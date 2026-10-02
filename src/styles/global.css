@@ -355,9 +355,7 @@ footer.foot a{display:block;text-decoration:none;color:#B8C7D8;padding:3px 0;fon
 .lite *{animation:none!important;transition:none!important}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
-/* ===== ancien design : en-tête, navigation, barre prototype ===== */
-.proto-bar{background:var(--gold-soft);color:var(--gold-ink);font-size:.85rem;text-align:center;padding:6px 12px;font-weight:600}
-.proto-bar a{color:inherit}
+/* ===== ancien design : en-tête, navigation ===== */
 .secbar{background:var(--surface);border-bottom:1px solid var(--line)}
 .secbar .wrap{display:flex;gap:4px;overflow-x:auto;padding-top:8px;padding-bottom:8px}
 .secbar a{text-decoration:none;padding:6px 12px;border-radius:999px;font-weight:600;font-size:.88rem;white-space:nowrap;color:var(--muted)}

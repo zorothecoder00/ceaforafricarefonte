@@ -25,7 +25,6 @@ export function localizeHtml(html: string, lang: Lang): string {
 export const TRANSLATED = new Set(['/', '/connexion/nouveau-mot-de-passe', '/commencer', '/plan-du-site', '/connexion', '/signalement', '/hors-ligne']);
 
 const ui = {
-  proto: { fr: "Prototype fonctionnel — toutes les données sont fictives, aucun paiement ni investissement réel n'est effectué.", en: 'Working prototype — all data is fictitious; no real payment or investment takes place.' },
   skip: { fr: 'Aller au contenu', en: 'Skip to content' },
   home: { fr: 'Accueil', en: 'Home' },
   brandHome: { fr: 'CEA FOR AFRICA, accueil', en: 'CEA FOR AFRICA, home' },
@@ -74,7 +73,7 @@ const ui = {
   nlOk: { fr: 'Inscription confirmée. Un e-mail de vérification vous a été envoyé.', en: 'Subscription confirmed. A verification email has been sent.' },
   countries: { fr: 'Contacts par pays', en: 'Country contacts' },
   follow: { fr: 'Nous suivre', en: 'Follow us' },
-  rights: { fr: '© 2026 CEA FOR AFRICA — chiffres et contenus de démonstration.', en: '© 2026 CEA FOR AFRICA — demonstration figures and content.' },
+  rights: { fr: '© 2026 CEA FOR AFRICA — tous droits réservés.', en: '© 2026 CEA FOR AFRICA — all rights reserved.' },
   // Copilot
   copSub: { fr: 'Assistant de la plateforme', en: 'Platform assistant' },
   copHello: { fr: 'Bonjour ! Je suis CEA Copilot. Je peux vous orienter vers une formation, un programme, un événement ou CEA Kapital Invest.', en: 'Hello! I am CEA Copilot. I can point you to a course, a programme, an event or CEA Kapital Invest.' },

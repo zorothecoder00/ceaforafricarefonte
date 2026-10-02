@@ -94,7 +94,7 @@ export const KADS = [
 ];
 
 export const KRISK =
-  "Investir dans des entreprises non cotées comporte un risque de perte totale du capital et un risque d'illiquidité. Les informations présentées ne constituent ni une offre ni un conseil en investissement. Ce prototype n'effectue aucune opération financière.";
+  "Investir dans des entreprises non cotées comporte un risque de perte totale du capital et un risque d'illiquidité. Les informations présentées ne constituent ni une offre ni un conseil en investissement. CEA Kapital Invest n'effectue aucune opération financière : seules des manifestations d'intérêt non engageantes sont recueillies.";
 
 /** Partenaires du bandeau de confiance (accueil). À remplacer par les vrais partenaires et leurs logos. */
 export const PARTNERS: Record<'fr' | 'en', string>[] = [

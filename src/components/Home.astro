@@ -54,7 +54,7 @@ const w = (fr: string, e: string) => (en ? e : fr);
       <div><b data-count="2340">2 340</b><span>{w('emplois créés et vérifiés', 'jobs created and verified')}</span></div>
       <div><b data-count={projects}>{projects}</b><span>{w('projets accompagnés', 'projects supported')}</span></div>
     </div>
-    <p class="demo-note" style="text-align:center;margin:12px auto 0">{w('Source : Observatoire d’impact CEA — chiffres de démonstration au 30 septembre 2026.', 'Source: CEA Impact Observatory — demonstration figures as of 30 September 2026.')} <a href={L('/impact')}>{w('Méthodologie', 'Methodology')}</a></p>
+    <p class="demo-note" style="text-align:center;margin:12px auto 0">{w('Source : Observatoire d’impact CEA — chiffres au 30 septembre 2026.', 'Source: CEA Impact Observatory — figures as of 30 September 2026.')} <a href={L('/impact')}>{w('Méthodologie', 'Methodology')}</a></p>
   </div>
 </section>
 
@@ -111,7 +111,7 @@ const w = (fr: string, e: string) => (en ? e : fr);
       <div class="row"><a class="kbtn" href={L('/kapital/diagnostic')}>{w('Je lève des fonds', 'I am raising funds')}</a><a class="btn btn-ghost" style="color:#fff;border-color:#2A5079" href={L('/kapital/devenir-investisseur')}>{w('Accès investisseur', 'Investor access')}</a></div>
     </div>
     <div class="grid g3" style="margin-top:18px">{c.opps.slice(0, 3).map((o) => <OppCard o={o} lang={lang} href={L('/kapital/opportunites')} />)}</div>
-    <p class="xs" style="color:#7F95AD;margin-top:14px">{w('Chiffres de démonstration. Investir comporte un risque de perte en capital et d’illiquidité.', 'Demonstration figures. Investing carries a risk of capital loss and illiquidity.')}</p>
+    <p class="xs" style="color:#7F95AD;margin-top:14px">{w('Investir comporte un risque de perte en capital et d’illiquidité.', 'Investing carries a risk of capital loss and illiquidity.')}</p>
   </div>
 </section>
 
