@@ -1,0 +1,24 @@
+---
+import PageHead from '../PageHead.astro';
+import { MEGA } from '../../data/nav';
+import { KMENU } from '../../data/site';
+import { lp, type Lang } from '../../i18n/ui';
+
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+const en = lang === 'en';
+const L = (p: string) => lp(lang, p);
+const other: [string, string][] = en
+  ? [['/commencer', 'Where to start?'], ['/connexion', 'Sign in'], ['/adherer', 'Join'], ['/contact', 'Contact'], ['/aide', 'Help centre'], ['/signalement', 'Report content or fraud'], ['/statut', 'Platform status'], ['/legal/confidentialite', 'Privacy'], ['/legal/cookies', 'Cookies'], ['/legal/conditions', 'Terms of use'], ['/legal/accessibilite', 'Accessibility']]
+  : [['/commencer', 'Par où commencer ?'], ['/connexion', 'Se connecter'], ['/adherer', 'Adhérer'], ['/contact', 'Contact'], ['/aide', "Centre d'aide"], ['/signalement', 'Signaler un contenu ou une fraude'], ['/statut', 'Statut de la plateforme'], ['/legal/confidentialite', 'Confidentialité'], ['/legal/cookies', 'Cookies'], ['/legal/conditions', "Conditions d'utilisation"], ['/legal/accessibilite', 'Accessibilité']];
+---
+<PageHead lang={lang} title={en ? 'Site map' : 'Plan du site'} lead={en ? 'Every section of CEA FOR AFRICA and CEA Kapital Invest.' : 'Toutes les rubriques de CEA FOR AFRICA et de CEA Kapital Invest.'} crumbs={[['', en ? 'Site map' : 'Plan du site']]} />
+<section class="block">
+  <div class="wrap grid g4">
+    {MEGA.map((m) => (
+      <div><h3><a href={L(m.href)}>{m.label[lang]}</a></h3><ul class="small">{m.cols.flatMap((c) => c.items).map((i) => <li><a href={L(i.href)}>{i.t[lang]}</a></li>)}</ul></div>
+    ))}
+    <div><h3><a href={L('/kapital')}>CEA Kapital Invest</a></h3><ul class="small">{KMENU.flatMap((m) => m.cols.flatMap((c) => c.items)).map((i) => <li><a href={L(i[0])}>{i[2]}</a></li>)}</ul></div>
+    <div><h3>{en ? 'Help and legal' : 'Aide et mentions'}</h3><ul class="small">{other.map(([h, t]) => <li><a href={L(h)}>{t}</a></li>)}</ul></div>
+  </div>
+</section>

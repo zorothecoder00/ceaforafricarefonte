@@ -1,0 +1,14 @@
+---
+/* Encadré « fonction soumise à agrément » : affiché tant que la fonction n'est pas ouverte dans le pays (Togo par défaut). */
+import Icon from './Icon.astro';
+import { FLAG0 } from '../data/site';
+interface Props { feature: string; text?: string; country?: string }
+const { feature, text = "Cette fonction sera ouverte pays par pays, après obtention des autorisations ou via un partenaire agréé.", country = 'TG' } = Astro.props;
+const open = !!FLAG0[country]?.[feature];
+---
+{!open && (
+  <div class="lock">
+    <Icon name="lock" size={22} />
+    <div><b>Fonction soumise à agrément</b><br />{text} Statut pour le Togo : <b>non ouverte</b>. <a href="/kapital/conformite">Voir l'ouverture par pays</a></div>
+  </div>
+)}

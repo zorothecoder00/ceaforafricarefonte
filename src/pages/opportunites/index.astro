@@ -1,55 +1,10 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
-import KapitalAd from '../../components/KapitalAd.astro';
-import { JOBS, SUBS, country } from '../../data/site';
-
-const types = [...new Set(JOBS.map((j) => j.type))];
+import JobsBoard from '../../components/JobsBoard.astro';
+import { JOBS, SUBS } from '../../data/site';
 ---
 <BaseLayout title="Opportunités">
-  <PageHead title="Emplois et stages" lead="Des offres vérifiées, publiées par les entreprises membres du réseau CEA." crumbs={[['', 'Opportunités']]} subnav={SUBS.opps} />
-  <section class="block" style="padding-top:20px">
-    <div class="wrap">
-      <div class="filters">
-        <input class="in" id="jq" placeholder="Métier, compétence, entreprise" aria-label="Rechercher une offre" style="flex:1;min-width:200px" />
-        <select class="in" id="jt" aria-label="Type de contrat"><option value="">Tous les contrats</option>{types.map((t) => <option>{t}</option>)}</select>
-        <label class="chip"><input type="checkbox" id="jr" /> Télétravail</label>
-      </div>
-      <div class="split">
-        <div>
-          <p class="small muted" id="jn">{JOBS.length} offres</p>
-          <div id="jl">
-            {JOBS.map((j) => (
-              <div class="panel" style="margin-bottom:12px" data-type={j.type} data-remote={j.remote ? '1' : '0'} data-q={`${j.t} ${j.co} ${j.skills.join(' ')}`}>
-                <div class="row between"><b>{j.t}</b><span class="tag info">{j.type}</span></div>
-                <div class="small muted">{j.co} · {country(j.c)}{j.remote ? ' · Télétravail possible' : ''} · {j.sal}</div>
-                <div class="row" style="margin-top:10px">{j.skills.map((s) => <span class="tag">{s}</span>)}</div>
-                <button class="btn btn-primary btn-sm" style="margin-top:12px" data-toast={`Candidature envoyée à ${j.co}.`}>Postuler</button>
-              </div>
-            ))}
-          </div>
-        </div>
-        <aside>
-          <KapitalAd variant={0} />
-          <div class="panel" style="margin-top:16px"><h3>Votre profil talent</h3><p class="small muted">Complétez votre profil pour recevoir les offres qui vous correspondent.</p><a class="btn btn-ghost btn-sm" href="/opportunites/profil">Compléter mon profil</a></div>
-        </aside>
-      </div>
-    </div>
-  </section>
+  <PageHead title="Offres d'emploi et stages" lead="Les offres des entreprises africaines, vérifiées par notre équipe. Les compétences de votre profil sont surlignées." crumbs={[['', 'Opportunités']]} subnav={SUBS.opps} />
+  <JobsBoard jobs={JOBS} />
 </BaseLayout>
-<script>
-  const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-  const q = document.getElementById('jq') as HTMLInputElement, t = document.getElementById('jt') as HTMLSelectElement, r = document.getElementById('jr') as HTMLInputElement;
-  function apply() {
-    let n = 0;
-    document.querySelectorAll<HTMLElement>('#jl > .panel').forEach((el) => {
-      const ok = (!t.value || el.dataset.type === t.value) && (!r.checked || el.dataset.remote === '1') && norm(el.dataset.q!).includes(norm(q.value));
-      el.hidden = !ok;
-      if (ok) n++;
-    });
-    document.getElementById('jn')!.textContent = `${n} offre${n > 1 ? 's' : ''}`;
-  }
-  q.addEventListener('input', apply);
-  t.addEventListener('change', apply);
-  r.addEventListener('change', apply);
-</script>

@@ -1,0 +1,21 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { SUBS } from '../../data/site';
+
+const basics = [['Action', 'Une part du capital, qui donne droit au vote et aux dividendes.', 'Découverte'], ['Dividende', 'La part des bénéfices distribuée aux actionnaires.', 'Découverte'], ['Dilution', 'Quand de nouvelles actions sont émises, votre pourcentage baisse.', 'Initié'], ['Valorisation', "La valeur attribuée à l'entreprise lors d'une levée.", 'Initié']];
+const steps = ['Clarifier pourquoi ouvrir le capital (croissance, associés, transmission)', "Valoriser l'entreprise et choisir le montant", "Rédiger le pacte d'associés et adapter les statuts (avec un conseil)", 'Choisir les investisseurs et négocier', "Réaliser l'opération et mettre à jour le registre des titres"];
+---
+<BaseLayout title="Actionnariat">
+  <PageHead title="CEA Actionnariat & Shareholder Academy" lead="Comprendre l'actionnariat, ouvrir son capital sereinement et devenir actionnaire des entreprises du continent." crumbs={[['/domaines', 'Nos domaines'], ['', 'Actionnariat']]} subnav={SUBS.actionnariat} />
+  <section class="block">
+    <div class="wrap">
+      <div class="grid g4">
+        {basics.map(([t, d, lv]) => <div class="panel"><span class="tag gold">Niveau {lv}</span><h3 style="margin-top:10px">{t}</h3><p class="small">{d}</p><button class="btn btn-ghost btn-sm" type="button" data-toast="Vidéo de 2 minutes (simulation).">Vidéo de 2 min</button></div>)}
+      </div>
+      <h2 style="margin-top:36px">Ouvrir le capital de sa PME, pas à pas</h2>
+      <ol class="timeline">{steps.map((s, i) => <li class={i === 0 ? 'cur' : ''}><b>Étape {i + 1}</b> — {s}</li>)}</ol>
+      <div class="row"><a class="btn btn-primary" href="/actionnariat/studio">Simuler ma levée</a><a class="btn btn-ghost" href="/academie/c6">Cours : ouvrir le capital de sa PME</a><a class="kbtn" href="/kapital/actions">Émettre des actions avec Kapital Invest</a></div>
+    </div>
+  </section>
+</BaseLayout>

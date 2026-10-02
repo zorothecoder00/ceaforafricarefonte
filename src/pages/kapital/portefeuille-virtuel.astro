@@ -1,0 +1,62 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { STOCKS, fmt } from '../../data/site';
+---
+<KapitalLayout title="Portefeuille virtuel" risk={false}>
+  <PageHead title="Portefeuille virtuel" lead="10 millions de FCFA fictifs pour s'entraîner, sans aucun risque. Classement mensuel entre membres." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Portefeuille virtuel']]} />
+  <section class="block">
+    <div class="wrap" id="vp" data-stocks={JSON.stringify(STOCKS.map((s) => ({ n: s.n, p: s.p })))}>
+      <div class="grid g3">
+        <div class="panel kpi"><span class="small muted">Liquidités</span><b id="vCash"></b></div>
+        <div class="panel kpi"><span class="small muted">Valeur des titres</span><b id="vVal"></b></div>
+        <div class="panel kpi"><span class="small muted">Performance</span><b id="vPerf"></b></div>
+      </div>
+      <div class="panel scroll-x" style="margin-top:18px">
+        <table class="t">
+          <thead><tr><th>Société (fictive)</th><th>Cours</th><th>Détenu</th><th>Quantité</th><th></th></tr></thead>
+          <tbody>
+            {STOCKS.map((s, i) => (
+              <tr><td>{s.n}</td><td class="num">{fmt(s.p)}</td><td class="num" data-held={i}>0</td><td><input class="in" type="number" min="1" value="10" data-q={i} style="width:90px;margin:0" aria-label="Quantité" /></td><td style="white-space:nowrap"><button class="btn btn-primary btn-sm" type="button" data-b={i}>Acheter</button> <button class="btn btn-ghost btn-sm" type="button" data-s={i}>Vendre</button></td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <button class="btn btn-ghost btn-sm" type="button" style="margin-top:12px" id="vReset">Réinitialiser le portefeuille</button>
+    </div>
+  </section>
+</KapitalLayout>
+<script>
+  const root = document.getElementById('vp')!;
+  const stocks: { n: string; p: number }[] = JSON.parse(root.dataset.stocks!);
+  const START = 10_000_000;
+  type V = { cash: number; pos: Record<string, number> };
+  let v: V = { cash: START, pos: {} };
+  try { v = JSON.parse(localStorage.getItem('cea-vport') || 'null') || v; } catch {}
+  const toast = (t: string) => (window as any).toast(t);
+  const m = (n: number) => Math.round(n).toLocaleString('fr-FR') + ' FCFA';
+  function draw() {
+    const val = stocks.reduce((a, s) => a + (v.pos[s.n] || 0) * s.p, 0);
+    const perf = ((v.cash + val) / START - 1) * 100;
+    document.getElementById('vCash')!.textContent = m(v.cash);
+    document.getElementById('vVal')!.textContent = m(val);
+    const pe = document.getElementById('vPerf')!;
+    pe.textContent = perf.toFixed(2) + ' %';
+    pe.className = perf >= 0 ? 'up' : 'down';
+    stocks.forEach((s, i) => (root.querySelector(`[data-held="${i}"]`)!.textContent = String(v.pos[s.n] || 0)));
+    try { localStorage.setItem('cea-vport', JSON.stringify(v)); } catch {}
+  }
+  const qty = (i: string) => Math.max(1, Number(root.querySelector<HTMLInputElement>(`[data-q="${i}"]`)!.value) || 0);
+  root.querySelectorAll<HTMLButtonElement>('[data-b]').forEach((b) => b.addEventListener('click', () => {
+    const s = stocks[Number(b.dataset.b)], q = qty(b.dataset.b!);
+    if (q * s.p > v.cash) return toast('Liquidités insuffisantes.');
+    v.cash -= q * s.p; v.pos[s.n] = (v.pos[s.n] || 0) + q; draw(); toast(`Achat fictif de ${q} titres.`);
+  }));
+  root.querySelectorAll<HTMLButtonElement>('[data-s]').forEach((b) => b.addEventListener('click', () => {
+    const s = stocks[Number(b.dataset.s)], q = qty(b.dataset.s!);
+    if ((v.pos[s.n] || 0) < q) return toast('Vous ne détenez pas assez de titres.');
+    v.cash += q * s.p; v.pos[s.n] -= q; draw(); toast(`Vente fictive de ${q} titres.`);
+  }));
+  document.getElementById('vReset')!.addEventListener('click', () => { v = { cash: START, pos: {} }; draw(); });
+  draw();
+</script>

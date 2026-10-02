@@ -19,7 +19,7 @@ for (let lat = 37.5; lat > -35.5; lat -= st)
     if (pip(lon, lat, AFRICA) || pip(lon, lat, MADA)) dots.push([+MX(lon).toFixed(1), +MY(lat).toFixed(1)]);
 
 const first = Math.max(0, HUBS.findIndex((h) => (sel ? h.c === sel : h.hq)));
-const hubs = HUBS.map((h) => ({ name: COUNTRIES[h.c], hq: !!h.hq, m: fmt(h.m), p: h.p, e: h.e, city: h.city, lead: h.lead }));
+const hubs = HUBS.map((h) => ({ code: h.c.toLowerCase(), name: COUNTRIES[h.c], hq: !!h.hq, m: fmt(h.m), p: h.p, e: h.e, city: h.city, lead: h.lead }));
 const h0 = hubs[first];
 ---
 <div class="mapbox" data-map data-hubs={JSON.stringify(hubs)}>
@@ -36,7 +36,7 @@ const h0 = hubs[first];
     <div class="map-card">
       <h4>{h0.name} {h0.hq && <span class="tag gold">Siège</span>}</h4>
       <div class="kv"><span>Membres</span><b>{h0.m}</b><span>Projets accompagnés</span><b>{h0.p}</b><span>Événements en 2026</span><b>{h0.e}</b></div>
-      <span class="small" style="color:#546273">Antenne de {h0.city} · {h0.lead}</span>
+      <a class="small" style="color:#082B4C;font-weight:700" href={`/pays/${h0.code}`}>Antenne de {h0.city} · {h0.lead}</a>
     </div>
   )}
 </div>

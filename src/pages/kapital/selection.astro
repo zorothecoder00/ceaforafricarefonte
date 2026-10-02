@@ -1,0 +1,26 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+
+const steps = [
+  ['Contrôle de complétude', 'Toutes les pièces requises sont présentes.'],
+  ['Vérification (KYB)', "Existence de l'entreprise, dirigeants, bénéficiaires effectifs, listes de sanctions."],
+  ['Évaluation sur 8 axes', 'Équipe, marché, produit, traction, modèle, finances, gouvernance, impact.'],
+  ['Comité', "Déclaration des conflits d'intérêts, procès-verbal, décision motivée."],
+  ['Publication', 'Résumé anonymisé, niveau de vérification affiché, date de mise à jour.'],
+];
+---
+<KapitalLayout title="Comment nous sélectionnons">
+  <PageHead title="Comment nous sélectionnons" lead="Un processus documenté, un comité indépendant, des décisions motivées." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Sélection']]} />
+  <section class="block">
+    <div class="wrap split">
+      <ol class="timeline">{steps.map(([t, d]) => <li class="done"><b>{t}</b><div class="small muted">{d}</div></li>)}</ol>
+      <aside>
+        <div class="panel">
+          <h3>Niveaux de vérification</h3>
+          <p class="small"><span class="tag ok">Vérifié par CEA</span> diligence complète.<br /><br /><span class="tag gold">Diligence en cours</span> évaluation non terminée.<br /><br /><span class="tag">Déclaratif</span> informations fournies par l'entreprise, non vérifiées.</p>
+        </div>
+      </aside>
+    </div>
+  </section>
+</KapitalLayout>

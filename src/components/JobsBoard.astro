@@ -1,0 +1,58 @@
+---
+import JobCard from './JobCard.astro';
+import KapitalAd from './KapitalAd.astro';
+import { country } from '../data/site';
+interface Props { jobs: any[] }
+const { jobs } = Astro.props;
+const types = [...new Set(jobs.map((j) => j.type))];
+const countries = [...new Set(jobs.map((j) => j.c))];
+---
+<section class="block" style="padding-top:20px">
+  <div class="wrap" data-jobs>
+    <div class="filters">
+      <input class="in" data-f="q" placeholder="Métier, compétence, entreprise" aria-label="Rechercher une offre" style="flex:1;min-width:220px" />
+      <select class="in" data-f="c" aria-label="Pays"><option value="">Tous les pays</option>{countries.map((c) => <option value={c}>{country(c)}</option>)}</select>
+      <select class="in" data-f="type" aria-label="Type de contrat"><option value="">Tous les contrats</option>{types.map((t) => <option>{t}</option>)}</select>
+      <label class="chip"><input type="checkbox" data-f="remote" /> Télétravail</label>
+      <button class="btn btn-ghost btn-sm" type="button" data-toast="Alerte créée. Vous recevrez les nouvelles offres par WhatsApp.">Créer une alerte</button>
+    </div>
+    <div class="split">
+      <div>
+        <p class="small muted" data-count>{jobs.length} offres</p>
+        <div data-list>{jobs.map((j) => <JobCard j={j} />)}</div>
+        <div class="empty" data-empty hidden>Aucune offre ne correspond. Retirez un filtre ou créez une alerte.</div>
+      </div>
+      <aside>
+        <KapitalAd variant={0} />
+        <div class="panel" style="margin-top:16px"><h3>Votre profil talent</h3><p class="small muted">Complétez votre profil pour être visible des recruteurs et voir votre correspondance.</p><a class="btn btn-ghost btn-sm" href="/opportunites/profil">Compléter mon profil</a></div>
+      </aside>
+    </div>
+  </div>
+</section>
+<script>
+  const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  document.querySelectorAll<HTMLElement>('[data-jobs]').forEach((root) => {
+    const f = (k: string) => root.querySelector<HTMLInputElement>(`[data-f="${k}"]`)!;
+    // Compétences du profil talent (enregistrées sur /opportunites/profil) : surlignage et score de correspondance.
+    let skills = '';
+    try { skills = norm(JSON.parse(localStorage.getItem('cea-talent') || '{}').skills || ''); } catch {}
+    if (skills) root.querySelectorAll<HTMLElement>('[data-skills]').forEach((card) => {
+      let n = 0;
+      card.querySelectorAll<HTMLElement>('[data-skill]').forEach((t) => { if (skills.includes(norm(t.dataset.skill!))) { t.classList.add('ok'); n++; } });
+      card.querySelector('.match')!.innerHTML = ` · <b>${n}/${card.dataset.skills!.split('|').length} compétences correspondent</b>`;
+    });
+    const apply = () => {
+      let n = 0;
+      root.querySelectorAll<HTMLElement>('[data-list] > .panel').forEach((el) => {
+        const ok = (!f('c').value || el.dataset.c === f('c').value) && (!f('type').value || el.dataset.type === f('type').value) && (!f('remote').checked || el.dataset.remote === '1') && norm(el.dataset.q!).includes(norm(f('q').value));
+        el.hidden = !ok;
+        if (ok) n++;
+      });
+      root.querySelector('[data-count]')!.textContent = `${n} offre${n > 1 ? 's' : ''}`;
+      root.querySelector<HTMLElement>('[data-empty]')!.hidden = n > 0;
+    };
+    root.querySelectorAll('[data-f]').forEach((x) => x.addEventListener('input', apply));
+    const q = new URLSearchParams(location.search).get('q');
+    if (q) { f('q').value = q; apply(); }
+  });
+</script>

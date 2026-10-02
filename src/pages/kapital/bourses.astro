@@ -1,0 +1,25 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { MARKETS } from '../../data/site';
+---
+<KapitalLayout title="Fiches des bourses">
+  <PageHead title="Les bourses africaines" lead="Régulateur, ville, nombre de sociétés cotées (approximatif) et devise de cotation." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Fiches des bourses']]} />
+  <section class="block">
+    <div class="wrap grid g3">
+      {MARKETS.map((m) => (
+        <div class="panel">
+          <h3 style="margin:0">{m.ex}</h3>
+          <p class="small muted">{m.city} · {m.zone}</p>
+          <table class="t small"><tbody>
+            <tr><td class="muted">Régulateur</td><td>{m.reg}</td></tr>
+            <tr><td class="muted">Indice</td><td>{m.n}</td></tr>
+            <tr><td class="muted">Sociétés cotées (ordre de grandeur)</td><td>{m.co}</td></tr>
+            <tr><td class="muted">Devise</td><td>{m.cur}</td></tr>
+          </tbody></table>
+        </div>
+      ))}
+    </div>
+    <div class="wrap"><p class="xs muted" style="margin-top:14px">Informations indicatives à vérifier et mettre à jour en production. Les indices affichés sur la plateforme sont fictifs.</p></div>
+  </section>
+</KapitalLayout>

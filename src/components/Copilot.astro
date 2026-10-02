@@ -1,27 +1,25 @@
-<button class="fab" id="fab" aria-expanded="false" aria-controls="chat"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>CEA Copilot</button>
-<section class="chat" id="chat" aria-label="Assistant CEA Copilot">
+---
+import { getLang, useT } from '../i18n/ui';
+const lang = getLang(Astro.currentLocale);
+const t = useT(lang);
+---
+<button class="fab" id="fab" type="button" aria-expanded="false" aria-controls="chat"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>CEA Copilot</button>
+<section class="chat" id="chat" aria-label="CEA Copilot" data-lang={lang}>
   <div class="chat-h">
-    <div><b style="font-family:var(--display)">CEA Copilot</b><div class="small muted">Assistant de la plateforme</div></div>
-    <button class="icon-btn" id="chatClose" aria-label="Fermer l'assistant">✕</button>
+    <div><b style="font-family:var(--display)">CEA Copilot</b><div class="small muted">{t('copSub')}</div></div>
+    <button class="icon-btn" id="chatClose" type="button" aria-label={t('close')}>✕</button>
   </div>
-  <div class="chat-b" id="chatBody" aria-live="polite">
-    <div class="msg a">Bonjour ! Je suis CEA Copilot. Je peux vous orienter vers une formation, un programme, un événement ou CEA Kapital Invest.</div>
-  </div>
-  <div class="sugg" id="sugg">
-    <button type="button">Comment lever des fonds ?</button>
-    <button type="button">Cours gratuits</button>
-    <button type="button">Prochain événement</button>
-    <button type="button">Investir</button>
-  </div>
+  <div class="chat-b" id="chatBody" aria-live="polite"><div class="msg a">{t('copHello')}</div></div>
+  <div class="sugg" id="sugg">{t('sugg').split('|').map((s) => <button type="button">{s}</button>)}</div>
   <form class="chat-f" id="chatForm">
-    <input id="chatIn" placeholder="Posez votre question…" aria-label="Votre question" autocomplete="off" />
-    <button class="btn btn-primary btn-sm" type="submit">Envoyer</button>
+    <input id="chatIn" placeholder={t('copAsk')} aria-label={t('copAsk')} autocomplete="off" />
+    <button class="btn btn-primary btn-sm" type="submit">{t('send')}</button>
   </form>
 </section>
 <dialog id="dlg">
-  <div class="dlg-h"><h3 id="dlgTitle">Rechercher</h3><button class="icon-btn" id="dlgClose" aria-label="Fermer">✕</button></div>
+  <div class="dlg-h"><h3 id="dlgTitle">{lang === 'en' ? 'Search' : 'Rechercher'}</h3><button class="icon-btn" type="button" id="dlgClose" aria-label={t('close')}>✕</button></div>
   <div class="dlg-b" id="dlgBody">
-    <input class="in" id="sq" placeholder="Cours, événement, offre, opportunité, pays…" aria-label="Rechercher" autocomplete="off" />
+    <input class="in" id="sq" placeholder={t('searchPh')} aria-label={lang === 'en' ? 'Search' : 'Rechercher'} autocomplete="off" />
     <div class="search-res" id="sres"></div>
   </div>
 </dialog>

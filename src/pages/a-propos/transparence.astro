@@ -1,0 +1,32 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import Icon from '../../components/Icon.astro';
+import { SUBS } from '../../data/site';
+
+const reports = ['Rapport annuel 2025', "Rapport d'impact 2025", 'États financiers 2025 (résumé)'];
+const policies = ['Charte éthique et anticorruption', 'Politique de protection des données', "Politique de lanceur d'alerte", 'Charte de neutralité politique', "Politique de gestion des conflits d'intérêts", "Politique d'usage de l'intelligence artificielle"];
+const line = 'padding:10px 0;border-bottom:1px solid var(--line)';
+---
+<BaseLayout title="Transparence">
+  <PageHead title="Transparence" lead="Rapports, politiques et engagements publics." crumbs={[['/a-propos', 'À propos'], ['', 'Transparence']]} subnav={SUBS.apropos} />
+  <section class="block">
+    <div class="wrap grid g2">
+      <div class="panel">
+        <h3>Rapports</h3>
+        {reports.map((r) => <div class="row between" style={line}><span class="row"><Icon name="doc" /> {r}</span><button class="btn btn-ghost btn-sm" type="button" data-toast={`« ${r} » ouvert (simulation).`}>PDF</button></div>)}
+      </div>
+      <div class="panel">
+        <h3>Politiques</h3>
+        {policies.map((r) => <div class="row between" style={line}><span>{r}</span><button class="btn btn-ghost btn-sm" type="button" data-toast={`« ${r} » ouvert (simulation).`}>Lire</button></div>)}
+      </div>
+      <form class="panel" data-demo="Alerte reçue. Un code de suivi confidentiel vous a été attribué.">
+        <h3>Signaler une alerte</h3>
+        <p class="small">Canal confidentiel, anonyme si vous le souhaitez.</p>
+        <textarea class="in" required minlength="10" placeholder="Décrivez les faits" aria-label="Description des faits"></textarea>
+        <label class="row small"><input type="checkbox" checked /> Rester anonyme</label>
+        <button class="btn btn-primary btn-sm" type="submit" style="margin-top:10px">Envoyer l'alerte</button>
+      </form>
+    </div>
+  </section>
+</BaseLayout>

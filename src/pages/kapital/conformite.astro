@@ -1,0 +1,29 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { REG_FEATURES, FLAG0, country } from '../../data/site';
+
+const reg = [['UEMOA (8 pays)', 'AMF-UMOA', 'BRVM (Abidjan)'], ['CEMAC (6 pays)', 'COSUMAF', 'BVMAC (Douala)'], ['Nigeria', 'SEC Nigeria', 'NGX'], ['Kenya', 'CMA', 'NSE'], ['Afrique du Sud', 'FSCA', 'JSE'], ['Maroc', 'AMMC', 'Bourse de Casablanca'], ['Égypte', 'FRA', 'EGX'], ['Ghana', 'SEC Ghana', 'GSE']];
+const controls = [['KYC et KYB', 'Vérification des personnes et des entreprises.'], ['Sanctions et PEP', 'Filtrage des listes internationales et des personnes politiquement exposées.'], ['Origine des fonds', 'Justificatifs selon les seuils applicables.']];
+const cs = Object.keys(FLAG0);
+---
+<KapitalLayout title="Conformité et réglementation">
+  <PageHead title="Conformité et réglementation" lead="Les fonctions réglementées sont ouvertes pays par pays, selon le statut obtenu ou le partenaire agréé." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Conformité']]} />
+  <section class="block">
+    <div class="wrap">
+      <h2>Ouverture des fonctions par pays (paramétrage actuel)</h2>
+      <div class="panel scroll-x">
+        <table class="t">
+          <thead><tr><th>Fonction</th>{cs.map((c) => <th>{country(c)}</th>)}</tr></thead>
+          <tbody>{REG_FEATURES.map(([k, l]) => <tr><td>{l}</td>{cs.map((c) => <td>{FLAG0[c][k] ? <span class="tag ok">Ouvert</span> : <span class="tag">Fermé</span>}</td>)}</tr>)}</tbody>
+        </table>
+      </div>
+      <p class="xs muted">Paramétrable par l'administration après avis juridique.</p>
+      <h2 style="margin-top:30px">Régulateurs des marchés financiers</h2>
+      <div class="panel scroll-x">
+        <table class="t"><thead><tr><th>Zone</th><th>Régulateur</th><th>Bourse</th></tr></thead><tbody>{reg.map(([z, r, b]) => <tr><td>{z}</td><td>{r}</td><td>{b}</td></tr>)}</tbody></table>
+      </div>
+      <div class="grid g3" style="margin-top:20px">{controls.map(([t, d]) => <div class="panel"><h3>{t}</h3><p class="small" style="margin:0">{d}</p></div>)}</div>
+    </div>
+  </section>
+</KapitalLayout>

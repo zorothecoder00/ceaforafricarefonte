@@ -1,0 +1,73 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import Icon from '../../components/Icon.astro';
+import { STAGES } from '../../data/site';
+
+const files = ['01 Juridique / Statuts.pdf', '02 Financier / États 2025.pdf', '03 Commercial / Pitch deck.pdf'];
+const tasks = ['Compléter les états financiers 2025', 'Mettre à jour le pitch deck', "Prendre rendez-vous avec l'analyste"];
+---
+<KapitalLayout title="Mon espace entreprise">
+  <PageHead title="Mon espace entreprise" lead="Démonstration : dossier Manioc+ · D-2026-0412" crumbs={[['/kapital', 'Kapital Invest'], ['', 'Mon espace entreprise']]} />
+  <section class="block">
+    <div class="wrap">
+      <div class="grid g3">
+        <div class="panel">
+          <h3>Jauge Investor Ready</h3>
+          <b style="font-family:var(--display);font-size:2.4rem;color:#E7BD62" id="score">78</b><span class="small muted">/100</span>
+          <div class="progress" style="margin-top:8px"><span id="scoreBar" style="width:78%"></span></div>
+          <a class="small" href="/kapital/diagnostic">Refaire le diagnostic</a>
+        </div>
+        <div class="panel"><h3>Statut du dossier</h3><ol class="timeline">{STAGES.map((s, i) => <li class={i < 3 ? 'done' : i === 3 ? 'cur' : ''}>{s}</li>)}</ol></div>
+        <div class="panel">
+          <h3>Tâches</h3>
+          {tasks.map((t) => <label class="row small" style="margin:6px 0"><input type="checkbox" /> {t}</label>)}
+          <button class="btn btn-ghost btn-sm" type="button" data-toast="Rendez-vous proposé : jeudi 10:00.">Prendre rendez-vous</button>
+        </div>
+      </div>
+      <div class="grid g2" style="margin-top:18px">
+        <div class="panel">
+          <div class="row between"><h3 style="margin:0">Data room</h3><label class="btn btn-primary btn-sm">Ajouter<input type="file" id="drUp" class="sr" /></label></div>
+          <div id="dr">{files.map((f, i) => <div class="row between small" style="padding:8px 0;border-bottom:1px solid var(--line)"><span class="row"><Icon name="doc" size={16} /> {f}</span><span class="muted">{[5, 3, 7][i]} vues</span></div>)}</div>
+          <h4 style="margin-top:16px">Qui a consulté</h4>
+          <div class="small muted">Investisseur A — 14 min, 6 documents</div>
+          <div class="small muted">Fonds B — 3 min, 1 document</div>
+          <div class="row between" style="margin-top:12px"><span class="small">Partage avec les investisseurs</span><button class="toggle" type="button" role="switch" aria-checked="true" id="shareT" aria-label="Partage avec les investisseurs"></button></div>
+        </div>
+        <div class="panel">
+          <h3>Page d'opportunité (aperçu)</h3>
+          <div class="panel" style="background:#103152"><b>Manioc+</b><div class="small muted">Actions de préférence · 350 000 000 FCFA</div><p class="small" style="margin:8px 0 0">Résumé anonymisé tel que vu par les investisseurs vérifiés.</p></div>
+          <form data-demo="Mise à jour envoyée à 7 investisseurs." style="margin-top:16px">
+            <h3>Mise à jour aux investisseurs</h3>
+            <textarea class="in" required placeholder="Chiffres du mois, jalons, besoins…" aria-label="Mise à jour"></textarea>
+            <button class="btn btn-primary btn-sm" type="submit">Envoyer aux investisseurs intéressés</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+</KapitalLayout>
+<script>
+  const toast = (t: string) => (window as any).toast(t);
+  try {
+    const s = localStorage.getItem('cea-diag');
+    if (s) { document.getElementById('score')!.textContent = s; document.getElementById('scoreBar')!.style.width = s + '%'; }
+  } catch {}
+  const t = document.getElementById('shareT')!;
+  t.addEventListener('click', () => {
+    const on = t.getAttribute('aria-checked') !== 'true';
+    t.setAttribute('aria-checked', String(on));
+    toast(on ? 'Partage activé.' : 'Partage révoqué : les accès sont fermés immédiatement.');
+  });
+  document.getElementById('drUp')!.addEventListener('change', (e) => {
+    const f = (e.target as HTMLInputElement).files?.[0];
+    if (!f) return;
+    const d = document.createElement('div');
+    d.className = 'row between small';
+    d.style.cssText = 'padding:8px 0;border-bottom:1px solid var(--line)';
+    d.innerHTML = '<span></span><span class="muted">0 vue</span>';
+    d.firstElementChild!.textContent = '04 Ajouts / ' + f.name;
+    document.getElementById('dr')!.appendChild(d);
+    toast('Document ajouté à la data room.');
+  });
+</script>

@@ -1,0 +1,34 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import Lock from '../../components/Lock.astro';
+import Icon from '../../components/Icon.astro';
+
+const kpis = [['Engagement', '500 000 USD'], ['Appelé', '42 %'], ['Distribué', '0 USD'], ['Valeur liquidative', '226 000 USD']];
+const nav: [string, number][] = [['T1 25', 95], ['T2 25', 120], ['T3 25', 150], ['T4 25', 170], ['T1 26', 200], ['T2 26', 226]];
+const calls = [['T1 2026', '100 000 USD', 'Payé'], ['T3 2026', '110 000 USD', 'Payé'], ['T1 2027', '90 000 USD', 'À venir']];
+const max = 250;
+---
+<KapitalLayout title="Portail des souscripteurs">
+  <PageHead title="Portail des souscripteurs (LP)" lead="Démonstration du futur espace des investisseurs dans les fonds CEA." crumbs={[['/kapital', 'Kapital Invest'], ['/kapital/capital-risque', 'Capital-risque'], ['', 'Portail LP']]} />
+  <section class="block">
+    <div class="wrap">
+      <Lock feature="kap_lp" text="La gestion de fonds et la commercialisation de parts exigent des agréments dans chaque juridiction." />
+      <div class="grid g4" style="margin-top:18px">{kpis.map(([k, v]) => <div class="panel kpi"><span class="small muted">{k}</span><b>{v}</b></div>)}</div>
+      <div class="grid g2" style="margin-top:18px">
+        <div class="panel">
+          <h3>Valeur liquidative trimestrielle (k USD)</h3>
+          <div style="display:flex;align-items:flex-end;gap:10px;height:200px;padding-top:10px">
+            {nav.map(([l, v]) => <div style="flex:1;text-align:center"><div class="small">{v}</div><div style={`height:${(v / max) * 160}px;background:var(--gold);border-radius:6px 6px 0 0`}></div><div class="xs muted">{l}</div></div>)}
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Appels de fonds</h3>
+          <table class="t"><tbody>{calls.map(([p, a, s]) => <tr><td>{p}</td><td class="num">{a}</td><td><span class={`tag ${s === 'Payé' ? 'ok' : 'gold'}`}>{s}</span></td></tr>)}</tbody></table>
+          <h3 style="margin-top:16px">Documents</h3>
+          {['Rapport trimestriel T2 2026', 'Lettre aux souscripteurs', 'Attestation fiscale 2025'].map((d) => <div class="small row" style="padding:4px 0"><Icon name="doc" size={16} /> {d}</div>)}
+        </div>
+      </div>
+    </div>
+  </section>
+</KapitalLayout>

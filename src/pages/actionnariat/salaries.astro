@@ -1,0 +1,29 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { SUBS } from '../../data/site';
+---
+<BaseLayout title="Actionnariat salarié">
+  <PageHead title="Actionnariat salarié" lead="Associez vos salariés à la réussite de l'entreprise." crumbs={[['/actionnariat', 'Actionnariat'], ['', 'Actionnariat salarié']]} subnav={SUBS.actionnariat} />
+  <section class="block">
+    <div class="wrap grid g2">
+      <div class="panel" id="esop">
+        <label class="f" for="ns">Nombre de salariés bénéficiaires</label><input class="in" id="ns" type="number" min="1" value="12" />
+        <label class="f" for="pc">Part du capital réservée (%)</label><input class="in" id="pc" type="number" min="0" max="100" value="8" />
+        <label class="f" for="val">Valorisation de l'entreprise (M FCFA)</label><input class="in" id="val" type="number" min="0" value="800" />
+        <label class="f" for="vest">Durée d'acquisition (années)</label><input class="in" id="vest" type="number" min="1" value="4" />
+      </div>
+      <div class="panel"><h3>Résultat</h3><div id="sres"></div></div>
+    </div>
+  </section>
+</BaseLayout>
+<script>
+  const n = (id: string) => Number((document.getElementById(id) as HTMLInputElement).value);
+  function r() {
+    const ns = n('ns') || 1, y = n('vest') || 1;
+    const per = (n('val') * n('pc')) / 100 / ns;
+    document.getElementById('sres')!.innerHTML = `<p>Chaque salarié recevrait l'équivalent de <b>${(Math.round(per * 10) / 10).toLocaleString('fr-FR')} M FCFA</b> de capital, acquis par tranches de ${Math.round(100 / y)} % par an sur ${y} ans.</p><p class="small muted">Exemple pédagogique. La mise en place exige des statuts et un règlement adaptés (droit OHADA).</p>`;
+  }
+  document.querySelectorAll('#esop input').forEach((i) => i.addEventListener('input', r));
+  r();
+</script>

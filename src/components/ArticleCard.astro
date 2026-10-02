@@ -1,11 +1,11 @@
 ---
 import { dateFr } from '../data/site';
-interface Props { a: { id: string; t: string; cat: string; c: string; d: string; r: string; x: string; k?: boolean } }
-const { a } = Astro.props;
+interface Props { a: { id: string; t: string; cat: string; c: string; d: string; r: string; x: string; k?: boolean }; lang?: 'fr' | 'en' }
+const { a, lang = 'fr' } = Astro.props;
 ---
 <a class="panel" href={`/ressources/article/${a.id}`} style="text-decoration:none;display:flex;flex-direction:column;gap:8px" data-cat={a.cat}>
   <div class="row between"><span class={`tag ${a.k ? 'gold' : 'info'}`}>{a.cat}</span><span class="xs muted">{a.c}</span></div>
   <h3 style="margin:0">{a.t}</h3>
   <p class="small muted" style="margin:0">{a.x}</p>
-  <span class="xs muted" style="margin-top:auto">{dateFr(a.d)} · {a.r} de lecture</span>
+  <span class="xs muted" style="margin-top:auto">{lang === 'en' ? new Date(a.d).toLocaleDateString('en-GB') : dateFr(a.d)} · {a.r} {lang === 'en' ? 'read' : 'de lecture'}</span>
 </a>

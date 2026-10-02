@@ -1,0 +1,19 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import AfricaMap from '../../components/AfricaMap.astro';
+import { HUBS, SUBS, country, fmt } from '../../data/site';
+---
+<BaseLayout title="Présence en Afrique">
+  <PageHead title="Présence en Afrique" lead="16 pays, une équipe locale dans chacun. Survolez la carte ou choisissez dans la liste." crumbs={[['/a-propos', 'À propos'], ['', 'Présence en Afrique']]} subnav={SUBS.apropos} />
+  <section class="block">
+    <div class="wrap split">
+      <div class="panel" style="background:#082B4C;border:0"><AfricaMap /></div>
+      <div class="grid" style="gap:8px;align-content:start">
+        {HUBS.map((h) => (
+          <a class="panel row between" style="padding:12px 16px;text-decoration:none" href={`/pays/${h.c.toLowerCase()}`}><span><b>{country(h.c)}</b> <span class="small muted">· {h.city}</span></span><span class="small muted">{fmt(h.m)} membres</span></a>
+        ))}
+      </div>
+    </div>
+  </section>
+</BaseLayout>

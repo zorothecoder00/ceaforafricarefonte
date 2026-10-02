@@ -1,0 +1,60 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import VoteBox from '../../components/VoteBox.astro';
+import { SUBS } from '../../data/site';
+
+const poll: [string, number][] = [['Transformation', 412], ['Irrigation', 238], ['Logistique du froid', 184], ['Fintech agricole', 250]];
+const questions: [string, number][] = [["Quel est le coût d'acquisition client ?", 12], ['Comment gérez-vous les impayés ?', 7]];
+---
+<BaseLayout title="En direct">
+  <PageHead title="En direct : Rencontres investisseurs — Agritech" lead="Salle principale · 1 284 participants connectés" crumbs={[['/evenements', 'Événements'], ['', 'En direct']]} subnav={SUBS.evenements} />
+  <section class="block" style="padding-top:24px">
+    <div class="wrap split">
+      <div>
+        <div class="player">
+          <span class="live">EN DIRECT</span>
+          <button class="playbtn" type="button" aria-label="Lire le direct" data-toast="Diffusion en direct (simulation). Sous-titres et traduction disponibles."><svg width="28" height="28" viewBox="0 0 24 24" fill="#1B1305"><path d="M8 5v14l11-7z" /></svg></button>
+          <div class="cap">SolarVillage présente son projet · organisé avec CEA Kapital Invest</div>
+        </div>
+        <div class="row" style="margin-top:12px" id="rooms">
+          {['Salle principale', 'Salle B — ateliers', 'Salle C — anglais'].map((s, i) => <button class="chip" type="button" aria-pressed={i === 0 ? 'true' : 'false'}>{s}</button>)}
+          <select class="sel" aria-label="Sous-titres"><option>Sous-titres FR</option><option>Subtitles EN</option></select>
+        </div>
+        <div style="margin-top:16px">
+          <VoteBox v={{ id: 'live-agritech', t: 'Sondage en direct : quel secteur agritech vous semble le plus prometteur ?', c: 'En direct', close: '2026-10-29', o: poll }} />
+        </div>
+      </div>
+      <aside>
+        <div class="panel" style="display:flex;flex-direction:column;height:480px">
+          <h3>Questions aux intervenants</h3>
+          <div id="qs" style="flex:1;overflow:auto">
+            {questions.map(([q, n]) => <div class="small" style="padding:8px 0;border-bottom:1px solid var(--line)">{q} <button class="btn btn-ghost btn-sm" type="button" style="padding:2px 8px" data-up>▲ <span>{n}</span></button></div>)}
+          </div>
+          <form class="row" id="qf"><input class="in" id="qin" placeholder="Votre question" aria-label="Votre question" style="flex:1;margin:0" /><button class="btn btn-primary btn-sm" type="submit">Envoyer</button></form>
+        </div>
+      </aside>
+    </div>
+  </section>
+</BaseLayout>
+<script>
+  const rooms = [...document.querySelectorAll<HTMLButtonElement>('#rooms .chip')];
+  rooms.forEach((r) => r.addEventListener('click', () => rooms.forEach((x) => x.setAttribute('aria-pressed', String(x === r)))));
+  const bindUp = (root: ParentNode) => root.querySelectorAll<HTMLButtonElement>('[data-up]').forEach((b) => b.addEventListener('click', () => {
+    const s = b.querySelector('span')!; s.textContent = String(Number(s.textContent) + 1); b.disabled = true;
+  }));
+  bindUp(document);
+  document.getElementById('qf')!.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const i = document.getElementById('qin') as HTMLInputElement;
+    const v = i.value.trim();
+    if (!v) return;
+    const d = document.createElement('div');
+    d.className = 'small';
+    d.style.cssText = 'padding:8px 0;border-bottom:1px solid var(--line)';
+    d.textContent = v + ' ';
+    d.insertAdjacentHTML('beforeend', '<span class="tag">en modération</span>');
+    document.getElementById('qs')!.appendChild(d);
+    i.value = '';
+  });
+</script>

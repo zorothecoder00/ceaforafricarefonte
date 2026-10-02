@@ -1,0 +1,44 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import Lock from '../../components/Lock.astro';
+import { OPPS, money } from '../../data/site';
+
+const sectors = ['Agro-industrie', 'Fintech', 'Énergie', 'Santé', 'Éducation'];
+---
+<KapitalLayout title="Mon espace investisseur">
+  <PageHead title="Mon espace investisseur" lead="Préférences, recommandations, suivi et data rooms." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Mon espace investisseur']]} />
+  <section class="block">
+    <div class="wrap grid g3" id="inv" data-opps={JSON.stringify(OPPS.map((o) => ({ id: o.id, n: o.n, s: o.s, need: money(o.need) })))}>
+      <div class="panel">
+        <h3>Préférences</h3>
+        <p class="small">Tickets : 20 000 – 100 000 USD</p>
+        <div class="row">{sectors.map((s) => <button class="chip" type="button" aria-pressed={s === 'Fintech' || s === 'Énergie' ? 'true' : 'false'} data-ps={s}>{s}</button>)}</div>
+      </div>
+      <div class="panel"><h3>Recommandées pour vous</h3><div id="reco"></div></div>
+      <div class="panel"><h3>Ma liste de suivi</h3><p class="small muted">Utilisez « Suivre » sur une opportunité pour l'ajouter ici.</p><a class="small" href="/kapital/opportunites">Parcourir les opportunités</a></div>
+      <div class="panel"><h3>Data rooms ouvertes</h3><p class="small muted">Aucune. L'accès exige un profil vérifié et un accord de confidentialité.</p><a class="small" href="/kapital/devenir-investisseur">Me faire vérifier</a></div>
+      <div class="panel"><h3>Intérêts manifestés</h3><p class="small muted">Aucun pour le moment.</p></div>
+      <div class="panel"><h3>Portefeuille</h3><Lock feature="kap_sub" /><p class="small muted" style="margin-top:8px">Vos participations apparaîtront ici après souscription via un partenaire agréé.</p></div>
+    </div>
+  </section>
+</KapitalLayout>
+<script>
+  const root = document.getElementById('inv')!;
+  const opps: { id: string; n: string; s: string; need: string }[] = JSON.parse(root.dataset.opps!);
+  const chips = [...root.querySelectorAll<HTMLButtonElement>('[data-ps]')];
+  let pref: string[] = chips.filter((c) => c.getAttribute('aria-pressed') === 'true').map((c) => c.dataset.ps!);
+  try { pref = JSON.parse(localStorage.getItem('cea-ipref') || 'null') || pref; } catch {}
+  function draw() {
+    chips.forEach((c) => c.setAttribute('aria-pressed', String(pref.includes(c.dataset.ps!))));
+    const l = opps.filter((o) => pref.some((s) => o.s.includes(s)));
+    document.getElementById('reco')!.innerHTML = l.map((o) => `<a class="small" href="/kapital/opportunites/${o.id}" style="display:block;padding:5px 0">${o.n} — ${o.need}</a>`).join('') || '<p class="small muted">Ajoutez des secteurs.</p>';
+  }
+  chips.forEach((c) => c.addEventListener('click', () => {
+    const s = c.dataset.ps!;
+    pref = pref.includes(s) ? pref.filter((x) => x !== s) : [...pref, s];
+    try { localStorage.setItem('cea-ipref', JSON.stringify(pref)); } catch {}
+    draw();
+  }));
+  draw();
+</script>

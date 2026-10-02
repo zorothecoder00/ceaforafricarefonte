@@ -1,0 +1,51 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { SUBS } from '../../data/site';
+---
+<BaseLayout title="Contrôle d'accès">
+  <PageHead title="Contrôle d'accès" lead="Outil de l'équipe d'accueil : scannez ou saisissez le code du billet. Fonctionne hors connexion, synchronisation ensuite." crumbs={[['/evenements', 'Événements'], ['', "Contrôle d'accès"]]} subnav={SUBS.evenements} />
+  <section class="block">
+    <div class="wrap grid g2">
+      <form class="panel" id="scanF">
+        <div class="player" style="aspect-ratio:4/3;background:#000"><div class="cap" style="text-align:center">Caméra (simulation) — ou saisissez le code ci-dessous</div></div>
+        <label class="f" for="tc" style="margin-top:14px">Code du billet</label>
+        <input class="in" id="tc" placeholder="TKT-E1-12345" autocomplete="off" />
+        <div class="row"><button class="btn btn-primary" type="submit">Valider l'entrée</button><button class="btn btn-ghost" type="button" id="demo">Code de démonstration</button></div>
+        <div id="sr" style="margin-top:14px"></div>
+      </form>
+      <div class="panel">
+        <h3>Tableau de bord en temps réel</h3>
+        <div class="grid g2">
+          <div class="kpi"><span class="small muted">Entrées</span><b id="nIn">412</b></div>
+          <div class="kpi"><span class="small muted">Attendus</span><b>1 250</b></div>
+          <div class="kpi"><span class="small muted">Salle principale</span><b>68 %</b></div>
+          <div class="kpi"><span class="small muted">Salle B2B</span><b>41 %</b></div>
+        </div>
+        <h4 style="margin-top:16px">Dernières entrées</h4>
+        <div id="last"><p class="small muted">Aucune entrée sur cet appareil.</p></div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+<script>
+  let checked: string[] = [];
+  try { checked = JSON.parse(localStorage.getItem('cea-checked') || '[]'); } catch {}
+  const tc = document.getElementById('tc') as HTMLInputElement, sr = document.getElementById('sr')!;
+  function draw() {
+    document.getElementById('nIn')!.textContent = String(412 + checked.length);
+    if (checked.length) document.getElementById('last')!.innerHTML = checked.slice(-5).reverse().map((c) => `<div class="small">✓ ${c}</div>`).join('');
+  }
+  document.getElementById('demo')!.addEventListener('click', () => { tc.value = 'TKT-E1-' + Math.floor(10000 + Math.random() * 89999); });
+  document.getElementById('scanF')!.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const c = tc.value.trim().toUpperCase();
+    const ok = /^TKT-E\d-\d{5}$/.test(c), dup = checked.includes(c);
+    sr.innerHTML = !ok
+      ? '<div class="lock" style="background:var(--bad-soft);border-color:var(--bad)"><b>Billet invalide</b> — code inconnu (format attendu : TKT-E1-12345).</div>'
+      : dup ? '<div class="lock"><b>Déjà scanné</b> — ce billet a déjà été utilisé.</div>'
+      : `<div class="lock" style="background:var(--ok-soft);border-color:var(--ok)"><b>Entrée validée</b> — ${c}</div>`;
+    if (ok && !dup) { checked.push(c); try { localStorage.setItem('cea-checked', JSON.stringify(checked)); } catch {} tc.value = ''; draw(); }
+  });
+  draw();
+</script>

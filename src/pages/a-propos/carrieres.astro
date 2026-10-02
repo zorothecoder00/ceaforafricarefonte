@@ -1,0 +1,19 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import JobCard from '../../components/JobCard.astro';
+import { JOBS, SUBS } from '../../data/site';
+
+const why = [['Impact', "Votre travail aide des milliers d'entrepreneurs."], ['Panafricain', 'Des équipes dans 16 pays, en français et en anglais.'], ['Apprendre', 'Formation continue via CEA Academy.']];
+---
+<BaseLayout title="Carrières">
+  <PageHead title="Travailler chez CEA" lead="Rejoignez une équipe panafricaine qui construit l'infrastructure de l'entrepreneuriat africain." crumbs={[['/a-propos', 'À propos'], ['', 'Carrières']]} subnav={SUBS.apropos} />
+  <section class="block">
+    <div class="wrap">
+      <div class="grid g3">{why.map(([t, d]) => <div class="panel"><h3>{t}</h3><p class="small" style="margin:0">{d}</p></div>)}</div>
+      <h2 style="margin-top:30px">Postes ouverts</h2>
+      {JOBS.filter((j) => j.co.startsWith('CEA')).map((j) => <JobCard j={j} />)}
+      <p class="small muted">Candidature spontanée ? <a href="/contact">Écrivez-nous</a>.</p>
+    </div>
+  </section>
+</BaseLayout>

@@ -1,0 +1,13 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import JobsBoard from '../../components/JobsBoard.astro';
+import { JOBS, SUBS } from '../../data/site';
+---
+<BaseLayout title="Diaspora">
+  <PageHead title="Diaspora : contribuer depuis l'étranger" lead="Des postes en télétravail et des missions pour les talents de la diaspora qui veulent contribuer ou revenir sur le continent." crumbs={[['/opportunites', 'Opportunités'], ['', 'Diaspora']]} subnav={SUBS.opps} />
+  <JobsBoard jobs={JOBS.filter((j) => j.diaspora || j.remote)} />
+  <section class="block" style="padding-top:0">
+    <div class="wrap"><div class="call"><div><h2>Investir plutôt que travailler ?</h2><p>Diaspora Invest vous permet d'investir dans des entreprises de votre pays d'origine.</p></div><div><a class="btn btn-primary" href="/kapital/diaspora">Découvrir Diaspora Invest</a></div></div></div>
+  </section>
+</BaseLayout>

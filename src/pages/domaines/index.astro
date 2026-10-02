@@ -4,25 +4,57 @@ import PageHead from '../../components/PageHead.astro';
 import DomainCard from '../../components/DomainCard.astro';
 import { DOMAINS } from '../../data/site';
 
-const quiz = [
-  ['Je veux apprendre les bases', '/academie'],
-  ["Je cherche de l'argent pour mon entreprise", '/kapital/diagnostic'],
-  ['Je veux investir dans des entreprises africaines', '/kapital/opportunites'],
-  ['Je veux recruter', '/opportunites'],
-  ['Je veux échanger avec des pairs', '/communaute'],
-  ["J'ai un projet à structurer", '/projets'],
-];
+// Quiz « Quel domaine pour moi ? » en 3 questions (CDC §6). Le besoin (Q2) choisit le parcours ; le stade (Q1) et le format (Q3) l'affinent.
+const Q1: [string, string][] = [['idee', "J'ai une idée"], ['jeune', 'Mon entreprise a moins de 2 ans'], ['pme', 'Je dirige une PME établie'], ['inv', 'Je veux investir']];
+const Q2: [string, string][] = [['apprendre', 'Apprendre et me former'], ['financer', 'Trouver des financements'], ['recruter', 'Recruter'], ['pairs', 'Échanger avec des pairs'], ['voix', 'Me faire entendre des décideurs'], ['capital', 'Ouvrir mon capital'], ['projet', 'Structurer un projet']];
+const Q3: [string, string][] = [['ligne', 'En ligne, à mon rythme'], ['accomp', 'Avec un accompagnement suivi'], ['events', 'Lors d’événements et de rencontres']];
+const RESULTS: Record<string, [string, string, string]> = {
+  apprendre: ['Accompagnement et formation', '/academie', 'Commencez par un cours gratuit de CEA Academy, puis un parcours certifiant.'],
+  'apprendre-accomp': ['Programmes d’accompagnement', '/programmes', 'Pré-incubation ou incubation : un parcours structuré avec un mentor.'],
+  financer: ['Levée de fonds', '/kapital/diagnostic', 'Faites le diagnostic « Suis-je prêt ? » puis rejoignez Investor Ready.'],
+  'financer-idee': ['Développement de projets', '/projets', 'Avant de lever, structurez votre projet dans le Project Studio.'],
+  'financer-inv': ['Investir avec CEA Kapital Invest', '/kapital/opportunites', 'Découvrez les opportunités vérifiées et créez votre profil investisseur.'],
+  recruter: ["Création d'emplois", '/opportunites/recruteur', 'Publiez vos offres dans CEA Talents et déclarez vos embauches.'],
+  pairs: ['Mastermind', '/communaute/mastermind', 'Rejoignez un cercle confidentiel de dirigeants de votre niveau.'],
+  'pairs-idee': ['Communauté', '/communaute/espaces', 'Commencez par les espaces thématiques et le mentorat.'],
+  voix: ['Action syndicale', '/voix', 'Participez aux consultations et soutenez les propositions.'],
+  capital: ['Actionnariat', '/actionnariat', 'Comprenez les bases puis simulez votre levée dans le studio de capital.'],
+  projet: ['Développement de projets', '/projets', 'Fiche projet, canvas et plan d’action dans le Project Studio.'],
+  events: ['Événements', '/evenements', 'Forums, ateliers et rencontres investisseurs près de chez vous.'],
+};
 ---
 <BaseLayout title="Nos domaines">
   <PageHead title="Nos domaines d'intervention" lead="Chaque domaine ouvre un parcours concret. Choisissez celui qui correspond à votre besoin du moment." crumbs={[['', 'Nos domaines']]} />
   <section class="block">
     <div class="wrap">
-      <div class="panel" style="margin-bottom:24px">
-        <h3>Quel domaine pour moi ?</h3>
-        <p class="muted">Choisissez la phrase qui vous ressemble.</p>
-        <div class="row">{quiz.map(([t, h]) => <a class="chip" href={h}>{t}</a>)}</div>
-      </div>
+      <form class="panel" id="quiz" style="margin-bottom:24px;scroll-margin-top:140px" data-results={JSON.stringify(RESULTS)}>
+        <h2 style="font-size:1.4rem">Quel domaine pour moi ?</h2>
+        <p class="muted">3 questions, 30 secondes.</p>
+        {[['q1', '1. Où en êtes-vous ?', Q1], ['q2', '2. Quel est votre besoin principal ?', Q2], ['q3', '3. Comment préférez-vous avancer ?', Q3]].map(([n, legend, opts]) => (
+          <fieldset style="border:0;padding:0;margin:0 0 14px">
+            <legend class="f">{legend as string}</legend>
+            <div class="row">{(opts as [string, string][]).map(([v, l], i) => <label class="chip"><input type="radio" name={n as string} value={v} required={i === 0} /> {l}</label>)}</div>
+          </fieldset>
+        ))}
+        <button class="btn btn-primary" type="submit">Voir mon parcours</button>
+        <div id="quizRes" class="call" style="margin-top:16px" hidden></div>
+      </form>
       <div class="grid g4">{DOMAINS.map((d) => <DomainCard d={d} href={`/domaines/${d.id}`} />)}</div>
     </div>
   </section>
 </BaseLayout>
+<script>
+  const f = document.getElementById('quiz') as HTMLFormElement;
+  const R: Record<string, [string, string, string]> = JSON.parse(f.dataset.results!);
+  f.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const v = (n: string) => (f.querySelector<HTMLInputElement>(`input[name="${n}"]:checked`) || { value: '' }).value;
+    const q1 = v('q1'), q2 = v('q2'), q3 = v('q3');
+    if (!q1 || !q2 || !q3) return (window as any).toast('Répondez aux 3 questions.');
+    const r = (q1 === 'inv' && R['financer-inv']) || R[`${q2}-${q1}`] || R[`${q2}-${q3}`] || (q3 === 'events' && q2 === 'pairs' ? R.events : null) || R[q2];
+    const out = document.getElementById('quizRes')!;
+    const prefix = location.pathname.startsWith('/en/') ? '/en' : '';
+    out.innerHTML = `<div><span class="tag gold">Votre parcours</span><h3 style="margin:10px 0 6px">${r[0]}</h3><p style="margin:0">${r[2]}</p></div><div><a class="btn btn-primary" href="${prefix}${r[1]}">Commencer</a></div>`;
+    out.hidden = false;
+  });
+</script>

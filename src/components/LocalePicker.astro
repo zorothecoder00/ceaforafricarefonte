@@ -1,0 +1,37 @@
+---
+/* Sélecteur pays · langue · devise (CDC §5.3). Les choix sont synchronisés entre l'en-tête et le menu mobile par src/scripts/app.ts.
+   inline = champs seuls (menu mobile) ; sinon bouton + fenêtre (en-tête). */
+import { HUBS, country } from '../data/site';
+import { CURRENCIES } from '../data/currency';
+import { getLang, useT } from '../i18n/ui';
+
+interface Props { id?: string; inline?: boolean }
+const { id, inline = false } = Astro.props;
+const lang = getLang(Astro.currentLocale);
+const t = useT(lang);
+const countries = [...HUBS].sort((a, b) => country(a.c).localeCompare(country(b.c), 'fr'));
+---
+{!inline && (
+  <div class="loc">
+    <button class="loc-btn" type="button" aria-expanded="false" aria-controls={id} aria-label={t('locTitle')} data-loc-btn>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></svg>
+      <span class="loc-txt" data-loc-txt>{lang.toUpperCase()} · FCFA</span>
+    </button>
+    <div class="loc-pop" id={id} hidden>
+      <b style="display:block;margin-bottom:10px">{t('locTitle')}</b>
+      <label class="f">{t('country')}<select class="in" data-loc="country"><option value="">{t('otherCountry')}</option>{countries.map((h) => <option value={h.c}>{country(h.c)}</option>)}</select></label>
+      <label class="f">{t('language')}<select class="in" data-loc="lang"><option value="fr" selected={lang === 'fr'}>Français</option><option value="en" selected={lang === 'en'}>English</option><option value="pt" disabled>Português (V2)</option><option value="ar" disabled>العربية (V2)</option><option value="sw" disabled>Kiswahili (V3)</option></select></label>
+      <label class="f">{t('currency')}<select class="in" data-loc="cur">{CURRENCIES.map((c) => <option value={c.code}>{c.code} — {c.name[lang]}</option>)}</select></label>
+      <p class="xs muted" style="margin:0">{t('rateNote')}</p>
+    </div>
+  </div>
+)}
+{inline && (
+  <>
+    <b>{t('locTitle')}</b>
+    <label class="f">{t('country')}<select class="in" data-loc="country"><option value="">{t('otherCountry')}</option>{countries.map((h) => <option value={h.c}>{country(h.c)}</option>)}</select></label>
+    <label class="f">{t('language')}<select class="in" data-loc="lang"><option value="fr" selected={lang === 'fr'}>Français</option><option value="en" selected={lang === 'en'}>English</option><option value="pt" disabled>Português (V2)</option><option value="ar" disabled>العربية (V2)</option><option value="sw" disabled>Kiswahili (V3)</option></select></label>
+    <label class="f">{t('currency')}<select class="in" data-loc="cur">{CURRENCIES.map((c) => <option value={c.code}>{c.code} — {c.name[lang]}</option>)}</select></label>
+    <p class="xs muted" style="margin:0">{t('rateNote')}</p>
+  </>
+)}

@@ -1,0 +1,18 @@
+---
+import { country } from '../data/site';
+interface Props { j: { id: string; t: string; co: string; c: string; type: string; remote: boolean; sal: string; skills: string[] } }
+const { j } = Astro.props;
+---
+<div class="panel row between" style="align-items:flex-start;margin-bottom:12px" data-type={j.type} data-c={j.c} data-remote={j.remote ? '1' : '0'} data-q={`${j.t} ${j.co} ${j.skills.join(' ')}`} data-skills={j.skills.join('|')}>
+  <div style="flex:1;min-width:240px">
+    <h3 style="margin:0 0 4px">{j.t}</h3>
+    <div class="muted small">{j.co} · {country(j.c)} · {j.type}{j.remote ? ' · Télétravail' : ''}</div>
+    <div class="row" style="margin-top:10px">{j.skills.map((s) => <span class="tag" data-skill={s.toLowerCase()}>{s}</span>)}</div>
+    <div class="small" style="margin-top:8px">Rémunération : {j.sal}<span class="match"></span></div>
+  </div>
+  <div class="row">
+    <button class="btn btn-ghost btn-sm" type="button" data-toast="Offre sauvegardée.">Sauvegarder</button>
+    <button class="btn btn-primary btn-sm" type="button" data-toast={`Candidature envoyée à ${j.co} avec votre profil CEA.`}>Postuler en un clic</button>
+    <button class="btn btn-ghost btn-sm" type="button" aria-label="Signaler l'annonce" data-toast="Annonce signalée. Merci, la modération vérifie.">⚑</button>
+  </div>
+</div>

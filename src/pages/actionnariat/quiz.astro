@@ -1,0 +1,46 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { SUBS } from '../../data/site';
+
+const Q: [string, string[]][] = [
+  ['Si une entreprise émet de nouvelles actions, le pourcentage des associés existants…', ['Baisse (dilution)', 'Augmente', 'Reste identique']],
+  ['Un dividende est…', ['Une part des bénéfices distribuée', 'Un prêt', 'Un impôt']],
+  ['La valorisation post-money est…', ['La valeur après la levée', 'La valeur avant la levée', "Le chiffre d'affaires"]],
+  ['Sur la BRVM, on passe un ordre via…', ['Une SGI agréée', "N'importe quelle banque", "Directement l'entreprise"]],
+];
+---
+<BaseLayout title="Quiz Actionnaire averti">
+  <PageHead title="Quiz « Actionnaire averti »" lead="4 questions. 3 bonnes réponses pour obtenir le certificat partageable." crumbs={[['/actionnariat', 'Actionnariat'], ['', 'Quiz']]} subnav={SUBS.actionnariat} />
+  <section class="block">
+    <div class="wrap" style="max-width:720px">
+      <form class="panel" id="qa">
+        {Q.map(([q, opts], i) => (
+          <fieldset style="border:0;padding:0;margin:0 0 16px">
+            <legend style="font-weight:600;margin-bottom:6px">{i + 1}. {q}</legend>
+            {opts.map((o, j) => <label class="row small" style="margin:4px 0"><input type="radio" name={`q${i}`} value={j === 0 ? '1' : '0'} required /> {o}</label>)}
+          </fieldset>
+        ))}
+        <button class="btn btn-primary" type="submit">Valider</button>
+      </form>
+      <div class="panel" id="cert" hidden style="border:2px solid var(--gold);text-align:center;padding:30px">
+        <div class="brand-sub" style="font-size:.8rem">CEA ACADEMY</div>
+        <h2 style="margin:10px 0">Certificat « Actionnaire averti »</h2>
+        <p>Délivré le <span id="certDate"></span> · n° <b class="num" id="certNo"></b></p>
+        <p class="small muted">Vérifiable par QR code sur la plateforme.</p>
+        <button class="btn btn-ghost btn-sm" type="button" data-toast="Lien du certificat copié pour LinkedIn.">Partager</button>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+<script>
+  document.getElementById('qa')!.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const ok = [...document.querySelectorAll<HTMLInputElement>('#qa input:checked')].filter((i) => i.value === '1').length;
+    if (ok < 3) return (window as any).toast(`${ok}/4. Il faut 3 bonnes réponses : relisez les fiches « Comprendre ».`);
+    document.getElementById('certDate')!.textContent = new Date().toLocaleDateString('fr-FR');
+    document.getElementById('certNo')!.textContent = 'CERT-ACT-' + Math.floor(10000 + Math.random() * 89999);
+    document.getElementById('qa')!.hidden = true;
+    document.getElementById('cert')!.hidden = false;
+  });
+</script>

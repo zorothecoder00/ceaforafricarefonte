@@ -1,0 +1,22 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import Icon from '../../components/Icon.astro';
+
+const items = [
+  ['Guide : préparer sa data room', '/academie/c3', 'doc'],
+  ['Guide : comprendre une term sheet', '/academie/c3', 'doc'],
+  ['Glossaire financier', '/ressources/glossaire', 'book'],
+  ['Simulateur de dilution', '/actionnariat/studio', 'chart'],
+  ['Calculateur obligataire', '/kapital/obligations', 'bank'],
+  ['Modèle de pitch deck', '/ressources/outils', 'tool'],
+];
+---
+<KapitalLayout title="Guides et modèles">
+  <PageHead title="Guides, glossaire et simulateurs" lead="Tout pour comprendre la levée de fonds et les marchés." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Ressources']]} />
+  <section class="block">
+    <div class="wrap grid g3">
+      {items.map(([t, h, ic]) => <a class="panel row" href={h} style="text-decoration:none"><span style="color:#E7BD62"><Icon name={ic} size={22} /></span><h3 style="margin:0">{t}</h3></a>)}
+    </div>
+  </section>
+</KapitalLayout>

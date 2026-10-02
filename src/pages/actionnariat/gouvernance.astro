@@ -1,0 +1,36 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { SUBS } from '../../data/site';
+
+const checks = ["Nous avons un pacte d'associés signé", 'Le conseil se réunit au moins 4 fois par an', 'Les comptes sont certifiés', 'Les décisions importantes sont consignées dans des procès-verbaux', "Les conflits d'intérêts sont déclarés"];
+const cal = [['31 mars', 'Dépôt des états financiers'], ['30 juin', 'Assemblée générale annuelle'], ['Trimestriel', 'Réunion du conseil']];
+const models = ['Procès-verbal de conseil', "Procès-verbal d'assemblée", 'Règlement intérieur du conseil'];
+---
+<BaseLayout title="Kit de gouvernance">
+  <PageHead title="Kit de gouvernance" lead="Conseil d'administration, procès-verbaux, calendrier des obligations et auto-évaluation." crumbs={[['/actionnariat', 'Actionnariat'], ['', 'Gouvernance']]} subnav={SUBS.actionnariat} />
+  <section class="block">
+    <div class="wrap grid g2">
+      <div class="panel">
+        <h3>Auto-évaluation de gouvernance</h3>
+        {checks.map((q) => <label class="row small" style="padding:6px 0"><input type="checkbox" class="gv" /> {q}</label>)}
+        <p id="gvs" class="small"></p>
+      </div>
+      <div class="panel">
+        <h3>Calendrier des obligations</h3>
+        <ol class="timeline">{cal.map(([d, t]) => <li><b>{d}</b> — {t}</li>)}</ol>
+        <h3>Modèles</h3>
+        {models.map((t) => <button class="btn btn-ghost btn-sm" type="button" style="margin:3px" data-toast="Modèle téléchargé (simulation).">{t}</button>)}
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+<script>
+  const boxes = [...document.querySelectorAll<HTMLInputElement>('.gv')];
+  const r = () => {
+    const n = boxes.filter((c) => c.checked).length;
+    document.getElementById('gvs')!.innerHTML = `Score : <b>${n}/5</b>. ${n < 3 ? 'Des bases à consolider : suivez le cours « Ouvrir le capital de sa PME ».' : n < 5 ? 'Bonne base. Encore quelques points à formaliser.' : 'Excellent : vous êtes prêt pour des investisseurs exigeants.'}`;
+  };
+  boxes.forEach((c) => c.addEventListener('change', r));
+  r();
+</script>

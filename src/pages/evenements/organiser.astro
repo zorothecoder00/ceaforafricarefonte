@@ -1,0 +1,40 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import Money from '../../components/Money.astro';
+import { SUBS } from '../../data/site';
+
+const packs: [string, number, string[]][] = [
+  ['Partenaire', 500000, ['Logo sur le site', '2 pass']],
+  ['Argent', 2000000, ['Stand', '5 pass', '1 prise de parole']],
+  ['Or', 5000000, ['Stand premium', '10 pass', 'Rapport de leads']],
+  ['Platine', 12000000, ["Naming d'une salle", '20 pass', 'Session dédiée Kapital Invest']],
+];
+---
+<BaseLayout title="Organiser avec nous">
+  <PageHead title="Organiser avec nous" lead="Proposez un événement, devenez sponsor ou exposant, ou organisez dans votre pays avec l'antenne CEA." crumbs={[['/evenements', 'Événements'], ['', 'Organiser']]} subnav={SUBS.evenements} />
+  <section class="block">
+    <div class="wrap">
+      <h2>Devenir sponsor du Forum 2026</h2>
+      <div class="grid g4">
+        {packs.map(([n, p, items], i) => (
+          <div class="panel" style={i === 3 ? 'border:2px solid var(--gold)' : ''}>
+            <h3>{n}</h3>
+            <b style="font-family:var(--display);font-size:1.3rem;color:var(--navy)"><Money xof={p} /></b>
+            <ul class="small">{items.map((x) => <li>{x}</li>)}</ul>
+            <button class="btn btn-primary btn-sm" type="button" data-toast={`Dossier sponsor « ${n} » envoyé par e-mail.`}>Demander le dossier</button>
+          </div>
+        ))}
+      </div>
+      <form class="panel" style="margin-top:24px;max-width:720px" data-demo="Proposition reçue. L'équipe Events vous recontacte sous 5 jours ouvrés.">
+        <h3>Proposer un événement</h3>
+        <label class="f" for="et">Titre</label><input class="in" id="et" required />
+        <label class="f" for="ec">Pays et ville</label><input class="in" id="ec" required />
+        <label class="f" for="ed">Date</label><input class="in" id="ed" type="date" />
+        <label class="f" for="ef">Format</label><select class="in" id="ef"><option>Présentiel</option><option>En ligne</option><option>Hybride</option></select>
+        <label class="f" for="ecap">Capacité</label><input class="in" id="ecap" type="number" value="100" min="1" />
+        <button class="btn btn-primary" type="submit">Soumettre</button>
+      </form>
+    </div>
+  </section>
+</BaseLayout>

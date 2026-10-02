@@ -1,0 +1,10 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import JobsBoard from '../../components/JobsBoard.astro';
+import { JOBS, SUBS } from '../../data/site';
+---
+<BaseLayout title="Missions et consultants">
+  <PageHead title="Missions et appels à consultants" lead="Missions freelance et expertises courtes proposées par les entreprises et programmes du réseau." crumbs={[['/opportunites', 'Opportunités'], ['', 'Missions']]} subnav={SUBS.opps} />
+  <JobsBoard jobs={JOBS.filter((j) => ['Freelance', 'Mission'].includes(j.type))} />
+</BaseLayout>

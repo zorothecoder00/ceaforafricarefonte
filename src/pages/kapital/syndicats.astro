@@ -1,0 +1,18 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import Lock from '../../components/Lock.astro';
+
+const clubs: [string, string, number][] = [["Club Agritech Afrique de l'Ouest", 'Chef de file : J.-M. Ekotto', 34], ['Diaspora Capital Club', 'Chef de file : A. Bello', 58], ['Women Invest Africa', 'Chef de file : N. Eze', 41]];
+---
+<KapitalLayout title="Clubs et syndicats">
+  <PageHead title="Clubs et syndicats d'investisseurs" lead="Un investisseur chef de file présente une opportunité ; les membres du club co-investissent ensemble." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Clubs et syndicats']]} />
+  <section class="block">
+    <div class="wrap">
+      <Lock feature="kap_sub" text="Les syndicats exigent un véhicule dédié et un partenaire agréé dans chaque juridiction." />
+      <div class="grid g3" style="margin-top:18px">
+        {clubs.map(([n, l, m]) => <div class="panel"><h3>{n}</h3><p class="small muted">{l} · {m} membres</p><button class="btn btn-primary btn-sm" type="button" data-toast="Demande d'adhésion envoyée au chef de file.">Demander à rejoindre</button></div>)}
+      </div>
+    </div>
+  </section>
+</KapitalLayout>

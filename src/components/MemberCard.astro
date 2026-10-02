@@ -1,0 +1,12 @@
+---
+import { country, initials } from '../data/site';
+interface Props { m: { n: string; c: string; s: string; r: string; b: string[]; need: string; offer: string } }
+const { m } = Astro.props;
+---
+<div class="panel" data-c={m.c} data-q={`${m.n} ${m.s} ${m.need} ${m.offer} ${m.r}`}>
+  <div class="row"><span class="avatar">{initials(m.n)}</span><div><b>{m.n}</b><div class="small muted">{m.r} · {m.s} · {country(m.c)}</div></div></div>
+  <div class="row" style="margin:10px 0">{m.b.map((x) => <span class={`tag ${x.includes('Vérifi') ? 'ok' : 'gold'}`}>{x}</span>)}</div>
+  <p class="small" style="margin:0"><b>Cherche :</b> {m.need}</p>
+  <p class="small"><b>Propose :</b> {m.offer}</p>
+  <a class="btn btn-ghost btn-sm" href={`/communaute/messages?to=${encodeURIComponent(m.n)}`}>Envoyer un message</a>
+</div>

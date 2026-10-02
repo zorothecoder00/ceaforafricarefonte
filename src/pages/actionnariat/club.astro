@@ -1,0 +1,62 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { SUBS } from '../../data/site';
+
+const docs = ['Convocation', 'Rapport de gestion 2025', 'Comptes 2025', 'Texte des résolutions'];
+const resolutions = ['Approbation des comptes 2025', 'Affectation du résultat', "Renouvellement d'un administrateur"];
+---
+<BaseLayout title="Club des actionnaires">
+  <PageHead title="Club des actionnaires CEA" lead="Informations, documents et assemblées générales. Vote électronique sécurisé." crumbs={[['/actionnariat', 'Actionnariat'], ['', 'Club des actionnaires']]} subnav={SUBS.actionnariat} />
+  <section class="block">
+    <div class="wrap split">
+      <div>
+        <h2>Assemblée générale ordinaire — 14 décembre 2026</h2>
+        <div class="panel">
+          <h3>Documents</h3>
+          {docs.map((d) => <div class="row between" style="padding:8px 0;border-bottom:1px solid var(--line)"><span>{d}</span><button class="btn btn-ghost btn-sm" type="button" data-toast="Document ouvert (simulation).">Lire</button></div>)}
+        </div>
+        <h3 style="margin-top:22px">Résolutions</h3>
+        <div id="ag">
+          {resolutions.map((r, i) => (
+            <div class="panel row between" style="margin-bottom:8px">
+              <span>{i + 1}. {r}</span>
+              <span class="row" data-slots>{['Pour', 'Contre', 'Abstention'].map((o) => <button class="slot" type="button" aria-pressed="false" data-res={i}>{o}</button>)}</span>
+            </div>
+          ))}
+          <button class="btn btn-primary" type="button" id="agGo">Valider mon vote (authentification forte)</button>
+        </div>
+      </div>
+      <aside>
+        <form class="panel" data-demo="Question transmise. La réponse sera publiée avant l'assemblée.">
+          <h3>Poser une question écrite</h3>
+          <textarea class="in" required aria-label="Votre question"></textarea>
+          <button class="btn btn-primary btn-sm" type="submit">Envoyer</button>
+        </form>
+      </aside>
+    </div>
+  </section>
+  <dialog id="otp">
+    <div class="dlg-h"><h3>Authentification forte</h3></div>
+    <form class="dlg-b" id="otpF">
+      <p>Saisissez le code reçu par SMS pour signer votre vote (démo : 4 à 6 chiffres au choix).</p>
+      <input class="in" id="agc" required pattern="[0-9]{4,6}" maxlength="6" inputmode="numeric" aria-label="Code SMS" />
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" type="button" id="otpX">Annuler</button><button class="btn btn-primary" type="submit">Signer</button></div>
+    </form>
+  </dialog>
+</BaseLayout>
+<script>
+  const dlg = document.getElementById('otp') as HTMLDialogElement;
+  const toast = (t: string) => (window as any).toast(t);
+  document.getElementById('agGo')!.addEventListener('click', () => {
+    const voted = new Set([...document.querySelectorAll<HTMLElement>('#ag .slot[aria-pressed="true"]')].map((b) => b.dataset.res));
+    if (voted.size < 3) return toast('Votez sur les trois résolutions.');
+    dlg.showModal();
+  });
+  document.getElementById('otpX')!.addEventListener('click', () => dlg.close());
+  document.getElementById('otpF')!.addEventListener('submit', (e) => {
+    e.preventDefault();
+    dlg.close();
+    toast(`Vote enregistré. Preuve horodatée n° VOTE-2026-${Math.floor(1000 + Math.random() * 8999)}.`);
+  });
+</script>

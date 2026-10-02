@@ -1,0 +1,76 @@
+---
+/* Connexion / inscription (CDC §10) — interface prête ; l'authentification réelle arrive au lot 2. */
+import PageHead from '../PageHead.astro';
+import { lp, type Lang } from '../../i18n/ui';
+
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+const en = lang === 'en';
+const L = (p: string) => lp(lang, p);
+const w = (fr: string, e: string) => (en ? e : fr);
+const providers = ['Google', 'Apple', 'LinkedIn'];
+---
+<PageHead lang={lang} title={w('Se connecter ou créer un compte', 'Sign in or create an account')} lead={w('Un seul compte pour CEA FOR AFRICA et CEA Kapital Invest. Inscription en 60 secondes avec votre numéro de téléphone.', 'One account for CEA FOR AFRICA and CEA Kapital Invest. Sign up in 60 seconds with your phone number.')} crumbs={[['', w('Connexion', 'Sign in')]]} />
+<section class="block">
+  <div class="wrap" style="max-width:520px">
+    <div class="tag info" style="display:block;border-radius:8px;padding:10px;margin-bottom:16px">{w('Démonstration : la connexion réelle (SMS, WhatsApp, Google, Apple, LinkedIn, clés d’accès) sera activée au lot 2.', 'Demo: real sign-in (SMS, WhatsApp, Google, Apple, LinkedIn, passkeys) will be enabled in phase 2.')}</div>
+    <form class="panel" id="authF" novalidate>
+      <div data-step="0">
+        <div class="filters" style="margin-top:0" role="tablist">
+          <button class="chip" type="button" aria-pressed="true" data-mode="tel">{w('Téléphone', 'Phone')}</button>
+          <button class="chip" type="button" aria-pressed="false" data-mode="mail">E-mail</button>
+        </div>
+        <label class="f" for="authId" id="authLbl">{w('Numéro de téléphone', 'Phone number')}</label>
+        <input class="in" id="authId" required inputmode="tel" autocomplete="tel" placeholder="+228 90 00 00 00" />
+        <label class="row small" style="margin-bottom:12px"><input type="checkbox" checked /> {w('Recevoir le code par WhatsApp plutôt que par SMS', 'Receive the code by WhatsApp instead of SMS')}</label>
+        <button class="btn btn-primary" type="submit" style="width:100%">{w('Recevoir un code', 'Get a code')}</button>
+        <p class="small muted" style="text-align:center;margin:14px 0 8px">{w('ou', 'or')}</p>
+        <div class="grid" style="gap:8px">{providers.map((p) => <button class="btn btn-ghost" type="button" data-toast={w(`Connexion ${p} : disponible au lot 2.`, `${p} sign-in: available in phase 2.`)}>{w('Continuer avec', 'Continue with')} {p}</button>)}</div>
+      </div>
+      <div data-step="1" hidden>
+        <p>{w('Un code à 6 chiffres a été envoyé. Saisissez-le pour continuer (démo : n’importe quel code).', 'A 6-digit code has been sent. Enter it to continue (demo: any code).')}</p>
+        <label class="f" for="otp">{w('Code de vérification', 'Verification code')}</label>
+        <input class="in" id="otp" required pattern="[0-9]{6}" maxlength="6" inputmode="numeric" autocomplete="one-time-code" />
+        <button class="btn btn-primary" type="submit" style="width:100%">{w('Valider', 'Verify')}</button>
+        <button class="btn btn-ghost btn-sm" type="button" id="authBack" style="margin-top:10px">{w('Modifier le numéro', 'Change number')}</button>
+      </div>
+      <div data-step="2" hidden style="text-align:center">
+        <span class="tag ok">{w('Connecté (démo)', 'Signed in (demo)')}</span>
+        <h3 style="margin-top:12px">{w('Bienvenue !', 'Welcome!')}</h3>
+        <p class="small">{w('Prochaine étape : compléter votre profil et choisir votre formule.', 'Next step: complete your profile and choose your plan.')}</p>
+        <a class="btn btn-primary" href={L('/adherer')}>{w('Choisir ma formule', 'Choose my plan')}</a>
+      </div>
+    </form>
+    <p class="small muted" style="margin-top:14px">{w('En continuant, vous acceptez les', 'By continuing, you accept the')} <a href={L('/legal/conditions')}>{w("conditions d'utilisation", 'terms of use')}</a> {w('et la', 'and the')} <a href={L('/legal/confidentialite')}>{w('politique de confidentialité', 'privacy policy')}</a>.</p>
+  </div>
+</section>
+<script>
+  const f = document.getElementById('authF') as HTMLFormElement;
+  const steps = [...f.querySelectorAll<HTMLElement>('[data-step]')];
+  const id = document.getElementById('authId') as HTMLInputElement, lbl = document.getElementById('authLbl')!;
+  const en = document.documentElement.lang === 'en';
+  let step = 0;
+  const show = () => steps.forEach((s, i) => (s.hidden = i !== step));
+  f.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) => b.addEventListener('click', () => {
+    f.querySelectorAll('[data-mode]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    const mail = b.dataset.mode === 'mail';
+    id.type = mail ? 'email' : 'text';
+    id.inputMode = mail ? 'email' : 'tel';
+    id.autocomplete = mail ? 'email' : 'tel';
+    id.placeholder = mail ? (en ? 'your@email.com' : 'votre@email.com') : '+228 90 00 00 00';
+    lbl.textContent = mail ? 'E-mail' : en ? 'Phone number' : 'Numéro de téléphone';
+  }));
+  f.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const field = steps[step].querySelector<HTMLInputElement>('input[required]');
+    if (field && (!field.value.trim() || !field.checkValidity() || (id.type !== 'email' && step === 0 && id.value.replace(/\D/g, '').length < 8))) {
+      field.setCustomValidity(en ? 'Please check this field.' : 'Vérifiez ce champ.');
+      field.reportValidity();
+      field.setCustomValidity('');
+      return;
+    }
+    step++; show();
+    steps[step].querySelector<HTMLInputElement>('input')?.focus();
+  });
+  document.getElementById('authBack')!.addEventListener('click', () => { step = 0; show(); });
+</script>

@@ -1,12 +1,12 @@
 ---
 import Money from './Money.astro';
-interface Props { e: { id: string; t: string; city: string; c: string; fmt: string; date: string; tk: { p: number }[] } }
-const { e } = Astro.props;
+interface Props { e: { id: string; t: string; city: string; c: string; fmt: string; date: string; tk: { p: number }[] }; lang?: 'fr' | 'en' }
+const { e, lang = 'fr' } = Astro.props;
 const d = new Date(e.date);
 const free = e.tk.some((t) => !t.p);
 ---
 <a href={`/evenements/${e.id}`} class="panel" style="display:flex;gap:16px;text-decoration:none;margin-top:12px;align-items:center" data-fmt={e.fmt} data-c={e.c}>
-  <div style="text-align:center;min-width:56px"><b style="font-family:var(--display);font-size:1.6rem;color:var(--navy);display:block;line-height:1">{d.getDate()}</b><span class="small muted">{d.toLocaleDateString('fr-FR', { month: 'short' })}</span></div>
+  <div style="text-align:center;min-width:56px"><b style="font-family:var(--display);font-size:1.6rem;color:var(--navy);display:block;line-height:1">{d.getDate()}</b><span class="small muted">{d.toLocaleDateString(lang === 'en' ? 'en-GB' : 'fr-FR', { month: 'short' })}</span></div>
   <div style="flex:1"><b>{e.t}</b><div class="small muted">{e.city} · {e.fmt}</div></div>
-  <span class={`tag ${free ? 'ok' : 'info'}`}>{free ? 'Accès gratuit' : <>Dès <Money xof={Math.min(...e.tk.map((t) => t.p))} /></>}</span>
+  <span class={`tag ${free ? 'ok' : 'info'}`}>{free ? (lang === 'en' ? 'Free access' : 'Accès gratuit') : <>{lang === 'en' ? 'From' : 'Dès'} <Money xof={Math.min(...e.tk.map((t) => t.p))} /></>}</span>
 </a>

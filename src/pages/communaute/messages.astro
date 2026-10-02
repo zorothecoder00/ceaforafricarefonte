@@ -1,0 +1,64 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { SUBS } from '../../data/site';
+
+/* Conversations de démonstration ; les nouveaux messages sont enregistrés dans le navigateur. */
+const seed = {
+  'Ngozi Eze': [['a', 'Bonjour ! Votre modèle financier avance ? Je peux le relire jeudi.'], ['u', 'Oui, je vous envoie la dernière version demain.']],
+  'Kwame Asante': [['a', "Merci pour l'intro au distributeur, on s'est parlé hier."]],
+  'Cercle Croissance AO': [['a', 'Rappel : séance jeudi 18:00, hot seat de Fatou.']],
+};
+---
+<BaseLayout title="Messagerie">
+  <PageHead title="Messagerie" lead="Conversations privées et de groupe, chiffrées en transit." crumbs={[['/communaute', 'Communauté'], ['', 'Messagerie']]} subnav={SUBS.communaute} />
+  <section class="block" style="padding-top:20px">
+    <div class="wrap">
+      <div class="chatbox" id="mbox" data-seed={JSON.stringify(seed)}>
+        <div class="conv" id="conv"></div>
+        <div class="thread">
+          <div class="row between" style="padding:12px 14px;border-bottom:1px solid var(--line)"><b id="cur"></b><div class="row"><button class="btn btn-ghost btn-sm" type="button" data-toast="Appel vidéo lancé (simulation).">Appel vidéo</button><button class="btn btn-ghost btn-sm" type="button" data-toast="Traduction automatique activée pour cette conversation.">Traduire</button></div></div>
+          <div class="msgs" id="msgs"></div>
+          <form class="chat-f" id="mf"><input id="mi" placeholder="Votre message" aria-label="Votre message" autocomplete="off" /><label class="btn btn-ghost btn-sm">Fichier<input type="file" class="sr" id="mfile" /></label><button class="btn btn-primary btn-sm" type="submit">Envoyer</button></form>
+        </div>
+      </div>
+      <p class="demo-note" style="margin-top:10px">Démonstration : les messages restent dans votre navigateur.</p>
+    </div>
+  </section>
+</BaseLayout>
+<script>
+  type Msgs = Record<string, [string, string][]>;
+  const box = document.getElementById('mbox')!;
+  let S: Msgs = JSON.parse(box.dataset.seed!);
+  try { S = { ...S, ...JSON.parse(localStorage.getItem('cea-msgs') || '{}') }; } catch {}
+  const to = new URLSearchParams(location.search).get('to');
+  if (to && !S[to]) S = { [to]: [], ...S };
+  let cur = to || Object.keys(S)[0];
+  const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  const ini = (n: string) => n.split(' ').map((x) => x[0]).join('').slice(0, 2);
+  const save = () => { try { localStorage.setItem('cea-msgs', JSON.stringify(S)); } catch {} };
+  function render() {
+    document.getElementById('conv')!.innerHTML = Object.keys(S).map((n) => `<button type="button" aria-pressed="${n === cur}" data-cv="${esc(n)}"><span class="avatar" style="width:36px;height:36px;font-size:.72rem">${esc(ini(n))}</span><span><b class="small">${esc(n)}</b><br><span class="xs muted">${esc((S[n].slice(-1)[0] || ['', ''])[1].slice(0, 32))}</span></span></button>`).join('');
+    document.getElementById('cur')!.textContent = cur;
+    const m = document.getElementById('msgs')!;
+    m.innerHTML = S[cur].map(([w, t]) => `<div class="msg ${w === 'u' ? 'u' : 'a'}">${esc(t)}</div>`).join('') || '<p class="small muted">Écrivez le premier message.</p>';
+    m.scrollTop = m.scrollHeight;
+    document.querySelectorAll<HTMLButtonElement>('[data-cv]').forEach((b) => b.addEventListener('click', () => { cur = b.dataset.cv!; render(); }));
+  }
+  function send(t: string) {
+    const c = cur;
+    S[c].push(['u', t]); save(); render();
+    setTimeout(() => { S[c].push(['a', 'Merci pour votre message, je reviens vers vous rapidement.']); save(); render(); }, 1200);
+  }
+  document.getElementById('mf')!.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const i = document.getElementById('mi') as HTMLInputElement;
+    if (i.value.trim()) send(i.value.trim());
+    i.value = '';
+  });
+  document.getElementById('mfile')!.addEventListener('change', (e) => {
+    const f = (e.target as HTMLInputElement).files?.[0];
+    if (f) send('📎 ' + f.name);
+  });
+  render();
+</script>

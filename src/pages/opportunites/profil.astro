@@ -1,0 +1,54 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { SUBS } from '../../data/site';
+---
+<BaseLayout title="Mon profil talent">
+  <PageHead title="Mon profil talent" lead="Importez votre CV : nous en extrayons vos compétences. Vous choisissez qui peut voir votre profil." crumbs={[['/opportunites', 'Opportunités'], ['', 'Mon profil talent']]} subnav={SUBS.opps} />
+  <section class="block">
+    <div class="wrap split">
+      <div class="panel">
+        <b id="pComp"></b>
+        <div class="progress" style="margin:8px 0 18px"><span id="pBar" style="width:0"></span></div>
+        <label class="f" for="cv">Importer mon CV (PDF)</label><input class="in" type="file" id="cv" accept=".pdf,.doc,.docx" />
+        <p class="small" id="cvName" style="margin-top:-8px"></p>
+        <label class="f" for="tt">Titre professionnel</label><input class="in" id="tt" placeholder="Ex. Développeur mobile" />
+        <label class="f" for="tsk">Compétences (séparées par des virgules)</label><input class="in" id="tsk" placeholder="Flutter, Excel, Anglais" />
+        <div class="row between" style="margin-bottom:14px"><span>Visible par les recruteurs vérifiés</span><button class="toggle" id="tv" type="button" role="switch" aria-checked="true" aria-label="Visibilité du profil"></button></div>
+        <div class="row"><button class="btn btn-primary" id="tsave" type="button">Enregistrer</button><a class="btn btn-ghost" href="/opportunites">Voir les offres correspondantes</a></div>
+        <p class="demo-note" style="margin-top:12px">Démonstration : le profil est enregistré dans votre navigateur uniquement.</p>
+      </div>
+      <aside>
+        <div class="panel"><h3>Suggestions de formation</h3><p class="small muted">Pour combler l'écart avec les offres qui vous intéressent.</p><a class="small" href="/academie/c5" style="display:block">Marketing digital à petit budget</a><a class="small" href="/academie/c2" style="display:block">Construire un modèle financier</a></div>
+        <div class="panel" style="margin-top:16px"><h3>Préparer un entretien</h3><button class="btn btn-ghost btn-sm" type="button" onclick="openChat()">Demander conseil à CEA Copilot</button></div>
+      </aside>
+    </div>
+  </section>
+</BaseLayout>
+<script>
+  type P = { titre: string; skills: string; cv: string; visible: boolean };
+  let p: P = { titre: '', skills: '', cv: '', visible: true };
+  try { p = { ...p, ...JSON.parse(localStorage.getItem('cea-talent') || '{}') }; } catch {}
+  const $ = (id: string) => document.getElementById(id) as HTMLInputElement;
+  const save = () => { try { localStorage.setItem('cea-talent', JSON.stringify(p)); } catch {} };
+  function draw() {
+    const n = [p.titre, p.skills, p.cv].filter(Boolean).length;
+    $('pComp').textContent = `Profil complété à ${Math.round((n / 3) * 100)} %`;
+    $('pBar').style.width = (n / 3) * 100 + '%';
+    $('cvName').textContent = p.cv ? `✓ ${p.cv}` : '';
+    $('tt').value = p.titre;
+    $('tsk').value = p.skills;
+    $('tv').setAttribute('aria-checked', String(p.visible));
+  }
+  $('cv').addEventListener('change', (e) => {
+    const f = (e.target as HTMLInputElement).files?.[0];
+    if (!f) return;
+    p.cv = f.name;
+    if (!p.skills) p.skills = 'Excel, Rédaction, Anglais';
+    save(); draw();
+    (window as any).toast('CV analysé : 3 compétences détectées.');
+  });
+  $('tv').addEventListener('click', () => { p.visible = !p.visible; save(); draw(); });
+  $('tsave').addEventListener('click', () => { p.titre = $('tt').value; p.skills = $('tsk').value; save(); draw(); (window as any).toast('Profil enregistré.'); });
+  draw();
+</script>

@@ -5,7 +5,10 @@ import EventRow from '../../components/EventRow.astro';
 import KapitalAd from '../../components/KapitalAd.astro';
 import { EVENTS, SUBS, country } from '../../data/site';
 
+// Type d'événement (filtre ?type= utilisé par le méga-menu)
+const TYPE: Record<string, string> = { e1: 'Forum', e2: 'Masterclass et ateliers', e3: 'Rencontres investisseurs', e4: 'Masterclass et ateliers', e5: 'Réseautage' };
 const list = [...EVENTS].sort((a, b) => a.date.localeCompare(b.date));
+const types = [...new Set(Object.values(TYPE))];
 const countries = [...new Set(EVENTS.map((e) => e.c))];
 ---
 <BaseLayout title="Événements">
@@ -13,28 +16,31 @@ const countries = [...new Set(EVENTS.map((e) => e.c))];
   <section class="block" style="padding-top:20px">
     <div class="wrap">
       <div class="filters">
+        <select class="in" id="fType" aria-label="Type"><option value="">Tous les types</option>{types.map((t) => <option>{t}</option>)}</select>
         <select class="in" id="fFmt" aria-label="Format"><option value="">Tous les formats</option><option>Présentiel</option><option>En ligne</option><option>Hybride</option></select>
         <select class="in" id="fC" aria-label="Pays"><option value="">Tous les pays</option>{countries.map((c) => <option value={c}>{country(c)}</option>)}</select>
         <button class="btn btn-ghost btn-sm" data-toast="Abonnement au calendrier ajouté (.ics).">S'abonner au calendrier</button>
       </div>
       <div class="split">
-        <div id="evList">{list.map((e) => <EventRow e={e} />)}<div class="empty" id="evEmpty" hidden style="margin-top:12px">Aucun événement pour ces critères.</div></div>
+        <div id="evList">{list.map((e) => <div data-type={TYPE[e.id]}><EventRow e={e} /></div>)}<div class="empty" id="evEmpty" hidden style="margin-top:12px">Aucun événement pour ces critères.</div></div>
         <aside><KapitalAd variant={0} /></aside>
       </div>
     </div>
   </section>
 </BaseLayout>
 <script>
-  const f = document.getElementById('fFmt') as HTMLSelectElement, c = document.getElementById('fC') as HTMLSelectElement;
+  const f = document.getElementById('fFmt') as HTMLSelectElement, c = document.getElementById('fC') as HTMLSelectElement, ty = document.getElementById('fType') as HTMLSelectElement;
   function apply() {
     let n = 0;
-    document.querySelectorAll<HTMLElement>('#evList > a').forEach((el) => {
-      const ok = (!f.value || el.dataset.fmt === f.value) && (!c.value || el.dataset.c === c.value);
-      el.hidden = !ok;
+    document.querySelectorAll<HTMLElement>('#evList > [data-type]').forEach((box) => {
+      const el = box.querySelector<HTMLElement>('a')!;
+      const ok = (!ty.value || box.dataset.type === ty.value) && (!f.value || el.dataset.fmt === f.value) && (!c.value || el.dataset.c === c.value);
+      box.hidden = !ok;
       if (ok) n++;
     });
     document.getElementById('evEmpty')!.hidden = n > 0;
   }
-  f.addEventListener('change', apply);
-  c.addEventListener('change', apply);
+  [f, c, ty].forEach((x) => x.addEventListener('change', apply));
+  const q = new URLSearchParams(location.search).get('type');
+  if (q && [...ty.options].some((o) => o.value === q)) { ty.value = q; apply(); }
 </script>

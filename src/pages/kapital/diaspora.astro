@@ -1,0 +1,18 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { HUBS, country } from '../../data/site';
+
+const pillars = [['Choisir son pays', "Opportunités filtrées par pays d'origine."], ['Comprendre la fiscalité', 'Guides par pays de résidence (à valider avec un conseil).'], ['Rencontrer les fondateurs', 'Sessions en ligne mensuelles, adaptées aux fuseaux horaires.']];
+---
+<KapitalLayout title="Diaspora Invest">
+  <PageHead title="Diaspora Invest" lead="Investir dans l'entreprise africaine depuis Paris, Montréal, Londres ou Washington." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Diaspora Invest']]} />
+  <section class="block">
+    <div class="wrap">
+      <div class="grid g3">{pillars.map(([t, d]) => <div class="panel"><h3>{t}</h3><p class="small" style="margin:0">{d}</p></div>)}</div>
+      <h2 style="margin-top:30px">Votre pays d'origine</h2>
+      <div class="filters">{HUBS.slice(0, 10).map((h) => <a class="chip" href={`/pays/${h.c.toLowerCase()}`}>{country(h.c)}</a>)}</div>
+      <a class="kbtn" href="/kapital/devenir-investisseur">Devenir investisseur vérifié</a>
+    </div>
+  </section>
+</KapitalLayout>

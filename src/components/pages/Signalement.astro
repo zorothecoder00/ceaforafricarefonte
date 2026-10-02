@@ -1,0 +1,41 @@
+---
+import PageHead from '../PageHead.astro';
+import { lp, type Lang } from '../../i18n/ui';
+
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+const en = lang === 'en';
+const L = (p: string) => lp(lang, p);
+const w = (fr: string, e: string) => (en ? e : fr);
+const cats = en
+  ? ['Inappropriate content', 'Fraud or scam', 'Misleading job offer', 'Fake profile', 'Investment scam attempt', 'Security vulnerability', 'Accessibility problem']
+  : ['Contenu inapproprié', 'Fraude ou arnaque', "Offre d'emploi trompeuse", 'Faux profil', "Tentative d'arnaque à l'investissement", 'Faille de sécurité', "Problème d'accessibilité"];
+---
+<PageHead lang={lang} title={w('Signaler un contenu ou une fraude', 'Report content or fraud')} lead={w('Votre signalement est traité par l’équipe de modération sous 48 heures. Vous pouvez rester anonyme.', 'Your report is handled by the moderation team within 48 hours. You can stay anonymous.')} crumbs={[['', w('Signalement', 'Report')]]} />
+<section class="block">
+  <div class="wrap split">
+    <form class="panel" data-demo={w('Signalement reçu. Merci : la modération vérifie sous 48 heures.', 'Report received. Thank you: moderation will check within 48 hours.')}>
+      <label class="f" for="rk">{w('Type de signalement', 'Type of report')}</label>
+      <select class="in" id="rk">{cats.map((c) => <option>{c}</option>)}</select>
+      <label class="f" for="ru">{w('Page ou profil concerné (adresse)', 'Page or profile concerned (address)')}</label>
+      <input class="in" id="ru" type="url" placeholder="https://cea4africa.com/…" />
+      <label class="f" for="rd">{w('Description', 'Description')}</label>
+      <textarea class="in" id="rd" required minlength="10"></textarea>
+      <label class="f" for="rc">{w('Votre contact (facultatif)', 'Your contact (optional)')}</label>
+      <input class="in" id="rc" placeholder={w('E-mail ou téléphone', 'Email or phone')} />
+      <label class="row small"><input type="checkbox" checked /> {w('Rester anonyme', 'Stay anonymous')}</label>
+      <button class="btn btn-primary" type="submit" style="margin-top:12px">{w('Envoyer le signalement', 'Send report')}</button>
+    </form>
+    <aside>
+      <div class="panel">
+        <h3>{w('Arnaques à l’investissement', 'Investment scams')}</h3>
+        <p class="small">{w('CEA ne vous demandera jamais de verser de l’argent sur un compte personnel ni par message. Aucune souscription n’est ouverte sans partenaire agréé.', 'CEA will never ask you to send money to a personal account or by message. No subscription is open without a licensed partner.')}</p>
+        <a class="small" href={L('/kapital/risques')}>{w("Risques de l'investissement", 'Investment risks')}</a>
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <h3>{w('Faille de sécurité', 'Security vulnerability')}</h3>
+        <p class="small" style="margin:0">{w('Merci de ne pas divulguer publiquement la faille avant sa correction. Nous répondons sous 72 heures.', 'Please do not disclose the vulnerability publicly before it is fixed. We reply within 72 hours.')}</p>
+      </div>
+    </aside>
+  </div>
+</section>

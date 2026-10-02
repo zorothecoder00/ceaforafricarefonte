@@ -1,0 +1,30 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import Icon from '../../components/Icon.astro';
+import KapitalAd from '../../components/KapitalAd.astro';
+import { SUBS } from '../../data/site';
+
+const steps = [['Candidature', 'Formulaire et pièces'], ['Diagnostic de maturité', '8 dimensions, avec un analyste'], ["Plan d'accompagnement", 'Objectifs et jalons sur 6 mois'], ['Séances de mentorat', 'Toutes les 2 semaines'], ['Jalons validés', "Chiffre d'affaires, équipe, produit"], ['Demo Day', 'Devant les investisseurs de Kapital Invest']];
+const gets = ['Un mentor dédié et 12 séances', "Un accès gratuit à tous les cours de l'Académie", 'La préparation Investor Ready avec Kapital Invest', 'Une place au Demo Day du Forum 2026'];
+---
+<BaseLayout title="Accélérateur — Cohorte 4">
+  <PageHead title="Accélérateur CEA — Cohorte 4" lead="Six mois pour accélérer, avec un mentor dédié et un Demo Day devant 40 investisseurs." crumbs={[['/programmes', 'Programmes'], ['', 'Accélérateur']]} subnav={SUBS.programmes} />
+  <section class="block">
+    <div class="wrap split">
+      <div>
+        <h2>Le parcours</h2>
+        <ol class="timeline">{steps.map(([t, d]) => <li><b>{t}</b><div class="small muted">{d}</div></li>)}</ol>
+        <a class="btn btn-primary" href="/programmes/candidature">Postuler à la cohorte 4</a>
+        <h2 style="margin-top:28px">Ce que vous recevez</h2>
+        <div class="grid g2">{gets.map((x) => <div class="panel small row"><Icon name="star" /> {x}</div>)}</div>
+        <h2 style="margin-top:28px">Critères d'éligibilité</h2>
+        <ul><li>Entreprise immatriculée depuis 1 à 5 ans, dans l'un des 16 pays CEA</li><li>Premiers clients payants</li><li>Équipe dirigeante disponible pour les séances</li></ul>
+      </div>
+      <aside>
+        <div class="panel"><p class="small muted" style="margin:0 0 6px">Clôture des candidatures</p><div class="cd" data-countdown="2026-11-15T23:59:00"></div></div>
+        <div style="margin-top:16px"><KapitalAd variant={0} /></div>
+      </aside>
+    </div>
+  </section>
+</BaseLayout>

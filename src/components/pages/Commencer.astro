@@ -1,0 +1,70 @@
+---
+/* « Par où commencer ? » selon le profil déclaré (CDC §5.3). */
+import PageHead from '../PageHead.astro';
+import Icon from '../Icon.astro';
+import { lp, type Lang } from '../../i18n/ui';
+
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+const en = lang === 'en';
+const L = (p: string) => lp(lang, p);
+type Step = [string, string, string];
+const profiles: { id: string; ic: string; t: string; d: string; steps: Step[] }[] = [
+  {
+    id: 'entrepreneur', ic: 'rocket', t: en ? 'I am an entrepreneur' : 'Je suis entrepreneur',
+    d: en ? 'From idea to growth: learn, get structured, get funded.' : "De l'idée à la croissance : apprendre, se structurer, se financer.",
+    steps: [
+      ['/academie', en ? 'Take a free course' : 'Suivre un cours gratuit', en ? 'Start with the basics, on your phone.' : 'Commencez par les bases, sur votre téléphone.'],
+      ['/kapital/diagnostic', en ? 'Take the maturity diagnostic' : 'Faire le diagnostic de maturité', en ? '8 questions, a score out of 100.' : '8 questions, un score sur 100.'],
+      ['/programmes', en ? 'Join a programme' : 'Rejoindre un programme', en ? 'Incubation, acceleration, Investor Ready.' : 'Incubation, accélération, Investor Ready.'],
+      ['/communaute/mentorat', en ? 'Find a mentor' : 'Trouver un mentor', en ? 'Verified mentors across the continent.' : 'Des mentors vérifiés sur tout le continent.'],
+    ],
+  },
+  {
+    id: 'investisseur', ic: 'fund', t: en ? 'I am an investor' : 'Je suis investisseur',
+    d: en ? 'Verified opportunities and African market data.' : 'Des opportunités vérifiées et les données des marchés africains.',
+    steps: [
+      ['/kapital', en ? 'Discover CEA Kapital Invest' : 'Découvrir CEA Kapital Invest', en ? 'The pan-African financial portal.' : 'Le portail financier panafricain.'],
+      ['/kapital/risques', en ? 'Read the investment risks' : "Lire les risques de l'investissement", en ? 'Before anything else.' : 'Avant toute chose.'],
+      ['/kapital/devenir-investisseur', en ? 'Get verified' : 'Me faire vérifier', en ? 'Identity check and investor profile.' : "Vérification d'identité et profil investisseur."],
+      ['/kapital/opportunites', en ? 'Browse opportunities' : 'Parcourir les opportunités', en ? 'Files reviewed by our analysts.' : 'Des dossiers revus par nos analystes.'],
+    ],
+  },
+  {
+    id: 'partenaire', ic: 'hand', t: en ? 'I am a partner' : 'Je suis partenaire',
+    d: en ? 'Donor, bank, foundation, ministry: co-build and measure impact.' : "Bailleur, banque, fondation, ministère : co-construire et mesurer l'impact.",
+    steps: [
+      ['/impact', en ? 'See our impact' : 'Voir notre impact', en ? 'Sourced, dated figures.' : 'Des chiffres sourcés et datés.'],
+      ['/a-propos/transparence', en ? 'Read our reports' : 'Lire nos rapports', en ? 'Annual and impact reports.' : "Rapports annuels et d'impact."],
+      ['/evenements/organiser', en ? 'Sponsor an event' : 'Soutenir un événement', en ? 'Sponsoring packages.' : 'Offres de sponsoring.'],
+      ['/contact', en ? 'Talk to the partnerships team' : "Parler à l'équipe partenariats", en ? 'We reply within 2 working days.' : 'Réponse sous 2 jours ouvrés.'],
+    ],
+  },
+  {
+    id: 'talent', ic: 'job', t: en ? 'I am looking for a job' : 'Je cherche un emploi',
+    d: en ? 'Jobs, internships and missions in African companies.' : 'Emplois, stages et missions dans des entreprises africaines.',
+    steps: [
+      ['/opportunites/profil', en ? 'Create my talent profile' : 'Créer mon profil talent', en ? 'Import your CV, choose who sees it.' : 'Importez votre CV, choisissez qui le voit.'],
+      ['/opportunites', en ? 'Browse offers' : 'Parcourir les offres', en ? 'Matching skills are highlighted.' : 'Les compétences correspondantes sont surlignées.'],
+      ['/opportunites/diaspora', en ? 'Diaspora opportunities' : 'Opportunités diaspora', en ? 'Remote roles and missions.' : 'Télétravail et missions.'],
+      ['/academie', en ? 'Train to close the gap' : "Me former pour combler l'écart", en ? 'Courses matched to the offers.' : 'Des cours liés aux offres.'],
+    ],
+  },
+];
+---
+<PageHead lang={lang} title={en ? 'Where to start?' : 'Par où commencer ?'} lead={en ? 'Choose the profile that fits you: we show you the first steps.' : 'Choisissez le profil qui vous ressemble : nous vous montrons les premières étapes.'} crumbs={[['', en ? 'Where to start?' : 'Par où commencer ?']]} />
+<section class="block">
+  <div class="wrap">
+    <div class="filters">{profiles.map((p) => <a class="chip" href={`#${p.id}`}>{p.t}</a>)}</div>
+    <div class="grid g2">
+      {profiles.map((p) => (
+        <div class="panel" id={p.id} style="scroll-margin-top:140px">
+          <div class="row"><span class="ic" style="width:42px;height:42px;border-radius:10px;background:var(--gold-soft);color:var(--gold-ink);display:flex;align-items:center;justify-content:center"><Icon name={p.ic} size={22} /></span><h2 style="margin:0;font-size:1.3rem">{p.t}</h2></div>
+          <p class="muted" style="margin:10px 0 14px">{p.d}</p>
+          <ol class="timeline">{p.steps.map(([h, t, d], i) => <li class={i === 0 ? 'cur' : ''}><a href={L(h)}><b>{t}</b></a><div class="small muted">{d}</div></li>)}</ol>
+        </div>
+      ))}
+    </div>
+    <p class="small muted" style="margin-top:20px">{en ? 'Still unsure? Ask CEA Copilot (bottom right) or ' : 'Toujours un doute ? Demandez à CEA Copilot (en bas à droite) ou '}<a href={L('/contact')}>{en ? 'contact us' : 'contactez-nous'}</a>.</p>
+  </div>
+</section>

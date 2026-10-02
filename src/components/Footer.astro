@@ -1,35 +1,64 @@
 ---
+import { MEGA, SOCIAL } from '../data/nav';
+import { HUBS, country } from '../data/site';
+import { getLang, lp, useT } from '../i18n/ui';
+
+const lang = getLang(Astro.currentLocale);
+const t = useT(lang);
+const L = (p: string) => lp(lang, p);
 const btn = 'color:#B8C7D8;border-color:#2A4A6B';
+const social = SOCIAL.filter((s) => s.href);
+const kapital: [string, string][] = lang === 'en'
+  ? [['/kapital', 'Kapital home'], ['/kapital/opportunites', 'Opportunities'], ['/kapital/marches', 'African exchanges'], ['/kapital/capital-risque', 'Venture capital'], ['/kapital/obligations', 'Capital markets'], ['/kapital/risques', 'Risks']]
+  : [['/kapital', 'Accueil Kapital'], ['/kapital/opportunites', 'Opportunités'], ['/kapital/marches', 'Bourses africaines'], ['/kapital/capital-risque', 'Capital-risque'], ['/kapital/obligations', 'Marché des capitaux'], ['/kapital/risques', 'Risques']];
 ---
 <footer class="foot">
   <div class="wrap">
     <div class="footk">
-      <div><span class="xs" style="color:var(--gold);font-family:var(--display);font-weight:700">CEA KAPITAL INVEST</span><br /><b>Votre entreprise mérite des investisseurs. Préparez votre levée avec nous.</b></div>
-      <div class="row"><a class="kbtn" href="/kapital/diagnostic">Faire le diagnostic gratuit</a><a class="btn btn-ghost" style="color:#fff;border-color:#2A5079" href="/kapital/devenir-investisseur">Devenir investisseur</a></div>
+      <div><span class="xs" style="color:var(--gold);font-family:var(--display);font-weight:700">CEA KAPITAL INVEST</span><br /><b>{t('fkTitle')}</b></div>
+      <div class="row"><a class="kbtn" href={L('/kapital/diagnostic')}>{t('fkDiag')}</a><a class="btn btn-ghost" style="color:#fff;border-color:#2A5079" href={L('/kapital/devenir-investisseur')}>{t('fkInv')}</a></div>
     </div>
     <div class="grid g4">
       <div>
         <h4>CEA FOR AFRICA</h4>
-        <p class="small">Connecter · Entreprendre · Agir. La plateforme des entrepreneurs africains, de Dakar à Nairobi.</p>
-        <div class="row small" style="gap:6px">
-          <button class="btn btn-ghost btn-sm" id="themeBtn" style={btn}>Thème clair / sombre</button>
-          <button class="btn btn-ghost btn-sm" id="liteBtn" style={btn} aria-pressed="false">Mode Lite</button>
-          <button class="btn btn-ghost btn-sm" id="fsBtn" style={btn}>Taille du texte</button>
+        <p class="small">{t('tagline')}</p>
+        <form class="row" data-demo={t('nlOk')} style="margin:14px 0">
+          <label class="sr" for="fnl">E-mail</label>
+          <input class="in" id="fnl" type="email" required placeholder={lang === 'en' ? 'your@email.com' : 'votre@email.com'} style="flex:1;margin:0;min-width:160px" />
+          <button class="btn btn-gold btn-sm" type="submit">{t('nlBtn')}</button>
+        </form>
+        {social.length > 0 && <div class="social" aria-label={t('follow')}>{social.map((s) => <a href={s.href} aria-label={s.n} rel="noopener"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={s.path} /></svg></a>)}</div>}
+        <div class="row small" style="gap:6px;margin-top:12px">
+          <button class="btn btn-ghost btn-sm" type="button" id="themeBtn" style={btn}>{t('theme')}</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="liteBtn" style={btn} aria-pressed="false">{t('lite')}</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="fsBtn" style={btn}>{t('textSize')}</button>
         </div>
       </div>
       <div>
-        <h4>Plateforme</h4>
-        <a href="/a-propos">À propos</a><a href="/academie">Académie</a><a href="/programmes">Programmes</a><a href="/projets">Project Studio</a><a href="/evenements">Événements</a><a href="/opportunites">Opportunités</a><a href="/ressources">Ressources</a>
+        <h4>{t('platform')}</h4>
+        {MEGA.map((m) => <a href={L(m.href)}>{m.label[lang]}</a>)}
+        <a href={L('/commencer')}>{t('start')}</a>
       </div>
       <div>
         <h4>CEA Kapital Invest</h4>
-        <a href="/kapital">Accueil Kapital</a><a href="/kapital/opportunites">Opportunités</a><a href="/kapital/marches">Bourses africaines</a><a href="/kapital/capital-risque">Capital-risque</a><a href="/kapital/obligations">Marché des capitaux</a><a href="/kapital/risques">Risques</a>
+        {kapital.map(([h, l]) => <a href={L(h)}>{l}</a>)}
       </div>
       <div>
-        <h4>Confiance et aide</h4>
-        <a href="/contact">Contact</a><a href="/legal/confidentialite">Confidentialité</a><a href="/legal/cookies">Cookies</a><a href="/legal/conditions">Conditions d'utilisation</a><a href="/legal/accessibilite">Accessibilité</a><a href="/aide">Centre d'aide</a><a href="/statut">Statut de la plateforme</a>
+        <h4>{t('trust')}</h4>
+        <a href={L('/contact')}>{t('contact')}</a><a href={L('/aide')}>{t('help')}</a><a href={L('/signalement')}>{t('report')}</a><a href={L('/statut')}>{t('status')}</a><a href={L('/plan-du-site')}>{t('sitemap')}</a>
       </div>
     </div>
-    <p class="xs" style="margin-top:30px;color:#7F95AD">© 2026 CEA FOR AFRICA — Chiffres et contenus de démonstration.</p>
+    <details>
+      <summary>{t('countries')}</summary>
+      <div class="foot-countries">
+        {HUBS.map((h) => <a href={L(`/pays/${h.c.toLowerCase()}`)}>{country(h.c)} — {h.city} · {h.c.toLowerCase()}@cea4africa.com</a>)}
+      </div>
+    </details>
+    <div class="foot-bottom small">
+      <span>{t('rights')}</span>
+      <span class="row" style="gap:6px 16px">
+        <a href={L('/legal/confidentialite')}>{t('privacy')}</a><a href={L('/legal/cookies')}>{t('cookies')}</a><a href={L('/legal/conditions')}>{t('terms')}</a><a href={L('/legal/accessibilite')}>{t('a11y')}</a>
+      </span>
+    </div>
   </div>
 </footer>

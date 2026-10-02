@@ -1,47 +1,107 @@
 ---
-import { NAV, MENU, sectionOf } from '../data/site';
-const sec = sectionOf(Astro.url.pathname);
+import Icon from './Icon.astro';
+import LocalePicker from './LocalePicker.astro';
+import { MEGA, megaOf, type Feature } from '../data/nav';
+import { COURSES, PATHS, CONSULTS, JOBS, STUDIES, PODCASTS, country } from '../data/site';
+import { getLang, lp, stripLang, useT } from '../i18n/ui';
+
+const lang = getLang(Astro.currentLocale);
+const t = useT(lang);
+const L = (p: string) => lp(lang, p);
+const cur = megaOf(stripLang(Astro.url.pathname));
+const en = lang === 'en';
+
+// Données des encarts mis en avant
+const topCourse = COURSES.find((c) => c.id === 'c3')!;
+const newPath = PATHS[1];
+const jobsByCountry = Object.entries(JOBS.reduce<Record<string, number>>((a, j) => ((a[j.c] = (a[j.c] || 0) + 1), a), {})).sort((a, b) => b[1] - a[1]).slice(0, 4);
+const chev = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+const feats: Record<Feature, { k: string; title: string; text: string; href: string; cta: string; countdown?: string; stats?: [string, string][] }> = {
+  president: { k: en ? 'THE PRESIDENT' : 'LE MOT DU PRÉSIDENT', title: en ? 'Why CEA FOR AFRICA exists' : 'Pourquoi CEA FOR AFRICA existe', text: en ? '2-minute video, subtitled in French and English. Then explore our offices on the interactive map.' : 'Vidéo de 2 minutes, sous-titrée en français et en anglais. Puis explorez nos antennes sur la carte interactive.', href: '/pays', cta: en ? 'Interactive map' : 'Carte interactive' },
+  quiz: { k: en ? 'ORIENTATION' : 'ORIENTATION', title: en ? 'Which area is right for me?' : 'Quel domaine pour moi ?', text: en ? 'Answer 3 questions and we show you the right path.' : 'Répondez à 3 questions, nous vous montrons le bon parcours.', href: '/domaines#quiz', cta: en ? 'Start the quiz' : 'Commencer le quiz' },
+  call: { k: en ? 'OPEN CALL' : 'APPEL EN COURS', title: en ? 'Accelerator — Cohort 4' : 'Accélérateur — Cohorte 4', text: en ? '“Six months that changed our company.” — Aïcha, alumna, Togo' : '« Six mois qui ont changé notre entreprise. » — Aïcha, ancienne, Togo', href: '/programmes/candidature', cta: en ? 'Apply' : 'Postuler', countdown: '2026-11-15T23:59:00' },
+  course: { k: en ? 'MOST FOLLOWED COURSE' : 'COURS LE PLUS SUIVI', title: topCourse.t, text: `${en ? 'New path' : 'Nouveau parcours'} : ${newPath.t}`, href: `/academie/${topCourse.id}`, cta: en ? 'Start for free' : 'Commencer gratuitement' },
+  mastermind: { k: en ? 'NEXT MASTERMIND SESSION' : 'PROCHAINE SÉANCE MASTERMIND', title: en ? 'Thursday 9 October, 6 pm' : 'Jeudi 9 octobre, 18:00', text: `${en ? 'Open consultation' : 'Consultation en cours'} : ${CONSULTS[0].t}`, href: '/voix', cta: en ? 'Take part' : 'Je participe' },
+  forum: { k: en ? '26 – 28 NOVEMBER · LOMÉ' : '26 – 28 NOVEMBRE · LOMÉ', title: en ? 'CEA Pan-African Forum 2026' : 'Forum panafricain CEA 2026', text: en ? 'Plenaries, B2B meetings and Demo Day with CEA Kapital Invest.' : 'Plénières, rencontres B2B et Demo Day avec CEA Kapital Invest.', href: '/evenements/e1', cta: en ? 'Book my ticket' : 'Réserver ma place', countdown: '2026-11-26T09:00:00' },
+  jobs: { k: en ? 'ACTIVE OFFERS BY COUNTRY' : 'OFFRES ACTIVES PAR PAYS', title: `${JOBS.length} ${en ? 'verified offers' : 'offres vérifiées'}`, text: '', href: '/opportunites', cta: en ? 'See all offers' : 'Voir les offres', stats: jobsByCountry.map(([c, n]) => [String(n), country(c)]) },
+  study: { k: en ? 'LATEST STUDY' : 'DERNIÈRE ÉTUDE', title: STUDIES[0].t, text: `${en ? 'Podcast' : 'Podcast'} : ${PODCASTS[0].t}`, href: '/ressources/etudes', cta: en ? 'Read the study' : "Lire l'étude" },
+};
 ---
-<div class="proto-bar">Prototype fonctionnel — toutes les données sont fictives, aucun paiement ni investissement réel n'est effectué.</div>
+<div class="proto-bar">{t('proto')}</div>
 <header class="top" id="top">
   <div class="wrap top-row">
-    <a class="brand" href="/" aria-label="CEA FOR AFRICA, accueil"><span><span class="brand-mark">CEA</span><br /><span class="brand-sub">FOR AFRICA</span></span></a>
+    <a class="brand" href={L('/')} aria-label={t('brandHome')}><span><span class="brand-mark">CEA</span><br /><span class="brand-sub">FOR AFRICA</span></span></a>
     <div class="top-actions">
-      <select class="sel hide-m" id="langSel" aria-label="Langue">
-        <option value="fr">FR</option><option value="en">EN</option><option value="pt">PT</option><option value="ar">AR</option><option value="sw">SW</option>
-      </select>
-      <select class="sel hide-m" id="curSel" aria-label="Devise d'affichage">
-        <option value="XOF">FCFA</option><option value="EUR">EUR</option><option value="USD">USD</option>
-      </select>
-      <button class="icon-btn" id="searchBtn" aria-label="Rechercher (Ctrl+K)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg></button>
-      <a class="btn btn-gold btn-sm" href="/kapital" aria-label="CEA Kapital Invest"><span class="kfull">Kapital Invest</span><span class="kshort">Kapital</span></a>
-      <a class="btn btn-primary btn-sm" id="loginBtn" href="/adherer">Adhérer</a>
-      <button class="icon-btn menu-btn" id="menuBtn" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="menuPanel"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18" /></svg></button>
+      <button class="icon-btn" id="searchBtn" type="button" aria-label={t('search')}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg></button>
+      <LocalePicker id="locPop" />
+      <a class="btn btn-gold btn-sm" href={L('/kapital')} aria-label="CEA Kapital Invest"><span class="kfull">Kapital Invest</span><span class="kshort">Kapital</span></a>
+      <a class="btn btn-ghost btn-sm top-login" href={L('/connexion')}>{t('login')}</a>
+      <a class="btn btn-primary btn-sm" href={L('/adherer')}>{t('join')}</a>
+      <button class="icon-btn menu-btn" id="menuBtn" type="button" aria-label={t('menu')} aria-expanded="false" aria-controls="drawer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18" /></svg></button>
     </div>
   </div>
-  <div class="navrow">
+  <div class="mnavrow">
     <div class="wrap">
-      <nav class="nav" id="nav" aria-label="Navigation principale">
-        {NAV.map(([k, href, label]) => <a href={href} aria-current={k === sec ? 'page' : undefined}>{label}</a>)}
+      <nav class="mnav" aria-label={t('mainNav')}>
+        {MEGA.map((m) => (
+          <button type="button" class:list={[{ cur: m.k === cur }]} aria-expanded="false" aria-controls={`mega-${m.k}`} data-mega={m.k}>{m.label[lang]} <Fragment set:html={chev} /></button>
+        ))}
       </nav>
     </div>
   </div>
-  <div class="menupanel" id="menuPanel">
-    <div class="wrap">
-      <div class="mp-grid">
-        {MENU.map((m) => (
-          <div class="mp-sec">
-            <a href={m.cols[0].items[0][0]}>{m.l}</a>
-            <div class="sub">{m.cols.flatMap((c) => c.items).map((it) => <a href={it[0]}>{it[2]}</a>)}</div>
+  {MEGA.map((m) => {
+    const f = feats[m.feat];
+    return (
+      <div class="mega" id={`mega-${m.k}`} role="region" aria-label={m.label[lang]}>
+        <div class="wrap mega-in">
+          <div>
+            <div class="mega-cols">
+              {m.cols.map((c) => (
+                <div class="mega-col">
+                  <h5>{c.h[lang]}</h5>
+                  {c.items.map((it) => (
+                    <a class="mlink" href={L(it.href)}>
+                      <span class="mi"><Icon name={it.ic} size={18} /></span>
+                      <span><b>{it.t[lang]}{it.badge && <span class="badge">{it.badge[lang]}</span>}</b><span class="d">{it.d[lang]}</span></span>
+                    </a>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <a class="mega-all" href={L(m.href)}>{t('seeAll')} — {m.label[lang]} →</a>
           </div>
-        ))}
-        <div class="mp-sec k">
-          <a href="/kapital">CEA Kapital Invest</a>
-          <div class="sub">
-            <a href="/kapital/diagnostic">Suis-je prêt ?</a><a href="/kapital/opportunites">Opportunités</a><a href="/kapital/marches">Bourses africaines</a><a href="/kapital/capital-risque">Capital-risque</a><a href="/kapital/obligations">Marché des capitaux</a><a href="/kapital/risques">Risques</a>
-          </div>
+          <a class="mfeat" href={L(f.href)}>
+            <span class="k">{f.k}</span>
+            <h4>{f.title}</h4>
+            {f.text && <p>{f.text}</p>}
+            {f.countdown && <div class="cd" data-countdown={f.countdown}></div>}
+            {f.stats && <div class="mfeat-stats">{f.stats.map(([n, l]) => <div><b>{n}</b><span>{l}</span></div>)}</div>}
+            <span class="btn btn-gold btn-sm">{f.cta}</span>
+          </a>
         </div>
       </div>
-    </div>
-  </div>
+    );
+  })}
 </header>
+<div class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label={t('mainNav')}>
+  <div class="drawer-h">
+    <a class="brand" href={L('/')}><span><span class="brand-mark">CEA</span><br /><span class="brand-sub">FOR AFRICA</span></span></a>
+    <button class="icon-btn" type="button" id="drawerClose" aria-label={t('close')}>✕</button>
+  </div>
+  <div class="drawer-b">
+    <div class="drawer-actions">
+      <a class="btn btn-primary" href={L('/adherer')} style="flex:1">{t('join')}</a>
+      <a class="btn btn-ghost" href={L('/connexion')} style="flex:1">{t('login')}</a>
+    </div>
+    {MEGA.map((m) => (
+      <details open={m.k === cur}>
+        <summary>{m.label[lang]} <Fragment set:html={chev} /></summary>
+        {m.cols.flatMap((c) => c.items).map((it) => (
+          <a class="mlink" href={L(it.href)}><span class="mi"><Icon name={it.ic} size={18} /></span><span><b>{it.t[lang]}</b><span class="d">{it.d[lang]}</span></span></a>
+        ))}
+      </details>
+    ))}
+    <a class="kbtn" href={L('/kapital')} style="margin:18px 0 8px">CEA Kapital Invest</a>
+    <div class="drawer-loc"><LocalePicker inline /></div>
+  </div>
+</div>

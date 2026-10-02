@@ -1,0 +1,65 @@
+---
+/* Formulaire multi-étapes avec brouillon enregistré dans le navigateur.
+   Chaque étape est un enfant <fieldset data-step="Titre"> du slot ; les champs [required] de l'étape sont vérifiés avant de continuer. */
+interface Props { id: string; submitLabel: string; success: string; prefix: string }
+const { id, submitLabel, success, prefix } = Astro.props;
+---
+<form class="panel" data-wizard={id} data-success={success} data-prefix={prefix} novalidate>
+  <div class="steps" data-steps></div>
+  <h3 data-title></h3>
+  <slot />
+  <div class="row between" style="margin-top:8px">
+    <button class="btn btn-ghost" type="button" data-prev>Précédent</button>
+    <button class="btn btn-primary" type="button" data-next data-submit-label={submitLabel}>Continuer</button>
+  </div>
+  <p class="demo-note" style="margin-top:12px">Brouillon enregistré automatiquement dans ce navigateur.</p>
+</form>
+<div class="panel" data-done={id} hidden style="text-align:center;padding:30px"></div>
+<script>
+  document.querySelectorAll<HTMLFormElement>('[data-wizard]').forEach((form) => {
+    const id = form.dataset.wizard!;
+    const key = 'cea-draft-' + id;
+    const steps = [...form.querySelectorAll<HTMLFieldSetElement>('fieldset[data-step]')];
+    const fields = [...form.querySelectorAll<HTMLInputElement>('[name]')];
+    let d: Record<string, string> = {};
+    try { d = JSON.parse(localStorage.getItem(key) || '{}'); } catch {}
+    const save = () => { try { localStorage.setItem(key, JSON.stringify(d)); } catch {} };
+    fields.forEach((f) => {
+      if (f.type === 'file' || f.type === 'checkbox') return;
+      if (d[f.name] != null) f.value = d[f.name];
+      f.addEventListener('input', () => { d[f.name] = f.value; save(); });
+    });
+    let step = Math.min(Number(d._step || 0), steps.length - 1);
+    const bar = form.querySelector('[data-steps]')!;
+    bar.innerHTML = steps.map(() => '<span></span>').join('');
+    const prev = form.querySelector<HTMLButtonElement>('[data-prev]')!, next = form.querySelector<HTMLButtonElement>('[data-next]')!;
+    function render() {
+      steps.forEach((s, i) => (s.hidden = i !== step));
+      [...bar.children].forEach((s, i) => s.classList.toggle('on', i <= step));
+      form.querySelector('[data-title]')!.textContent = `${step + 1}. ${steps[step].dataset.step}`;
+      prev.disabled = step === 0;
+      next.textContent = step === steps.length - 1 ? next.dataset.submitLabel! : 'Continuer';
+      // Récapitulatif : remplit les éléments [data-recap="champ"]
+      form.querySelectorAll<HTMLElement>('[data-recap]').forEach((el) => { el.textContent = d[el.dataset.recap!] || '—'; });
+      d._step = String(step); save();
+    }
+    form.addEventListener('submit', (e) => { e.preventDefault(); next.click(); });
+    prev.addEventListener('click', () => { step--; render(); });
+    next.addEventListener('click', () => {
+      const bad = [...steps[step].querySelectorAll<HTMLInputElement>('[required]')].find((f) => !f.checkValidity());
+      if (bad) { bad.reportValidity(); return; }
+      if (step < steps.length - 1) { step++; render(); return; }
+      const ref = `${form.dataset.prefix}-2026-${Math.floor(1000 + Math.random() * 8999)}`;
+      try { localStorage.removeItem(key); } catch {}
+      const done = document.querySelector<HTMLElement>(`[data-done="${id}"]`)!;
+      done.innerHTML = `<span class="tag ok">Envoyé</span><h2 style="margin-top:12px">Merci${d.nom ? ', ' + d.nom.split(' ')[0].replace(/[<>&"]/g, '') : ''} !</h2><p>Numéro de dossier : <b class="num">${ref}</b>. ${form.dataset.success}</p>`;
+      form.hidden = true;
+      done.hidden = false;
+    });
+    form.querySelectorAll<HTMLInputElement>('input[type=file]').forEach((f) => f.addEventListener('change', () => {
+      const out = form.querySelector('[data-uploads]');
+      if (f.files?.[0] && out) out.insertAdjacentHTML('beforeend', `<div>✓ ${f.files[0].name.replace(/[<>&"]/g, '')} — analysé, aucun virus</div>`);
+    }));
+    render();
+  });
+</script>

@@ -20,7 +20,7 @@ const finance = c.th === 'Finance' || c.th === 'Levée de fonds';
           <div style="text-align:center;padding:20px">
             <h2 style="color:#fff">{c.t}</h2>
             <p style="color:#C9D6E5">{c.ls.length} leçons · certificat vérifiable à la fin</p>
-            <button class="btn btn-gold" data-toast="Inscription confirmée. Bonne formation !">S'inscrire — <Money xof={c.price} /></button>
+            <button class="btn btn-gold" type="button" id="enroll">S'inscrire — <Money xof={c.price} /></button>
           </div>
         </div>
         <div class="panel" style="margin-top:18px">
@@ -31,10 +31,46 @@ const finance = c.th === 'Finance' || c.th === 'Levée de fonds';
       <aside>
         <div class="panel">
           <h3>Programme</h3>
-          <ul class="lessons">{c.ls.map((l, i) => <li><span class="check">{i + 1}</span>{l}</li>)}</ul>
+          <ul class="lessons" id="lessons" data-course={c.id}>{c.ls.map((l, i) => <li tabindex="0" role="checkbox" aria-checked="false" data-i={i}><span class="check">{i + 1}</span>{l}</li>)}</ul>
+          <p class="small" id="prog" style="margin:12px 0 0"></p>
+          <a class="btn btn-ghost btn-sm" href="/espace/apprentissage" style="margin-top:10px">Mon apprentissage</a>
         </div>
         <div style="margin-top:16px"><KapitalAd variant={finance ? 0 : 2} /></div>
       </aside>
     </div>
   </section>
 </BaseLayout>
+<script>
+  // Progression enregistrée dans le navigateur (lue par /espace/apprentissage).
+  const ul = document.getElementById('lessons')!;
+  const id = ul.dataset.course!;
+  const items = [...ul.querySelectorAll<HTMLLIElement>('li')];
+  let en: Record<string, number[]> = {};
+  try { en = JSON.parse(localStorage.getItem('cea-enroll') || '{}'); } catch {}
+  const save = () => { try { localStorage.setItem('cea-enroll', JSON.stringify(en)); } catch {} };
+  const toast = (t: string) => (window as any).toast(t);
+  function draw() {
+    const done = en[id] || [];
+    items.forEach((li, i) => {
+      const ok = done.includes(i);
+      li.setAttribute('aria-checked', String(ok));
+      const c = li.querySelector('.check')!;
+      c.classList.toggle('done', ok);
+      c.textContent = ok ? '✓' : String(i + 1);
+    });
+    document.getElementById('prog')!.textContent = en[id] ? `Progression : ${Math.round((done.length / items.length) * 100)} %${done.length === items.length ? ' — certificat obtenu 🎓' : ''}` : 'Inscrivez-vous pour suivre votre progression.';
+    document.getElementById('enroll')!.hidden = !!en[id];
+  }
+  document.getElementById('enroll')!.addEventListener('click', () => { en[id] = en[id] || []; save(); draw(); toast('Inscription confirmée. Bonne formation !'); });
+  items.forEach((li, i) => {
+    const flip = () => {
+      if (!en[id]) { toast("Inscrivez-vous d'abord au cours."); return; }
+      en[id] = en[id].includes(i) ? en[id].filter((x) => x !== i) : [...en[id], i];
+      save(); draw();
+      if (en[id].length === items.length) toast('Félicitations ! Votre certificat vérifiable est disponible.');
+    };
+    li.addEventListener('click', flip);
+    li.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(); } });
+  });
+  draw();
+</script>

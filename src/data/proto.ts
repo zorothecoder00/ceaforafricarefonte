@@ -195,3 +195,11 @@ export const KMENU=[
  {k:"confiance",l:"Confiance",cols:[{h:"Nos règles",items:[["/kapital/selection","search","Comment nous sélectionnons","Processus et comité"],["/kapital/risques","info","Risques de l'investissement","À lire avant d'investir"]]},{h:"Conformité",items:[["/kapital/conformite","shield","Conformité et réglementation","Régulateurs, ouverture par pays"],["/kapital/reclamations","mail","Réclamations","Signaler un problème"]]}]}
 ];
 
+export const PRIV_OFFERS=[{id:"po1",n:"Manioc+ SA",c:"TG",price:12500,min:250000,max:350000000,raised:62,close:"2026-12-15"},{id:"po2",n:"MediPass Ltd",c:"RW",price:4800,min:500000,max:300000000,raised:77,close:"2026-11-30"}];
+
+export const REG_FEATURES=[["kap_intro","Mise en relation privée avec des investisseurs qualifiés"],["kap_sub","Souscriptions et syndicats via partenaire agréé"],["kap_sec","Marché secondaire des actions non cotées"],["kap_pop","Actionnariat populaire (offre au public)"],["kap_ord","Ordres de bourse via SGI ou société de bourse partenaire"],["kap_lp","Portail des souscripteurs de fonds"],["vote","Vote électronique en assemblée"]];
+
+export const FLAG0: Record<string, Record<string, boolean>>={TG:{kap_intro:true,vote:true},CI:{kap_intro:true},SN:{kap_intro:true},NG:{},KE:{},GH:{}};
+
+export const PIPE0=[{id:"D-2026-0412",n:"Manioc+",c:"TG",st:"Prêt"},{id:"D-2026-0398",n:"PayLink",c:"GH",st:"Prêt"},{id:"D-2026-0455",n:"SolarVillage",c:"KE",st:"Comité"},{id:"D-2026-0461",n:"BatiVert",c:"CI",st:"Préparation"},{id:"D-2026-0470",n:"Kola Logistics",c:"NG",st:"Diagnostic"},{id:"D-2026-0473",n:"EduMobile",c:"SN",st:"Préparation"},{id:"D-2026-0480",n:"AquaPure",c:"BJ",st:"Reçu"},{id:"D-2026-0482",n:"Sahel Dairy",c:"BF",st:"Reçu"}];
+

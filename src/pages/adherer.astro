@@ -1,0 +1,82 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHead from '../components/PageHead.astro';
+import Money from '../components/Money.astro';
+import { SUBS } from '../data/site';
+
+const plans: [string, number, string[]][] = [
+  ['Gratuit', 0, ['Annuaire et espaces', 'Cours gratuits', 'Événements gratuits']],
+  ['Membre', 30000, ['Tout Gratuit', "Tous les cours de l'Académie", 'Votes et consultations', 'Carte de membre']],
+  ['Premium', 90000, ['Tout Membre', 'Masterclass', '2 séances de mentorat', 'Priorité Kapital Invest']],
+  ['Entreprise', 250000, ['5 comptes salariés', 'Espace recruteur illimité', 'Pack événements', 'Visibilité partenaire']],
+];
+const methods = ['Orange Money', 'MTN MoMo', 'Wave', 'Moov Money', 'M-Pesa', 'Carte bancaire'];
+---
+<BaseLayout title="Adhérer">
+  <PageHead title="Adhérer à CEA FOR AFRICA" lead="Choisissez votre formule. Paiement annuel par Mobile Money ou carte, renouvellement avec rappel." crumbs={[['/communaute', 'Communauté'], ['', 'Adhérer']]} subnav={SUBS.communaute} />
+  <section class="block">
+    <div class="wrap">
+      <div class="panel row between" id="myPlan" style="margin-bottom:20px" hidden>
+        <div><b id="myPlanName"></b><div class="small muted" id="myPlanUntil"></div></div>
+        <span class="tag ok">Active</span>
+      </div>
+      <div class="grid g4">
+        {plans.map(([n, p, items], i) => (
+          <div class="panel" style={i === 2 ? 'border:2px solid var(--gold)' : ''}>
+            {i === 2 && <span class="tag gold">Le plus choisi</span>}
+            <h3 style="margin-top:8px">{n}</h3>
+            <b style="font-family:var(--display);font-size:1.6rem;color:var(--navy)"><Money xof={p} /></b>{p > 0 && <span class="small muted"> / an</span>}
+            <ul class="small">{items.map((x) => <li>{x}</li>)}</ul>
+            <button class={`btn ${i === 2 ? 'btn-gold' : 'btn-primary'}`} style="width:100%" type="button" data-plan={n} data-price={p}>Choisir</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+  <dialog id="pay">
+    <div class="dlg-h"><h3>Paiement sécurisé</h3><button class="icon-btn" type="button" data-close aria-label="Fermer">✕</button></div>
+    <form class="dlg-b" id="payForm">
+      <p class="muted small" id="payTitle"></p>
+      <p style="font-family:var(--display);font-size:1.8rem;color:var(--navy);margin:4px 0 16px" id="payAmount"></p>
+      <div class="pay-opts">{methods.map((m, i) => <label><input type="radio" name="pm" value={m} checked={i === 0} /><span>{m}</span></label>)}</div>
+      <label class="f" for="payTel">Numéro de téléphone ou de carte</label>
+      <input class="in" id="payTel" required pattern="[0-9 +]{8,}" placeholder="+228 90 00 00 00" inputmode="numeric" />
+      <p class="xs muted">Paiement traité par un agrégateur agréé. CEA ne conserve aucune donnée de carte. Démonstration : aucun débit réel.</p>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" type="button" data-close>Annuler</button><button class="btn btn-primary" type="submit">Payer</button></div>
+    </form>
+  </dialog>
+</BaseLayout>
+<script>
+  const dlg = document.getElementById('pay') as HTMLDialogElement;
+  let plan = '';
+  const until = () => { const u = new Date(); u.setFullYear(u.getFullYear() + 1); return u.toLocaleDateString('fr-FR'); };
+  function activate(name: string) {
+    const m = { plan: name, until: until(), no: 'CEA-' + Math.floor(1000 + Math.random() * 8999) };
+    try { localStorage.setItem('cea-member', JSON.stringify(m)); } catch {}
+    show();
+    (window as any).toast(`Adhésion ${name} activée. Carte de membre n° ${m.no}.`);
+  }
+  function show() {
+    let m: any = null;
+    try { m = JSON.parse(localStorage.getItem('cea-member') || 'null'); } catch {}
+    if (!m) return;
+    document.getElementById('myPlan')!.hidden = false;
+    document.getElementById('myPlanName')!.textContent = `Votre adhésion : ${m.plan} · carte n° ${m.no}`;
+    document.getElementById('myPlanUntil')!.textContent = `Valable jusqu'au ${m.until}`;
+  }
+  document.querySelectorAll<HTMLButtonElement>('[data-plan]').forEach((b) => b.addEventListener('click', () => {
+    plan = b.dataset.plan!;
+    if (Number(b.dataset.price) === 0) return activate(plan);
+    document.getElementById('payTitle')!.textContent = `Adhésion ${plan} — 1 an`;
+    const price = b.closest('.panel')!.querySelector('.money')!.textContent;
+    document.getElementById('payAmount')!.textContent = price;
+    dlg.showModal();
+  }));
+  dlg.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => dlg.close()));
+  document.getElementById('payForm')!.addEventListener('submit', (e) => {
+    e.preventDefault();
+    dlg.close();
+    activate(plan);
+  });
+  show();
+</script>

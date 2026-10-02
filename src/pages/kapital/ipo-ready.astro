@@ -1,0 +1,35 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+
+const items = ['Comptes certifiés sur 3 exercices', "Conseil d'administration avec administrateurs indépendants", 'Communication financière régulière', 'Choix du compartiment et de la bourse', "Désignation d'un conseiller agréé (SGI ou banque)", "Document d'information soumis au régulateur", 'Roadshow investisseurs'];
+---
+<KapitalLayout title="IPO Ready">
+  <PageHead title="IPO Ready : la feuille de route vers la cotation" lead="Auto-diagnostic, étapes et mise en relation avec des conseillers agréés." crumbs={[['/kapital', 'Kapital Invest'], ['', 'IPO Ready']]} />
+  <section class="block">
+    <div class="wrap split">
+      <div class="panel">
+        <h3>Feuille de route</h3>
+        {items.map((x, i) => <label class="row" style="padding:8px 0;border-bottom:1px solid var(--line)"><input type="checkbox" data-ipo={i} /> {x}</label>)}
+        <p id="ipor" style="margin-top:12px"></p>
+      </div>
+      <aside>
+        <div class="panel"><h3>Être accompagné</h3><p class="small">Mise en relation avec des conseillers agréés, sans rémunération non déclarée.</p><button class="btn btn-primary btn-sm" type="button" data-toast="Demande transmise à l'équipe Capital Markets.">Demander un accompagnement</button></div>
+        <div class="panel" style="margin-top:14px"><h3>Club des émetteurs</h3><p class="small muted">Communauté des entreprises cotées ou en préparation.</p></div>
+      </aside>
+    </div>
+  </section>
+</KapitalLayout>
+<script>
+  const boxes = [...document.querySelectorAll<HTMLInputElement>('[data-ipo]')];
+  let st: boolean[] = [];
+  try { st = JSON.parse(localStorage.getItem('cea-ipo') || '[]'); } catch {}
+  boxes.forEach((b, i) => (b.checked = !!st[i]));
+  const r = () => {
+    const n = boxes.filter((b) => b.checked).length;
+    document.getElementById('ipor')!.innerHTML = `Avancement : <b>${n}/${boxes.length}</b>. Délai indicatif avant cotation : <b>${n >= 6 ? '6 à 9 mois' : n >= 3 ? '12 à 18 mois' : '24 mois et plus'}</b>.`;
+    try { localStorage.setItem('cea-ipo', JSON.stringify(boxes.map((b) => b.checked))); } catch {}
+  };
+  boxes.forEach((b) => b.addEventListener('change', r));
+  r();
+</script>

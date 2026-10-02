@@ -1,0 +1,41 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { STOCKS, fmt } from '../../data/site';
+
+const exchanges = [...new Set(STOCKS.map((s) => s.ex))];
+---
+<KapitalLayout title="Sociétés cotées">
+  <PageHead title="Sociétés cotées" lead="Sociétés fictives pour la démonstration. Filtrez et comparez." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Sociétés cotées']]} />
+  <section class="block" style="padding-top:20px">
+    <div class="wrap">
+      <div class="filters">
+        <select class="in" id="sx" aria-label="Bourse"><option value="">Toutes les bourses</option>{exchanges.map((x) => <option>{x}</option>)}</select>
+        <select class="in" id="ss" aria-label="Trier"><option value="">Trier par</option><option value="dy">Rendement du dividende</option><option value="ch">Variation du jour</option></select>
+      </div>
+      <div class="panel scroll-x">
+        <table class="t">
+          <thead><tr><th>Société</th><th>Bourse</th><th>Secteur</th><th>Cours</th><th>Jour</th><th>Rendement</th></tr></thead>
+          <tbody id="stb">
+            {STOCKS.map((s) => (
+              <tr data-ex={s.ex} data-dy={s.dy} data-ch={s.ch}><td><b>{s.n}</b></td><td>{s.ex}</td><td>{s.s}</td><td class="num">{fmt(s.p)}</td><td class={`num ${s.ch >= 0 ? 'up' : 'down'}`}>{s.ch >= 0 ? '+' : ''}{s.ch} %</td><td class="num">{s.dy} %</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="xs muted">Sociétés fictives. Ceci n'est pas un conseil en investissement.</p>
+    </div>
+  </section>
+</KapitalLayout>
+<script>
+  const tb = document.getElementById('stb')!;
+  const rows = [...tb.querySelectorAll<HTMLTableRowElement>('tr')];
+  const sx = document.getElementById('sx') as HTMLSelectElement, ss = document.getElementById('ss') as HTMLSelectElement;
+  function r() {
+    const k = ss.value as 'dy' | 'ch' | '';
+    const sorted = k ? [...rows].sort((a, b) => Number(b.dataset[k]) - Number(a.dataset[k])) : rows;
+    sorted.forEach((tr) => { tr.hidden = !!sx.value && tr.dataset.ex !== sx.value; tb.appendChild(tr); });
+  }
+  sx.addEventListener('change', r);
+  ss.addEventListener('change', r);
+</script>

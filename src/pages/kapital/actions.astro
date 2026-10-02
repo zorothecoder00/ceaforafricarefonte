@@ -1,0 +1,53 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import Lock from '../../components/Lock.astro';
+import Money from '../../components/Money.astro';
+import { PRIV_OFFERS, country, dateFr } from '../../data/site';
+---
+<KapitalLayout title="Vente d'actions">
+  <PageHead title="Vente d'actions" lead="Ouvrir son capital, vendre et acheter des actions de sociétés non cotées, dans un cadre sécurisé." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Actions']]} />
+  <section class="block">
+    <div class="wrap">
+      <div class="grid g2">
+        <div class="panel"><h3>Je suis une entreprise</h3><p class="small">Préparez une émission d'actions : éligibilité, document d'information, valorisation, accompagnement juridique par des partenaires.</p><a class="btn btn-primary btn-sm" href="/actionnariat">Ouvrir mon capital</a></div>
+        <div class="panel"><h3>Je suis investisseur</h3><p class="small">Manifestez votre intérêt pour des offres privées, puis souscrivez via un partenaire agréé quand la fonction sera ouverte.</p><a class="btn btn-ghost btn-sm" style="color:#fff" href="/kapital/devenir-investisseur">Me faire vérifier</a></div>
+      </div>
+
+      <h2 style="margin-top:36px" id="prive">Marché privé des actions</h2>
+      <Lock feature="kap_sub" text="Avant agrément, ce module fonctionne en mode « manifestation d'intérêt » : aucun paiement, aucune souscription." />
+      <div class="grid g2" style="margin-top:14px">
+        {PRIV_OFFERS.map((o) => (
+          <div class="panel">
+            <div class="row between"><h3 style="margin:0">{o.n}</h3><span class="small muted">{country(o.c)}</span></div>
+            <table class="t small"><tbody>
+              <tr><td class="muted">Prix par action</td><td><Money xof={o.price} /></td></tr>
+              <tr><td class="muted">Ticket minimum</td><td><Money xof={o.min} /></td></tr>
+              <tr><td class="muted">Montant maximum</td><td><Money xof={o.max} /></td></tr>
+              <tr><td class="muted">Clôture</td><td>{dateFr(o.close)}</td></tr>
+            </tbody></table>
+            <div class="progress" style="margin:10px 0"><span style={`width:${o.raised}%`}></span></div>
+            <div class="row between"><span class="small">{o.raised} % d'intérêt</span><button class="btn btn-primary btn-sm" type="button" data-toast="Intérêt enregistré, non engageant.">Manifester mon intérêt</button></div>
+          </div>
+        ))}
+      </div>
+
+      <h2 style="margin-top:36px" id="secondaire">Marché secondaire</h2>
+      <Lock feature="kap_sec" />
+      <div class="panel" style="margin-top:14px">
+        <p class="small">Fenêtres de liquidité trimestrielles : les actionnaires existants proposent leurs titres, les investisseurs vérifiés expriment des intentions d'achat. Prochaine fenêtre : <b>janvier 2027</b>.</p>
+        <div class="scroll-x"><table class="t small">
+          <thead><tr><th>Société</th><th>Intentions de vente</th><th>Intentions d'achat</th><th>Prix indicatif</th></tr></thead>
+          <tbody>
+            <tr><td>Manioc+ SA</td><td class="num">1 200 actions</td><td class="num">900 actions</td><td><Money xof={12000} /> – <Money xof={13500} /></td></tr>
+            <tr><td>MediPass Ltd</td><td class="num">400 actions</td><td class="num">1 100 actions</td><td><Money xof={4600} /> – <Money xof={5200} /></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+
+      <h2 style="margin-top:36px" id="populaire">Actionnariat populaire</h2>
+      <Lock feature="kap_pop" text="Une offre au public exige un visa du régulateur et un intermédiaire agréé." />
+      <div class="panel" style="margin-top:14px"><p class="small" style="margin:0">Objectif à terme : permettre à chacun de devenir actionnaire d'entreprises africaines dès <Money xof={10000} />, par Mobile Money, avec un parcours pédagogique obligatoire. <a href="/actionnariat">Commencer par comprendre l'actionnariat</a></p></div>
+    </div>
+  </section>
+</KapitalLayout>

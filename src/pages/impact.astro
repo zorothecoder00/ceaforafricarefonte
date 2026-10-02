@@ -1,0 +1,53 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHead from '../components/PageHead.astro';
+import AfricaMap from '../components/AfricaMap.astro';
+import { HUBS, SUBS, country, fmt } from '../data/site';
+
+const kpis = [['Entrepreneurs formés', '18 420', 'Ayant terminé au moins un cours'], ['Emplois créés', '2 340', 'Vérifiés à 6 mois, CDI et CDD'], ['Financements obtenus', '9,8 Md FCFA', 'Montants clôturés et vérifiés'], ['Part de femmes', '46 %', 'Parmi les entrepreneurs accompagnés']];
+const top = [...HUBS].sort((a, b) => b.m - a.m).slice(0, 8);
+const maxM = top[0].m;
+const jobs: [string, number][] = [['T1 25', 120], ['T2 25', 190], ['T3 25', 260], ['T4 25', 310], ['T1 26', 380], ['T2 26', 470], ['T3 26', 610]];
+const W = 320, H = 160, maxJ = 650;
+const pts = jobs.map(([, v], i) => [20 + (i * (W - 40)) / (jobs.length - 1), H - 20 - (v / maxJ) * (H - 40)]);
+const line = pts.map((p) => p.join(',')).join(' ');
+const area = `20,${H - 20} ${line} ${W - 20},${H - 20}`;
+---
+<BaseLayout title="Observatoire d'impact">
+  <PageHead title="Observatoire d'impact" lead="Des chiffres agrégés, définis, sourcés et datés. Données de démonstration au 30 septembre 2026." crumbs={[['/ressources', 'Ressources'], ['', "Observatoire d'impact"]]} subnav={SUBS.ressources} />
+  <section class="block" style="padding-top:28px">
+    <div class="wrap">
+      <div class="grid g4">
+        {kpis.map(([k, v, d]) => <div class="panel"><div class="small muted">{k}</div><b style="font-family:var(--display);font-size:1.9rem;color:var(--navy)">{v}</b><div class="small muted">{d}</div></div>)}
+      </div>
+      <div class="grid g2" style="margin-top:20px">
+        <div class="panel" style="background:#082B4C;border:0"><h3 style="color:#fff">Carte de l'impact</h3><AfricaMap /></div>
+        <div class="grid">
+          <div class="panel">
+            <h3>Membres par pays</h3>
+            {top.map((h) => (
+              <div class="row" style="gap:10px;margin-bottom:6px;flex-wrap:nowrap">
+                <span class="small" style="width:110px;flex-shrink:0">{country(h.c)}</span>
+                <div class="progress" style="flex:1;height:14px"><span style={`width:${(h.m / maxM) * 100}%`}></span></div>
+                <b class="small num" style="width:50px;text-align:right">{fmt(h.m)}</b>
+              </div>
+            ))}
+          </div>
+          <div class="panel">
+            <h3>Emplois créés par trimestre</h3>
+            <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Emplois créés par trimestre, de 120 au T1 2025 à 610 au T3 2026" style="width:100%;height:auto">
+              <polygon points={area} fill="rgba(201,150,43,.18)" />
+              <polyline points={line} fill="none" stroke="var(--gold)" stroke-width="2.5" />
+              {pts.map(([x, y], i) => <><circle cx={x} cy={y} r="3.5" fill="var(--gold)" /><text x={x} y={H - 4} font-size="9" text-anchor="middle" fill="currentColor" opacity=".7">{jobs[i][0]}</text><text x={x} y={y - 8} font-size="9" text-anchor="middle" fill="currentColor">{jobs[i][1]}</text></>)}
+            </svg>
+          </div>
+        </div>
+      </div>
+      <div class="grid g3" style="margin-top:20px">
+        <div class="panel"><h3>Alignement</h3><p class="small" style="margin:0">Objectifs de développement durable 1, 5, 8 et 9 ; Agenda 2063 de l'Union africaine.</p></div>
+        <div class="panel"><h3>Méthodologie</h3><p class="small" style="margin:0">Un emploi est compté comme « créé » s'il existe depuis au moins 6 mois, prouvé par un contrat ou une déclaration sociale, vérifié par échantillonnage. Aucune cellule de moins de 10 personnes n'est publiée.</p></div>
+        <div class="panel"><h3>Données ouvertes</h3><p class="small">Jeux de données anonymisés et API publique.</p><div class="row"><button class="btn btn-ghost btn-sm" type="button" data-toast="CSV téléchargé (simulation).">CSV</button><button class="btn btn-ghost btn-sm" type="button" data-toast="Documentation de l'API ouverte (simulation).">API</button></div></div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

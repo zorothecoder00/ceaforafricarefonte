@@ -1,0 +1,28 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import Money from '../../components/Money.astro';
+import { RESEARCH } from '../../data/site';
+---
+<KapitalLayout title="Recherche et analyses">
+  <PageHead title="Recherche et analyses" lead="Notes de marché, rapports sectoriels et baromètres. Méthodologie, sources et conflits d'intérêts déclarés." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Recherche']]} />
+  <section class="block">
+    <div class="wrap">
+      <div class="grid g2">
+        {RESEARCH.map((r) => (
+          <div class="panel row between">
+            <div><b>{r.t}</b><div class="small muted">{r.p ? 'Premium' : 'Gratuit'}</div></div>
+            {r.p
+              ? <a class="btn btn-gold btn-sm" href="#abo">S'abonner</a>
+              : <button class="btn btn-ghost btn-sm" type="button" data-toast={`Lecture : ${r.t} (simulation).`}>Lire</button>}
+          </div>
+        ))}
+      </div>
+      <div class="panel" style="margin-top:18px" id="abo">
+        <h3>Abonnement Recherche Premium</h3>
+        <p class="small">Toutes les notes, données exportables, alertes. <Money xof={60000} /> par an.</p>
+        <a class="btn btn-primary btn-sm" href="/adherer">S'abonner via une adhésion</a>
+      </div>
+    </div>
+  </section>
+</KapitalLayout>

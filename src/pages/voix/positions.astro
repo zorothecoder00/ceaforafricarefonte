@@ -1,0 +1,22 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { POSITIONS, SUBS, dateFr } from '../../data/site';
+
+const agenda = [['12 sept. 2026', 'Rencontre avec le ministère du Commerce (Togo)', 'done'], ['3 oct. 2026', "Audition à la Commission de l'UEMOA", 'cur'], ['20 nov. 2026', 'Remise du baromètre aux autorités du Sénégal', '']];
+---
+<BaseLayout title="Nos positions">
+  <PageHead title="Nos positions" lead="Positions officielles, validées par les instances statutaires avant publication." crumbs={[['/voix', 'Voix des entrepreneurs'], ['', 'Positions']]} subnav={SUBS.voix} />
+  <section class="block">
+    <div class="wrap">
+      {POSITIONS.map((p) => (
+        <div class="panel row between" style="margin-bottom:12px">
+          <div><b>{p.t}</b><div class="small muted">{dateFr(p.d)} · {p.p}</div></div>
+          <div class="row"><button class="btn btn-ghost btn-sm" type="button" data-toast="Document ouvert (simulation).">Lire</button><button class="btn btn-ghost btn-sm" type="button" data-toast="Lien copié pour partage.">Partager</button></div>
+        </div>
+      ))}
+      <h2 style="margin-top:30px">Agenda institutionnel</h2>
+      <ol class="timeline">{agenda.map(([d, t, c]) => <li class={c}><b>{d}</b> — {t}</li>)}</ol>
+    </div>
+  </section>
+</BaseLayout>

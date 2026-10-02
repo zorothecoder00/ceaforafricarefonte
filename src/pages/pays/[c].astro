@@ -1,0 +1,48 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import EventRow from '../../components/EventRow.astro';
+import MemberCard from '../../components/MemberCard.astro';
+import Money from '../../components/Money.astro';
+import KapitalAd from '../../components/KapitalAd.astro';
+import { HUBS, EVENTS, JOBS, MEMBERS, OPPS, country, fmt } from '../../data/site';
+
+export function getStaticPaths() {
+  return HUBS.map((h) => ({ params: { c: h.c.toLowerCase() }, props: { h } }));
+}
+const { h } = Astro.props;
+const name = country(h.c);
+const evs = EVENTS.filter((e) => e.c === h.c);
+const jobs = JOBS.filter((j) => j.c === h.c);
+const mem = MEMBERS.filter((m) => m.c === h.c);
+const opp = OPPS.filter((o) => o.c === h.c);
+const kpis: [string, string | number][] = [['Membres', fmt(h.m)], ['Projets accompagnés', h.p], ['Événements en 2026', h.e], ["Offres d'emploi", jobs.length]];
+---
+<BaseLayout title={`CEA ${name}`}>
+  <PageHead title={`CEA ${name}`} lead={`Antenne de ${h.city} · Responsable : ${h.lead}`} crumbs={[['/pays', 'Présence en Afrique'], ['', name]]} />
+  <section class="block">
+    <div class="wrap">
+      <div class="grid g4">{kpis.map(([k, v]) => <div class="panel kpi"><span class="small muted">{k}</span><b>{v}</b></div>)}</div>
+      <div class="split" style="margin-top:24px">
+        <div>
+          <h2>Événements</h2>
+          {evs.length ? evs.map((e) => <EventRow e={e} />) : <div class="empty">Aucun événement programmé. <a href="/evenements">Voir l'agenda continental</a></div>}
+          <h2 style="margin-top:28px">Membres</h2>
+          {mem.length ? <div class="grid g2">{mem.map((m) => <MemberCard m={m} />)}</div> : <div class="empty">Les membres de ce pays apparaîtront ici.</div>}
+          <h2 style="margin-top:28px">Opportunités d'investissement</h2>
+          {opp.length
+            ? opp.map((o) => <a class="panel row between" style="text-decoration:none;margin-bottom:8px" href={`/kapital/opportunites/${o.id}`}><b>{o.n}</b><span><Money xof={o.need} /></span></a>)
+            : <p class="muted">Aucune opportunité publiée pour ce pays.</p>}
+        </div>
+        <aside>
+          <div class="panel">
+            <h3>Contacter l'antenne</h3>
+            <p class="small">{h.city}, {name}<br />+000 00 00 00 00 (fictif)<br />{h.c.toLowerCase()}@cea4africa.com (fictif)</p>
+            <a class="btn btn-primary btn-sm" href="/contact">Écrire à l'antenne</a>
+          </div>
+          <div style="margin-top:16px"><KapitalAd variant={0} /></div>
+        </aside>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

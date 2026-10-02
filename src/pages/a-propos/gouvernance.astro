@@ -1,0 +1,36 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { HUBS, SUBS, country, initials } from '../../data/site';
+
+const org = [['Assemblée générale des membres'], ["Conseil d'administration"], ['Direction générale'], ['Programmes et Academy', 'CEA Kapital Invest', 'Events et communauté', 'Voix des entrepreneurs', 'Antennes pays']];
+const committees = [
+  ["Comité d'investissement", 'Décide de la présentation des dossiers Kapital Invest aux investisseurs. Déclarations de conflits obligatoires.'],
+  ["Comité d'audit et des risques", 'Contrôle financier, conformité, protection des données.'],
+  ["Comité d'éthique", 'Neutralité politique, déontologie, lanceurs d\'alerte.'],
+];
+---
+<BaseLayout title="Gouvernance">
+  <PageHead title="Gouvernance" lead="Des instances claires, des responsabilités publiées, des conflits d'intérêts déclarés." crumbs={[['/a-propos', 'À propos'], ['', 'Gouvernance']]} subnav={SUBS.apropos} />
+  <section class="block">
+    <div class="wrap">
+      <h2>Organigramme</h2>
+      <div class="grid" style="justify-items:center;gap:10px">
+        {org.map((level, i) => (
+          <>
+            {i > 0 && <div style="width:2px;height:16px;background:var(--gold)"></div>}
+            <div class="row" style="justify-content:center">
+              {level.map((x) => <div class="panel small" style={`padding:12px 16px;text-align:center;${level.length === 1 ? 'min-width:280px' : ''}`}><b>{x}</b></div>)}
+            </div>
+          </>
+        ))}
+      </div>
+      <h2 style="margin-top:40px">Conseil et comités</h2>
+      <div class="grid g3">{committees.map(([t, d]) => <div class="panel"><h3>{t}</h3><p class="small" style="margin:0">{d}</p></div>)}</div>
+      <h2 style="margin-top:40px">Équipe et experts</h2>
+      <div class="grid g4">
+        {HUBS.slice(0, 8).map((h) => <div class="panel row"><span class="avatar">{initials(h.lead)}</span><div><b>{h.lead}</b><div class="small muted">Responsable {country(h.c)}</div></div></div>)}
+      </div>
+    </div>
+  </section>
+</BaseLayout>

@@ -1,0 +1,19 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+---
+<KapitalLayout title="Proposer un deal">
+  <PageHead title="Proposer un deal" lead="Fondateur, business angel ou fonds : présentez une entreprise à notre équipe d'investissement." crumbs={[['/kapital', 'Kapital Invest'], ['/kapital/capital-risque', 'Capital-risque'], ['', 'Proposer un deal']]} />
+  <section class="block">
+    <div class="wrap" style="max-width:700px">
+      <form class="panel" data-demo="Deal transmis à l'équipe d'investissement. Réponse sous 10 jours ouvrés.">
+        <label class="f" for="pd1">Vous êtes</label><select class="in" id="pd1"><option>Fondateur</option><option>Business angel</option><option>Fonds</option><option>Autre</option></select>
+        <label class="f" for="pd2">Entreprise</label><input class="in" id="pd2" required />
+        <label class="f" for="pd5">Site web ou deck (lien)</label><input class="in" id="pd5" type="url" placeholder="https://" />
+        <label class="f" for="pd3">Pourquoi cette entreprise ?</label><textarea class="in" id="pd3" required></textarea>
+        <label class="row small"><input type="checkbox" required /> Je n'ai pas de conflit d'intérêts non déclaré avec cette entreprise.</label>
+        <button class="btn btn-primary" type="submit" style="margin-top:12px">Envoyer</button>
+      </form>
+    </div>
+  </section>
+</KapitalLayout>

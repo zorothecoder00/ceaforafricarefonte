@@ -1,0 +1,19 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import MemberCard from '../../components/MemberCard.astro';
+import { MEMBERS, SUBS } from '../../data/site';
+
+const kpis = [['Anciens', '312'], ['Ont levé des fonds', '58'], ['Emplois créés', '2 340'], ['Pays', '16']];
+const alumni = MEMBERS.filter((m) => m.b.includes('Alumni')).concat(MEMBERS.slice(1, 3));
+---
+<BaseLayout title="Alumni">
+  <PageHead title="Le réseau des anciens" lead="Plus de 300 entreprises accompagnées depuis 2025. Des offres et événements réservés." crumbs={[['/programmes', 'Programmes'], ['', 'Alumni']]} subnav={SUBS.programmes} />
+  <section class="block">
+    <div class="wrap">
+      <div class="grid g4">{kpis.map(([k, v]) => <div class="panel kpi"><span class="small muted">{k}</span><b>{v}</b></div>)}</div>
+      <h2 style="margin-top:28px">Quelques anciens</h2>
+      <div class="grid g3">{alumni.map((m) => <MemberCard m={m} />)}</div>
+    </div>
+  </section>
+</BaseLayout>

@@ -1,0 +1,18 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+---
+<KapitalLayout title="Réclamations" risk={false}>
+  <PageHead title="Réclamations" lead="Accusé de réception sous 48 heures, réponse sous 15 jours." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Réclamations']]} />
+  <section class="block">
+    <div class="wrap" style="max-width:700px">
+      <form class="panel" data-demo="Réclamation enregistrée. Accusé de réception envoyé par e-mail.">
+        <label class="f" for="rc1">Objet</label>
+        <select class="in" id="rc1"><option>Information sur une opportunité</option><option>Accès à une data room</option><option>Vérification d'identité</option><option>Comportement d'un utilisateur</option></select>
+        <label class="f" for="rc3">E-mail</label><input class="in" id="rc3" type="email" required />
+        <label class="f" for="rc2">Description</label><textarea class="in" id="rc2" required minlength="10"></textarea>
+        <button class="btn btn-primary" type="submit">Envoyer</button>
+      </form>
+    </div>
+  </section>
+</KapitalLayout>

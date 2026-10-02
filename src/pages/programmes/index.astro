@@ -21,6 +21,10 @@ const progs = PROGS.map(([n, dur, d, open, date]) => ({ n: String(n), dur, d, op
       ))}
     </div>
     <div class="wrap" style="margin-top:40px">
+      <h2 id="sectoriels" style="scroll-margin-top:140px">Programmes sectoriels et pays</h2>
+      <div class="grid g3" style="margin-bottom:40px">
+        {[['Femmes entrepreneures', 'Programme dédié aux dirigeantes, tous pays'], ['Diaspora Connect', 'Entreprendre ou investir depuis la diaspora'], ['Agritech Sahel', 'Mali, Burkina Faso, Sénégal']].map(([t, d]) => <div class="panel"><span class="tag gold">Sectoriel / pays</span><h3 style="margin:10px 0 4px">{t}</h3><p class="small muted" style="margin:0">{d}</p></div>)}
+      </div>
       <h2>Comment se passe la sélection</h2>
       <div class="grid g4">
         {['Candidature en ligne', 'Diagnostic de maturité', 'Évaluation par 3 jurys et entretien', 'Entrée en cohorte'].map((s, i) => (

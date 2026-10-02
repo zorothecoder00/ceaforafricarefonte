@@ -1,0 +1,15 @@
+---
+import PageHead from '../PageHead.astro';
+import { lp, type Lang } from '../../i18n/ui';
+
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+const en = lang === 'en';
+---
+<PageHead lang={lang} title={en ? 'You are offline' : 'Vous êtes hors ligne'} lead={en ? 'This page has not been saved on this device. Pages you have already opened remain available.' : "Cette page n'a pas été enregistrée sur cet appareil. Les pages déjà ouvertes restent consultables."} />
+<section class="block">
+  <div class="wrap row">
+    <button class="btn btn-primary" type="button" onclick="location.reload()">{en ? 'Try again' : 'Réessayer'}</button>
+    <a class="btn btn-ghost" href={lp(lang, '/')}>{en ? 'Home' : "Revenir à l'accueil"}</a>
+  </div>
+</section>

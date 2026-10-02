@@ -1,0 +1,24 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { PROGS, SUBS, dateFr } from '../../data/site';
+
+const list = PROGS.map(([n, dur, , open, date]) => ({ n: String(n), dur: String(dur), open: !!open, date: String(date) })).sort((a, b) => a.date.localeCompare(b.date));
+---
+<BaseLayout title="Calendrier des appels">
+  <PageHead title="Calendrier des appels" lead="Toutes les ouvertures et clôtures de candidature." crumbs={[['/programmes', 'Programmes'], ['', 'Calendrier']]} subnav={SUBS.programmes} />
+  <section class="block">
+    <div class="wrap">
+      <div class="panel scroll-x">
+        <table class="t">
+          <thead><tr><th>Programme</th><th>Durée</th><th>Date</th><th>Statut</th><th></th></tr></thead>
+          <tbody>
+            {list.map((p) => (
+              <tr><td><b>{p.n}</b></td><td>{p.dur}</td><td>{dateFr(p.date)}</td><td><span class={`tag ${p.open ? 'ok' : ''}`}>{p.open ? "Ouvert jusqu'au" : 'Ouverture le'}</span></td><td><button class="btn btn-ghost btn-sm" type="button" data-toast="Ajouté à votre agenda (fichier .ics).">Ajouter à mon agenda</button></td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

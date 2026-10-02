@@ -1,0 +1,181 @@
+---
+/* Page d'accueil en 12 sections (CDC §6.1), partagée par / et /en/. */
+import fs from 'node:fs';
+import AfricaMap from './AfricaMap.astro';
+import Ticker from './Ticker.astro';
+import Icon from './Icon.astro';
+import DomainCard from './DomainCard.astro';
+import ArticleCard from './ArticleCard.astro';
+import EventRow from './EventRow.astro';
+import VoteBox from './VoteBox.astro';
+import OppCard from './OppCard.astro';
+import { HUBS, PARTNERS, country } from '../data/site';
+import { tr } from '../i18n/content-en';
+import { lp, type Lang } from '../i18n/ui';
+
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+const en = lang === 'en';
+const L = (p: string) => lp(lang, p);
+const c = tr(lang);
+const members = HUBS.reduce((a, h) => a + h.m, 0);
+const projects = HUBS.reduce((a, h) => a + h.p, 0);
+const nextEv = [...c.events].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3);
+const freeCourses = c.courses.filter((x) => !x.price).slice(0, 3);
+const storyCountries = [...new Set(c.articles.map((a) => a.c))];
+const storyCats = [...new Set(c.articles.map((a) => a.cat))];
+// Vidéo du héros : affichée seulement si le fichier existe (public/media/hero.mp4 + hero.jpg en affiche)
+const heroVideo = fs.existsSync('public/media/hero.mp4');
+const heroPoster = fs.existsSync('public/media/hero.jpg') ? '/media/hero.jpg' : undefined;
+const w = (fr: string, e: string) => (en ? e : fr);
+---
+<!-- 1. Héros -->
+<section class="hero">
+  {heroVideo && <video class="hero-video" autoplay muted loop playsinline preload="none" poster={heroPoster} aria-hidden="true"><source src="/media/hero.mp4" type="video/mp4" /></video>}
+  <div class="wrap hero-in">
+    <span class="tagline">{w('CONNECTER · ENTREPRENDRE · AGIR', 'CONNECT · BUILD · ACT')}</span>
+    <h1 style="margin-top:12px">{w('Les entrepreneurs africains,', 'African entrepreneurs,')}<span class="l2">{w('ensemble.', 'together.')}</span></h1>
+    <p class="lead">{w("Apprendre, se structurer, se financer, recruter et peser collectivement : tout l'écosystème de CEA FOR AFRICA, dans 16 pays.", 'Learn, get structured, raise funds, hire and carry weight together: the whole CEA FOR AFRICA ecosystem, in 16 countries.')}</p>
+    <div class="persona row3">
+      <a href={L('/commencer#entrepreneur')}><span>{w('Je suis entrepreneur', 'I am an entrepreneur')}<small>{w('Formation, accompagnement, financement', 'Training, support, funding')}</small></span><span aria-hidden="true">›</span></a>
+      <a href={L('/kapital')} class="kp"><span>{w('Je suis investisseur', 'I am an investor')}<small>{w('Opportunités vérifiées et marchés africains', 'Verified opportunities and African markets')}</small></span><span aria-hidden="true" style="color:var(--gold)">›</span></a>
+      <a href={L('/commencer#partenaire')}><span>{w('Je suis partenaire', 'I am a partner')}<small>{w('Co-construire des programmes, mesurer l’impact', 'Co-build programmes, measure impact')}</small></span><span aria-hidden="true">›</span></a>
+    </div>
+  </div>
+</section>
+
+<!-- 2. Bandeau de confiance -->
+<section class="trust" aria-label={w('Partenaires et chiffres clés', 'Partners and key figures')}>
+  <div class="wrap">
+    <div class="logos">{PARTNERS.map((p) => <span>{p[lang]}</span>)}</div>
+    <div class="counters">
+      <div><b data-count={members}>{members.toLocaleString('fr-FR')}</b><span>{w('membres inscrits', 'registered members')}</span></div>
+      <div><b data-count={HUBS.length}>{HUBS.length}</b><span>{w('pays actifs', 'active countries')}</span></div>
+      <div><b data-count="2340">2 340</b><span>{w('emplois créés et vérifiés', 'jobs created and verified')}</span></div>
+      <div><b data-count={projects}>{projects}</b><span>{w('projets accompagnés', 'projects supported')}</span></div>
+    </div>
+    <p class="demo-note" style="text-align:center;margin:12px auto 0">{w('Source : Observatoire d’impact CEA — chiffres de démonstration au 30 septembre 2026.', 'Source: CEA Impact Observatory — demonstration figures as of 30 September 2026.')} <a href={L('/impact')}>{w('Méthodologie', 'Methodology')}</a></p>
+  </div>
+</section>
+
+<!-- 3. Carte vivante de l'Afrique -->
+<section class="block mapsec">
+  <div class="wrap hg" style="display:grid;grid-template-columns:1fr 1.1fr;gap:30px;align-items:center">
+    <div>
+      <h2>{w("Carte vivante de l'Afrique", 'Living map of Africa')}</h2>
+      <p class="muted">{w('Membres, projets, événements et antennes par pays. Survolez un pays pour voir ses chiffres, cliquez pour ouvrir sa page.', 'Members, projects, events and offices by country. Hover a country to see its figures, click to open its page.')}</p>
+      <a class="btn btn-gold" href={L('/pays')}>{w('Toutes les antennes', 'All offices')}</a>
+    </div>
+    <AfricaMap />
+  </div>
+</section>
+
+<!-- 4. Nos domaines -->
+<section class="block">
+  <div class="wrap">
+    <div class="row between"><h2>{w("Nos domaines d'activité", 'Our areas of activity')}</h2><a class="btn btn-ghost btn-sm" href={L('/domaines#quiz')}>{w('Quel domaine pour moi ?', 'Which area is right for me?')}</a></div>
+    <div class="grid g4" style="margin-top:18px">{c.domains.map((d) => <DomainCard d={{ ...d, to: L(d.to) }} />)}</div>
+  </div>
+</section>
+
+<!-- 5. Appel à candidatures -->
+<section class="block" style="padding-top:0">
+  <div class="wrap">
+    <div class="call">
+      <div>
+        <span class="tag gold">{w('Appel à candidatures ouvert', 'Call for applications open')}</span>
+        <h2 style="margin-top:10px">{w('Accélérateur CEA — Cohorte 4', 'CEA Accelerator — Cohort 4')}</h2>
+        <p>{w("Six mois d'accompagnement, un mentor dédié et le Demo Day de CEA Kapital Invest devant 40 investisseurs.", 'Six months of support, a dedicated mentor and the CEA Kapital Invest Demo Day in front of 40 investors.')}</p>
+        <ul class="small" style="margin:0 0 14px;padding-left:18px">
+          <li>{w('Entreprise de 1 à 5 ans, immatriculée', 'Registered company, 1 to 5 years old')}</li>
+          <li>{w('Premiers clients payants', 'First paying customers')}</li>
+          <li>{w("Dans l'un des 16 pays CEA", 'In one of the 16 CEA countries')}</li>
+        </ul>
+        <a class="btn btn-primary" href={L('/programmes/candidature')}>{w('Postuler', 'Apply')}</a>
+      </div>
+      <div><p class="small muted" style="margin-bottom:6px">{w('Clôture le 15 novembre 2026', 'Closes on 15 November 2026')}</p><div class="cd" data-countdown="2026-11-15T23:59:00"></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 6. CEA Kapital Invest -->
+<section class="kpromo kz" style="min-height:0" aria-label="CEA Kapital Invest">
+  <Ticker />
+  <div class="wrap" style="display:block">
+    <div class="row between">
+      <div>
+        <span class="eyebrow"><Icon name="cap" size={18} /> CEA KAPITAL INVEST</span>
+        <h2 style="margin-top:10px">{w('Opportunités du moment', 'Current opportunities')}</h2>
+        <p style="color:#B9C9DA;max-width:60ch">{w('Résumés anonymisés de dossiers préparés par nos analystes. Le dossier complet est réservé aux investisseurs vérifiés.', 'Anonymised summaries of files prepared by our analysts. Full files are reserved for verified investors.')}</p>
+      </div>
+      <div class="row"><a class="kbtn" href={L('/kapital/diagnostic')}>{w('Je lève des fonds', 'I am raising funds')}</a><a class="btn btn-ghost" style="color:#fff;border-color:#2A5079" href={L('/kapital/devenir-investisseur')}>{w('Accès investisseur', 'Investor access')}</a></div>
+    </div>
+    <div class="grid g3" style="margin-top:18px">{c.opps.slice(0, 3).map((o) => <OppCard o={o} lang={lang} />)}</div>
+    <p class="xs" style="color:#7F95AD;margin-top:14px">{w('Chiffres de démonstration. Investir comporte un risque de perte en capital et d’illiquidité.', 'Demonstration figures. Investing carries a risk of capital loss and illiquidity.')}</p>
+  </div>
+</section>
+
+<!-- 7. Histoires d'entrepreneurs -->
+<section class="block">
+  <div class="wrap">
+    <div class="row between"><h2>{w("Histoires d'entrepreneurs", 'Entrepreneur stories')}</h2><a class="small" href={L('/ressources')}>{w('Le média CEA', 'CEA media')}</a></div>
+    <div class="filters" id="storyF">
+      <select class="in" data-k="c" aria-label={w('Pays', 'Country')}><option value="">{w('Tous les pays', 'All countries')}</option>{storyCountries.map((x) => <option>{x}</option>)}</select>
+      <select class="in" data-k="cat" aria-label={w('Thème', 'Topic')}><option value="">{w('Tous les thèmes', 'All topics')}</option>{storyCats.map((x) => <option>{x}</option>)}</select>
+    </div>
+    <div class="grid g3" id="storyL">{c.articles.map((a) => <div data-c={a.c} data-cat={a.cat}><ArticleCard a={a} lang={lang} /></div>)}</div>
+  </div>
+</section>
+
+<!-- 8-10. Agenda, Académie, Opportunités -->
+<section class="block" style="padding-top:0">
+  <div class="wrap grid g3">
+    <div>
+      <div class="row between"><h2>{w('Agenda', 'Calendar')}</h2><a href={L('/evenements')} class="small">{w("Tout l'agenda", 'Full calendar')}</a></div>
+      {nextEv.map((e) => <EventRow e={e} lang={lang} />)}
+      <a class="btn btn-primary btn-sm" style="margin-top:12px" href={L(`/evenements/${nextEv[0].id}`)}>{w('Je m’inscris', 'Register')}</a>
+    </div>
+    <div>
+      <div class="row between"><h2>{w('Académie', 'Academy')}</h2><a href={L('/academie')} class="small">{w('Catalogue', 'Catalogue')}</a></div>
+      {freeCourses.map((x) => <a href={L(`/academie/${x.id}`)} class="panel" style="display:block;text-decoration:none;margin-top:12px"><span class="tag ok">{w('Gratuit', 'Free')}</span><b style="display:block;margin-top:6px">{x.t}</b><span class="small muted">{x.dur} · {x.by}</span></a>)}
+      <a href={L('/academie/parcours')} class="panel" style="display:block;text-decoration:none;margin-top:12px;border-color:var(--gold)"><span class="tag gold">{w('Parcours recommandé', 'Recommended path')}</span><b style="display:block;margin-top:6px">{c.paths[0].t}</b></a>
+    </div>
+    <div>
+      <div class="row between"><h2>{w('Opportunités', 'Opportunities')}</h2><a href={L('/opportunites')} class="small">{w('Toutes les offres', 'All offers')}</a></div>
+      {c.jobs.slice(0, 3).map((j) => <a href={L('/opportunites')} class="panel" style="display:block;text-decoration:none;margin-top:12px"><b>{j.t}</b><div class="small muted">{j.co} · {country(j.c)} · {j.type}</div></a>)}
+      <a href={L('/opportunites/appels-offres')} class="panel" style="display:block;text-decoration:none;margin-top:12px"><span class="tag info">{w("Appels d'offres", 'Tenders')}</span><b style="display:block;margin-top:6px">{w('3 marchés ouverts', '3 open tenders')}</b></a>
+    </div>
+  </div>
+</section>
+
+<!-- 11-12. Voix des entrepreneurs, lettre d'information -->
+<section class="block" style="padding-top:0">
+  <div class="wrap grid g2">
+    <div>
+      <h2>{w('Votre voix compte', 'Your voice matters')}</h2>
+      <VoteBox v={c.consults[0]} lang={lang} />
+      <a class="panel row between" href={L('/voix/positions')} style="text-decoration:none;margin-top:12px"><span><span class="xs muted">{w('Dernière position publiée', 'Latest published position')}</span><b style="display:block">{c.positions[0].t}</b></span><span aria-hidden="true">›</span></a>
+    </div>
+    <form class="panel" data-demo={w('Inscription confirmée. Un e-mail de vérification vous a été envoyé.', 'Subscription confirmed. A verification email has been sent.')}>
+      <h2 style="font-size:1.4rem">{w("Lettre d'information", 'Newsletter')}</h2>
+      <p class="small muted">{w('Choisissez vos sujets, votre pays et votre langue.', 'Choose your topics, country and language.')}</p>
+      <fieldset style="border:0;padding:0;margin:0 0 12px"><legend class="f">{w('Sujets', 'Topics')}</legend>
+        <div class="row">{(en ? ['Funding', 'Training', 'Events', 'Kapital Invest', 'Advocacy'] : ['Financement', 'Formation', 'Événements', 'Kapital Invest', 'Plaidoyer']).map((x, i) => <label class="chip"><input type="checkbox" checked={i < 2} /> {x}</label>)}</div>
+      </fieldset>
+      <div class="grid g2" style="gap:10px">
+        <label class="f">{w('Pays', 'Country')}<select class="in">{[...HUBS].sort((a, b) => country(a.c).localeCompare(country(b.c))).map((h) => <option>{country(h.c)}</option>)}</select></label>
+        <label class="f">{w('Langue', 'Language')}<select class="in"><option selected={!en}>Français</option><option selected={en}>English</option></select></label>
+      </div>
+      <div class="row"><input class="in" type="email" required placeholder={w('votre@email.com', 'your@email.com')} aria-label="E-mail" style="flex:1;margin:0;min-width:200px" /><button class="btn btn-primary" type="submit">{w("S'abonner", 'Subscribe')}</button></div>
+    </form>
+  </div>
+</section>
+<script>
+  const box = document.getElementById('storyF');
+  if (box) {
+    const sels = [...box.querySelectorAll<HTMLSelectElement>('select')];
+    sels.forEach((s) => s.addEventListener('change', () => {
+      document.querySelectorAll<HTMLElement>('#storyL > [data-c]').forEach((el) => { el.hidden = !sels.every((x) => !x.value || el.dataset[x.dataset.k!] === x.value); });
+    }));
+  }
+</script>

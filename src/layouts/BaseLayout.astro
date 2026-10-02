@@ -4,29 +4,54 @@ import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import Copilot from '../components/Copilot.astro';
 import { MENU, KMENU, COURSES, EVENTS, JOBS, OPPS, ARTICLES, country } from '../data/site';
+import { getLang, lp, stripLang, localizeHtml, useT, TRANSLATED } from '../i18n/ui';
+import { CURRENCIES, COUNTRY_CURRENCY } from '../data/currency';
 
 interface Props { title?: string; description?: string }
-const { title, description = "CEA FOR AFRICA — la plateforme des entrepreneurs africains : formation, accompagnement, événements, opportunités et CEA Kapital Invest." } = Astro.props;
-const fullTitle = title ? `${title} — CEA FOR AFRICA` : 'CEA FOR AFRICA — Connecter · Entreprendre · Agir';
+const lang = getLang(Astro.currentLocale);
+const t = useT(lang);
+const defaultDesc = lang === 'en'
+  ? 'CEA FOR AFRICA — the platform for African entrepreneurs: training, support, events, opportunities and CEA Kapital Invest.'
+  : 'CEA FOR AFRICA — la plateforme des entrepreneurs africains : formation, accompagnement, événements, opportunités et CEA Kapital Invest.';
+const { title, description = defaultDesc } = Astro.props;
+const fullTitle = title ? `${title} — CEA FOR AFRICA` : `CEA FOR AFRICA — ${lang === 'en' ? 'Connect · Build · Act' : 'Connecter · Entreprendre · Agir'}`;
+
+// Chemin français de la page (sur les pages anglaises de repli, Astro fournit déjà le chemin français).
+const frPath = (stripLang(Astro.url.pathname).replace(/\/$/, '') || '/');
+const translated = lang === 'fr' || TRANSLATED.has(frPath);
+const alt = (l: 'fr' | 'en') => new URL(lp(l, frPath === '/' ? '/' : frPath + '/'), Astro.site).href;
+
+// Contenu de la page : en anglais, les liens internes sont réécrits vers /en/…
+const body = localizeHtml(await Astro.slots.render('default'), lang);
 
 const searchIndex = [
   ...MENU.flatMap((m) => m.cols.flatMap((c) => c.items.map((i) => ({ t: i[2], d: i[3], h: i[0], ty: 'Page' })))),
   ...KMENU.flatMap((m) => m.cols.flatMap((c) => c.items.map((i) => ({ t: i[2], d: 'Kapital Invest — ' + i[3], h: i[0], ty: 'Kapital' })))),
-  ...COURSES.map((c) => ({ t: c.t, d: `${c.th} · ${c.by}`, h: `/academie/${c.id}`, ty: 'Cours' })),
-  ...EVENTS.map((e) => ({ t: e.t, d: `${e.city} · ${e.date}`, h: `/evenements/${e.id}`, ty: 'Événement' })),
-  ...JOBS.map((j) => ({ t: j.t, d: `${j.co} · ${country(j.c)}`, h: '/opportunites', ty: 'Emploi' })),
-  ...OPPS.map((o) => ({ t: o.n, d: `${o.s} · ${country(o.c)}`, h: `/kapital/opportunites/${o.id}`, ty: 'Opportunité' })),
+  ...COURSES.map((c) => ({ t: c.t, d: `${c.th} · ${c.by}`, h: `/academie/${c.id}`, ty: lang === 'en' ? 'Course' : 'Cours' })),
+  ...EVENTS.map((e) => ({ t: e.t, d: `${e.city} · ${e.date}`, h: `/evenements/${e.id}`, ty: lang === 'en' ? 'Event' : 'Événement' })),
+  ...JOBS.map((j) => ({ t: j.t, d: `${j.co} · ${country(j.c)}`, h: '/opportunites', ty: lang === 'en' ? 'Job' : 'Emploi' })),
+  ...OPPS.map((o) => ({ t: o.n, d: `${o.s} · ${country(o.c)}`, h: `/kapital/opportunites/${o.id}`, ty: lang === 'en' ? 'Opportunity' : 'Opportunité' })),
   ...ARTICLES.map((a) => ({ t: a.t, d: a.cat, h: `/ressources/article/${a.id}`, ty: 'Article' })),
-];
+].map((e) => ({ ...e, h: lp(lang, e.h) }));
 ---
 <!doctype html>
-<html lang="fr">
+<html lang={lang}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
+    <link rel="canonical" href={alt(lang)} />
+    <link rel="alternate" hreflang="fr" href={alt('fr')} />
+    <link rel="alternate" hreflang="en" href={alt('en')} />
+    <link rel="alternate" hreflang="x-default" href={alt('fr')} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:locale" content={lang === 'en' ? 'en_GB' : 'fr_FR'} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <meta name="theme-color" content="#082B4C" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -39,12 +64,15 @@ const searchIndex = [
     </script>
   </head>
   <body>
-    <a class="sr" href="#app">Aller au contenu</a>
+    <a class="sr" href="#app">{t('skip')}</a>
     <Header />
-    <main id="app" tabindex="-1"><slot /></main>
+    {!translated && <div class="i18n-note">{t('notTranslated')} <a href={alt('fr')} hreflang="fr">Version française</a></div>}
+    <main id="app" tabindex="-1" lang={translated ? lang : 'fr'} set:html={body} />
     <Footer />
     <Copilot />
     <script type="application/json" id="searchIndex" set:html={JSON.stringify(searchIndex)} />
+    <script type="application/json" id="currencies" set:html={JSON.stringify(CURRENCIES.map(({ code, perEur, symbol }) => ({ code, perEur, symbol })))} />
+    <script type="application/json" id="countryCur" set:html={JSON.stringify(COUNTRY_CURRENCY)} />
     <script>
       import '../scripts/app.ts';
     </script>
