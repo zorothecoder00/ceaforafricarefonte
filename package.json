@@ -8,15 +8,29 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "check": "astro check"
+    "check": "astro check",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:migrate:prod": "node scripts/with-env.mjs prod tsx scripts/migrate.ts",
+    "db:check": "drizzle-kit check",
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
-    "astro": "^7.3.5"
+    "@astrojs/vercel": "^11.0.11",
+    "astro": "^7.3.5",
+    "better-auth": "^1.7.7",
+    "drizzle-orm": "^0.45.3",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
     "@types/node": "^26.6.4",
+    "@types/pg": "^8.23.1",
+    "dotenv": "^18.0.5",
+    "drizzle-kit": "^0.31.11",
     "sharp": "^0.35.5",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3"
   }
 }
