@@ -38,6 +38,12 @@ export const profile = pgTable('profile', {
   visibility: visibilityEnum('visibility').notNull().default('membres'),
   cvKey: text('cv_key'), // CV déposé (stockage privé)
   recruiterVisible: boolean('recruiter_visible').notNull().default(false), // visible des recruteurs vérifiés (CDC §7.4)
+  // Étudiants et jeunes diplômés (CDC §7.4, stages et alternance)
+  school: text('school'),
+  degree: text('degree'),
+  studyLevel: text('study_level'),
+  availableFrom: date('available_from'),
+  availableUntil: date('available_until'),
   updatedAt: ts('updated_at').notNull().defaultNow(),
 });
 
@@ -154,6 +160,7 @@ export const eventTicket = pgTable('event_ticket', {
   priceXof: bigint('price_xof', { mode: 'number' }).notNull().default(0),
   userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
   holderName: text('holder_name'),
+  holderEmail: text('holder_email'), // billet transféré à une personne sans compte : envoyé à cette adresse
   status: ticketStatusEnum('status').notNull().default('valide'),
   paymentId: uuid('payment_id').references(() => payment.id, { onDelete: 'set null' }),
   checkedInAt: ts('checked_in_at'),
@@ -211,6 +218,11 @@ export const job = pgTable('job', {
   salary: text('salary'),
   skills: text('skills').array().notNull().default([]),
   description: text('description'),
+  // Stages et alternance (CDC §7.4) : date de début, durée, niveau d'études visé, tuteur désigné
+  startDate: date('start_date'),
+  durationMonths: integer('duration_months'),
+  studyLevel: text('study_level'),
+  tutor: text('tutor'),
   status: jobStatusEnum('status').notNull().default('en_moderation'),
   featured: boolean('featured').notNull().default(false),
   publishedAt: ts('published_at'),
@@ -588,5 +600,6 @@ export const eventWaitlist = pgTable('event_waitlist', {
   eventId: text('event_id').notNull(),
   email: text('email').notNull(),
   userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
+  notifiedAt: ts('notified_at'), // prévenu·e qu'une place s'est libérée
   createdAt: ts('created_at').notNull().defaultNow(),
 }, (t) => [uniqueIndex('event_waitlist_unique').on(t.eventId, t.email)]);

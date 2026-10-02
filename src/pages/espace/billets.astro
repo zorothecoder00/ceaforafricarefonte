@@ -1,30 +1,52 @@
 ---
+/* Mes billets (CDC §7.3) : QR code, renvoi par e-mail/WhatsApp, transfert, annulation ou remboursement selon les conditions, reçu. */
 import EspaceLayout from '../../layouts/EspaceLayout.astro';
 import { desc, eq } from 'drizzle-orm';
 import { db } from '../../lib/db';
-import { eventTicket } from '../../db/schema/app';
+import { eventTicket, payment } from '../../db/schema/app';
 import { EVENTS, dateFr } from '../../data/site';
 import { qrSvg, verifyUrl } from '../../lib/qr';
+import { rules, REFUND_DAYS } from '../../lib/tickets';
 
 export const prerender = false;
 const user = Astro.locals.user!;
-const rows = await db.select().from(eventTicket).where(eq(eventTicket.userId, user.id)).orderBy(desc(eventTicket.createdAt));
-const tickets = await Promise.all(rows.map(async (t) => ({ t, e: EVENTS.find((x) => x.id === t.eventId), qr: await qrSvg(verifyUrl(Astro.url.origin, 'billet', t.code)) })));
-const ST: Record<string, string> = { valide: 'ok', utilise: 'info', rembourse: '', transfere: '', annule: 'bad' };
+const rows = await db.select({ t: eventTicket, pay: payment.reference }).from(eventTicket).leftJoin(payment, eq(payment.id, eventTicket.paymentId)).where(eq(eventTicket.userId, user.id)).orderBy(desc(eventTicket.createdAt));
+const tickets = await Promise.all(rows.map(async ({ t, pay }) => ({ t, pay, r: rules(t), e: EVENTS.find((x) => x.id === t.eventId), qr: t.status === 'valide' ? await qrSvg(verifyUrl(Astro.url.origin, 'billet', t.code)) : '' })));
+const ST: Record<string, [string, string]> = { valide: ['ok', 'Valide'], utilise: ['info', 'Utilisé'], rembourse: ['', 'Remboursement en cours'], transfere: ['', 'Transféré'], annule: ['bad', 'Annulé'] };
 ---
 <EspaceLayout title="Mes billets" lead="Présentez le QR code à l'entrée. Il fonctionne aussi hors connexion une fois la page ouverte.">
+  <p class="small muted">Conditions : transfert gratuit jusqu'au début de l'événement ; annulation libre des billets gratuits ; remboursement des billets payants jusqu'à {REFUND_DAYS} jours avant l'événement.</p>
   {tickets.length ? (
     <div class="grid g2">
-      {tickets.map(({ t, e, qr }) => (
-        <div class="ticket panel">
-          <div>
-            <span class={`tag ${ST[t.status]}`}>{t.status}</span>
-            <h3 style="margin:8px 0 4px">{e?.t ?? t.eventId}</h3>
-            <div class="small muted">{e ? `${dateFr(e.date)} · ${e.city}` : ''}</div>
-            <div class="small">{t.ticketType}</div>
-            <div class="xs num">{t.code}</div>
+      {tickets.map(({ t, pay, r, e, qr }) => (
+        <div class="panel">
+          <div class="ticket" style="border:0;padding:0;margin:0">
+            <div>
+              <span class={`tag ${ST[t.status][0]}`}>{ST[t.status][1]}</span>
+              <h3 style="margin:8px 0 4px">{e?.t ?? t.eventId}</h3>
+              <div class="small muted">{e ? `${dateFr(e.date)} · ${e.city}` : ''}</div>
+              <div class="small">{t.ticketType}{t.holderName && ` · ${t.holderName}`}</div>
+              <div class="xs num">{t.code}</div>
+            </div>
+            {qr && <div class="qrbox" set:html={qr} />}
           </div>
-          <div class="qrbox" set:html={qr} />
+          <div class="row" style="gap:6px;margin-top:10px">
+            {t.status === 'valide' && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/billets/gestion" data-body={JSON.stringify({ action: 'renvoyer', code: t.code })}>Renvoyer par e-mail</button>}
+            {pay && <a class="btn btn-ghost btn-sm" href={`/espace/recu/${pay}`}>Reçu</a>}
+            {r.canCancel && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/billets/gestion" data-body={JSON.stringify({ action: 'annuler', code: t.code })} data-confirm={r.refund ? `Annuler ce billet et demander le remboursement de ${t.priceXof.toLocaleString('fr-FR')} FCFA ?` : 'Annuler votre inscription ? La place sera proposée à la liste d’attente.'}>{r.refund ? 'Annuler et rembourser' : 'Annuler'}</button>}
+          </div>
+          {r.canTransfer && (
+            <details style="margin-top:8px">
+              <summary class="small" style="cursor:pointer">Transférer ce billet</summary>
+              <form data-api="/api/billets/gestion" style="margin-top:6px">
+                <input type="hidden" name="action" value="transferer" /><input type="hidden" name="code" value={t.code} />
+                <label class="f" for={`tn-${t.id}`}>Nom de la personne</label><input class="in" id={`tn-${t.id}`} name="name" required minlength="2" />
+                <label class="f" for={`te-${t.id}`}>Son e-mail</label><input class="in" id={`te-${t.id}`} name="email" type="email" required />
+                <p class="xs muted" style="margin:4px 0">Un nouveau QR code lui est envoyé ; le vôtre cesse d'être valable.</p>
+                <button class="btn btn-primary btn-sm" type="submit">Transférer</button>
+              </form>
+            </details>
+          )}
         </div>
       ))}
     </div>

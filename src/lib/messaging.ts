@@ -8,7 +8,7 @@ import { env, isProd } from './env';
 
 const devLog = (channel: string, to: string, text: string) => console.info(`[CEA][dev][${channel}] → ${to}\n${text}`);
 
-export async function sendEmail(to: string, subject: string, text: string) {
+export async function sendEmail(to: string, subject: string, text: string, html?: string) {
   const key = env('RESEND_API_KEY');
   if (!key) {
     if (isProd()) throw new Error("Aucun prestataire e-mail n'est configuré (RESEND_API_KEY).");
@@ -17,7 +17,7 @@ export async function sendEmail(to: string, subject: string, text: string) {
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: env('EMAIL_FROM') ?? 'CEA FOR AFRICA <noreply@cea4africa.com>', to, subject, text }),
+    body: JSON.stringify({ from: env('EMAIL_FROM') ?? 'CEA FOR AFRICA <noreply@cea4africa.com>', to, subject, text, ...(html ? { html } : {}) }),
   });
   if (!res.ok) throw new Error(`Envoi e-mail refusé (${res.status})`);
 }

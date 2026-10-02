@@ -64,6 +64,20 @@
       "when": 1790953104487,
       "tag": "0008_ag_vote",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790953862118,
+      "tag": "0009_stages",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790954164272,
+      "tag": "0010_billetterie",
+      "breakpoints": true
     }
   ]
 }

@@ -6,7 +6,10 @@ import KapitalAd from '../../components/KapitalAd.astro';
 import { COURSES, SUBS } from '../../data/site';
 import { META } from '../../data/course-content';
 
-const themes = ['Tous', ...new Set(COURSES.map((c) => c.th))];
+// Thèmes du CDC §7.6 (création, finance, marketing, vente, numérique, gestion, juridique, export ZLECAf, leadership), puis les thèmes propres à CEA
+const CDC_THEMES = ['Création', 'Finance', 'Marketing', 'Vente', 'Numérique', 'Gestion', 'Juridique', 'Export', 'Leadership'];
+const themes = [...CDC_THEMES, ...new Set(COURSES.map((c) => c.th).filter((t) => !CDC_THEMES.includes(t)))];
+const nTheme = (t: string) => COURSES.filter((c) => c.th === t).length;
 const langs = [...new Set(COURSES.flatMap((c) => META[c.id]?.langs ?? ['Français']))];
 ---
 <BaseLayout title="Académie">
@@ -14,18 +17,21 @@ const langs = [...new Set(COURSES.flatMap((c) => META[c.id]?.langs ?? ['Françai
   <section class="block" style="padding-top:20px">
     <div class="wrap">
       <div class="filters" role="group" aria-label="Filtrer les cours" id="cf">
-        {themes.map((t, i) => <button class="chip" type="button" aria-pressed={i === 0 ? 'true' : 'false'} data-th={t}>{t}</button>)}
+        <button class="chip" type="button" aria-pressed="true" data-th="Tous">Tous ({COURSES.length})</button>
+        {themes.map((t) => <button class="chip" type="button" aria-pressed="false" data-th={t} disabled={nTheme(t) === 0} title={nTheme(t) === 0 ? 'Cours en préparation' : undefined}>{t === 'Export' ? 'Export ZLECAf' : t} ({nTheme(t)})</button>)}
         <select class="in" id="lvSel" aria-label="Niveau"><option value="">Tous niveaux</option><option>Débutant</option><option>Intermédiaire</option><option>Avancé</option></select>
         <select class="in" id="langSel" aria-label="Langue"><option value="">Toutes langues</option>{langs.map((l) => <option>{l}</option>)}</select>
         <select class="in" id="durSel" aria-label="Durée"><option value="">Toutes durées</option><option value="0-90">Moins d’1 h 30</option><option value="90-150">1 h 30 à 2 h 30</option><option value="150-9999">Plus de 2 h 30</option></select>
         <label class="chip"><input type="checkbox" id="free" /> Gratuits</label>
         <input class="in" id="cq" type="search" placeholder="Rechercher un cours, un formateur…" aria-label="Rechercher un cours" style="flex:1;min-width:200px" />
         <select class="in" id="sortSel" aria-label="Trier"><option value="">Ordre par défaut</option><option value="court">Plus courts d’abord</option><option value="prix">Prix croissant</option></select>
+        <button class="btn btn-ghost btn-sm" type="button" id="cReset">Réinitialiser</button>
       </div>
+      <p class="small muted" id="cCount" aria-live="polite" style="margin:0 0 12px"></p>
       <div class="split">
         <div>
           <div class="grid g2" id="cl">{COURSES.map((c) => <CourseCard c={c} />)}</div>
-          <div class="empty" id="cEmpty" hidden>Aucun cours pour ces filtres.</div>
+          <div class="empty" id="cEmpty" hidden>Aucun cours pour ces filtres. <button class="btn btn-ghost btn-sm" type="button" onclick="document.getElementById('cReset').click()">Voir tous les cours</button></div>
         </div>
         <aside>
           <KapitalAd variant={2} />
@@ -59,6 +65,12 @@ const langs = [...new Set(COURSES.flatMap((c) => META[c.id]?.langs ?? ['Françai
       if (ok) n++;
     });
     document.getElementById('cEmpty')!.hidden = n > 0;
+    document.getElementById('cCount')!.textContent = `${n} cours sur ${cards.length}`;
+    // Filtres reflétés dans l'adresse : recherche partageable, retour arrière conservé
+    const u = new URL(location.href);
+    const set = (k: string, v: string) => (v ? u.searchParams.set(k, v) : u.searchParams.delete(k));
+    set('theme', th === 'Tous' ? '' : th); set('niveau', lv.value); set('langue', lang.value); set('duree', dur.value); set('gratuit', free.checked ? '1' : ''); set('q', q.value.trim()); set('tri', sort.value);
+    history.replaceState(null, '', u);
     const key = sort.value === 'court' ? 'min' : sort.value === 'prix' ? 'price' : '';
     (key ? [...cards].sort((a, b) => Number(a.dataset[key]) - Number(b.dataset[key])) : cards).forEach((c) => list.appendChild(c));
   }
@@ -67,6 +79,18 @@ const langs = [...new Set(COURSES.flatMap((c) => META[c.id]?.langs ?? ['Françai
     chips.forEach((x) => x.setAttribute('aria-pressed', String(x === c)));
     apply();
   }));
+  // Restauration depuis l'adresse (?theme=Finance&langue=Anglais…)
+  const sp = new URLSearchParams(location.search);
+  const pick = (sel: HTMLSelectElement, v: string | null) => { if (v && [...sel.options].some((o) => o.value === v)) sel.value = v; };
+  const t0 = sp.get('theme');
+  if (t0 && chips.some((c) => c.dataset.th === t0 && !c.disabled)) { th = t0; chips.forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.th === t0))); }
+  pick(lv, sp.get('niveau')); pick(lang, sp.get('langue')); pick(dur, sp.get('duree')); pick(sort, sp.get('tri'));
+  free.checked = sp.get('gratuit') === '1'; q.value = sp.get('q') ?? '';
+  document.getElementById('cReset')!.addEventListener('click', () => {
+    th = 'Tous'; chips.forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.th === 'Tous')));
+    lv.value = lang.value = dur.value = sort.value = q.value = ''; free.checked = false; apply();
+  });
+  apply();
   lv.addEventListener('change', apply);
   free.addEventListener('change', apply);
   lang.addEventListener('change', apply);

@@ -2,12 +2,13 @@
    - Prestataire réel : CinetPay (Orange Money, MTN MoMo, Wave, Moov, cartes…) — actif si CINETPAY_APIKEY et CINETPAY_SITE_ID sont définis.
    - Sans prestataire : mode « simulation » en développement uniquement ; en production le paiement est refusé proprement.
    CEA ne voit ni ne conserve aucune donnée de carte : la saisie se fait chez l'agrégateur. */
-import { and, count, eq } from 'drizzle-orm';
+import { and, count, eq, inArray } from 'drizzle-orm';
 import { db } from './db';
 import * as s from '../db/schema';
 import { COURSES, EVENTS } from '../data/site';
 import { env, isProd } from './env';
 import { reference, audit } from './session';
+import { contactOf, deliverTickets, newTicketCode } from './tickets';
 import { notify } from './notify';
 
 export type Purpose = (typeof s.paymentPurposeEnum.enumValues)[number];
@@ -126,11 +127,11 @@ export async function settle(ref: string, info: { method?: string; providerRef?:
       break;
     case 'billet': {
       const qty = Number(meta.qty ?? 1);
-      for (let i = 0; i < qty; i++) {
-        await db.insert(s.eventTicket).values({ code: `TKT-${String(meta.eventId).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`, eventId: String(meta.eventId), ticketType: String(meta.ticketType), priceXof: Number(meta.unitXof ?? 0), userId: uid, paymentId: pay.id });
-      }
+      const [buyer] = await db.select({ name: s.user.name }).from(s.user).where(eq(s.user.id, uid));
+      const issued = await db.insert(s.eventTicket).values(Array.from({ length: qty }, () => ({ code: newTicketCode(String(meta.eventId)), eventId: String(meta.eventId), ticketType: String(meta.ticketType), priceXof: Number(meta.unitXof ?? 0), userId: uid, holderName: buyer?.name ?? null, paymentId: pay.id }))).returning();
+      await deliverTickets(issued, await contactOf(uid));
       if (meta.promo) await db.update(s.promoCode).set({ used: (await db.select({ u: s.promoCode.used }).from(s.promoCode).where(eq(s.promoCode.code, String(meta.promo))))[0].u + 1 }).where(eq(s.promoCode.code, String(meta.promo)));
-      await notify(uid, `Billet${qty > 1 ? 's' : ''} confirmé${qty > 1 ? 's' : ''} : ${meta.label}`, '/espace/billets', { email: true, whatsapp: true });
+      await notify(uid, `Billet${qty > 1 ? 's' : ''} confirmé${qty > 1 ? 's' : ''} : ${meta.label}`, '/espace/billets');
       break;
     }
     case 'expert':
@@ -156,6 +157,6 @@ export async function settle(ref: string, info: { method?: string; providerRef?:
 }
 
 export async function ticketsSold(eventId: string) {
-  const [r] = await db.select({ n: count() }).from(s.eventTicket).where(and(eq(s.eventTicket.eventId, eventId), eq(s.eventTicket.status, 'valide')));
+  const [r] = await db.select({ n: count() }).from(s.eventTicket).where(and(eq(s.eventTicket.eventId, eventId), inArray(s.eventTicket.status, ['valide', 'utilise'])));
   return r.n;
 }

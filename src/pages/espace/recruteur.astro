@@ -6,6 +6,7 @@ import { db } from '../../lib/db';
 import { job, jobApplication, hireDeclaration, profile, jobTypeEnum } from '../../db/schema/app';
 import { user } from '../../db/schema/auth';
 import { COUNTRIES, country } from '../../data/site';
+import { STUDY_LEVELS } from '../../data/etudes';
 
 export const prerender = false;
 const me = Astro.locals.user!;
@@ -56,7 +57,17 @@ const COLS: [string, string][] = [['envoyee', 'Reçues'], ['vue', 'Vues'], ['ent
         <div><label class="f" for="jp">Pays</label><select class="in" id="jp" name="country">{Object.entries(COUNTRIES).map(([k, v]) => <option value={k}>{v}</option>)}</select></div>
         <div><label class="f" for="jy">Contrat</label><select class="in" id="jy" name="type">{jobTypeEnum.enumValues.map((t) => <option>{t}</option>)}</select></div>
       </div>
-      <label class="f" for="js">Rémunération</label><input class="in" id="js" name="salary" placeholder="Ex. 450 000 – 600 000 FCFA / mois" />
+      <fieldset id="internF" hidden style="border:1px solid var(--line);border-radius:8px;padding:4px 12px 10px;margin:10px 0">
+        <legend class="small" style="padding:0 6px"><b>Stage ou alternance</b></legend>
+        <div class="grid g2" style="gap:0 12px">
+          <div><label class="f" for="jsd">Date de début</label><input class="in" id="jsd" name="startDate" type="date" /></div>
+          <div><label class="f" for="jdm">Durée (mois)</label><input class="in" id="jdm" name="durationMonths" type="number" min="1" max="36" /></div>
+        </div>
+        <label class="f" for="jsl">Niveau d'études visé</label><select class="in" id="jsl" name="studyLevel"><option value="">Tous niveaux</option>{STUDY_LEVELS.map((l) => <option>{l}</option>)}</select>
+        <label class="f" for="jtu">Tuteur ou tutrice (nom et fonction)</label><input class="in" id="jtu" name="tutor" maxlength="140" placeholder="Ex. A. Mensah, directrice financière" />
+        <p class="xs muted" style="margin:6px 0 0">Décrivez les missions d'apprentissage dans la description (80 caractères minimum). Un stage dure 12 mois au plus ; la gratification suit la loi du pays.</p>
+      </fieldset>
+      <label class="f" for="js">Rémunération ou gratification</label><input class="in" id="js" name="salary" placeholder="Ex. 450 000 – 600 000 FCFA / mois" />
       <label class="f" for="jk">Compétences (séparées par des virgules)</label><input class="in" id="jk" name="skills" data-type="list" />
       <label class="f" for="jd">Description</label><textarea class="in" id="jd" name="description" maxlength="6000"></textarea>
       <label class="row small"><input type="checkbox" name="remote" /> Télétravail possible</label>
@@ -89,6 +100,21 @@ const COLS: [string, string][] = [['envoyee', 'Reçues'], ['vue', 'Vues'], ['ent
   {sk && (talents.length ? <div class="grid g3">{talents.map((t) => <div class="panel"><b>{t.name}</b><div class="small muted">{t.headline ?? ''}{t.country ? ` · ${country(t.country)}` : ''}</div><div class="xs" style="margin-top:6px">{(t.skills ?? []).join(', ')}</div></div>)}</div> : <p class="small muted">Aucun talent visible pour « {sk} ».</p>)}
 </EspaceLayout>
 <script>
+  // Champs propres aux stages et à l'alternance : affichés et obligatoires seulement pour ces contrats
+  const jy = document.getElementById('jy') as HTMLSelectElement | null;
+  const internF = document.getElementById('internF') as HTMLFieldSetElement | null;
+  const syncIntern = () => {
+    if (!jy || !internF) return;
+    const on = ['Stage', 'Alternance'].includes(jy.value);
+    internF.hidden = !on;
+    internF.querySelectorAll<HTMLInputElement>('#jsd, #jdm, #jtu').forEach((i) => (i.required = on));
+    (document.getElementById('jdm') as HTMLInputElement).max = jy.value === 'Stage' ? '12' : '36';
+    const jd = document.getElementById('jd') as HTMLTextAreaElement;
+    jd.minLength = on ? 80 : 0;
+    jd.placeholder = on ? 'Missions confiées, compétences acquises, encadrement…' : '';
+  };
+  jy?.addEventListener('change', syncIntern);
+  syncIntern();
   document.querySelectorAll<HTMLSelectElement>('[data-app]').forEach((s) => s.addEventListener('change', async () => {
     const r = await fetch('/api/emplois', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ applicationId: s.dataset.app, status: s.value }) });
     const d = await r.json().catch(() => ({}));

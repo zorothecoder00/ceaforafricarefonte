@@ -9,6 +9,7 @@ import { EVENTS } from '../../data/site';
 import { json, fail, requireUser, audit } from '../../lib/session';
 import { EVENT_CAPACITY, ticketsSold } from '../../lib/payments';
 import { notify } from '../../lib/notify';
+import { deliverTickets, contactOf, newTicketCode } from '../../lib/tickets';
 
 export const prerender = false;
 
@@ -28,10 +29,9 @@ export const POST: APIRoute = async ({ locals, request }) => {
     if (p.data.promo) qs.set('promo', p.data.promo);
     return json({ ok: true, redirect: `/paiement?${qs}` });
   }
-  for (let i = 0; i < p.data.qty; i++) {
-    await db.insert(eventTicket).values({ code: `TKT-${e.id.toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`, eventId: e.id, ticketType: tk.n, priceXof: 0, userId: u.id, holderName: u.name });
-  }
+  const issued = await db.insert(eventTicket).values(Array.from({ length: p.data.qty }, () => ({ code: newTicketCode(e.id), eventId: e.id, ticketType: tk.n, priceXof: 0, userId: u.id, holderName: u.name }))).returning();
+  await deliverTickets(issued, await contactOf(u.id));
   await audit(u.id, 'billet.gratuit', e.id, { qty: p.data.qty });
-  await notify(u.id, `Inscription confirmée : ${e.t}`, '/espace/billets', { email: true, whatsapp: true });
+  await notify(u.id, `Inscription confirmée : ${e.t}`, '/espace/billets');
   return json({ ok: true, message: 'Inscription confirmée. Votre billet QR est dans « Mon espace › Billets ».', redirect: '/espace/billets' });
 };

@@ -4,12 +4,16 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import JobsBoard from '../../components/JobsBoard.astro';
-import { SUBS, COUNTRIES } from '../../data/site';
+import { SUBS, COUNTRIES, dateFr } from '../../data/site';
 import { listJobs } from '../../lib/jobs';
+import { eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { profile } from '../../db/schema/app';
 
 export const prerender = false;
 const uid = Astro.locals.user?.id;
 const jobs = await listJobs({ userId: uid, types: ['Stage', 'Alternance'] });
+const [me] = uid ? await db.select({ school: profile.school, degree: profile.degree, level: profile.studyLevel, from: profile.availableFrom, until: profile.availableUntil }).from(profile).where(eq(profile.userId, uid)) : [];
 const steps: [string, string][] = [
   ['Complétez votre profil talent', 'École, diplôme préparé, période de disponibilité et compétences : les recruteurs filtrent sur ces informations.'],
   ['Postulez en un clic', 'Votre profil et votre CV sont transmis directement ; vous suivez chaque candidature depuis votre espace.'],
@@ -24,7 +28,16 @@ const steps: [string, string][] = [
       {steps.map(([t, d], i) => <div class="panel"><span class="tag info">Étape {i + 1}</span><h3 style="font-size:1rem;margin:8px 0 4px">{t}</h3><p class="small" style="margin:0">{d}</p></div>)}
     </div>
   </section>
-  <JobsBoard jobs={jobs} />
+  {uid && (
+    <section class="block" style="padding:16px 0 0">
+      <div class="wrap">
+        {me?.school || me?.from
+          ? <div class="panel small">🎓 <b>Votre profil étudiant</b> : {[me.school, me.degree, me.level].filter(Boolean).join(' · ') || '—'}{me.from && <> · disponible à partir du {dateFr(me.from)}{me.until && <> jusqu'au {dateFr(me.until)}</>}</>}. <a href="/opportunites/profil">Modifier</a></div>
+          : <div class="panel small">🎓 Indiquez votre établissement et vos disponibilités dans <a href="/opportunites/profil">votre profil talent</a> : vous pourrez filtrer les offres compatibles avec votre calendrier.</div>}
+      </div>
+    </section>
+  )}
+  <JobsBoard jobs={jobs} student avail={me ? { from: me.from, until: me.until } : undefined} />
   <section class="block" style="padding-top:0">
     <div class="wrap split">
       <div class="panel">

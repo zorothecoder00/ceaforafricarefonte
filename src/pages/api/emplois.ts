@@ -12,6 +12,7 @@ import { db } from '../../lib/db';
 import { job, jobApplication, savedItem, jobAlert, hireDeclaration, userRole, jobTypeEnum } from '../../db/schema/app';
 import { json, fail, requireUser, audit } from '../../lib/session';
 import { notify } from '../../lib/notify';
+import { STUDY_LEVELS, INTERN_TYPES } from '../../data/etudes';
 
 export const prerender = false;
 
@@ -26,6 +27,8 @@ const Body = z.discriminatedUnion('action', [
     action: z.literal('publier'), title: z.string().trim().min(3).max(140), company: z.string().trim().min(2).max(140), country: z.string().length(2),
     type: z.enum(jobTypeEnum.enumValues), remote: z.boolean().default(false), salary: z.string().max(80).optional(), skills: z.array(z.string().max(40)).max(15).default([]),
     description: z.string().max(6000).optional(), featured: z.boolean().default(false),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal('')), durationMonths: z.number().int().min(1).max(36).nullable().optional(),
+    studyLevel: z.enum(STUDY_LEVELS).optional().or(z.literal('')), tutor: z.string().trim().max(140).optional(),
   }),
   z.object({ action: z.literal('embauche'), personName: z.string().trim().min(2).max(120), contract: z.enum(jobTypeEnum.enumValues), hiredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), country: z.string().max(2).optional() }),
 ]);
@@ -55,7 +58,14 @@ export const POST: APIRoute = async ({ locals, request }) => {
       return json({ ok: true, message: 'Alerte créée : vous recevrez les nouvelles offres correspondantes par WhatsApp.' });
     case 'publier': {
       if (DISCRIM.test(`${b.title} ${b.description ?? ''}`)) return fail('Les critères d’âge, de religion, d’origine ou de sexe sont interdits dans les offres.');
-      const [row] = await db.insert(job).values({ employerId: u.id, title: b.title, company: b.company, country: b.country, type: b.type, remote: b.remote, salary: b.salary, skills: b.skills, description: b.description, status: 'en_moderation' }).returning({ id: job.id });
+      const intern = INTERN_TYPES.includes(b.type);
+      // Un stage ou une alternance décrit de vraies missions d'apprentissage, une durée et un tuteur (CDC §7.4)
+      if (intern && (!b.startDate || !b.durationMonths || !b.tutor || (b.description ?? '').trim().length < 80)) return fail('Pour un stage ou une alternance, indiquez la date de début, la durée, le tuteur et les missions (80 caractères minimum).');
+      if (b.type === 'Stage' && b.durationMonths && b.durationMonths > 12) return fail('Un stage ne peut pas dépasser 12 mois : proposez plutôt une alternance ou un CDD.');
+      const [row] = await db.insert(job).values({
+        employerId: u.id, title: b.title, company: b.company, country: b.country, type: b.type, remote: b.remote, salary: b.salary, skills: b.skills, description: b.description, status: 'en_moderation',
+        ...(intern ? { startDate: b.startDate || null, durationMonths: b.durationMonths ?? null, studyLevel: b.studyLevel || null, tutor: b.tutor || null } : {}),
+      }).returning({ id: job.id });
       await db.insert(userRole).values({ userId: u.id, role: 'employeur' }).onConflictDoNothing();
       await audit(u.id, 'emploi.publication', row.id);
       if (b.featured) return json({ ok: true, message: 'Offre soumise à la modération.', redirect: `/paiement?objet=mise_en_avant&ref=${row.id}` });

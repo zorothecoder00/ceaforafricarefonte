@@ -1,17 +1,18 @@
 ---
 /* Carte d'offre d'emploi (CDC §7.4) : candidature en un clic, sauvegarde, signalement, correspondance « n compétences sur m ». */
-import { country } from '../data/site';
-interface Props { j: { id: string; t: string; co: string; c: string; type: string; remote: boolean; sal: string; skills: string[]; featured?: boolean; saved?: boolean }; mine?: string[] }
+import { country, dateFr } from '../data/site';
+interface Props { j: { id: string; t: string; co: string; c: string; type: string; remote: boolean; sal: string; skills: string[]; featured?: boolean; saved?: boolean; start?: string | null; dur?: number | null; level?: string | null; tutor?: string | null }; mine?: string[] }
 const { j, mine = [] } = Astro.props;
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const have = new Set(mine.map(norm));
 const match = j.skills.filter((s) => have.has(norm(s))).length;
 const logged = !!Astro.locals.user;
 ---
-<div class="panel row between" style="align-items:flex-start;margin-bottom:12px" data-type={j.type} data-c={j.c} data-remote={j.remote ? '1' : '0'} data-q={`${j.t} ${j.co} ${j.skills.join(' ')}`}>
+<div class="panel row between" style="align-items:flex-start;margin-bottom:12px" data-type={j.type} data-c={j.c} data-remote={j.remote ? '1' : '0'} data-q={`${j.t} ${j.co} ${j.skills.join(' ')}`} data-start={j.start ?? ''} data-level={j.level ?? ''} data-dur={j.dur ?? ''}>
   <div style="flex:1;min-width:240px">
     <h3 style="margin:0 0 4px">{j.featured && <span class="tag gold" style="margin-right:6px">À la une</span>}{j.t}</h3>
     <div class="muted small">{j.co} · {country(j.c)} · {j.type}{j.remote ? ' · Télétravail' : ''}</div>
+    {(j.start || j.dur) && <div class="small" style="margin-top:6px">{j.start && <>Début : <b>{dateFr(j.start)}</b></>}{j.dur && <> · Durée : <b>{j.dur} mois</b></>}{j.level && <> · {j.level}</>}{j.tutor && <> · Tuteur : {j.tutor}</>}</div>}
     <div class="row" style="margin-top:10px">{j.skills.map((s) => <span class={`tag ${have.has(norm(s)) ? 'ok' : ''}`}>{s}</span>)}</div>
     <div class="small" style="margin-top:8px">Rémunération : {j.sal}{mine.length > 0 && <> · <b>{match}/{j.skills.length} compétences correspondent</b></>}</div>
   </div>

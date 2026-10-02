@@ -75,6 +75,8 @@ await db.insert(s.job).values(JOBS.map((j) => ({
   employerId: j.co === 'PayLink Africa' ? ids.kwame : null,
   title: j.t, company: j.co, country: j.c, type: TYPE[j.type] ?? 'CDI', remote: j.remote, diaspora: !!(j as { diaspora?: boolean }).diaspora,
   salary: j.sal, skills: j.skills, status: 'publiee' as const, publishedAt: new Date(),
+  // Stages : début, durée, niveau et tuteur (CDC §7.4)
+  ...(j.type === 'Stage' ? { startDate: '2027-01-05', durationMonths: 6, studyLevel: 'Bac+5 (Master, ingénieur)', tutor: 'Responsable du service, désigné à la signature de la convention', description: "Missions d'apprentissage encadrées : participation aux travaux de l'équipe, montée en compétences sur les outils du métier, point hebdomadaire avec le tuteur et bilan de fin de stage." } : {}),
 })));
 console.log(`• ${JOBS.length} offres d'emploi.`);
 

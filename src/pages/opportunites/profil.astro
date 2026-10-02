@@ -7,6 +7,7 @@ import { db } from '../../lib/db';
 import { profile, jobApplication, savedItem } from '../../db/schema/app';
 import { SUBS } from '../../data/site';
 import { listJobs } from '../../lib/jobs';
+import { STUDY_LEVELS } from '../../data/etudes';
 
 export const prerender = false;
 const me = Astro.locals.user;
@@ -31,6 +32,16 @@ const nSaved = (await db.select({ id: savedItem.itemId }).from(savedItem).where(
         {p?.cvKey && <p class="small" style="margin-top:-8px">✓ CV déposé. Un nouveau dépôt remplace le précédent.</p>}
         <label class="f" for="tt">Titre professionnel</label><input class="in" id="tt" name="headline" value={p?.headline ?? ''} placeholder="Ex. Développeur mobile" />
         <label class="f" for="tsk">Compétences (séparées par des virgules)</label><input class="in" id="tsk" name="skills" value={skills.join(', ')} placeholder="Flutter, Excel, Anglais" />
+        <details style="margin:4px 0 12px" open={!!(p?.school || p?.availableFrom)}>
+          <summary class="small" style="cursor:pointer"><b>Étudiant·e ou jeune diplômé·e ?</b> Pour les stages et l'alternance</summary>
+          <label class="f" for="tsc">Établissement</label><input class="in" id="tsc" name="school" value={p?.school ?? ''} maxlength="140" placeholder="Ex. Université de Lomé" />
+          <label class="f" for="tdg">Diplôme préparé ou obtenu</label><input class="in" id="tdg" name="degree" value={p?.degree ?? ''} maxlength="140" placeholder="Ex. Master Finance d'entreprise" />
+          <label class="f" for="tsl">Niveau d'études</label><select class="in" id="tsl" name="studyLevel"><option value="">—</option>{STUDY_LEVELS.map((l) => <option selected={p?.studyLevel === l}>{l}</option>)}</select>
+          <div class="grid g2" style="gap:0 12px">
+            <div><label class="f" for="taf">Disponible à partir du</label><input class="in" id="taf" name="availableFrom" type="date" value={p?.availableFrom ?? ''} /></div>
+            <div><label class="f" for="tau">Jusqu'au</label><input class="in" id="tau" name="availableUntil" type="date" value={p?.availableUntil ?? ''} /></div>
+          </div>
+        </details>
         <label class="row small" style="margin-bottom:14px"><input type="checkbox" name="visible" checked={p?.recruiterVisible} /> Visible par les recruteurs vérifiés de CEA Talents</label>
         <button class="btn btn-primary" type="submit">Enregistrer</button>
         <p class="small muted" style="margin-top:10px">{nApps} candidature{nApps > 1 ? 's' : ''} · {nSaved} élément{nSaved > 1 ? 's' : ''} sauvegardé{nSaved > 1 ? 's' : ''} — <a href="/espace/candidatures">suivre mes candidatures</a></p>
