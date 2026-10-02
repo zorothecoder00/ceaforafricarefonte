@@ -3,6 +3,7 @@ import '../styles/global.css';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import Copilot from '../components/Copilot.astro';
+import CookieBanner from '../components/CookieBanner.astro';
 import { MENU, KMENU, COURSES, EVENTS, JOBS, OPPS, ARTICLES, country } from '../data/site';
 import { getLang, lp, stripLang, localizeHtml, useT, TRANSLATED } from '../i18n/ui';
 import { CURRENCIES, COUNTRY_CURRENCY } from '../data/currency';
@@ -70,6 +71,7 @@ const searchIndex = [
     <main id="app" tabindex="-1" lang={translated ? lang : 'fr'} set:html={body} />
     <Footer />
     <Copilot />
+    <CookieBanner lang={lang === 'en' ? 'en' : 'fr'} />
     <script type="application/json" id="searchIndex" set:html={JSON.stringify(searchIndex)} />
     <script type="application/json" id="currencies" set:html={JSON.stringify(CURRENCIES.map(({ code, perEur, symbol }) => ({ code, perEur, symbol })))} />
     <script type="application/json" id="countryCur" set:html={JSON.stringify(COUNTRY_CURRENCY)} />

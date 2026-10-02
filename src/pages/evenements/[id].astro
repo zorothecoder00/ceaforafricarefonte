@@ -101,6 +101,8 @@ const osm = x.venue ? `https://www.openstreetmap.org/?mlat=${x.venue.lat}&mlon=$
           <div class="row"><input class="in" name="email" type="email" required placeholder="votre@email.com" aria-label="E-mail" style="flex:1;margin:0" /><button class="btn btn-ghost btn-sm" type="submit">M'inscrire</button></div>
         </form>
         <div class="panel" style="margin-top:12px">
+          <a class="btn btn-primary btn-sm" href={`/evenements/${e.id}/participant`} style="margin-bottom:8px;display:inline-flex">Espace participant</a>
+          <p class="xs muted" style="margin:0 0 8px">Mon programme personnel{x.sessions.some((s) => /B2B/i.test(s.title)) ? ', rencontres B2B' : ''}, avis, replays et attestation.</p>
           <a class="btn btn-ghost btn-sm" download={`${e.id}.ics`} href={`data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`}>Ajouter à mon agenda</a>
         </div>
         <div style="margin-top:16px"><KapitalAd variant={1} /></div>

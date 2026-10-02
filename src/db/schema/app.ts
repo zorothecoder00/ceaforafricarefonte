@@ -149,6 +149,42 @@ export const eventTicket = pgTable('event_ticket', {
   createdAt: ts('created_at').notNull().defaultNow(),
 }, (t) => [index('event_ticket_event_idx').on(t.eventId)]);
 
+/* Programme personnel, rencontres B2B et après-événement (CDC §7.3) */
+export const eventAgenda = pgTable('event_agenda', {
+  userId: userRef('user_id').notNull(),
+  eventId: text('event_id').notNull(),
+  session: text('session').notNull(), // « jour-heure » de la session
+}, (t) => [primaryKey({ columns: [t.userId, t.eventId, t.session] })]);
+
+export const b2bProfile = pgTable('b2b_profile', {
+  eventId: text('event_id').notNull(),
+  userId: userRef('user_id').notNull(),
+  offer: text('offer').notNull(),
+  need: text('need').notNull(),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.eventId, t.userId] })]);
+
+export const b2bMeetingStatusEnum = pgEnum('b2b_meeting_status', ['demandee', 'acceptee', 'refusee', 'annulee']);
+export const b2bMeeting = pgTable('b2b_meeting', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  eventId: text('event_id').notNull(),
+  requesterId: userRef('requester_id').notNull(),
+  targetId: userRef('target_id').notNull(),
+  slot: text('slot').notNull(), // « 1-16:20 » (jour-heure)
+  note: text('note'),
+  status: b2bMeetingStatusEnum('status').notNull().default('demandee'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('b2b_meeting_event_idx').on(t.eventId)]);
+
+export const eventFeedback = pgTable('event_feedback', {
+  eventId: text('event_id').notNull(),
+  userId: userRef('user_id').notNull(),
+  rating: integer('rating').notNull(), // 1 à 5
+  nps: integer('nps'), // 0 à 10
+  comment: text('comment'),
+  at: ts('at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.eventId, t.userId] })]);
+
 /* ===== CEA Talents (CDC §7.4) ===== */
 export const jobTypeEnum = pgEnum('job_type', ['CDI', 'CDD', 'Stage', 'Alternance', 'Freelance', 'Mission']);
 export const jobStatusEnum = pgEnum('job_status', ['brouillon', 'en_moderation', 'publiee', 'fermee', 'refusee']);

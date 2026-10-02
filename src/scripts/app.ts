@@ -294,12 +294,29 @@ function say(text: string, who: 'u' | 'a') {
   body?.appendChild(m);
   body!.scrollTop = body!.scrollHeight;
 }
-function answer(q: string) {
+// Historique envoyé à l'IA (/api/copilot) ; sans clé d'API côté serveur, repli sur les réponses par mots-clés
+const history: { role: 'user' | 'assistant'; content: string }[] = [];
+function ruleAnswer(q: string) {
+  const hit = RULES.find(([r]) => r.test(norm(q)));
+  return hit ? hit[EN ? 2 : 1] : EN ? "I don't have an answer to that yet. Try search (Ctrl+K) or write to the team via /contact." : "Je n'ai pas encore la réponse à cette question. Essayez la recherche (Ctrl+K) ou écrivez à l'équipe via /contact.";
+}
+async function answer(q: string) {
   say(q, 'u');
-  const n = norm(q);
-  const hit = RULES.find(([r]) => r.test(n));
-  const fallback = EN ? "I don't have an answer to that yet. Try search (Ctrl+K) or write to the team via /contact." : "Je n'ai pas encore la réponse à cette question. Essayez la recherche (Ctrl+K) ou écrivez à l'équipe via /contact.";
-  setTimeout(() => say(hit ? hit[EN ? 2 : 1] : fallback, 'a'), 350);
+  history.push({ role: 'user', content: q });
+  const wait = document.createElement('div');
+  wait.className = 'msg a';
+  wait.textContent = '…';
+  body?.appendChild(wait);
+  let reply = '';
+  try {
+    const r = await fetch('/api/copilot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: history.slice(-10), lang: EN ? 'en' : 'fr' }) });
+    const d = await r.json();
+    if (d.ok && d.reply) reply = d.reply;
+  } catch { /* hors ligne : réponses locales */ }
+  wait.remove();
+  if (!reply) reply = ruleAnswer(q);
+  history.push({ role: 'assistant', content: reply });
+  say(reply, 'a');
 }
 $('#chatForm')?.addEventListener('submit', (e) => {
   e.preventDefault();

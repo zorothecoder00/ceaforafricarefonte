@@ -15,6 +15,8 @@ const themes = ['Tous', ...new Set(COURSES.map((c) => c.th))];
         {themes.map((t, i) => <button class="chip" type="button" aria-pressed={i === 0 ? 'true' : 'false'} data-th={t}>{t}</button>)}
         <select class="in" id="lvSel" aria-label="Niveau"><option value="">Tous niveaux</option><option>Débutant</option><option>Intermédiaire</option><option>Avancé</option></select>
         <label class="chip"><input type="checkbox" id="free" /> Gratuits</label>
+        <input class="in" id="cq" type="search" placeholder="Rechercher un cours, un formateur…" aria-label="Rechercher un cours" style="flex:1;min-width:200px" />
+        <select class="in" id="sortSel" aria-label="Trier"><option value="">Ordre par défaut</option><option value="court">Plus courts d’abord</option><option value="prix">Prix croissant</option></select>
       </div>
       <div class="split">
         <div>
@@ -38,14 +40,21 @@ const themes = ['Tous', ...new Set(COURSES.map((c) => c.th))];
   const chips = [...document.querySelectorAll<HTMLButtonElement>('#cf [data-th]')];
   const lv = document.getElementById('lvSel') as HTMLSelectElement;
   const free = document.getElementById('free') as HTMLInputElement;
+  const q = document.getElementById('cq') as HTMLInputElement;
+  const sort = document.getElementById('sortSel') as HTMLSelectElement;
+  const list = document.getElementById('cl')!;
+  const cards = [...list.querySelectorAll<HTMLElement>(':scope > a')];
+  const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   function apply() {
     let n = 0;
     document.querySelectorAll<HTMLElement>('#cl > a').forEach((el) => {
-      const ok = (th === 'Tous' || el.dataset.th === th) && (!lv.value || el.dataset.lv === lv.value) && (!free.checked || el.dataset.free === '1');
+      const ok = (th === 'Tous' || el.dataset.th === th) && (!lv.value || el.dataset.lv === lv.value) && (!free.checked || el.dataset.free === '1') && norm(el.dataset.q ?? '').includes(norm(q.value.trim()));
       el.hidden = !ok;
       if (ok) n++;
     });
     document.getElementById('cEmpty')!.hidden = n > 0;
+    const key = sort.value === 'court' ? 'min' : sort.value === 'prix' ? 'price' : '';
+    (key ? [...cards].sort((a, b) => Number(a.dataset[key]) - Number(b.dataset[key])) : cards).forEach((c) => list.appendChild(c));
   }
   chips.forEach((c) => c.addEventListener('click', () => {
     th = c.dataset.th!;
@@ -54,4 +63,6 @@ const themes = ['Tous', ...new Set(COURSES.map((c) => c.th))];
   }));
   lv.addEventListener('change', apply);
   free.addEventListener('change', apply);
+  q.addEventListener('input', apply);
+  sort.addEventListener('change', apply);
 </script>

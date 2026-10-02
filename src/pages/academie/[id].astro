@@ -1,55 +1,104 @@
 ---
+/* Lecteur de cours CEA Academy (CDC §7.6) : leçons courtes, notes personnelles, progression en base, quiz final corrigé côté serveur,
+   certificat vérifiable, lecture hors ligne (PWA). */
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import KapitalAd from '../../components/KapitalAd.astro';
 import Money from '../../components/Money.astro';
 import { COURSES } from '../../data/site';
+import { CONTENT, PASS_MARK } from '../../data/course-content';
 
 export function getStaticPaths() {
   return COURSES.map((c) => ({ params: { id: c.id }, props: { c } }));
 }
 const { c } = Astro.props;
+const content = CONTENT[c.id];
 const finance = c.th === 'Finance' || c.th === 'Levée de fonds';
+const last = c.ls.length - 1;
+const related = COURSES.filter((x) => x.id !== c.id && (x.th === c.th || x.lv === c.lv)).slice(0, 3);
 ---
 <BaseLayout title={c.t}>
   <PageHead title={c.t} lead={`${c.th} · ${c.lv} · ${c.dur} · par ${c.by}`} crumbs={[['/academie', 'Académie'], ['', c.th]]} />
   <section class="block" style="padding-top:28px">
-    <div class="wrap split">
+    <div class="wrap split" id="course" data-course={c.id} data-last={last}>
       <div>
-        <div class="player">
+        <div class="player" id="intro">
           <div style="text-align:center;padding:20px">
             <h2 style="color:#fff">{c.t}</h2>
-            <p style="color:#C9D6E5">{c.ls.length} leçons · certificat vérifiable à la fin</p>
+            <p style="color:#C9D6E5">{c.ls.length - 1} leçons de moins de 15 minutes + quiz final · certificat vérifiable</p>
             <button class="btn btn-gold" type="button" id="enroll">S'inscrire — <Money xof={c.price} /></button>
           </div>
         </div>
+
+        {c.ls.slice(0, last).map((l, i) => (
+          <article class="panel lesson" data-lesson={i} hidden={i !== 0} style="margin-top:18px">
+            <span class="tag info">Leçon {i + 1} sur {last}</span>
+            <h2 style="font-size:1.3rem;margin:10px 0">{l}</h2>
+            <p>{content?.lessons[i]?.s}</p>
+            <h3 style="font-size:1rem">À retenir</h3>
+            <ul>{content?.lessons[i]?.k.map((k) => <li>{k}</li>)}</ul>
+            <label class="f" for={`note-${i}`}>Mes notes (enregistrées sur cet appareil)</label>
+            <textarea class="in" id={`note-${i}`} data-note={i} placeholder="Vos idées pour votre entreprise…"></textarea>
+            <div class="row between" style="margin-top:8px">
+              <button class="btn btn-ghost btn-sm" type="button" data-go={i - 1} disabled={i === 0}>← Précédente</button>
+              <button class="btn btn-primary btn-sm" type="button" data-done={i}>Marquer comme terminée</button>
+              <button class="btn btn-ghost btn-sm" type="button" data-go={i + 1}>{i === last - 1 ? 'Quiz final →' : 'Suivante →'}</button>
+            </div>
+          </article>
+        ))}
+
+        <form class="panel lesson" data-lesson={last} id="quiz" hidden style="margin-top:18px">
+          <span class="tag gold">Quiz final</span>
+          <h2 style="font-size:1.3rem;margin:10px 0">Validez vos acquis</h2>
+          <p class="small muted">{content?.quiz.length} questions · {Math.ceil(PASS_MARK * (content?.quiz.length ?? 0))} bonnes réponses requises · tentatives illimitées.</p>
+          {content?.quiz.map((q, qi) => (
+            <fieldset style="border:0;padding:0;margin:0 0 14px">
+              <legend style="font-weight:600;margin-bottom:6px">{qi + 1}. {q.q}</legend>
+              {q.o.map((o, oi) => <label class="row small" style="margin-bottom:4px"><input type="radio" name={`q${qi}`} value={oi} required /> {o}</label>)}
+            </fieldset>
+          ))}
+          <button class="btn btn-primary" type="submit">Valider mes réponses</button>
+          <p class="small" id="quizMsg" style="margin:10px 0 0" aria-live="polite"></p>
+        </form>
+
         <div class="panel" style="margin-top:18px">
           <h3>Ce que vous allez apprendre</h3>
-          <p>{c.ls.slice(0, -1).join(', ')}. Chaque leçon dure moins de 15 minutes et s'appuie sur des exemples d'entreprises africaines.</p>
+          <p>{c.ls.slice(0, -1).join(', ')}. Chaque leçon s'appuie sur des exemples d'entreprises africaines.</p>
+          <button class="btn btn-ghost btn-sm" type="button" id="offline">Enregistrer pour lecture hors ligne</button>
         </div>
       </div>
       <aside>
         <div class="panel">
           <h3>Programme</h3>
-          <ul class="lessons" id="lessons" data-course={c.id}>{c.ls.map((l, i) => <li tabindex="0" role="checkbox" aria-checked="false" data-i={i}><span class="check">{i + 1}</span>{l}</li>)}</ul>
-          <p class="small" id="prog" style="margin:12px 0 0"></p>
+          <ul class="lessons" id="lessons">{c.ls.map((l, i) => <li tabindex="0" role="button" aria-checked="false" data-i={i}><span class="check">{i + 1}</span>{l}</li>)}</ul>
+          <div class="progress" style="margin-top:12px"><span id="bar" style="width:0"></span></div>
+          <p class="small" id="prog" style="margin:8px 0 0"></p>
           <a class="btn btn-ghost btn-sm" href="/espace/apprentissage" style="margin-top:10px">Mon apprentissage</a>
         </div>
+        {related.length > 0 && <div class="panel" style="margin-top:16px"><h3>Pour aller plus loin</h3>{related.map((r) => <a class="small" href={`/academie/${r.id}`} style="display:block;padding:4px 0">{r.t}</a>)}</div>}
         <div style="margin-top:16px"><KapitalAd variant={finance ? 0 : 2} /></div>
       </aside>
     </div>
   </section>
 </BaseLayout>
 <script>
-  // Progression enregistrée en base (compte connecté) ; certificat vérifiable délivré à 100 %.
-  const ul = document.getElementById('lessons')!;
-  const id = ul.dataset.course!;
-  const items = [...ul.querySelectorAll<HTMLLIElement>('li')];
+  // Progression en base (compte connecté) ; certificat vérifiable délivré quand toutes les leçons et le quiz sont validés.
+  const root = document.getElementById('course')!;
+  const id = root.dataset.course!, last = Number(root.dataset.last);
+  const items = [...document.querySelectorAll<HTMLLIElement>('#lessons li')];
+  const lessons = [...document.querySelectorAll<HTMLElement>('.lesson')];
   const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
-  const enrollBtn = document.getElementById('enroll')!;
-  const prog = document.getElementById('prog')!;
+  const enrollBtn = document.getElementById('enroll')!, prog = document.getElementById('prog')!, bar = document.getElementById('bar')!;
   const prefix = location.pathname.startsWith('/en/') ? '/en' : '';
   let enrolled = false, done: number[] = [], cert: string | null = null;
+
+  function show(i: number, scroll = true) {
+    if (i < 0 || i > last) return;
+    lessons.forEach((l) => (l.hidden = Number(l.dataset.lesson) !== i));
+    items.forEach((li, k) => li.classList.toggle('cur', k === i));
+    try { localStorage.setItem(`cea-course-${id}-at`, String(i)); } catch { /* ignoré */ }
+    if (scroll) lessons[i]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
   function draw() {
     items.forEach((li, i) => {
       const ok = done.includes(i);
@@ -58,9 +107,12 @@ const finance = c.th === 'Finance' || c.th === 'Levée de fonds';
       c.classList.toggle('done', ok);
       c.textContent = ok ? '✓' : String(i + 1);
     });
+    document.querySelectorAll<HTMLButtonElement>('[data-done]').forEach((b) => { const ok = done.includes(Number(b.dataset.done)); b.textContent = ok ? '✓ Terminée' : 'Marquer comme terminée'; b.classList.toggle('btn-primary', !ok); b.classList.toggle('btn-ghost', ok); });
     enrollBtn.hidden = enrolled;
+    const pct = Math.round((done.length / items.length) * 100);
+    bar.style.width = (enrolled ? pct : 0) + '%';
     prog.innerHTML = enrolled
-      ? `Progression : ${Math.round((done.length / items.length) * 100)} %${cert ? ` — <a href="/verifier/certificat/${cert}">voir mon certificat</a>` : ''}`
+      ? `Progression : ${pct} %${cert ? ` — <a href="/verifier/certificat/${cert}">voir mon certificat</a>` : ''}`
       : 'Inscrivez-vous pour suivre votre progression et obtenir le certificat.';
   }
   async function post(body: Record<string, unknown>) {
@@ -73,15 +125,49 @@ const finance = c.th === 'Finance' || c.th === 'Levée de fonds';
   }
   fetch('/api/academie/progression?course=' + id).then((r) => r.json()).then((d) => { enrolled = d.enrolled; done = d.done; cert = d.certificate; draw(); }).catch(draw);
   enrollBtn.addEventListener('click', async () => { const d = await post({}); if (d) { enrolled = true; done = d.done; toast(d.message); draw(); } });
+
   items.forEach((li, i) => {
-    const flip = async () => {
-      if (!enrolled) return toast("Inscrivez-vous d'abord au cours.");
-      const d = await post({ lesson: i, done: !done.includes(i) });
-      if (!d) return;
-      done = d.done; cert = d.certificate; draw();
-      if (d.complete) toast(d.message);
-    };
-    li.addEventListener('click', flip);
-    li.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(); } });
+    li.addEventListener('click', () => show(i));
+    li.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); show(i); } });
   });
+  document.querySelectorAll<HTMLButtonElement>('[data-go]').forEach((b) => b.addEventListener('click', () => show(Number(b.dataset.go))));
+  document.querySelectorAll<HTMLButtonElement>('[data-done]').forEach((b) => b.addEventListener('click', async () => {
+    if (!enrolled) return toast("Inscrivez-vous d'abord au cours.");
+    const i = Number(b.dataset.done);
+    const d = await post({ lesson: i, done: !done.includes(i) });
+    if (!d) return;
+    done = d.done; cert = d.certificate; draw();
+    if (d.done.includes(i) && i < last) show(i + 1);
+  }));
+
+  const quiz = document.getElementById('quiz') as HTMLFormElement;
+  quiz.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!enrolled) return toast("Inscrivez-vous d'abord au cours.");
+    const n = quiz.querySelectorAll('fieldset').length;
+    const answers = Array.from({ length: n }, (_, i) => Number((quiz.querySelector<HTMLInputElement>(`input[name="q${i}"]:checked`)?.value) ?? -1));
+    const d = await post({ quiz: answers });
+    if (!d) return;
+    done = d.done; cert = d.certificate; draw();
+    document.getElementById('quizMsg')!.textContent = d.message;
+    toast(d.message);
+  });
+
+  // Notes personnelles : stockées sur l'appareil uniquement
+  document.querySelectorAll<HTMLTextAreaElement>('[data-note]').forEach((t) => {
+    const k = `cea-note-${id}-${t.dataset.note}`;
+    try { t.value = localStorage.getItem(k) ?? ''; } catch { /* ignoré */ }
+    t.addEventListener('input', () => { try { localStorage.setItem(k, t.value); } catch { /* ignoré */ } });
+  });
+  document.getElementById('offline')!.addEventListener('click', async () => {
+    try {
+      if (!('caches' in window)) throw new Error();
+      const c = await caches.open('cea-v1-pages');
+      await c.add(location.pathname);
+      toast('Cours enregistré : il restera lisible sans connexion.');
+    } catch { toast('Lecture hors ligne indisponible sur ce navigateur.'); }
+  });
+  let start = 0;
+  try { start = Number(localStorage.getItem(`cea-course-${id}-at`) ?? 0); } catch { /* ignoré */ }
+  show(Math.min(Math.max(start, 0), last), false);
 </script>

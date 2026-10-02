@@ -36,6 +36,13 @@
       "when": 1790946519292,
       "tag": "0004_voix_talents",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790948031868,
+      "tag": "0005_evenements",
+      "breakpoints": true
     }
   ]
 }

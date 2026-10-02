@@ -1,19 +1,34 @@
 ---
+/* Pages légales (CDC §15) : mentions légales, confidentialité, cookies, CGU, accessibilité. */
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
+import { LEGAL } from '../../data/legal';
+import { dateFr } from '../../data/site';
 
-const LEGAL: Record<string, [string, string]> = {
-  confidentialite: ['Politique de confidentialité', "Nous collectons le minimum de données nécessaire, pour des finalités définies, avec des durées de conservation précises. Vous pouvez accéder à vos données, les télécharger, les corriger ou supprimer votre compte depuis le centre de confidentialité. Base de référence : loi togolaise n° 2019-014, Convention de Malabo, et lois des pays concernés."],
-  cookies: ['Politique de cookies', "Seuls les cookies nécessaires sont actifs par défaut. La mesure d'audience respectueuse de la vie privée n'est activée qu'avec votre accord."],
-  conditions: ["Conditions d'utilisation", 'Règles d\'usage de la plateforme, du réseau et des espaces connectés. Les contenus financiers ne constituent ni une offre ni un conseil en investissement.'],
-  accessibilite: ["Déclaration d'accessibilité", 'Objectif : conformité WCAG 2.2 niveau AA. Navigation au clavier, contrastes, taille de texte réglable (pied de page), mode Lite pour les connexions lentes.'],
-};
 export function getStaticPaths() {
-  return ['confidentialite', 'cookies', 'conditions', 'accessibilite'].map((slug) => ({ params: { slug } }));
+  return Object.keys(LEGAL).map((slug) => ({ params: { slug } }));
 }
-const [title, text] = LEGAL[Astro.params.slug!];
+const doc = LEGAL[Astro.params.slug!];
+const others = Object.entries(LEGAL).filter(([k]) => k !== Astro.params.slug);
 ---
-<BaseLayout title={title}>
-  <PageHead title={title} lead="Version de démonstration" crumbs={[['', title]]} />
-  <section class="block"><div class="wrap"><div class="panel"><p>{text}</p></div></div></section>
+<BaseLayout title={doc.title}>
+  <PageHead title={doc.title} lead={`Mise à jour le ${dateFr(doc.updated)}`} crumbs={[['', doc.title]]} />
+  <section class="block">
+    <div class="wrap split">
+      <article class="panel prose">
+        <p>{doc.intro}</p>
+        {doc.sections.map(([h, paras]) => (
+          <>
+            <h2 style="font-size:1.2rem;margin-top:24px">{h}</h2>
+            {paras.length > 1 ? <ul>{paras.map((p) => <li>{p}</li>)}</ul> : <p>{paras[0]}</p>}
+          </>
+        ))}
+      </article>
+      <aside class="panel">
+        <h3>Autres documents</h3>
+        {others.map(([k, d]) => <a class="small" href={`/legal/${k}`} style="display:block;margin-bottom:6px">{d.title}</a>)}
+        {Astro.params.slug === 'cookies' && <button class="btn btn-ghost btn-sm" type="button" data-cookie-settings style="margin-top:10px">Gérer mes choix</button>}
+      </aside>
+    </div>
+  </section>
 </BaseLayout>

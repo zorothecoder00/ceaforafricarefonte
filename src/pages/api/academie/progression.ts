@@ -1,17 +1,19 @@
 /* Inscription et progression dans un cours (CDC §7.6). Certificat vérifiable délivré à 100 %.
-   POST { courseId, lesson?: number, done?: boolean } — sans « lesson » : simple inscription. */
+   POST { courseId, lesson?: number, done?: boolean } — sans « lesson » : simple inscription.
+   POST { courseId, quiz: number[] } — quiz final corrigé côté serveur ; la dernière leçon n'est validée qu'à 70 % de bonnes réponses. */
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../../../lib/db';
 import { enrollment, certificate } from '../../../db/schema/app';
 import { COURSES } from '../../../data/site';
+import { CONTENT, PASS_MARK } from '../../../data/course-content';
 import { json, fail, requireUser, reference, audit } from '../../../lib/session';
 import { notify } from '../../../lib/notify';
 
 export const prerender = false;
 
-const Body = z.object({ courseId: z.string().max(20), lesson: z.number().int().min(0).max(50).optional(), done: z.boolean().default(true) });
+const Body = z.object({ courseId: z.string().max(20), lesson: z.number().int().min(0).max(50).optional(), done: z.boolean().default(true), quiz: z.array(z.number().int().min(-1).max(10)).max(20).optional() });
 
 export const GET: APIRoute = async ({ locals, url }) => {
   const u = locals.user;
@@ -37,7 +39,16 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const [cur] = await db.insert(enrollment).values({ userId: u.id, courseId: course.id }).onConflictDoNothing().returning();
   const [e] = cur ? [cur] : await db.select().from(enrollment).where(and(eq(enrollment.userId, u.id), eq(enrollment.courseId, course.id)));
   let done = e.completedLessons;
-  if (p.data.lesson !== undefined && p.data.lesson < course.ls.length) {
+  const quizIndex = course.ls.length - 1; // la dernière leçon est le quiz final
+  let quizResult: { score: number; total: number; passed: boolean } | null = null;
+  if (p.data.quiz) {
+    const qs = CONTENT[course.id]?.quiz ?? [];
+    const score = qs.filter((q, i) => p.data.quiz![i] === q.a).length;
+    quizResult = { score, total: qs.length, passed: qs.length > 0 && score / qs.length >= PASS_MARK };
+    if (quizResult.passed) done = [...new Set([...done, quizIndex])].sort((a, b) => a - b);
+  } else if (p.data.lesson === quizIndex) {
+    return fail('Le quiz final se valide en répondant aux questions.');
+  } else if (p.data.lesson !== undefined && p.data.lesson < course.ls.length) {
     done = p.data.done ? [...new Set([...done, p.data.lesson])].sort((a, b) => a - b) : done.filter((x) => x !== p.data.lesson);
   }
   const complete = done.length === course.ls.length;
@@ -53,5 +64,10 @@ export const POST: APIRoute = async ({ locals, request }) => {
       await notify(u.id, `Certificat obtenu : ${course.t}`, `/verifier/certificat/${cert}`, { email: true });
     }
   }
-  return json({ ok: true, done, complete, certificate: cert, message: p.data.lesson === undefined ? 'Inscription confirmée. Bonne formation !' : complete ? 'Félicitations ! Votre certificat vérifiable est disponible.' : 'Progression enregistrée.' });
+  const message = quizResult
+    ? quizResult.passed
+      ? `Quiz réussi : ${quizResult.score}/${quizResult.total}.${complete ? ' Félicitations, votre certificat vérifiable est disponible !' : ' Terminez les autres leçons pour obtenir le certificat.'}`
+      : `${quizResult.score}/${quizResult.total} : il faut ${Math.ceil(PASS_MARK * quizResult.total)} bonnes réponses. Relisez les leçons et réessayez.`
+    : p.data.lesson === undefined ? 'Inscription confirmée. Bonne formation !' : complete ? 'Félicitations ! Votre certificat vérifiable est disponible.' : 'Progression enregistrée.';
+  return json({ ok: true, done, complete, certificate: cert, quiz: quizResult, message });
 };

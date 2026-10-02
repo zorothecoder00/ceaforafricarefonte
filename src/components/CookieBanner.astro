@@ -1,0 +1,54 @@
+---
+/* Consentement aux cookies (CDC §15.1) : seuls les cookies nécessaires sont actifs par défaut ; la mesure d'audience (Matomo)
+   n'est chargée qu'après accord explicite, révocable à tout moment (lien « Gérer les cookies » du pied de page). */
+interface Props { lang?: 'fr' | 'en' }
+const { lang = 'fr' } = Astro.props;
+const en = lang === 'en';
+---
+<div class="cookie" id="cookieBanner" role="dialog" aria-labelledby="cookieTitle" aria-describedby="cookieText" hidden>
+  <b id="cookieTitle">{en ? 'Your privacy' : 'Votre vie privée'}</b>
+  <p class="small" id="cookieText" style="margin:6px 0 10px">
+    {en
+      ? 'We only use the cookies needed for the site to work. With your consent, we also measure audience anonymously (Matomo, no advertising, no resale).'
+      : 'Nous n’utilisons que les cookies nécessaires au fonctionnement du site. Avec votre accord, nous mesurons aussi l’audience de façon anonyme (Matomo, sans publicité ni revente).'}
+    {' '}<a href={en ? '/en/legal/cookies' : '/legal/cookies'}>{en ? 'Learn more' : 'En savoir plus'}</a>
+  </p>
+  <div class="row" style="gap:8px">
+    <button class="btn btn-ghost btn-sm" type="button" data-consent="0">{en ? 'Necessary only' : 'Nécessaires uniquement'}</button>
+    <button class="btn btn-primary btn-sm" type="button" data-consent="1">{en ? 'Accept audience measurement' : 'Accepter la mesure d’audience'}</button>
+  </div>
+</div>
+<style>
+  .cookie { position: fixed; z-index: 60; left: 16px; bottom: 16px; max-width: 420px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; padding: 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18); }
+  @media (max-width: 640px) { .cookie { left: 8px; right: 8px; bottom: 72px; max-width: none; } }
+</style>
+<script>
+  const KEY = 'cea-consent';
+  const MATOMO_URL = import.meta.env.PUBLIC_MATOMO_URL as string | undefined;
+  const MATOMO_ID = import.meta.env.PUBLIC_MATOMO_SITE_ID as string | undefined;
+  const banner = document.getElementById('cookieBanner')!;
+  const read = (): { mesure: boolean } | null => { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { return null; } };
+
+  function loadMatomo() {
+    if (!MATOMO_URL || !MATOMO_ID || (window as unknown as { _paq?: unknown })._paq) return;
+    const base = MATOMO_URL.replace(/\/?$/, '/');
+    const w = window as unknown as { _paq: unknown[][] };
+    w._paq = [['disableCookies'], ['trackPageView'], ['enableLinkTracking'], ['setTrackerUrl', base + 'matomo.php'], ['setSiteId', MATOMO_ID]];
+    const s = document.createElement('script');
+    s.async = true; s.src = base + 'matomo.js';
+    document.head.appendChild(s);
+  }
+  function choose(mesure: boolean) {
+    try { localStorage.setItem(KEY, JSON.stringify({ mesure, at: new Date().toISOString() })); } catch { /* stockage indisponible */ }
+    banner.hidden = true;
+    // Trace du consentement pour les membres connectés (ignorée sinon)
+    fetch('/api/consentements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'cookies_mesure', granted: mesure }) }).catch(() => {});
+    if (mesure) loadMatomo();
+    else if (read() && (window as unknown as { _paq?: unknown })._paq) location.reload(); // retrait : décharger le traceur
+  }
+  const c = read();
+  if (!c) banner.hidden = false;
+  else if (c.mesure) loadMatomo();
+  banner.querySelectorAll<HTMLButtonElement>('[data-consent]').forEach((b) => b.addEventListener('click', () => choose(b.dataset.consent === '1')));
+  document.querySelectorAll('[data-cookie-settings]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); banner.hidden = false; banner.querySelector('button')?.focus(); }));
+</script>

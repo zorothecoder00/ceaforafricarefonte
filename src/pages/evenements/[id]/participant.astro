@@ -1,0 +1,143 @@
+---
+/* Espace participant d'un événement (CDC §7.3) : programme personnel, rencontres B2B (profils, demandes, agenda des rendez-vous),
+   après l'événement (avis, replays, attestation de présence). */
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import PageHead from '../../../components/PageHead.astro';
+import { and, eq, inArray, ne, or } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
+import { db } from '../../../lib/db';
+import { eventAgenda, b2bProfile, b2bMeeting, eventFeedback, eventTicket, profile } from '../../../db/schema/app';
+import { user } from '../../../db/schema/auth';
+import { eventById, hasTicket, b2bSlots, isPast } from '../../../lib/events';
+import { EXTRA } from '../../../data/events-extra';
+import { REPLAYS, dateFr, country } from '../../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user;
+const e = eventById(Astro.params.id ?? '');
+if (!e) return new Response('Événement introuvable', { status: 404 });
+if (!me) return Astro.redirect(`/connexion?retour=${encodeURIComponent(Astro.url.pathname + Astro.url.search)}`);
+const x = EXTRA[e.id];
+const ticket = await hasTicket(me.id, e.id);
+const past = isPast(e.date);
+const tab = Astro.url.searchParams.get('onglet') ?? (past ? 'apres' : 'programme');
+const mine = new Set((await db.select({ s: eventAgenda.session }).from(eventAgenda).where(and(eq(eventAgenda.userId, me.id), eq(eventAgenda.eventId, e.id)))).map((r) => r.s));
+const slots = b2bSlots(e.id);
+const [myB2b] = await db.select().from(b2bProfile).where(and(eq(b2bProfile.eventId, e.id), eq(b2bProfile.userId, me.id)));
+const others = tab === 'b2b' && myB2b ? await db.select({ id: user.id, name: user.name, offer: b2bProfile.offer, need: b2bProfile.need, c: profile.country, sector: profile.sector }).from(b2bProfile).innerJoin(user, eq(user.id, b2bProfile.userId)).leftJoin(profile, eq(profile.userId, b2bProfile.userId)).where(and(eq(b2bProfile.eventId, e.id), ne(b2bProfile.userId, me.id))) : [];
+const other = alias(user, 'other');
+const meetings = await db.select({ m: b2bMeeting, rq: user.name, tg: other.name }).from(b2bMeeting).innerJoin(user, eq(user.id, b2bMeeting.requesterId)).innerJoin(other, eq(other.id, b2bMeeting.targetId))
+  .where(and(eq(b2bMeeting.eventId, e.id), or(eq(b2bMeeting.requesterId, me.id), eq(b2bMeeting.targetId, me.id)), inArray(b2bMeeting.status, ['demandee', 'acceptee'])));
+const taken = new Set(meetings.map((r) => r.m.slot));
+const [fb] = await db.select().from(eventFeedback).where(and(eq(eventFeedback.eventId, e.id), eq(eventFeedback.userId, me.id)));
+const [present] = await db.select({ code: eventTicket.code }).from(eventTicket).where(and(eq(eventTicket.userId, me.id), eq(eventTicket.eventId, e.id), eq(eventTicket.status, 'utilise'))).limit(1);
+const slotLabel = (k: string) => slots.find((s) => s.key === k)?.label ?? k;
+const words = (s: string) => new Set(s.toLowerCase().split(/\W+/).filter((w) => w.length > 3));
+const match = (a: string, b: string) => [...words(a)].filter((w) => words(b).has(w)).length;
+const sorted = myB2b ? [...others].sort((a, b) => match(myB2b.need, b.offer) - match(myB2b.need, a.offer)) : others;
+---
+<BaseLayout title={`Espace participant — ${e.t}`}>
+  <PageHead title="Espace participant" lead={`${e.t} · ${dateFr(e.date)} · ${e.city}`} crumbs={[['/evenements', 'Événements'], [`/evenements/${e.id}`, e.t], ['', 'Espace participant']]} />
+  <section class="block" style="padding-top:20px">
+    <div class="wrap">
+      {!ticket && <div class="lock" style="margin-bottom:16px"><div><b>Vous n’avez pas encore de billet.</b> Le programme personnel reste accessible ; les rencontres B2B et l’avis sont réservés aux participants. <a href={`/evenements/${e.id}`}>Prendre un billet</a></div></div>}
+      <nav class="subnav" style="margin:0 0 16px">
+        <a href="?onglet=programme" aria-current={tab === 'programme' ? 'page' : undefined}>Mon programme ({mine.size})</a>
+        {slots.length > 0 && <a href="?onglet=b2b" aria-current={tab === 'b2b' ? 'page' : undefined}>Rencontres B2B ({meetings.length})</a>}
+        <a href="?onglet=apres" aria-current={tab === 'apres' ? 'page' : undefined}>Après l'événement</a>
+      </nav>
+
+      {tab === 'programme' && (
+        <div>
+          {x.sessions.map((s) => { const k = `${s.day}-${s.time}`; const inMine = mine.has(k); return (
+            <div class="panel row between" style="margin-bottom:8px">
+              <div><b>Jour {s.day} · {s.time} · {s.title}</b><div class="small muted">{s.room}{s.speakers.length ? ` · ${s.speakers.join(', ')}` : ''}</div></div>
+              <button class={`btn btn-sm ${inMine ? 'btn-primary' : 'btn-ghost'}`} type="button" data-post="/api/evenements" data-body={JSON.stringify({ action: 'agenda', eventId: e.id, session: k, add: !inMine })} data-reload>{inMine ? '✓ Dans mon programme' : 'Ajouter'}</button>
+            </div>
+          ); })}
+        </div>
+      )}
+
+      {tab === 'b2b' && (
+        <div class="split">
+          <div>
+            {!myB2b ? <div class="empty">Créez votre profil B2B pour voir les autres participants et proposer des rendez-vous.</div> : (
+              <>
+                <h2 style="font-size:1.2rem">Participants ({sorted.length})</h2>
+                <p class="small muted">Classés selon la correspondance entre votre besoin et leur offre.</p>
+                {sorted.map((o) => (
+                  <div class="panel" style="margin-bottom:10px">
+                    <div class="row between"><b>{o.name}</b><span class="xs muted">{[o.sector, o.c ? country(o.c) : ''].filter(Boolean).join(' · ')}</span></div>
+                    <p class="small" style="margin:6px 0"><b>Propose :</b> {o.offer}<br /><b>Recherche :</b> {o.need}</p>
+                    <form data-api="/api/evenements" data-reload class="row" style="gap:6px">
+                      <input type="hidden" name="action" value="b2b.demande" /><input type="hidden" name="eventId" value={e.id} /><input type="hidden" name="targetId" value={o.id} />
+                      <select class="in" name="slot" aria-label="Créneau" style="margin:0;width:auto">{slots.filter((s) => !taken.has(s.key)).map((s) => <option value={s.key}>{s.label}</option>)}</select>
+                      <input class="in" name="note" placeholder="Objet du rendez-vous" aria-label="Objet" style="margin:0;flex:1;min-width:160px" />
+                      <button class="btn btn-primary btn-sm" type="submit">Proposer</button>
+                    </form>
+                  </div>
+                ))}
+                {sorted.length === 0 && <p class="small muted">Aucun autre participant inscrit aux rencontres pour l’instant.</p>}
+              </>
+            )}
+          </div>
+          <aside>
+            <form class="panel" data-api="/api/evenements" data-reload>
+              <h3>Mon profil B2B</h3>
+              <input type="hidden" name="action" value="b2b.profil" /><input type="hidden" name="eventId" value={e.id} />
+              <label class="f" for="bo">Ce que je propose</label><textarea class="in" id="bo" name="offer" required minlength="5" maxlength="300">{myB2b?.offer ?? ''}</textarea>
+              <label class="f" for="bn">Ce que je recherche</label><textarea class="in" id="bn" name="need" required minlength="5" maxlength="300">{myB2b?.need ?? ''}</textarea>
+              <button class="btn btn-primary btn-sm" type="submit" disabled={!ticket}>Enregistrer</button>
+            </form>
+            <div class="panel" style="margin-top:14px">
+              <h3>Mes rendez-vous</h3>
+              {meetings.length === 0 && <p class="small muted" style="margin:0">Aucun rendez-vous.</p>}
+              {meetings.sort((a, b) => a.m.slot.localeCompare(b.m.slot)).map(({ m, rq, tg }) => (
+                <div style="border-top:1px solid var(--line);padding:8px 0">
+                  <b class="small">{slotLabel(m.slot)}</b> · <span class="small">{m.requesterId === me.id ? tg : rq}</span> <span class={`tag ${m.status === 'acceptee' ? 'ok' : ''}`}>{m.status === 'acceptee' ? 'confirmé' : 'en attente'}</span>
+                  {m.note && <div class="xs muted">{m.note}</div>}
+                  {m.targetId === me.id && m.status === 'demandee' && <div class="row" style="gap:6px;margin-top:4px">
+                    <button class="btn btn-primary btn-sm" type="button" data-post="/api/evenements" data-body={JSON.stringify({ action: 'b2b.reponse', meetingId: m.id, accept: true })} data-reload>Accepter</button>
+                    <button class="btn btn-ghost btn-sm" type="button" data-post="/api/evenements" data-body={JSON.stringify({ action: 'b2b.reponse', meetingId: m.id, accept: false })} data-reload>Décliner</button>
+                  </div>}
+                </div>
+              ))}
+              <p class="xs muted" style="margin:8px 0 0">Lieu : {x.sessions.find((s) => /B2B/i.test(s.title))?.room ?? 'Espace B2B'}, table indiquée à l'accueil.</p>
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {tab === 'apres' && (
+        <div class="grid g2">
+          <div class="panel">
+            <h3>Votre avis</h3>
+            {!past ? <p class="small muted">Le questionnaire s’ouvrira à la fin de l’événement.</p> : !ticket ? <p class="small muted">Réservé aux participants.</p> : (
+              <form data-api="/api/evenements" data-reload>
+                <input type="hidden" name="action" value="avis" /><input type="hidden" name="eventId" value={e.id} />
+                <fieldset style="border:0;padding:0;margin:0 0 10px"><legend class="small" style="font-weight:600">Note globale</legend><div class="row" style="gap:4px">{[1, 2, 3, 4, 5].map((n) => <label class="chip"><input type="radio" name="rating" value={n} required checked={fb?.rating === n} /> {n} ★</label>)}</div></fieldset>
+                <label class="f" for="nps">Recommanderiez-vous cet événement ? (0 à 10)</label><input class="in" id="nps" name="nps" type="number" min="0" max="10" value={fb?.nps ?? ''} />
+                <label class="f" for="cm">Commentaire</label><textarea class="in" id="cm" name="comment">{fb?.comment ?? ''}</textarea>
+                <button class="btn btn-primary btn-sm" type="submit">{fb ? 'Mettre à jour' : 'Envoyer'}</button>
+              </form>
+            )}
+          </div>
+          <div>
+            <div class="panel">
+              <h3>Attestation de présence</h3>
+              {present ? <><p class="small">Votre présence a été enregistrée à l’entrée.</p><a class="btn btn-ghost btn-sm" href={`/verifier/presence/${present.code}`}>Voir et imprimer l’attestation</a></> : <p class="small muted">Disponible après le scan de votre billet à l’entrée de l’événement.</p>}
+            </div>
+            <div class="panel" style="margin-top:14px">
+              <h3>Replays et supports</h3>
+              {past ? REPLAYS.slice(0, 3).map((r) => <a class="small" href="/evenements/replays" style="display:block;margin-bottom:6px">▶ {r.t} <span class="muted">({r.d})</span></a>) : <p class="small muted">Les replays et présentations seront publiés ici sous 72 heures après l’événement.</p>}
+            </div>
+            <div class="panel" style="margin-top:14px">
+              <h3>Garder le contact</h3>
+              <p class="small">Retrouvez les personnes rencontrées dans <a href="/espace/messages">votre messagerie</a> et <a href="/communaute">l’annuaire des membres</a>.</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  </section>
+</BaseLayout>

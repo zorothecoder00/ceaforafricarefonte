@@ -34,6 +34,15 @@ if (type === 'carte') {
     title = ok ? 'Billet valide' : `Billet ${r.status}`;
     lines = [['Événement', EVENTS.find((e) => e.id === r.eventId)?.t ?? r.eventId], ['Catégorie', r.ticketType], ['Code', r.code]];
   }
+} else if (type === 'presence') {
+  // Attestation de présence : billet scanné à l'entrée
+  const [r] = await db.select({ t: eventTicket, name: user.name }).from(eventTicket).leftJoin(user, eq(user.id, eventTicket.userId)).where(eq(eventTicket.code, id));
+  if (r?.t.checkedInAt) {
+    const ev = EVENTS.find((e) => e.id === r.t.eventId);
+    ok = true;
+    title = 'Attestation de présence';
+    lines = [['Participant·e', r.t.holderName ?? r.name ?? '—'], ['Événement', ev?.t ?? r.t.eventId], ['Lieu', ev?.city ?? '—'], ['Présence enregistrée le', dateFr(r.t.checkedInAt.toISOString())], ['Code', r.t.code]];
+  }
 }
 ---
 <BaseLayout title="Vérification">
@@ -43,6 +52,7 @@ if (type === 'carte') {
       <div class="panel">
         <span class={`tag ${ok ? 'ok' : 'bad'}`}>{ok ? '✓ Vérifié' : '✗ Non valide'}</span>
         {lines.length > 0 ? <div style="margin-top:12px">{lines.map(([k, v]) => <div class="list-row"><span class="muted">{k}</span><b>{v}</b></div>)}</div> : <p style="margin-top:12px">Aucun document ne correspond à ce code. Vérifiez qu'il a été saisi sans erreur.</p>}
+        {type === 'presence' && ok && <button class="btn btn-primary btn-sm" type="button" onclick="window.print()" style="margin-top:12px">Imprimer / enregistrer en PDF</button>}
         <p class="xs muted" style="margin:12px 0 0">Vérification effectuée le {new Date().toLocaleString('fr-FR')} par CEA FOR AFRICA.</p>
       </div>
     </div>
