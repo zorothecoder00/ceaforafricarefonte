@@ -1,0 +1,19 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import Money from '../../components/Money.astro';
+import { EXPERTS, SUBS, initials } from '../../data/site';
+---
+<BaseLayout title="Experts à la demande">
+  <PageHead title="Experts à la demande" lead="Des consultations courtes (45 minutes) avec des experts vérifiés." crumbs={[['/academie', 'Académie'], ['', 'Experts']]} subnav={SUBS.academie} />
+  <section class="block">
+    <div class="wrap grid g2">
+      {EXPERTS.map((x) => (
+        <div class="panel row between">
+          <div class="row"><span class="avatar">{initials(x.n)}</span><div><b>{x.n}</b><div class="small muted">{x.x}</div></div></div>
+          <div class="row"><b><Money xof={x.p} /></b><button class="btn btn-primary btn-sm" data-toast={`Demande de consultation envoyée à ${x.n}.`}>Réserver</button></div>
+        </div>
+      ))}
+    </div>
+  </section>
+</BaseLayout>

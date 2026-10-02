@@ -1,0 +1,21 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { PODCASTS, SUBS } from '../../data/site';
+---
+<BaseLayout title="Podcasts et vidéos">
+  <PageHead title="Podcasts et vidéos" lead="Écoutez les entrepreneurs et les financeurs du continent." crumbs={[['/ressources', 'Ressources'], ['', 'Podcasts']]} subnav={SUBS.ressources} />
+  <section class="block">
+    <div class="wrap">
+      {PODCASTS.map((p) => (
+        <div class="panel row between" style="margin-bottom:10px">
+          <div class="row">
+            <button class="icon-btn" aria-label={`Écouter ${p.t}`} data-toast="Lecture de l'épisode (simulation)."><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg></button>
+            <b>{p.t}</b>
+          </div>
+          <span class="small muted">{p.d}</span>
+        </div>
+      ))}
+    </div>
+  </section>
+</BaseLayout>

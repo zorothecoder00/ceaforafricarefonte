@@ -1,0 +1,48 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { MARKETS, STOCKS, fmt } from '../../data/site';
+
+function spark(s: number[]) {
+  const min = Math.min(...s), max = Math.max(...s);
+  return s.map((v, i) => `${((i / (s.length - 1)) * 120).toFixed(1)},${(30 - ((v - min) / (max - min || 1)) * 28 - 1).toFixed(1)}`).join(' ');
+}
+const heat = (ch: number) => (ch >= 0 ? `rgba(30,122,76,${Math.min(0.35 + ch / 3, 1)})` : `rgba(178,58,46,${Math.min(0.35 - ch / 3, 1)})`);
+---
+<KapitalLayout title="Bourses africaines" ticker>
+  <PageHead title="Tableau des marchés africains" lead="Indices des principales places du continent. Valeurs fictives générées pour la démonstration." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Bourses africaines']]} />
+  <section class="block">
+    <div class="wrap">
+      <div class="panel scroll-x">
+        <table class="t">
+          <thead><tr><th>Indice</th><th>Place</th><th>Zone</th><th>Dernier</th><th>Var. jour</th><th>90 jours</th><th>Régulateur</th></tr></thead>
+          <tbody>
+            {MARKETS.map((m) => (
+              <tr>
+                <td><b>{m.n}</b></td><td>{m.city}</td><td>{m.zone}</td>
+                <td class="num">{fmt(m.last)} <span class="xs muted">{m.cur}</span></td>
+                <td class={`num ${m.ch >= 0 ? 'up' : 'down'}`}>{m.ch >= 0 ? '▲' : '▼'} {Math.abs(m.ch).toFixed(2)} %</td>
+                <td><svg width="120" height="30" viewBox="0 0 120 30" aria-hidden="true"><polyline fill="none" stroke={m.series[89] >= m.series[0] ? '#4CC484' : '#F08A7E'} stroke-width="1.5" points={spark(m.series)} /></svg></td>
+                <td class="small muted">{m.reg}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <h2 style="margin-top:40px">Carte de chaleur</h2>
+      <div class="heat">{MARKETS.map((m) => <div style={`background:${heat(m.ch)}`}><b>{m.ex}</b>{m.ch >= 0 ? '+' : ''}{m.ch.toFixed(2)} %</div>)}</div>
+      <h2 style="margin-top:40px">Sociétés cotées (sélection)</h2>
+      <div class="panel scroll-x">
+        <table class="t">
+          <thead><tr><th>Société</th><th>Place</th><th>Secteur</th><th>Cours</th><th>Var.</th><th>Rendement</th></tr></thead>
+          <tbody>
+            {STOCKS.map((s) => (
+              <tr><td><b>{s.n}</b></td><td>{s.ex}</td><td>{s.s}</td><td class="num">{fmt(s.p)}</td><td class={`num ${s.ch >= 0 ? 'up' : 'down'}`}>{s.ch >= 0 ? '+' : ''}{s.ch} %</td><td class="num">{s.dy} %</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div class="row" style="margin-top:20px"><a class="btn btn-primary" href="/kapital/calendrier">Calendrier financier</a><a class="btn btn-ghost" style="color:#fff" href="/academie/c8">Apprendre la bourse (gratuit)</a></div>
+    </div>
+  </section>
+</KapitalLayout>

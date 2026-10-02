@@ -1,0 +1,20 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { SKILLCALLS, SUBS, country } from '../../data/site';
+---
+<BaseLayout title="Appels à compétences">
+  <PageHead title="Appels à compétences" lead="Des projets accompagnés par CEA cherchent des talents pour les rejoindre." crumbs={[['/projets', 'Project Studio'], ['', 'Appels à compétences']]} subnav={SUBS.projets} />
+  <section class="block">
+    <div class="wrap grid g3">
+      {SKILLCALLS.map((s) => (
+        <div class="panel">
+          <span class="tag gold">{s.p}</span>
+          <h3 style="margin:10px 0">{s.need}</h3>
+          <p class="small muted">{country(s.c)}</p>
+          <button class="btn btn-primary btn-sm" data-toast={`Candidature envoyée au projet ${s.p}.`}>Je suis intéressé·e</button>
+        </div>
+      ))}
+    </div>
+  </section>
+</BaseLayout>

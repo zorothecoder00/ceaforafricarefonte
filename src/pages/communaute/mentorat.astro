@@ -1,0 +1,25 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { MENTORS, SUBS, country, initials } from '../../data/site';
+---
+<BaseLayout title="Mentorat">
+  <PageHead title="Mentorat" lead="Des mentors vérifiés, notés par les membres. Première séance offerte aux adhérents." crumbs={[['/communaute', 'Communauté'], ['', 'Mentorat']]} subnav={SUBS.communaute} />
+  <section class="block">
+    <div class="wrap grid g2">
+      {MENTORS.map((m) => (
+        <div class="panel">
+          <div class="row between">
+            <div class="row"><span class="avatar">{initials(m.n)}</span><div><b>{m.n}</b><div class="small muted">{country(m.c)} · {m.lang}</div></div></div>
+            <span class="tag gold">★ {m.rate}</span>
+          </div>
+          <p class="small" style="margin:12px 0">{m.x}</p>
+          <div class="row" data-slots>
+            {['Lun 10:00', 'Mer 15:00', 'Ven 09:30'].map((s) => <button class="slot" type="button" aria-pressed="false">{s}</button>)}
+          </div>
+          <button class="btn btn-primary btn-sm" style="margin-top:12px" data-toast={`Séance réservée avec ${m.n}. Lien de visio envoyé.`}>Réserver</button>
+        </div>
+      ))}
+    </div>
+  </section>
+</BaseLayout>

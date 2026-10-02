@@ -1,0 +1,28 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import DomainCard from '../../components/DomainCard.astro';
+import { DOMAINS } from '../../data/site';
+
+const quiz = [
+  ['Je veux apprendre les bases', '/academie'],
+  ["Je cherche de l'argent pour mon entreprise", '/kapital/diagnostic'],
+  ['Je veux investir dans des entreprises africaines', '/kapital/opportunites'],
+  ['Je veux recruter', '/opportunites'],
+  ['Je veux échanger avec des pairs', '/communaute'],
+  ["J'ai un projet à structurer", '/projets'],
+];
+---
+<BaseLayout title="Nos domaines">
+  <PageHead title="Nos domaines d'intervention" lead="Chaque domaine ouvre un parcours concret. Choisissez celui qui correspond à votre besoin du moment." crumbs={[['', 'Nos domaines']]} />
+  <section class="block">
+    <div class="wrap">
+      <div class="panel" style="margin-bottom:24px">
+        <h3>Quel domaine pour moi ?</h3>
+        <p class="muted">Choisissez la phrase qui vous ressemble.</p>
+        <div class="row">{quiz.map(([t, h]) => <a class="chip" href={h}>{t}</a>)}</div>
+      </div>
+      <div class="grid g4">{DOMAINS.map((d) => <DomainCard d={d} href={`/domaines/${d.id}`} />)}</div>
+    </div>
+  </section>
+</BaseLayout>

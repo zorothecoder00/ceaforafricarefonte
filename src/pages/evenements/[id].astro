@@ -1,0 +1,56 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Money from '../../components/Money.astro';
+import KapitalAd from '../../components/KapitalAd.astro';
+import { EVENTS, dateFr } from '../../data/site';
+
+export function getStaticPaths() {
+  return EVENTS.map((e) => ({ params: { id: e.id }, props: { e } }));
+}
+const { e } = Astro.props;
+const program = [
+  ['Plénière d\'ouverture', 'Ateliers financement', 'Rencontres B2B'],
+  ['Masterclass', 'Rencontres investisseurs', 'Soirée networking'],
+  ['Demo Day CEA Kapital Invest', 'Remise des prix', 'Clôture'],
+];
+---
+<BaseLayout title={e.t} description={e.d}>
+  <section class="hero">
+    <div class="wrap" style="padding:40px 20px">
+      <div class="crumbs" style="color:#A9BDD3"><a href="/evenements">Événements</a> / {e.city}</div>
+      <h1>{e.t}</h1>
+      <p class="lead">{dateFr(e.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · {e.city} · {e.fmt}</p>
+    </div>
+  </section>
+  <section class="block">
+    <div class="wrap split">
+      <div>
+        <h2>À propos</h2>
+        <p>{e.d}</p>
+        <h3>Qui sera là</h3>
+        <div class="row">{e.sp.map((s) => <span class="tag info">{s}</span>)}</div>
+        {e.big && (
+          <>
+            <h3 style="margin-top:26px">Programme</h3>
+            <div class="grid g3">
+              {program.map((day, i) => <div class="panel"><b style="font-family:var(--display);color:var(--gold-ink)">Jour {i + 1}</b><ul class="small">{day.map((x) => <li>{x}</li>)}</ul></div>)}
+            </div>
+          </>
+        )}
+      </div>
+      <aside>
+        <form class="panel" data-demo="Réservation confirmée. Votre billet QR est envoyé par e-mail et WhatsApp.">
+          <h3>Billets</h3>
+          {e.tk.map((t, i) => (
+            <label class="row between" style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer">
+              <span><input type="radio" name="tk" checked={i === 0} /> {t.n}</span><b><Money xof={t.p} /></b>
+            </label>
+          ))}
+          <p class="xs muted">Paiement par Orange Money, MTN MoMo, Wave, Moov, M-Pesa ou carte.</p>
+          <button class="btn btn-primary" type="submit" style="width:100%">Réserver</button>
+        </form>
+        <div style="margin-top:16px"><KapitalAd variant={1} /></div>
+      </aside>
+    </div>
+  </section>
+</BaseLayout>

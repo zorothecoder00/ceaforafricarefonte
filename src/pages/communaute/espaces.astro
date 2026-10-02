@@ -1,0 +1,19 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { SPACES, SUBS, fmt } from '../../data/site';
+---
+<BaseLayout title="Espaces thématiques">
+  <PageHead title="Espaces thématiques" lead="Par pays, par secteur, par profil : rejoignez les conversations qui vous concernent." crumbs={[['/communaute', 'Communauté'], ['', 'Espaces']]} subnav={SUBS.communaute} />
+  <section class="block">
+    <div class="wrap grid g3">
+      {SPACES.map((s) => (
+        <div class="panel">
+          <h3>{s.n}</h3>
+          <p class="small muted">{s.d}</p>
+          <div class="row between"><span class="small">{fmt(s.m)} membres</span><button class="btn btn-ghost btn-sm" data-toast={`Vous suivez désormais « ${s.n} ».`}>Rejoindre</button></div>
+        </div>
+      ))}
+    </div>
+  </section>
+</BaseLayout>

@@ -1,0 +1,40 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import KapitalAd from '../../components/KapitalAd.astro';
+import Money from '../../components/Money.astro';
+import { COURSES } from '../../data/site';
+
+export function getStaticPaths() {
+  return COURSES.map((c) => ({ params: { id: c.id }, props: { c } }));
+}
+const { c } = Astro.props;
+const finance = c.th === 'Finance' || c.th === 'Levée de fonds';
+---
+<BaseLayout title={c.t}>
+  <PageHead title={c.t} lead={`${c.th} · ${c.lv} · ${c.dur} · par ${c.by}`} crumbs={[['/academie', 'Académie'], ['', c.th]]} />
+  <section class="block" style="padding-top:28px">
+    <div class="wrap split">
+      <div>
+        <div class="player">
+          <div style="text-align:center;padding:20px">
+            <h2 style="color:#fff">{c.t}</h2>
+            <p style="color:#C9D6E5">{c.ls.length} leçons · certificat vérifiable à la fin</p>
+            <button class="btn btn-gold" data-toast="Inscription confirmée. Bonne formation !">S'inscrire — <Money xof={c.price} /></button>
+          </div>
+        </div>
+        <div class="panel" style="margin-top:18px">
+          <h3>Ce que vous allez apprendre</h3>
+          <p>{c.ls.slice(0, -1).join(', ')}. Chaque leçon dure moins de 15 minutes et s'appuie sur des exemples d'entreprises africaines.</p>
+        </div>
+      </div>
+      <aside>
+        <div class="panel">
+          <h3>Programme</h3>
+          <ul class="lessons">{c.ls.map((l, i) => <li><span class="check">{i + 1}</span>{l}</li>)}</ul>
+        </div>
+        <div style="margin-top:16px"><KapitalAd variant={finance ? 0 : 2} /></div>
+      </aside>
+    </div>
+  </section>
+</BaseLayout>

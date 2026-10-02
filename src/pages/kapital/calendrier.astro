@@ -1,0 +1,22 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { FINCAL } from '../../data/site';
+---
+<KapitalLayout title="Calendrier financier">
+  <PageHead title="Calendrier financier" lead="Résultats, dividendes, introductions en bourse et émissions obligataires à venir." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Calendrier financier']]} />
+  <section class="block">
+    <div class="wrap">
+      {FINCAL.map((f) => {
+        const d = new Date(f.d);
+        return (
+          <div class="panel row" style="margin-bottom:10px;gap:18px">
+            <div style="text-align:center;min-width:56px"><b style="font-family:var(--display);font-size:1.6rem;display:block;line-height:1">{d.getDate()}</b><span class="small muted">{d.toLocaleDateString('fr-FR', { month: 'short' })}</span></div>
+            <div style="flex:1"><b>{f.t}</b></div>
+            <span class="tag info">{f.ex}</span>
+          </div>
+        );
+      })}
+    </div>
+  </section>
+</KapitalLayout>

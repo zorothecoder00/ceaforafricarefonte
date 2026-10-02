@@ -1,0 +1,8 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHead from '../components/PageHead.astro';
+---
+<BaseLayout title="Page introuvable">
+  <PageHead title="Page introuvable" lead="Cette page n'existe pas ou a été déplacée." />
+  <section class="block"><div class="wrap row"><a class="btn btn-primary" href="/">Revenir à l'accueil</a><button class="btn btn-ghost" onclick="document.getElementById('searchBtn').click()">Rechercher</button></div></section>
+</BaseLayout>

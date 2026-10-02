@@ -1,0 +1,14 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHead from '../components/PageHead.astro';
+
+const services = [['Portail public', '99,98 %'], ['Espaces connectés', '99,95 %'], ['CEA Kapital Invest', '99,99 %'], ['Paiements Mobile Money', '99,71 %'], ['Notifications WhatsApp et SMS', '99,80 %']];
+---
+<BaseLayout title="Statut de la plateforme">
+  <PageHead title="Statut de la plateforme" lead="Disponibilité des services sur les 90 derniers jours." crumbs={[['', 'Statut']]} />
+  <section class="block">
+    <div class="wrap">
+      {services.map(([s, v]) => <div class="panel row between" style="margin-bottom:8px"><span><span class="tag ok">Opérationnel</span> {s}</span><span class="small muted">{v}</span></div>)}
+    </div>
+  </section>
+</BaseLayout>

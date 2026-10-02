@@ -1,0 +1,42 @@
+---
+import { AFRICA, MADA, HUBS, COUNTRIES, fmt } from '../data/site';
+interface Props { sel?: string; card?: boolean }
+const { sel, card = true } = Astro.props;
+
+function pip(x: number, y: number, poly: number[][]) {
+  let ins = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) ins = !ins;
+  }
+  return ins;
+}
+const MX = (l: number) => (l + 19) * 4.4, MY = (l: number) => (38 - l) * 4.4;
+const dots: [number, number][] = [];
+const st = 1.35;
+for (let lat = 37.5; lat > -35.5; lat -= st)
+  for (let lon = -18; lon < 52; lon += st)
+    if (pip(lon, lat, AFRICA) || pip(lon, lat, MADA)) dots.push([+MX(lon).toFixed(1), +MY(lat).toFixed(1)]);
+
+const first = Math.max(0, HUBS.findIndex((h) => (sel ? h.c === sel : h.hq)));
+const hubs = HUBS.map((h) => ({ name: COUNTRIES[h.c], hq: !!h.hq, m: fmt(h.m), p: h.p, e: h.e, city: h.city, lead: h.lead }));
+const h0 = hubs[first];
+---
+<div class="mapbox" data-map data-hubs={JSON.stringify(hubs)}>
+  <svg viewBox="0 0 316 324" role="img" aria-label="Carte de l'Afrique : présence de CEA FOR AFRICA par pays">
+    {dots.map(([x, y]) => <circle class="dot" cx={x} cy={y} r="1.45" />)}
+    {HUBS.map((h, i) => (
+      <g class:list={['hub', { on: i === first }]} tabindex="0" role="button" aria-label={COUNTRIES[h.c]} data-i={i}>
+        <circle class="p" cx={MX(h.lon)} cy={MY(h.lat)} r="3" />
+        <circle class="c" cx={MX(h.lon)} cy={MY(h.lat)} r={h.hq ? 4.2 : 3} />
+      </g>
+    ))}
+  </svg>
+  {card && (
+    <div class="map-card">
+      <h4>{h0.name} {h0.hq && <span class="tag gold">Siège</span>}</h4>
+      <div class="kv"><span>Membres</span><b>{h0.m}</b><span>Projets accompagnés</span><b>{h0.p}</b><span>Événements en 2026</span><b>{h0.e}</b></div>
+      <span class="small" style="color:#546273">Antenne de {h0.city} · {h0.lead}</span>
+    </div>
+  )}
+</div>

@@ -1,0 +1,6 @@
+---
+import { KADS } from '../data/site';
+interface Props { variant?: number }
+const [t, d, href, cta] = KADS[(Astro.props.variant ?? 0) % KADS.length];
+---
+<a class="kad" href={href}><span class="k">CEA KAPITAL INVEST</span><b>{t}</b><p>{d}</p><span class="btn btn-gold btn-sm">{cta}</span></a>

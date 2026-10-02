@@ -1,0 +1,35 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import KapitalAd from '../../components/KapitalAd.astro';
+import { DOMAINS } from '../../data/site';
+
+export function getStaticPaths() {
+  return DOMAINS.map((d) => ({ params: { id: d.id }, props: { d } }));
+}
+const { d } = Astro.props;
+---
+<BaseLayout title={d.n} description={d.d}>
+  <PageHead title={d.n} lead={d.d} crumbs={[['/domaines', 'Nos domaines'], ['', d.n]]} />
+  <section class="block">
+    <div class="wrap split">
+      <div>
+        <div class="panel"><h3>Pour qui ?</h3><p style="margin:0">{d.pub}</p></div>
+        <div class="grid g2" style="margin-top:18px">
+          <div class="panel"><h3>Ce que nous faisons</h3><ul>{d.met.map((m) => <li>{m}</li>)}</ul></div>
+          <div class="panel"><h3>Ce que vous obtenez</h3><ul>{d.liv.map((m) => <li>{m}</li>)}</ul></div>
+        </div>
+        <a class="btn btn-primary" style="margin-top:20px" href={d.to}>{d.k}</a>
+      </div>
+      <aside>
+        <form class="panel" data-demo="Merci ! Un conseiller vous contacte sous 2 jours ouvrés.">
+          <h3>Être contacté</h3>
+          <label class="f" for="dn">Nom</label><input class="in" id="dn" required />
+          <label class="f" for="dt">Téléphone ou e-mail</label><input class="in" id="dt" required />
+          <button class="btn btn-primary" type="submit">Envoyer</button>
+        </form>
+        <div style="margin-top:16px"><KapitalAd variant={0} /></div>
+      </aside>
+    </div>
+  </section>
+</BaseLayout>

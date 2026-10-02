@@ -1,0 +1,52 @@
+---
+import '../styles/global.css';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import Copilot from '../components/Copilot.astro';
+import { MENU, KMENU, COURSES, EVENTS, JOBS, OPPS, ARTICLES, country } from '../data/site';
+
+interface Props { title?: string; description?: string }
+const { title, description = "CEA FOR AFRICA — la plateforme des entrepreneurs africains : formation, accompagnement, événements, opportunités et CEA Kapital Invest." } = Astro.props;
+const fullTitle = title ? `${title} — CEA FOR AFRICA` : 'CEA FOR AFRICA — Connecter · Entreprendre · Agir';
+
+const searchIndex = [
+  ...MENU.flatMap((m) => m.cols.flatMap((c) => c.items.map((i) => ({ t: i[2], d: i[3], h: i[0], ty: 'Page' })))),
+  ...KMENU.flatMap((m) => m.cols.flatMap((c) => c.items.map((i) => ({ t: i[2], d: 'Kapital Invest — ' + i[3], h: i[0], ty: 'Kapital' })))),
+  ...COURSES.map((c) => ({ t: c.t, d: `${c.th} · ${c.by}`, h: `/academie/${c.id}`, ty: 'Cours' })),
+  ...EVENTS.map((e) => ({ t: e.t, d: `${e.city} · ${e.date}`, h: `/evenements/${e.id}`, ty: 'Événement' })),
+  ...JOBS.map((j) => ({ t: j.t, d: `${j.co} · ${country(j.c)}`, h: '/opportunites', ty: 'Emploi' })),
+  ...OPPS.map((o) => ({ t: o.n, d: `${o.s} · ${country(o.c)}`, h: `/kapital/opportunites/${o.id}`, ty: 'Opportunité' })),
+  ...ARTICLES.map((a) => ({ t: a.t, d: a.cat, h: `/ressources/article/${a.id}`, ty: 'Article' })),
+];
+---
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <script is:inline>
+      try {
+        var t = localStorage.getItem('cea-theme'); if (t) document.documentElement.dataset.theme = t;
+        var f = localStorage.getItem('cea-fs'); if (f) document.documentElement.style.setProperty('--fs', f + 'px');
+        if (localStorage.getItem('cea-lite') === '1') document.documentElement.classList.add('lite');
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <a class="sr" href="#app">Aller au contenu</a>
+    <Header />
+    <main id="app" tabindex="-1"><slot /></main>
+    <Footer />
+    <Copilot />
+    <script type="application/json" id="searchIndex" set:html={JSON.stringify(searchIndex)} />
+    <script>
+      import '../scripts/app.ts';
+    </script>
+  </body>
+</html>

@@ -1,0 +1,36 @@
+---
+import KapitalLayout from '../../../layouts/KapitalLayout.astro';
+import PageHead from '../../../components/PageHead.astro';
+import Money from '../../../components/Money.astro';
+import Icon from '../../../components/Icon.astro';
+import { OPPS, country } from '../../../data/site';
+
+export function getStaticPaths() {
+  return OPPS.map((o) => ({ params: { id: o.id }, props: { o } }));
+}
+const { o } = Astro.props;
+const facts = [['Secteur', o.s], ['Pays', country(o.c)], ['Stade', o.st], ['Instrument', o.inst], ['Équipe', o.team], ['Vérification', o.ver]];
+---
+<KapitalLayout title={o.n} group="investir">
+  <PageHead title={o.n} lead={`${o.s} · ${country(o.c)} · ${o.st}`} crumbs={[['/kapital', 'Kapital Invest'], ['/kapital/opportunites', 'Opportunités'], ['', o.n]]} />
+  <section class="block">
+    <div class="wrap split">
+      <div>
+        <div class="grid g3">{facts.map(([k, v]) => <div class="panel"><div class="small muted">{k}</div><b>{v}</b></div>)}</div>
+        <div class="panel" style="margin-top:18px"><h3>Traction</h3><p style="margin:0">{o.tr}</p></div>
+        <div class="panel" style="margin-top:18px"><h3>Utilisation des fonds</h3><p style="margin:0">{o.use}</p></div>
+        <div class="lock" style="margin-top:18px"><Icon name="lock" size={20} /><div><b>Dossier complet protégé</b><br />Pitch deck, modèle financier, data room : accessibles aux investisseurs vérifiés après signature d'un accord de confidentialité. <a href="/kapital/devenir-investisseur">Devenir investisseur</a></div></div>
+      </div>
+      <aside>
+        <div class="panel">
+          <div class="small muted">Montant recherché</div>
+          <b style="font-family:var(--display);font-size:1.8rem;color:#E7BD62"><Money xof={o.need} /></b>
+          <div class="progress" style="margin-top:10px"><span style={`width:${o.prog}%`}></span></div>
+          <p class="xs muted" style="margin-top:4px">{o.prog} % d'intérêt manifesté</p>
+          <button class="btn btn-primary" style="width:100%" data-toast="Manifestation d'intérêt enregistrée. Un analyste vous contacte.">Manifester mon intérêt</button>
+          <button class="btn btn-ghost" style="width:100%;margin-top:8px" data-toast="Ajoutée à votre liste de suivi.">Suivre</button>
+        </div>
+      </aside>
+    </div>
+  </section>
+</KapitalLayout>

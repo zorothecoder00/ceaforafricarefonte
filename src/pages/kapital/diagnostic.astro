@@ -1,0 +1,72 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+
+const AXES = ['Équipe', 'Marché', 'Produit', 'Traction', 'Modèle économique', 'Finances', 'Gouvernance', 'Impact'];
+const QS = [
+  'Votre équipe dirigeante est-elle complète (commerce, technique, finance) ?',
+  'Avez-vous chiffré la taille de votre marché avec des sources ?',
+  'Votre produit est-il vendu à des clients payants ?',
+  'Votre chiffre d\'affaires progresse-t-il depuis 12 mois ?',
+  'Votre modèle est-il rentable par client (marge positive) ?',
+  'Avez-vous des comptes certifiés et un modèle financier à 5 ans ?',
+  'Votre capital et votre gouvernance sont-ils formalisés (pacte, conseil) ?',
+  'Mesurez-vous votre impact social ou environnemental ?',
+];
+---
+<KapitalLayout title="Suis-je prêt ?" description="Diagnostic Investor Ready gratuit : 8 questions, un score sur 100 et vos priorités.">
+  <PageHead title="Suis-je prêt à lever des fonds ?" lead="8 questions, 3 minutes, un score sur 100 et vos priorités." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Suis-je prêt ?']]} />
+  <section class="block">
+    <div class="wrap" style="max-width:720px" id="diag" data-axes={JSON.stringify(AXES)} data-qs={JSON.stringify(QS)}>
+      <div class="steps" id="dSteps">{QS.map((_, i) => <span class={i === 0 ? 'on' : ''}></span>)}</div>
+      <div class="panel" id="dQ">
+        <span class="small muted" id="dMeta"></span>
+        <h3 style="margin:10px 0 16px" id="dText"></h3>
+        <button class="vote-opt" type="button" data-v="1"><span>Pas encore</span></button>
+        <button class="vote-opt" type="button" data-v="3"><span>En partie</span></button>
+        <button class="vote-opt" type="button" data-v="5"><span>Oui, clairement</span></button>
+        <button class="btn btn-ghost btn-sm" id="dBack" type="button" style="margin-top:6px" hidden>Question précédente</button>
+      </div>
+      <div id="dRes" hidden>
+        <span class="tag" id="rTag"></span>
+        <h1 style="font-size:3.4rem;margin-top:12px" id="rScore"></h1>
+        <p class="muted" id="rWeak"></p>
+        <div class="panel" id="rAxes" style="margin:16px 0"></div>
+        <div class="row"><a class="kbtn" href="/kapital/soumettre">Soumettre mon dossier</a><a class="btn btn-ghost" style="color:#fff" href="/kapital/investor-ready">Rejoindre Investor Ready</a><button class="btn btn-ghost" style="color:#fff" id="dAgain" type="button">Recommencer</button></div>
+        <p class="small" style="margin-top:14px">Cours recommandé : <a href="/academie/c3">Pitcher devant des investisseurs</a></p>
+      </div>
+    </div>
+  </section>
+</KapitalLayout>
+<script>
+  const root = document.getElementById('diag')!;
+  const AXES: string[] = JSON.parse(root.dataset.axes!), QS: string[] = JSON.parse(root.dataset.qs!);
+  const ans: number[] = [];
+  let i = 0;
+  const steps = [...document.querySelectorAll('#dSteps span')];
+  const q = document.getElementById('dQ')!, res = document.getElementById('dRes')!, back = document.getElementById('dBack')!;
+  function render() {
+    steps.forEach((s, k) => s.classList.toggle('on', k <= i));
+    if (i < QS.length) {
+      q.hidden = false; res.hidden = true;
+      document.getElementById('dMeta')!.textContent = `${AXES[i]} · question ${i + 1} sur ${QS.length}`;
+      document.getElementById('dText')!.textContent = QS[i];
+      back.hidden = i === 0;
+      return;
+    }
+    const score = Math.round((ans.reduce((a, b) => a + b, 0) / (QS.length * 5)) * 100);
+    const weak = AXES.filter((_, k) => ans[k] < 5).slice(0, 3);
+    q.hidden = true; res.hidden = false;
+    const tag = document.getElementById('rTag')!;
+    tag.className = 'tag ' + (score >= 70 ? 'ok' : 'gold');
+    tag.textContent = score >= 70 ? 'Prêt pour la préparation finale' : 'Préparation recommandée';
+    document.getElementById('rScore')!.textContent = `${score} / 100`;
+    document.getElementById('rWeak')!.innerHTML = `Score Investor Ready. Points à renforcer en priorité : <b style="color:#fff">${weak.join(', ') || 'aucun'}</b>.`;
+    document.getElementById('rAxes')!.innerHTML = AXES.map((a, k) => `<div class="row between small" style="margin-bottom:6px"><span style="min-width:150px">${a}</span><div class="progress" style="flex:1"><span style="width:${ans[k] * 20}%"></span></div><b style="min-width:30px;text-align:right">${ans[k]}/5</b></div>`).join('');
+    try { localStorage.setItem('cea-diag', String(score)); } catch {}
+  }
+  q.querySelectorAll<HTMLButtonElement>('[data-v]').forEach((b) => b.addEventListener('click', () => { ans[i] = Number(b.dataset.v); i++; render(); }));
+  back.addEventListener('click', () => { i--; render(); });
+  document.getElementById('dAgain')!.addEventListener('click', () => { i = 0; ans.length = 0; render(); });
+  render();
+</script>

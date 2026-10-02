@@ -1,0 +1,11 @@
+---
+import { MARKETS, fmt } from '../data/site';
+const items = MARKETS.map((m) => ({ n: m.n, last: fmt(m.last), up: m.ch >= 0, ch: Math.abs(m.ch).toFixed(2) }));
+---
+<div class="ticker" aria-label="Indices des bourses africaines, valeurs fictives">
+  <div class="track">
+    {[0, 1].map(() => items.map((m) => (
+      <span><b>{m.n}</b>{m.last} <em class={m.up ? 'up' : 'down'} style="font-style:normal">{m.up ? '▲' : '▼'} {m.ch} %</em></span>
+    )))}
+  </div>
+</div>

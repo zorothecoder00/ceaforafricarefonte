@@ -1,0 +1,43 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { BONDS } from '../../data/site';
+---
+<KapitalLayout title="Obligations et sukuk">
+  <PageHead title="Obligations et sukuk" lead="Base des émissions sur les marchés africains et calculateur de rendement." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Obligations et sukuk']]} />
+  <section class="block">
+    <div class="wrap">
+      <div class="panel scroll-x">
+        <table class="t">
+          <thead><tr><th>Émetteur</th><th>Type</th><th>Montant</th><th>Taux</th><th>Échéance</th><th>Place</th></tr></thead>
+          <tbody>{BONDS.map((b) => <tr><td><b>{b.e}</b></td><td><span class={`tag ${b.type === 'Obligation verte' ? 'ok' : b.type === 'Sukuk' ? 'gold' : 'info'}`}>{b.type}</span></td><td>{b.m}</td><td class="num">{b.r.toLocaleString('fr-FR')} %</td><td>{b.mat}</td><td>{b.ex}</td></tr>)}</tbody>
+        </table>
+      </div>
+      <div class="grid g2" style="margin-top:30px">
+        <div class="panel">
+          <h3>Calculateur de coupons</h3>
+          <label class="f" for="bAmt">Montant investi (FCFA)</label><input class="in" id="bAmt" type="number" value="1000000" min="0" step="10000" />
+          <label class="f" for="bRate">Taux annuel : <span id="bRateV">6,25</span> %</label><input id="bRate" type="range" min="3" max="13" step="0.05" value="6.25" />
+          <label class="f" for="bYears" style="margin-top:14px">Durée (années)</label><input class="in" id="bYears" type="number" value="7" min="1" max="30" />
+        </div>
+        <div class="panel kpi">
+          <span class="small muted">Coupon annuel</span><b id="bCoupon">—</b>
+          <span class="small muted" style="display:block;margin-top:14px">Total des intérêts sur la durée</span><b id="bTotal">—</b>
+          <p class="xs muted" style="margin-top:14px">Calcul indicatif, hors fiscalité et frais. Remboursement du capital in fine.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</KapitalLayout>
+<script>
+  const amt = document.getElementById('bAmt') as HTMLInputElement, rate = document.getElementById('bRate') as HTMLInputElement, yrs = document.getElementById('bYears') as HTMLInputElement;
+  const f = (n: number) => Math.round(n).toLocaleString('fr-FR') + ' FCFA';
+  function calc() {
+    const c = (Number(amt.value) * Number(rate.value)) / 100;
+    document.getElementById('bRateV')!.textContent = Number(rate.value).toLocaleString('fr-FR');
+    document.getElementById('bCoupon')!.textContent = f(c);
+    document.getElementById('bTotal')!.textContent = f(c * Number(yrs.value));
+  }
+  [amt, rate, yrs].forEach((x) => x.addEventListener('input', calc));
+  calc();
+</script>

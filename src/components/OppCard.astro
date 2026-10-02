@@ -1,0 +1,18 @@
+---
+import Money from './Money.astro';
+import { country } from '../data/site';
+interface Props { o: { id: string; n: string; c: string; s: string; st: string; inst: string; need: number; ver: string; prog: number } }
+const { o } = Astro.props;
+const tag = o.ver === 'Vérifié par CEA' ? 'ok' : o.ver === 'Déclaratif' ? '' : 'gold';
+---
+<a class="panel" href={`/kapital/opportunites/${o.id}`} style="text-decoration:none;display:flex;flex-direction:column;gap:10px" data-s={o.s} data-st={o.st} data-c={o.c} data-ver={o.ver}>
+  <div class="row between"><span class={`tag ${tag}`}>{o.ver}</span><span class="small muted">{country(o.c)}</span></div>
+  <h3 style="margin:0">{o.n}</h3>
+  <span class="small muted">{o.s} · {o.st} · {o.inst}</span>
+  <div style="margin-top:auto">
+    <div class="small muted">Montant recherché</div>
+    <b style="font-family:var(--display);font-size:1.3rem"><Money xof={o.need} /></b>
+    <div class="progress" style="margin-top:8px"><span style={`width:${o.prog}%`}></span></div>
+    <div class="xs muted" style="margin-top:4px">{o.prog} % d'intérêt manifesté</div>
+  </div>
+</a>

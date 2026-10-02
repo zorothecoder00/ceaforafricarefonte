@@ -1,0 +1,36 @@
+---
+import KapitalLayout from '../../../layouts/KapitalLayout.astro';
+import PageHead from '../../../components/PageHead.astro';
+import OppCard from '../../../components/OppCard.astro';
+import { OPPS, country } from '../../../data/site';
+
+const uniq = (k: 's' | 'st' | 'c') => [...new Set(OPPS.map((o) => o[k]))];
+---
+<KapitalLayout title="Opportunités">
+  <PageHead title="Opportunités" lead="Résumés anonymisés. L'accès au dossier complet exige un profil investisseur vérifié et un accord de confidentialité." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Opportunités']]} />
+  <section class="block" style="padding-top:20px">
+    <div class="wrap">
+      <div class="filters" id="of">
+        <select class="in" data-k="s" aria-label="Secteur"><option value="">Tous les secteurs</option>{uniq('s').map((s) => <option>{s}</option>)}</select>
+        <select class="in" data-k="st" aria-label="Stade"><option value="">Tous les stades</option>{uniq('st').map((s) => <option>{s}</option>)}</select>
+        <select class="in" data-k="c" aria-label="Pays"><option value="">Tous les pays</option>{uniq('c').map((c) => <option value={c}>{country(c)}</option>)}</select>
+        <select class="in" data-k="ver" aria-label="Vérification"><option value="">Toute vérification</option><option>Vérifié par CEA</option><option>Diligence en cours</option><option>Déclaratif</option></select>
+      </div>
+      <div class="grid g3" id="ol">{OPPS.map((o) => <OppCard o={o} />)}</div>
+      <div class="empty" id="oEmpty" hidden>Aucune opportunité pour ces critères.</div>
+    </div>
+  </section>
+</KapitalLayout>
+<script>
+  const sels = [...document.querySelectorAll<HTMLSelectElement>('#of select')];
+  function apply() {
+    let n = 0;
+    document.querySelectorAll<HTMLElement>('#ol > a').forEach((el) => {
+      const ok = sels.every((s) => !s.value || el.dataset[s.dataset.k!] === s.value);
+      el.hidden = !ok;
+      if (ok) n++;
+    });
+    document.getElementById('oEmpty')!.hidden = n > 0;
+  }
+  sels.forEach((s) => s.addEventListener('change', apply));
+</script>

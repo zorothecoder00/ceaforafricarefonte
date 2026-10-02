@@ -1,0 +1,22 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+
+const risks = [
+  ['Perte en capital', "Une entreprise non cotée peut échouer. Vous pouvez perdre tout ou partie de la somme investie."],
+  ['Illiquidité', "Il peut être impossible de revendre vos titres avant plusieurs années. N'investissez que de l'argent dont vous n'aurez pas besoin."],
+  ['Dilution', 'De nouvelles levées de fonds peuvent réduire votre pourcentage de détention.'],
+  ['Change', 'Les investissements hors zone franc CFA sont exposés aux variations des devises.'],
+  ['Information', "Les informations déclaratives ne sont pas vérifiées par CEA. Repérez le badge « Vérifié par CEA »."],
+  ['Diversification', 'Répartissez vos investissements sur plusieurs entreprises, secteurs et pays.'],
+];
+---
+<KapitalLayout title="Risques de l'investissement" risk={false}>
+  <PageHead title="Risques de l'investissement" lead="À lire avant d'investir. Nous préférons des investisseurs informés à des investisseurs déçus." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Risques']]} />
+  <section class="block">
+    <div class="wrap">
+      <div class="grid g3">{risks.map(([t, d]) => <div class="panel"><h3>{t}</h3><p class="small" style="margin:0">{d}</p></div>)}</div>
+      <div class="risk" style="margin-top:30px">Les informations présentées sur CEA Kapital Invest ne constituent ni une offre ni un conseil en investissement. Les fonctions de souscription sont ouvertes pays par pays, après obtention des autorisations ou via un partenaire agréé.</div>
+    </div>
+  </section>
+</KapitalLayout>

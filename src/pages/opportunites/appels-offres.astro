@@ -1,0 +1,22 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { TENDERS, SUBS, country, dateFr } from '../../data/site';
+---
+<BaseLayout title="Appels d'offres">
+  <PageHead title="Appels d'offres" lead="Marchés et prestations ouverts aux entreprises membres." crumbs={[['/opportunites', 'Opportunités'], ['', "Appels d'offres"]]} subnav={SUBS.opps} />
+  <section class="block">
+    <div class="wrap">
+      <div class="panel scroll-x">
+        <table class="t">
+          <thead><tr><th>Objet</th><th>Émetteur</th><th>Pays</th><th>Budget</th><th>Clôture</th><th></th></tr></thead>
+          <tbody>
+            {TENDERS.map((t) => (
+              <tr><td><b>{t.t}</b></td><td>{t.org}</td><td>{country(t.c)}</td><td>{t.b}</td><td>{dateFr(t.close)}</td><td><button class="btn btn-ghost btn-sm" data-toast="Dossier de consultation téléchargé (simulation).">Dossier</button></td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

@@ -1,0 +1,43 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { MEMBERS, COUNTRIES, SUBS, country, initials } from '../../data/site';
+---
+<BaseLayout title="Communauté">
+  <PageHead title="Annuaire des membres" lead="Trouvez un pair, un mentor, un partenaire ou un investisseur. Chaque membre choisit ce qui est visible." crumbs={[['', 'Communauté']]} subnav={SUBS.communaute} />
+  <section class="block" style="padding-top:20px">
+    <div class="wrap">
+      <div class="filters">
+        <input class="in" id="mq" placeholder="Nom, secteur, besoin, compétence" aria-label="Rechercher un membre" style="flex:1;min-width:200px" />
+        <select class="in" id="mc" aria-label="Pays"><option value="">Tous les pays</option>{Object.entries(COUNTRIES).map(([k, v]) => <option value={k}>{v}</option>)}</select>
+      </div>
+      <p class="small muted" id="mn">{MEMBERS.length} membres</p>
+      <div class="grid g3" id="ml">
+        {MEMBERS.map((m) => (
+          <div class="panel" data-c={m.c} data-q={`${m.n} ${m.s} ${m.need} ${m.offer} ${m.r}`}>
+            <div class="row"><span class="avatar">{initials(m.n)}</span><div><b>{m.n}</b><div class="small muted">{m.r} · {m.s} · {country(m.c)}</div></div></div>
+            <div class="row" style="margin:10px 0">{m.b.map((x) => <span class={`tag ${x.includes('Vérifi') ? 'ok' : 'gold'}`}>{x}</span>)}</div>
+            <p class="small" style="margin:0"><b>Cherche :</b> {m.need}</p>
+            <p class="small"><b>Propose :</b> {m.offer}</p>
+            <a class="btn btn-ghost btn-sm" href="/adherer">Envoyer un message</a>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+<script>
+  const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const q = document.getElementById('mq') as HTMLInputElement, c = document.getElementById('mc') as HTMLSelectElement;
+  function apply() {
+    let n = 0;
+    document.querySelectorAll<HTMLElement>('#ml > .panel').forEach((el) => {
+      const ok = (!c.value || el.dataset.c === c.value) && norm(el.dataset.q!).includes(norm(q.value));
+      el.hidden = !ok;
+      if (ok) n++;
+    });
+    document.getElementById('mn')!.textContent = `${n} membre${n > 1 ? 's' : ''}`;
+  }
+  q.addEventListener('input', apply);
+  c.addEventListener('change', apply);
+</script>

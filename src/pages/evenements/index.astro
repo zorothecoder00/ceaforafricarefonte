@@ -1,0 +1,40 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import EventRow from '../../components/EventRow.astro';
+import KapitalAd from '../../components/KapitalAd.astro';
+import { EVENTS, SUBS, country } from '../../data/site';
+
+const list = [...EVENTS].sort((a, b) => a.date.localeCompare(b.date));
+const countries = [...new Set(EVENTS.map((e) => e.c))];
+---
+<BaseLayout title="Événements">
+  <PageHead title="Événements" lead="Forums, masterclass, ateliers et rencontres investisseurs, en présentiel et en ligne." crumbs={[['', 'Événements']]} subnav={SUBS.evenements} />
+  <section class="block" style="padding-top:20px">
+    <div class="wrap">
+      <div class="filters">
+        <select class="in" id="fFmt" aria-label="Format"><option value="">Tous les formats</option><option>Présentiel</option><option>En ligne</option><option>Hybride</option></select>
+        <select class="in" id="fC" aria-label="Pays"><option value="">Tous les pays</option>{countries.map((c) => <option value={c}>{country(c)}</option>)}</select>
+        <button class="btn btn-ghost btn-sm" data-toast="Abonnement au calendrier ajouté (.ics).">S'abonner au calendrier</button>
+      </div>
+      <div class="split">
+        <div id="evList">{list.map((e) => <EventRow e={e} />)}<div class="empty" id="evEmpty" hidden style="margin-top:12px">Aucun événement pour ces critères.</div></div>
+        <aside><KapitalAd variant={0} /></aside>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+<script>
+  const f = document.getElementById('fFmt') as HTMLSelectElement, c = document.getElementById('fC') as HTMLSelectElement;
+  function apply() {
+    let n = 0;
+    document.querySelectorAll<HTMLElement>('#evList > a').forEach((el) => {
+      const ok = (!f.value || el.dataset.fmt === f.value) && (!c.value || el.dataset.c === c.value);
+      el.hidden = !ok;
+      if (ok) n++;
+    });
+    document.getElementById('evEmpty')!.hidden = n > 0;
+  }
+  f.addEventListener('change', apply);
+  c.addEventListener('change', apply);
+</script>

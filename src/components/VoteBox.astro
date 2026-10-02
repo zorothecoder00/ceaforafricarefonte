@@ -1,0 +1,14 @@
+---
+import { dateFr } from '../data/site';
+interface Props { v: { id: string; t: string; c: string; close: string; o: (string | number)[][] } }
+const { v } = Astro.props;
+const total = v.o.reduce((a, o) => a + Number(o[1]), 0);
+---
+<div class="panel" data-vote={v.id}>
+  <div class="row between"><span class="tag info">{v.c}</span><span class="xs muted">Clôture le {dateFr(v.close)}</span></div>
+  <h3 style="margin:10px 0 14px">{v.t}</h3>
+  {v.o.map(([label, n]) => (
+    <button class="vote-opt" data-n={n} type="button"><span class="bar" style="width:0"></span><span>{label}</span><span class="pct small" style="float:right"></span></button>
+  ))}
+  <p class="xs muted" style="margin:6px 0 0"><span class="vote-total">{total.toLocaleString('fr-FR')}</span> participants · un vote par membre</p>
+</div>

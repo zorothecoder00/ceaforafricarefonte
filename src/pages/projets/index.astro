@@ -1,0 +1,37 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { OPPS, SUBS, country } from '../../data/site';
+
+const stages = ['', 'Pré-amorçage', 'Amorçage', 'Croissance', 'Série A'];
+---
+<BaseLayout title="Project Studio">
+  <PageHead title="Project Studio" lead="Structurer, piloter et faire financer des projets. Découvrez les projets accompagnés par CEA (publiés avec l'accord de leurs porteurs)." crumbs={[['', 'Project Studio']]} subnav={SUBS.projets} />
+  <section class="block" style="padding-top:20px">
+    <div class="wrap">
+      <div class="filters" id="pf">{stages.map((s) => <button class="chip" type="button" aria-pressed={s ? 'false' : 'true'} data-st={s}>{s || 'Tous les stades'}</button>)}</div>
+      <div class="grid g3" id="pl">
+        {OPPS.map((o) => (
+          <div class="panel" data-st={o.st}>
+            <div class="row between"><span class="tag">{o.s}</span><span class="small muted">{country(o.c)}</span></div>
+            <h3 style="margin:10px 0 4px">{o.n.replace('Projet ', '')}</h3>
+            <p class="small muted">{o.tr}</p>
+            <div class="row between small"><span>Stade : {o.st}</span><span class={`tag ${o.ver === 'Déclaratif' ? '' : 'ok'}`}>{o.ver === 'Déclaratif' ? 'Déclaratif' : 'Vérifié par CEA'}</span></div>
+            <a class="small" href={`/kapital/opportunites/${o.id}`} style="display:block;margin-top:10px">Voir sur Kapital Invest</a>
+          </div>
+        ))}
+      </div>
+      <div class="call" style="margin-top:40px">
+        <div><h2>Vous avez un projet à structurer ?</h2><p>Fiche projet normalisée, canvas interactifs, plan d'action, modèle financier guidé et score de maturité.</p></div>
+        <div><a class="btn btn-primary" href="/contact">Proposer un projet</a></div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+<script>
+  const chips = [...document.querySelectorAll<HTMLButtonElement>('#pf .chip')];
+  chips.forEach((c) => c.addEventListener('click', () => {
+    chips.forEach((x) => x.setAttribute('aria-pressed', String(x === c)));
+    document.querySelectorAll<HTMLElement>('#pl > [data-st]').forEach((el) => { el.hidden = !!c.dataset.st && el.dataset.st !== c.dataset.st; });
+  }));
+</script>

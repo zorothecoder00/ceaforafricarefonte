@@ -1,0 +1,36 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import VoteBox from '../../components/VoteBox.astro';
+import { CONSULTS, POSITIONS, WGROUPS, SUBS, dateFr } from '../../data/site';
+---
+<BaseLayout title="Voix des entrepreneurs">
+  <PageHead title="Voix des entrepreneurs" lead="Consultations, propositions et plaidoyer : portons ensemble la voix des entrepreneurs auprès des décideurs." crumbs={[['', 'Voix des entrepreneurs']]} subnav={SUBS.voix} />
+  <section class="block" style="padding-top:28px">
+    <div class="wrap">
+      <h2>Consultations ouvertes</h2>
+      <div class="grid g2">{CONSULTS.map((v) => <VoteBox v={v} />)}</div>
+
+      <h2 style="margin-top:44px">Nos positions</h2>
+      {POSITIONS.map((p) => (
+        <div class="panel row between" style="margin-bottom:12px">
+          <div><b>{p.t}</b><div class="small muted">{dateFr(p.d)} · {p.p}</div></div>
+          <button class="btn btn-ghost btn-sm" data-toast="Téléchargement du PDF (simulation).">Lire (PDF)</button>
+        </div>
+      ))}
+
+      <h2 style="margin-top:44px">Groupes de travail</h2>
+      <div class="grid g3">
+        {WGROUPS.map((g, i) => (
+          <div class="panel"><h3>Commission {g}</h3><p class="small muted">{12 + i * 7} membres · réunion mensuelle</p><button class="btn btn-ghost btn-sm" data-toast={`Demande envoyée à la commission ${g}.`}>Rejoindre</button></div>
+        ))}
+      </div>
+
+      <form class="panel" style="margin-top:30px" data-demo="Proposition reçue. Elle sera examinée par la commission compétente.">
+        <h3>Déposer une proposition</h3>
+        <textarea class="in" required placeholder="Décrivez la difficulté et la solution que vous proposez." aria-label="Votre proposition"></textarea>
+        <button class="btn btn-primary" type="submit">Envoyer</button>
+      </form>
+    </div>
+  </section>
+</BaseLayout>

@@ -1,0 +1,39 @@
+---
+/* Pages présentes dans les menus mais pas encore développées : on affiche un écran « bientôt disponible »
+   plutôt qu'une 404. Les routes déjà codées sont prioritaires et exclues ci-dessous. */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import KapitalLayout from '../layouts/KapitalLayout.astro';
+import PageHead from '../components/PageHead.astro';
+import KapitalAd from '../components/KapitalAd.astro';
+import { allMenuLinks } from '../data/site';
+
+export function getStaticPaths() {
+  const pages = import.meta.glob('./**/*.astro');
+  const built = new Set(
+    Object.keys(pages)
+      .filter((f) => !f.includes('['))
+      .map((f) => f.replace(/^\.\//, '/').replace(/\.astro$/, '').replace(/\/index$/, '') || '/'),
+  );
+  const dyn = [/^\/domaines\/[^/]+$/, /^\/academie\/c\d+$/, /^\/evenements\/e\d+$/, /^\/ressources\/article\//, /^\/legal\//, /^\/kapital\/opportunites\/o\d+$/];
+  return allMenuLinks()
+    .filter((l) => l.href !== '/' && !built.has(l.href) && !dyn.some((r) => r.test(l.href)))
+    .map((l) => ({ params: { slug: l.href.slice(1) }, props: l }));
+}
+const { title, desc, kapital } = Astro.props;
+---
+{kapital ? (
+  <KapitalLayout title={title} risk={false}>
+    <PageHead title={title} lead={desc} crumbs={[['/kapital', 'Kapital Invest'], ['', title]]} />
+    <section class="block"><div class="wrap"><div class="empty"><b>Bientôt disponible.</b> Cette section de CEA Kapital Invest est en cours de construction. <a href="/kapital">Retour à l'accueil Kapital</a></div></div></section>
+  </KapitalLayout>
+) : (
+  <BaseLayout title={title}>
+    <PageHead title={title} lead={desc} crumbs={[['', title]]} />
+    <section class="block">
+      <div class="wrap split">
+        <div class="empty"><b>Bientôt disponible.</b> Cette page est en cours de construction. En attendant, utilisez la recherche (Ctrl+K) ou demandez à CEA Copilot.</div>
+        <aside><KapitalAd variant={1} /></aside>
+      </div>
+    </section>
+  </BaseLayout>
+)}

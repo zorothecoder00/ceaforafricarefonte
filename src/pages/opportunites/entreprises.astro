@@ -1,0 +1,20 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { COMPANIES, SUBS, country } from '../../data/site';
+---
+<BaseLayout title="Entreprises qui recrutent">
+  <PageHead title="Entreprises qui recrutent" lead="Les pages employeurs des entreprises membres." crumbs={[['/opportunites', 'Opportunités'], ['', 'Entreprises']]} subnav={SUBS.opps} />
+  <section class="block">
+    <div class="wrap grid g2">
+      {COMPANIES.map((c) => (
+        <div class="panel">
+          <div class="player" style="aspect-ratio:21/9"><div class="cap">Vidéo de présentation — {c.n}</div></div>
+          <div class="row between" style="margin-top:14px"><h3 style="margin:0">{c.n}</h3><span class="tag info">{c.s}</span></div>
+          <p class="small muted">{c.d} · {country(c.c)}</p>
+          <a class="btn btn-ghost btn-sm" href="/opportunites">{c.j} offre ouverte</a>
+        </div>
+      ))}
+    </div>
+  </section>
+</BaseLayout>

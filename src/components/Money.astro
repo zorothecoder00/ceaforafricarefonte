@@ -1,0 +1,7 @@
+---
+/* Montant en FCFA, converti côté client selon la devise choisie dans l'en-tête. */
+import { money } from '../data/site';
+interface Props { xof: number; free?: string }
+const { xof, free = 'Gratuit' } = Astro.props;
+---
+<span class="money" data-xof={xof} data-free={free}>{money(xof, free)}</span>

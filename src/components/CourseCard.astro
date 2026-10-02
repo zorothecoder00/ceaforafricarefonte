@@ -1,0 +1,11 @@
+---
+import Money from './Money.astro';
+interface Props { c: { id: string; t: string; th: string; lv: string; dur: string; price: number; by: string; ls: string[] } }
+const { c } = Astro.props;
+---
+<a class="panel" href={`/academie/${c.id}`} style="text-decoration:none;display:flex;flex-direction:column;gap:8px" data-th={c.th} data-lv={c.lv} data-free={c.price ? '0' : '1'}>
+  <div class="row between"><span class="tag info">{c.th}</span><span class={`tag ${c.price ? 'gold' : 'ok'}`}><Money xof={c.price} /></span></div>
+  <h3 style="margin:0">{c.t}</h3>
+  <span class="small muted">{c.by}</span>
+  <span class="xs muted" style="margin-top:auto">{c.lv} · {c.dur} · {c.ls.length} leçons · certificat</span>
+</a>

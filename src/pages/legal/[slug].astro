@@ -1,0 +1,19 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+
+const LEGAL: Record<string, [string, string]> = {
+  confidentialite: ['Politique de confidentialité', "Nous collectons le minimum de données nécessaire, pour des finalités définies, avec des durées de conservation précises. Vous pouvez accéder à vos données, les télécharger, les corriger ou supprimer votre compte depuis le centre de confidentialité. Base de référence : loi togolaise n° 2019-014, Convention de Malabo, et lois des pays concernés."],
+  cookies: ['Politique de cookies', "Seuls les cookies nécessaires sont actifs par défaut. La mesure d'audience respectueuse de la vie privée n'est activée qu'avec votre accord."],
+  conditions: ["Conditions d'utilisation", 'Règles d\'usage de la plateforme, du réseau et des espaces connectés. Les contenus financiers ne constituent ni une offre ni un conseil en investissement.'],
+  accessibilite: ["Déclaration d'accessibilité", 'Objectif : conformité WCAG 2.2 niveau AA. Navigation au clavier, contrastes, taille de texte réglable (pied de page), mode Lite pour les connexions lentes.'],
+};
+export function getStaticPaths() {
+  return ['confidentialite', 'cookies', 'conditions', 'accessibilite'].map((slug) => ({ params: { slug } }));
+}
+const [title, text] = LEGAL[Astro.params.slug!];
+---
+<BaseLayout title={title}>
+  <PageHead title={title} lead="Version de démonstration" crumbs={[['', title]]} />
+  <section class="block"><div class="wrap"><div class="panel"><p>{text}</p></div></div></section>
+</BaseLayout>

@@ -1,0 +1,32 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { PROGS, SUBS, dateFr } from '../../data/site';
+
+const progs = PROGS.map(([n, dur, d, open, date]) => ({ n: String(n), dur, d, open: !!open, date: String(date) }));
+---
+<BaseLayout title="Programmes">
+  <PageHead title="Programmes d'accompagnement" lead="De l'idée à la levée de fonds : des parcours structurés, avec des mentors et des jalons clairs." crumbs={[['', 'Programmes']]} subnav={SUBS.programmes} />
+  <section class="block">
+    <div class="wrap grid g3">
+      {progs.map((p) => (
+        <div class="panel">
+          <div class="row between"><h3 style="margin:0">{p.n}</h3>{p.open ? <span class="tag ok">Ouvert</span> : <span class="tag">Prochaine session</span>}</div>
+          <p class="muted" style="margin:8px 0">{p.d} · {p.dur}</p>
+          <p class="small">{p.open ? 'Clôture' : 'Ouverture'} : {dateFr(p.date)}</p>
+          {p.open
+            ? <a class="btn btn-primary btn-sm" href={p.n.startsWith('Investor') ? '/kapital/investor-ready' : '/programmes/candidature'}>Postuler</a>
+            : <button class="btn btn-ghost btn-sm" data-toast={`Alerte créée : ${p.n}.`}>Être prévenu</button>}
+        </div>
+      ))}
+    </div>
+    <div class="wrap" style="margin-top:40px">
+      <h2>Comment se passe la sélection</h2>
+      <div class="grid g4">
+        {['Candidature en ligne', 'Diagnostic de maturité', 'Évaluation par 3 jurys et entretien', 'Entrée en cohorte'].map((s, i) => (
+          <div class="panel"><b style="font-family:var(--display);color:var(--gold-ink)">Étape {i + 1}</b><h4 style="margin-top:6px">{s}</h4></div>
+        ))}
+      </div>
+    </div>
+  </section>
+</BaseLayout>

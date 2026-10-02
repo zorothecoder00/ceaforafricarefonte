@@ -1,0 +1,23 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { GLOSS, SUBS } from '../../data/site';
+---
+<BaseLayout title="Glossaire">
+  <PageHead title="Glossaire" lead="Les mots de l'entrepreneuriat et de la finance, expliqués simplement." crumbs={[['/ressources', 'Ressources'], ['', 'Glossaire']]} subnav={SUBS.ressources} />
+  <section class="block">
+    <div class="wrap">
+      <input class="in" id="gq" placeholder="Rechercher un terme" aria-label="Rechercher un terme" style="max-width:400px" />
+      <div id="gl" class="grid g2">
+        {GLOSS.map(([t, d]) => <div class="panel" data-q={`${t} ${d}`}><h3>{t}</h3><p class="small" style="margin:0">{d}</p></div>)}
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+<script>
+  const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const q = document.getElementById('gq') as HTMLInputElement;
+  q.addEventListener('input', () => {
+    document.querySelectorAll<HTMLElement>('#gl > .panel').forEach((el) => { el.hidden = !norm(el.dataset.q!).includes(norm(q.value)); });
+  });
+</script>

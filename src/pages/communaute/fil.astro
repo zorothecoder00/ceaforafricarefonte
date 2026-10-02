@@ -1,0 +1,27 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import KapitalAd from '../../components/KapitalAd.astro';
+import { FEED, SUBS, initials } from '../../data/site';
+---
+<BaseLayout title="Fil d'actualité">
+  <PageHead title="Fil d'actualité" lead="Les réussites, questions et opportunités partagées par le réseau." crumbs={[['/communaute', 'Communauté'], ['', "Fil d'actualité"]]} subnav={SUBS.communaute} />
+  <section class="block">
+    <div class="wrap split">
+      <div>
+        <form class="panel" data-demo="Publication envoyée en modération.">
+          <textarea class="in" required placeholder="Partagez une réussite, une question, une opportunité…" aria-label="Votre publication"></textarea>
+          <button class="btn btn-primary btn-sm" type="submit">Publier</button>
+        </form>
+        {FEED.map((f) => (
+          <div class="panel" style="margin-top:14px">
+            <div class="row"><span class="avatar" style={f.k ? 'background:var(--gold);color:#1B1305' : ''}>{initials(f.a)}</span><div><b>{f.a}</b><div class="xs muted">{f.sp}</div></div></div>
+            <p style="margin:12px 0">{f.t}</p>
+            <button class="btn btn-ghost btn-sm" data-toast="Merci pour votre soutien !">♥ {f.l}</button>
+          </div>
+        ))}
+      </div>
+      <aside><KapitalAd variant={1} /></aside>
+    </div>
+  </section>
+</BaseLayout>

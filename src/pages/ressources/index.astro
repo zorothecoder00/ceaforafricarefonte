@@ -1,0 +1,28 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import ArticleCard from '../../components/ArticleCard.astro';
+import KapitalAd from '../../components/KapitalAd.astro';
+import { ARTICLES, SUBS } from '../../data/site';
+
+const cats = ['', 'Analyse', "Histoire d'entrepreneur", 'Guide', 'Communiqué'];
+---
+<BaseLayout title="Ressources">
+  <PageHead title="Le média CEA" lead="Analyses, histoires d'entrepreneurs, guides et communiqués, par pays et par thème." crumbs={[['', 'Ressources']]} subnav={SUBS.ressources} />
+  <section class="block" style="padding-top:20px">
+    <div class="wrap">
+      <div class="filters" id="af">{cats.map((c) => <button class="chip" type="button" aria-pressed={c ? 'false' : 'true'} data-cat={c}>{c || 'Tout'}</button>)}</div>
+      <div class="split">
+        <div class="grid g2" id="al">{ARTICLES.map((a) => <ArticleCard a={a} />)}</div>
+        <aside><KapitalAd variant={1} /><div style="margin-top:16px"><KapitalAd variant={2} /></div></aside>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+<script>
+  const chips = [...document.querySelectorAll<HTMLButtonElement>('#af .chip')];
+  chips.forEach((c) => c.addEventListener('click', () => {
+    chips.forEach((x) => x.setAttribute('aria-pressed', String(x === c)));
+    document.querySelectorAll<HTMLElement>('#al > a').forEach((el) => { el.hidden = !!c.dataset.cat && el.dataset.cat !== c.dataset.cat; });
+  }));
+</script>

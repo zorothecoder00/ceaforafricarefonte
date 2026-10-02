@@ -1,0 +1,47 @@
+---
+import { NAV, MENU, sectionOf } from '../data/site';
+const sec = sectionOf(Astro.url.pathname);
+---
+<div class="proto-bar">Prototype fonctionnel — toutes les données sont fictives, aucun paiement ni investissement réel n'est effectué.</div>
+<header class="top" id="top">
+  <div class="wrap top-row">
+    <a class="brand" href="/" aria-label="CEA FOR AFRICA, accueil"><span><span class="brand-mark">CEA</span><br /><span class="brand-sub">FOR AFRICA</span></span></a>
+    <div class="top-actions">
+      <select class="sel hide-m" id="langSel" aria-label="Langue">
+        <option value="fr">FR</option><option value="en">EN</option><option value="pt">PT</option><option value="ar">AR</option><option value="sw">SW</option>
+      </select>
+      <select class="sel hide-m" id="curSel" aria-label="Devise d'affichage">
+        <option value="XOF">FCFA</option><option value="EUR">EUR</option><option value="USD">USD</option>
+      </select>
+      <button class="icon-btn" id="searchBtn" aria-label="Rechercher (Ctrl+K)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg></button>
+      <a class="btn btn-gold btn-sm" href="/kapital" aria-label="CEA Kapital Invest"><span class="kfull">Kapital Invest</span><span class="kshort">Kapital</span></a>
+      <a class="btn btn-primary btn-sm" id="loginBtn" href="/adherer">Adhérer</a>
+      <button class="icon-btn menu-btn" id="menuBtn" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="menuPanel"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18" /></svg></button>
+    </div>
+  </div>
+  <div class="navrow">
+    <div class="wrap">
+      <nav class="nav" id="nav" aria-label="Navigation principale">
+        {NAV.map(([k, href, label]) => <a href={href} aria-current={k === sec ? 'page' : undefined}>{label}</a>)}
+      </nav>
+    </div>
+  </div>
+  <div class="menupanel" id="menuPanel">
+    <div class="wrap">
+      <div class="mp-grid">
+        {MENU.map((m) => (
+          <div class="mp-sec">
+            <a href={m.cols[0].items[0][0]}>{m.l}</a>
+            <div class="sub">{m.cols.flatMap((c) => c.items).map((it) => <a href={it[0]}>{it[2]}</a>)}</div>
+          </div>
+        ))}
+        <div class="mp-sec k">
+          <a href="/kapital">CEA Kapital Invest</a>
+          <div class="sub">
+            <a href="/kapital/diagnostic">Suis-je prêt ?</a><a href="/kapital/opportunites">Opportunités</a><a href="/kapital/marches">Bourses africaines</a><a href="/kapital/capital-risque">Capital-risque</a><a href="/kapital/obligations">Marché des capitaux</a><a href="/kapital/risques">Risques</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>

@@ -1,0 +1,32 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { OPPS, country } from '../../data/site';
+
+const criteria = [
+  ['Stade', "De l'amorçage à la série A"],
+  ['Ticket', '50 à 500 millions de FCFA'],
+  ['Secteurs', 'Agro-industrie, fintech, énergie, santé, éducation'],
+  ['Géographie', 'Les 16 pays du réseau CEA'],
+];
+---
+<KapitalLayout title="Capital-risque">
+  <PageHead title="CEA Kapital Ventures" lead="Investir tôt dans les entreprises africaines qui créent des emplois et résolvent de vrais problèmes." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Capital-risque']]} />
+  <section class="block">
+    <div class="wrap">
+      <h2>Notre thèse</h2>
+      <p>Les PME et start-up africaines rentables sont sous-financées. Nous combinons accompagnement opérationnel (programmes CEA) et capital patient pour les faire passer à l'échelle.</p>
+      <div class="grid g4">{criteria.map(([k, v]) => <div class="panel"><div class="small muted">{k}</div><b>{v}</b></div>)}</div>
+      <h2 style="margin-top:40px" id="portefeuille">Portefeuille</h2>
+      <div class="grid g3">
+        {OPPS.filter((o) => o.ver === 'Vérifié par CEA').map((o) => (
+          <div class="panel"><div class="row between"><b>{o.n.replace('Projet ', '').replace(/[«»]/g, '').trim()}</b><span class="tag">{o.s}</span></div><p class="small muted" style="margin:8px 0 0">{country(o.c)} · {o.tr}</p></div>
+        ))}
+      </div>
+      <div class="call" style="margin-top:40px;background:#103152">
+        <div><h2>Vous êtes fondateur, angel ou fonds ?</h2><p>Proposez-nous un deal ou rejoignez nos co-investissements.</p></div>
+        <div class="row"><a class="kbtn" href="/kapital/proposer-deal">Proposer un deal</a><a class="btn btn-ghost" style="color:#fff" href="/kapital/lp">Portail des souscripteurs</a></div>
+      </div>
+    </div>
+  </section>
+</KapitalLayout>

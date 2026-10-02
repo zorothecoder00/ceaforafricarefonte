@@ -1,0 +1,37 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import AfricaMap from '../../components/AfricaMap.astro';
+import { SUBS } from '../../data/site';
+
+const pillars = [
+  ['Vision', 'Des entrepreneurs africains qui créent les emplois du continent, connectés de Dakar à Nairobi.'],
+  ['Mission', "Donner à chaque entrepreneur l'accès au savoir, au réseau, au capital et à une voix collective."],
+  ['Valeurs', 'Excellence, intégrité, solidarité panafricaine, impact mesurable, neutralité politique.'],
+];
+const history = [
+  ['2024', 'Fondation de CEA FOR AFRICA à Lomé', 'done'],
+  ['2025', "Premières cohortes d'accompagnement dans 6 pays", 'done'],
+  ['2026', 'Lancement de CEA Kapital Invest et de la plateforme numérique', 'cur'],
+  ['2027', 'Ouverture de 10 nouveaux pays et des langues portugaise et arabe', ''],
+];
+---
+<BaseLayout title="À propos">
+  <PageHead title="Connecter, entreprendre, agir" lead="CEA FOR AFRICA réunit les entrepreneurs du continent pour apprendre, se financer, recruter et peser ensemble." crumbs={[['', 'À propos']]} subnav={SUBS.apropos} />
+  <section class="block">
+    <div class="wrap">
+      <div class="grid g3">{pillars.map(([t, d]) => <div class="panel"><h3>{t}</h3><p style="margin:0">{d}</p></div>)}</div>
+      <div class="grid g2" style="margin-top:40px;align-items:center">
+        <div>
+          <h2>Notre histoire</h2>
+          <ol class="timeline">{history.map(([y, t, c]) => <li class={c}><b>{y}</b> — {t}</li>)}</ol>
+        </div>
+        <div class="panel" style="background:#082B4C;border:0"><AfricaMap /></div>
+      </div>
+      <div class="panel row between" style="margin-top:30px">
+        <div><h3 style="margin:0">Le mot du Président</h3><p class="muted small" style="margin:0">Vidéo de 2 minutes, sous-titrée en français et en anglais.</p></div>
+        <button class="btn btn-primary" data-toast="Lecture de la vidéo (simulation).">Regarder</button>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

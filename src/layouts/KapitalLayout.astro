@@ -1,0 +1,29 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import Ticker from '../components/Ticker.astro';
+import { KMENU, KRISK } from '../data/site';
+
+interface Props { title?: string; description?: string; ticker?: boolean; risk?: boolean; group?: string }
+const { title, description, ticker = false, risk = true, group } = Astro.props;
+const path = Astro.url.pathname.replace(/\/$/, '') || '/';
+const cur = group ?? KMENU.find((m) => m.cols.some((c) => c.items.some((i) => i[0].split('#')[0] === path)))?.k;
+const grp = KMENU.find((m) => m.k === cur);
+---
+<BaseLayout title={title ? `${title} · Kapital Invest` : 'CEA Kapital Invest'} description={description}>
+  <div class="kz">
+    <div class="wrap">
+      <nav class="knav" aria-label="Navigation Kapital Invest">
+        <a href="/kapital" aria-current={path === '/kapital' ? 'page' : undefined}>Accueil</a>
+        {KMENU.map((m) => <a href={m.cols[0].items[0][0]} aria-current={m.k === cur ? 'page' : undefined}>{m.l}</a>)}
+      </nav>
+      {grp && (
+        <nav class="ksub" aria-label={grp.l}>
+          {grp.cols.flatMap((c) => c.items).map((i) => <a href={i[0]} aria-current={i[0] === path ? 'page' : undefined}>{i[2]}</a>)}
+        </nav>
+      )}
+    </div>
+    {ticker && <Ticker />}
+    <slot />
+    {risk && <div class="wrap" style="padding-bottom:50px"><div class="risk">{KRISK}</div></div>}
+  </div>
+</BaseLayout>

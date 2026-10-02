@@ -1,0 +1,30 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { COUNTRIES } from '../../data/site';
+---
+<KapitalLayout title="Devenir investisseur">
+  <PageHead title="Devenir investisseur" lead="Vérification d'identité et profil investisseur : environ 10 minutes." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Devenir investisseur']]} />
+  <section class="block">
+    <div class="wrap split">
+      <form class="panel" data-demo="Demande reçue. Vérification d'identité sous 48 h.">
+        <label class="f" for="iN">Nom complet</label><input class="in" id="iN" required />
+        <label class="f" for="iE">E-mail</label><input class="in" id="iE" type="email" required />
+        <label class="f" for="iC">Pays de résidence</label>
+        <select class="in" id="iC">{Object.entries(COUNTRIES).map(([k, v]) => <option value={k}>{v}</option>)}<option value="XX">Diaspora (hors Afrique)</option></select>
+        <label class="f" for="iT">Profil</label>
+        <select class="in" id="iT"><option>Particulier (business angel)</option><option>Club ou syndicat</option><option>Family office</option><option>Fonds d'investissement</option><option>Institution / DFI</option></select>
+        <label class="f" for="iA">Montant envisagé par an</label>
+        <select class="in" id="iA"><option>Moins de 5 M FCFA</option><option>5 à 50 M FCFA</option><option>50 à 500 M FCFA</option><option>Plus de 500 M FCFA</option></select>
+        <label class="row small"><input type="checkbox" required /> J'ai lu la page <a href="/kapital/risques">Risques de l'investissement</a>.</label>
+        <button class="btn btn-primary" type="submit" style="margin-top:12px">Démarrer la vérification</button>
+      </form>
+      <aside>
+        <div class="panel">
+          <h3>Ce que vous obtenez</h3>
+          <ol class="timeline"><li class="done">Accès aux résumés d'opportunités</li><li class="done">Data rooms après accord de confidentialité</li><li class="cur">Invitations au comité et au Demo Day</li><li>Clubs et syndicats de co-investissement</li></ol>
+        </div>
+      </aside>
+    </div>
+  </section>
+</KapitalLayout>

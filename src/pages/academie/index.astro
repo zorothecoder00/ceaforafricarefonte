@@ -1,0 +1,57 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import CourseCard from '../../components/CourseCard.astro';
+import KapitalAd from '../../components/KapitalAd.astro';
+import { COURSES, SUBS } from '../../data/site';
+
+const themes = ['Tous', ...new Set(COURSES.map((c) => c.th))];
+---
+<BaseLayout title="Académie">
+  <PageHead title="CEA Academy" lead="Des cours courts, pratiques et certifiants, pensés pour le téléphone et les petits forfaits. Téléchargeables hors ligne." crumbs={[['', 'Académie']]} subnav={SUBS.academie} />
+  <section class="block" style="padding-top:20px">
+    <div class="wrap">
+      <div class="filters" role="group" aria-label="Filtrer les cours" id="cf">
+        {themes.map((t, i) => <button class="chip" type="button" aria-pressed={i === 0 ? 'true' : 'false'} data-th={t}>{t}</button>)}
+        <select class="in" id="lvSel" aria-label="Niveau"><option value="">Tous niveaux</option><option>Débutant</option><option>Intermédiaire</option><option>Avancé</option></select>
+        <label class="chip"><input type="checkbox" id="free" /> Gratuits</label>
+      </div>
+      <div class="split">
+        <div>
+          <div class="grid g2" id="cl">{COURSES.map((c) => <CourseCard c={c} />)}</div>
+          <div class="empty" id="cEmpty" hidden>Aucun cours pour ces filtres.</div>
+        </div>
+        <aside>
+          <KapitalAd variant={2} />
+          <div class="panel" style="margin-top:16px">
+            <h3>Recommandé pour vous</h3>
+            <p class="small muted">Pour bien démarrer.</p>
+            {[COURSES[0], COURSES[4]].map((c) => <a href={`/academie/${c.id}`} class="small" style="display:block;padding:6px 0">{c.t}</a>)}
+          </div>
+        </aside>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+<script>
+  let th = 'Tous';
+  const chips = [...document.querySelectorAll<HTMLButtonElement>('#cf [data-th]')];
+  const lv = document.getElementById('lvSel') as HTMLSelectElement;
+  const free = document.getElementById('free') as HTMLInputElement;
+  function apply() {
+    let n = 0;
+    document.querySelectorAll<HTMLElement>('#cl > a').forEach((el) => {
+      const ok = (th === 'Tous' || el.dataset.th === th) && (!lv.value || el.dataset.lv === lv.value) && (!free.checked || el.dataset.free === '1');
+      el.hidden = !ok;
+      if (ok) n++;
+    });
+    document.getElementById('cEmpty')!.hidden = n > 0;
+  }
+  chips.forEach((c) => c.addEventListener('click', () => {
+    th = c.dataset.th!;
+    chips.forEach((x) => x.setAttribute('aria-pressed', String(x === c)));
+    apply();
+  }));
+  lv.addEventListener('change', apply);
+  free.addEventListener('change', apply);
+</script>

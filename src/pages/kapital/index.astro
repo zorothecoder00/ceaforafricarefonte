@@ -1,0 +1,58 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import Icon from '../../components/Icon.astro';
+import OppCard from '../../components/OppCard.astro';
+import { OPPS } from '../../data/site';
+
+const kpis = [['9,8 Md', 'FCFA levés par les entreprises accompagnées'], ['150', 'dossiers prêts pour les investisseurs'], ['420', 'investisseurs vérifiés'], ['16', 'pays couverts']];
+const universes = [
+  ['fund', 'Lever des fonds', 'Diagnostic, programme Investor Ready, dossier, data room.', '/kapital/diagnostic'],
+  ['rocket', 'Capital-risque', 'CEA Kapital Ventures : thèse, portefeuille, portail des souscripteurs.', '/kapital/capital-risque'],
+  ['cap', "Vente d'actions", 'Ouvrir son capital, marché privé, liquidité.', '/kapital/actions'],
+  ['chart', 'Bourses africaines', 'Indices, sociétés cotées, calendrier, portefeuille virtuel.', '/kapital/marches'],
+  ['bank', 'Marché des capitaux', 'IPO Ready, obligations, sukuk, finance verte.', '/kapital/obligations'],
+  ['shield', 'Confiance', 'Sélection, risques, conformité par pays.', '/kapital/risques'],
+];
+const steps = ['Soumission du dossier', 'Vérification et diagnostic', 'Préparation avec un analyste', "Comité d'investissement", 'Présentation aux investisseurs'];
+---
+<KapitalLayout ticker>
+  <section style="background:radial-gradient(900px 400px at 80% 0%,rgba(201,150,43,.25),transparent 60%)">
+    <div class="wrap" style="padding:56px 20px 30px">
+      <div class="grid g2" style="align-items:center">
+        <div>
+          <span class="tag gold">Le portail financier de CEA FOR AFRICA</span>
+          <h1 style="margin-top:14px;font-size:clamp(2.3rem,5vw,3.8rem)">Financer l'Afrique qui entreprend</h1>
+          <p style="font-size:1.15rem;color:#B9C9DA">Levée de fonds, capital-risque, vente d'actions, bourses africaines et marché des capitaux : un seul portail, des dossiers vérifiés, des règles claires.</p>
+          <div class="row" style="margin-top:20px"><a class="kbtn" style="padding:13px 22px;font-size:1rem" href="/kapital/diagnostic">Je lève des fonds</a><a class="btn btn-ghost" style="color:#fff;border-color:#2A5079;padding:12px 22px" href="/kapital/opportunites">J'investis</a></div>
+        </div>
+        <div class="grid g2" style="gap:12px">
+          {kpis.map(([b, s]) => <div class="panel kpi"><b style="color:#E7BD62">{b}</b><span class="small muted">{s}</span></div>)}
+          <p class="xs muted" style="grid-column:1/-1;margin:0">Chiffres de démonstration.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="block" style="padding-top:20px">
+    <div class="wrap">
+      <h2>Cinq univers, un seul portail</h2>
+      <div class="grid g3">
+        {universes.map(([ic, t, d, h]) => (
+          <a class="panel" href={h} style="text-decoration:none">
+            <span style="width:42px;height:42px;border-radius:10px;background:#2A2312;color:#E7BD62;display:flex;align-items:center;justify-content:center"><Icon name={ic} size={22} /></span>
+            <h3 style="margin:12px 0 6px">{t}</h3><p class="small muted" style="margin:0">{d}</p>
+          </a>
+        ))}
+      </div>
+      <h2 style="margin-top:46px">Opportunités du moment</h2>
+      <div class="grid g3">{OPPS.slice(0, 3).map((o) => <OppCard o={o} />)}</div>
+      <h2 style="margin-top:46px">Notre processus en cinq étapes</h2>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">
+        {steps.map((s, i) => <div class="panel"><b style="font-family:var(--display);color:var(--gold-ink);font-size:1.4rem">{i + 1}</b><h4 style="margin-top:6px">{s}</h4></div>)}
+      </div>
+      <div class="grid g2" style="margin-top:40px">
+        <div class="panel"><h3>Témoignage</h3><p>« Le diagnostic nous a montré nos points faibles avant les investisseurs. Six mois plus tard, nous avons levé 350 millions de FCFA. »</p><p class="small muted" style="margin:0">— Fondatrice de Manioc+ (témoignage fictif)</p></div>
+        <div class="panel"><h3>Prochain rendez-vous</h3><p>Rencontres investisseurs Agritech — 29 octobre, en ligne. Demo Day — 28 novembre à Lomé.</p><a class="btn btn-primary btn-sm" href="/evenements/e3">S'inscrire</a></div>
+      </div>
+    </div>
+  </section>
+</KapitalLayout>

@@ -1,0 +1,24 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHead from '../components/PageHead.astro';
+
+const faq = [
+  ['Comment payer avec Mobile Money ?', 'Choisissez Orange Money, MTN MoMo, Wave, Moov ou M-Pesa, saisissez votre numéro puis confirmez sur votre téléphone.'],
+  ["Je n'ai pas reçu mon billet", 'Retrouvez-le dans Mon espace > Mes billets. Il fonctionne aussi hors connexion.'],
+  ['Comment vérifier un certificat ?', 'Scannez le QR code du certificat : il ouvre la page de vérification.'],
+  ['Comment soumettre un dossier à Kapital Invest ?', "Faites d'abord le diagnostic « Suis-je prêt ? », puis soumettez votre dossier depuis le résultat."],
+];
+---
+<BaseLayout title="Centre d'aide">
+  <PageHead title="Centre d'aide" lead="Réponses rapides, tutoriels et contact du support." crumbs={[['', "Centre d'aide"]]} />
+  <section class="block">
+    <div class="wrap grid g2">
+      {faq.map(([q, a]) => <details class="panel"><summary><b>{q}</b></summary><p class="small" style="margin:10px 0 0">{a}</p></details>)}
+      <form class="panel" data-demo="Ticket créé. Réponse sous 1 jour ouvré.">
+        <h3>Ouvrir un ticket</h3>
+        <textarea class="in" required aria-label="Décrivez votre problème"></textarea>
+        <button class="btn btn-primary btn-sm" type="submit">Envoyer</button>
+      </form>
+    </div>
+  </section>
+</BaseLayout>

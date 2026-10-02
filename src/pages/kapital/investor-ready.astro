@@ -1,0 +1,27 @@
+---
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import Money from '../../components/Money.astro';
+
+const weeks = [['Semaines 1-2', 'Pitch et récit'], ['Semaines 3-4', 'Modèle financier et valorisation'], ['Semaines 5-6', 'Gouvernance et juridique'], ['Semaines 7-8', 'Data room et due diligence'], ['Semaine 9', 'Négociation et term sheet'], ['Semaine 10', 'Comité et Demo Day']];
+---
+<KapitalLayout title="Investor Ready">
+  <PageHead title="Programme Investor Ready" lead="10 semaines en cohorte pour arriver devant les investisseurs avec un dossier solide." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Investor Ready']]} />
+  <section class="block">
+    <div class="wrap split">
+      <div>
+        <div class="grid g2">{weeks.map(([w, t]) => <div class="panel"><span class="small muted">{w}</span><h4 style="margin:4px 0 0">{t}</h4></div>)}</div>
+        <p style="margin-top:20px">Prochaine cohorte : <b>1er décembre 2026</b> · 25 entreprises · en ligne, avec 2 jours en présentiel à Lomé.</p>
+      </div>
+      <aside>
+        <div class="panel">
+          <h3>Tarif</h3>
+          <b style="font-family:var(--display);font-size:1.6rem;color:#E7BD62"><Money xof={250000} /></b>
+          <p class="small muted">Bourses disponibles pour les entreprises dirigées par des femmes et les moins de 30 ans.</p>
+          <button class="btn btn-primary" style="width:100%" data-toast="Candidature Investor Ready reçue.">Candidater</button>
+          <a class="small" href="/kapital/diagnostic" style="display:block;margin-top:10px">Faire d'abord le diagnostic gratuit</a>
+        </div>
+      </aside>
+    </div>
+  </section>
+</KapitalLayout>

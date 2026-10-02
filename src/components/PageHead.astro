@@ -1,0 +1,21 @@
+---
+import type { Link } from '../data/site';
+interface Props { title: string; lead?: string; crumbs?: [string, string][]; subnav?: Link[] }
+const { title, lead, crumbs = [], subnav } = Astro.props;
+const path = Astro.url.pathname.replace(/\/$/, '') || '/';
+---
+<div class="page-head">
+  <div class="wrap">
+    <div class="crumbs">
+      <a href="/">Accueil</a>{crumbs.map(([h, l]) => <> / {h ? <a href={h}>{l}</a> : l}</>)}
+    </div>
+    <h1>{title}</h1>
+    {lead && <p>{lead}</p>}
+    {subnav && (
+      <nav class="subnav" aria-label="Sous-navigation">
+        {subnav.map(([h, l]) => <a href={h} aria-current={h === path ? 'page' : undefined}>{l}</a>)}
+      </nav>
+    )}
+    <slot />
+  </div>
+</div>

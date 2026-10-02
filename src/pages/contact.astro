@@ -1,0 +1,56 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHead from '../components/PageHead.astro';
+import { COUNTRIES } from '../data/site';
+
+const motifs: Record<string, string> = {
+  Accompagnement: 'Équipe programmes',
+  'Kapital Invest — levée de fonds': 'Équipe Kapital Invest',
+  'Kapital Invest — investisseur': 'Relations investisseurs',
+  Partenariat: 'Direction des partenariats',
+  'Presse et médias': 'Communication',
+  'Assistance technique': 'Support',
+  Adhésion: 'Vie associative',
+};
+---
+<BaseLayout title="Contact">
+  <PageHead title="Nous contacter" lead="Choisissez le motif : votre message est envoyé directement à la bonne équipe, dans votre pays." crumbs={[['', 'Contact']]} />
+  <section class="block">
+    <div class="wrap split">
+      <form class="panel" id="cform" data-demo="Message envoyé. Réponse sous 2 jours ouvrés.">
+        <label class="f" for="cm">Motif</label>
+        <select class="in" id="cm">{Object.entries(motifs).map(([m, team]) => <option data-team={team}>{m}</option>)}</select>
+        <p class="small" id="route" style="margin-top:-6px"></p>
+        <label class="f" for="cp">Pays</label>
+        <select class="in" id="cp">{Object.entries(COUNTRIES).map(([k, v]) => <option value={k}>{v}</option>)}</select>
+        <label class="f" for="cn">Nom</label><input class="in" id="cn" required />
+        <label class="f" for="ce">E-mail ou téléphone</label><input class="in" id="ce" required />
+        <label class="f" for="cmsg">Message</label><textarea class="in" id="cmsg" required></textarea>
+        <label class="row small"><input type="checkbox" required /> J'accepte que CEA traite ces données pour répondre à ma demande.</label>
+        <button class="btn btn-primary" type="submit" style="margin-top:12px">Envoyer</button>
+      </form>
+      <aside>
+        <div class="panel">
+          <h3>Autres canaux</h3>
+          <p class="small">WhatsApp : +228 00 00 00 00 (fictif)<br />Délai de réponse indicatif : 2 jours ouvrés</p>
+          <button class="btn btn-ghost btn-sm" data-toast="Ouverture de WhatsApp (simulation).">Écrire sur WhatsApp</button>
+          <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openChat()">Demander à CEA Copilot</button>
+        </div>
+        <div class="panel" style="margin-top:16px">
+          <h3>Prendre rendez-vous</h3>
+          <div class="row" data-slots>{['Lun 10:00', 'Mar 14:00', 'Jeu 11:30'].map((s) => <button class="slot" type="button" aria-pressed="false">{s}</button>)}</div>
+          <button class="btn btn-primary btn-sm" style="margin-top:10px" data-toast="Rendez-vous confirmé. Lien de visio envoyé.">Confirmer</button>
+        </div>
+      </aside>
+    </div>
+  </section>
+</BaseLayout>
+<script>
+  const cm = document.getElementById('cm') as HTMLSelectElement, cp = document.getElementById('cp') as HTMLSelectElement;
+  const upd = () => {
+    document.getElementById('route')!.innerHTML = `Transmis à : <b>${cm.selectedOptions[0].dataset.team}</b> — antenne ${cp.selectedOptions[0].text}`;
+  };
+  cm.addEventListener('change', upd);
+  cp.addEventListener('change', upd);
+  upd();
+</script>
