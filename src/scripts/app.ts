@@ -1,4 +1,5 @@
 /* Interactions globales du site (thème, menu, devise, carte, votes, Copilot, recherche…). */
+import { norm, search as fuzzySearch } from '../lib/fuzzy';
 
 const $ = <T extends Element = HTMLElement>(s: string, r: ParentNode = document) => r.querySelector<T>(s);
 const $$ = <T extends Element = HTMLElement>(s: string, r: ParentNode = document) => [...r.querySelectorAll<T>(s)];
@@ -241,16 +242,28 @@ $$('[data-slots]').forEach((g) => $$('.slot', g).forEach((s) => s.addEventListen
 /* ===== recherche universelle (Ctrl+K ou « / ») ===== */
 type Entry = { t: string; d: string; h: string; ty: string };
 const index: Entry[] = JSON.parse($('#searchIndex')?.textContent || '[]');
-const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const dlg = $<HTMLDialogElement>('#dlg');
 const sq = $<HTMLInputElement>('#sq'), sres = $('#sres');
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+// Filtre par type (Page, Cours, Événement…) : une puce par type présent dans l'index
+let sType = '';
+const sfil = $('#sfil');
+if (sfil) {
+  sfil.innerHTML = ['', ...new Set(index.map((x) => x.ty))].map((ty) => `<button type="button" class="chip" data-ty="${esc(ty)}" aria-pressed="${ty === ''}">${ty ? esc(ty) : EN ? 'All' : 'Tout'}</button>`).join('');
+  sfil.addEventListener('click', (e) => {
+    const b = (e.target as Element).closest<HTMLElement>('[data-ty]');
+    if (!b) return;
+    sType = b.dataset.ty!;
+    $$('[data-ty]', sfil).forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    runSearch(); sq!.focus();
+  });
+}
 function runSearch() {
   const q = norm(sq!.value.trim());
   if (!q) { sres!.innerHTML = `<p class="small muted">${EN ? 'Type at least one letter. Tip: Ctrl+K or / opens search anywhere.' : 'Tapez au moins une lettre. Astuce : Ctrl+K ou / ouvre la recherche partout.'}</p>`; return; }
-  const words = q.split(/\s+/);
+  // Tolérante aux fautes de frappe et classée par pertinence (titre prioritaire)
   const seen = new Set<string>();
-  const res = index.filter((x) => { const s = norm(x.t + ' ' + x.d); return words.every((w) => s.includes(w)) && !seen.has(x.ty + x.t) && seen.add(x.ty + x.t); }).slice(0, 12);
+  const res = fuzzySearch(index.filter((x) => (!sType || x.ty === sType) && !seen.has(x.ty + x.t) && seen.add(x.ty + x.t)), q, (x) => [x.t, x.d], 12);
   sres!.innerHTML = res.length
     ? res.map((x) => `<a href="${x.h}"><span class="tag info">${esc(x.ty)}</span><span><b>${esc(x.t)}</b><br><span class="small muted">${esc(x.d)}</span></span></a>`).join('')
     : `<div class="empty">${EN ? 'No results. Try another word or ask CEA Copilot.' : 'Aucun résultat. Essayez un autre mot ou demandez à CEA Copilot.'}</div>`;

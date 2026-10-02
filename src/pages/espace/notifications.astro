@@ -1,13 +1,20 @@
 ---
+/* Centre de notifications et préférences (CDC §10) : canaux par catégorie, heures de silence. */
 import EspaceLayout from '../../layouts/EspaceLayout.astro';
 import { desc, eq } from 'drizzle-orm';
 import { db } from '../../lib/db';
-import { notification } from '../../db/schema/app';
+import { notification, profile } from '../../db/schema/app';
+import { NOTIF_CATEGORIES, type NotifPrefs, type NotifCategory } from '../../lib/notify';
 
 export const prerender = false;
 const user = Astro.locals.user!;
 const rows = await db.select().from(notification).where(eq(notification.userId, user.id)).orderBy(desc(notification.createdAt)).limit(100);
 const unread = rows.filter((r) => !r.readAt).length;
+const [p] = await db.select({ prefs: profile.notifPrefs }).from(profile).where(eq(profile.userId, user.id));
+const prefs = (p?.prefs ?? {}) as NotifPrefs;
+const cats = Object.entries(NOTIF_CATEGORIES) as [NotifCategory, string][];
+const on = (c: NotifCategory, ch: 'email' | 'whatsapp') => prefs.cat?.[c]?.[ch] !== false;
+const hasPhone = !!user.phoneNumber;
 ---
 <EspaceLayout title="Notifications" lead={`${unread} non lue${unread > 1 ? 's' : ''}. Les notifications importantes sont aussi envoyées par e-mail et WhatsApp selon vos préférences.`}>
   {unread > 0 && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/notifications" data-reload style="margin-bottom:12px">Tout marquer comme lu</button>}
@@ -19,4 +26,44 @@ const unread = rows.filter((r) => !r.readAt).length;
       </div>
     )) : <p class="muted" style="margin:0">Aucune notification pour le moment.</p>}
   </div>
+
+  <form class="panel" id="prefsF" style="margin-top:20px">
+    <h2 style="font-size:1.2rem;margin-top:0">Mes préférences</h2>
+    <p class="small muted">Le centre de notifications reçoit toujours tout. Choisissez ce qui vous est aussi envoyé à l'extérieur.{!hasPhone && <> WhatsApp nécessite un numéro vérifié : <a href="/espace/securite">l'ajouter</a>.</>}</p>
+    <div class="scroll-x">
+      <table class="t">
+        <thead><tr><th>Catégorie</th><th style="text-align:center">E-mail</th><th style="text-align:center">WhatsApp / SMS</th></tr></thead>
+        <tbody>{cats.map(([k, label]) => (
+          <tr><td class="small">{label}</td>
+            <td style="text-align:center"><input type="checkbox" data-cat={k} data-ch="email" checked={on(k, 'email')} aria-label={`${label} par e-mail`} /></td>
+            <td style="text-align:center"><input type="checkbox" data-cat={k} data-ch="whatsapp" checked={on(k, 'whatsapp')} aria-label={`${label} par WhatsApp ou SMS`} /></td></tr>
+        ))}</tbody>
+      </table>
+    </div>
+    <h3 style="font-size:1rem;margin-top:16px">Heures de silence</h3>
+    <label class="row small"><input type="checkbox" id="qOn" checked={!!prefs.quiet} /> Ne pas m'envoyer de WhatsApp ni de SMS entre</label>
+    <div class="row" style="gap:8px;margin-top:6px">
+      <input class="in" type="time" id="qFrom" value={prefs.quiet?.from ?? '21:00'} aria-label="Début du silence" style="width:auto" />
+      <span class="small">et</span>
+      <input class="in" type="time" id="qTo" value={prefs.quiet?.to ?? '07:00'} aria-label="Fin du silence" style="width:auto" />
+      <span class="xs muted" id="qTz">{prefs.quiet?.tz ?? ''}</span>
+    </div>
+    <p class="xs muted">Pendant ce créneau, les messages restent disponibles ici et par e-mail. Les billets et codes de sécurité que vous demandez sont toujours envoyés.</p>
+    <button class="btn btn-primary btn-sm" type="submit">Enregistrer mes préférences</button>
+  </form>
 </EspaceLayout>
+<script>
+  const f = document.getElementById('prefsF') as HTMLFormElement;
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Africa/Lome';
+  const tzEl = document.getElementById('qTz')!;
+  if (!tzEl.textContent) tzEl.textContent = `(heure de votre appareil : ${tz})`;
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const cat: Record<string, { email: boolean; whatsapp: boolean }> = {};
+    f.querySelectorAll<HTMLInputElement>('[data-cat]').forEach((i) => { (cat[i.dataset.cat!] ??= { email: true, whatsapp: true })[i.dataset.ch as 'email' | 'whatsapp'] = i.checked; });
+    const quiet = (document.getElementById('qOn') as HTMLInputElement).checked ? { from: (document.getElementById('qFrom') as HTMLInputElement).value, to: (document.getElementById('qTo') as HTMLInputElement).value, tz } : null;
+    const r = await fetch('/api/notifications', { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cat, quiet }) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : { error: 'Erreur réseau.' };
+    (window as unknown as { toast: (t: string) => void }).toast(d.message ?? d.error ?? 'Erreur.');
+  });
+</script>

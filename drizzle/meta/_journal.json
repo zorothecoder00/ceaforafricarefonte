@@ -85,6 +85,13 @@
       "when": 1790954926923,
       "tag": "0011_brouillons",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790955440153,
+      "tag": "0012_preferences_notifications",
+      "breakpoints": true
     }
   ]
 }

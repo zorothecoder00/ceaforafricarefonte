@@ -1,0 +1,1 @@
+ALTER TABLE "profile" ADD COLUMN "notif_prefs" jsonb DEFAULT '{}'::jsonb NOT NULL;

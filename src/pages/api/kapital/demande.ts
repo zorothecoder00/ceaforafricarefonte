@@ -52,6 +52,6 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const num = reference('KAP');
   await db.insert(contactMessage).values({ reference: num, motif: k.motif, routedTeam: k.team, country: pr?.c ?? null, name: u.name, contact: u.email, message: subject + (p.data.message ? `\n\n${p.data.message}` : ''), userId: u.id });
   await audit(u.id, 'kapital.demande.' + kind, num, { ref }, clientIp(request));
-  await notify(u.id, `Demande ${num} reçue (${k.label}). ${k.team} vous recontacte sous 5 jours ouvrés.`, '/espace/notifications', { email: true });
+  await notify(u.id, `Demande ${num} reçue (${k.label}). ${k.team} vous recontacte sous 5 jours ouvrés.`, k.investor ? '/kapital/investisseur' : '/kapital/entreprise', { email: true });
   return json({ ok: true, reference: num, message: `Demande ${num} transmise à : ${k.team}. Elle n’engage à rien.` });
 };

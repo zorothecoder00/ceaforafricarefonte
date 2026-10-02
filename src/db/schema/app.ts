@@ -44,6 +44,8 @@ export const profile = pgTable('profile', {
   studyLevel: text('study_level'),
   availableFrom: date('available_from'),
   availableUntil: date('available_until'),
+  // Préférences de notification (CDC §10) : canaux par catégorie et heures de silence — voir src/lib/notify.ts
+  notifPrefs: jsonb('notif_prefs').notNull().default({}),
   updatedAt: ts('updated_at').notNull().defaultNow(),
 });
 
