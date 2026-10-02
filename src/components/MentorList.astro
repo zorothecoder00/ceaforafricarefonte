@@ -1,0 +1,51 @@
+---
+/* Liste des mentors ou experts avec créneaux réservables (CDC §7.6). Matching simple : secteur et langue du profil du visiteur. */
+import { and, eq, gt, sql } from 'drizzle-orm';
+import { db } from '../lib/db';
+import { mentorProfile, mentoringSession, profile } from '../db/schema/app';
+import { user } from '../db/schema/auth';
+import { upcomingSlots, type WeeklySlot } from '../lib/slots';
+import Money from './Money.astro';
+import { initials } from '../data/site';
+
+interface Props { kind: 'mentorat' | 'expert' }
+const { kind } = Astro.props;
+const me = Astro.locals.user;
+const [mine] = me ? await db.select({ sector: profile.sector, lang: profile.lang }).from(profile).where(eq(profile.userId, me.id)) : [];
+const rows = await db.select({ id: user.id, name: user.name, m: mentorProfile, country: profile.country, avg: sql<number | null>`(select round(avg(${mentoringSession.menteeRating})::numeric, 1) from ${mentoringSession} where ${mentoringSession.mentorId} = ${user.id} and ${mentoringSession.menteeRating} is not null)` })
+  .from(mentorProfile).innerJoin(user, eq(user.id, mentorProfile.userId)).leftJoin(profile, eq(profile.userId, user.id))
+  .where(and(eq(mentorProfile.kind, kind), eq(mentorProfile.active, true)));
+const taken = await db.select({ mentorId: mentoringSession.mentorId, at: mentoringSession.startsAt }).from(mentoringSession).where(gt(mentoringSession.startsAt, new Date()));
+// Score de correspondance expliqué (CDC §11 : matching avec score expliqué)
+const scored = rows.map((r) => {
+  const reasons: string[] = [];
+  if (mine?.sector && r.m.sectors.some((s) => s.toLowerCase().includes(mine.sector!.toLowerCase()))) reasons.push('même secteur');
+  if (mine?.lang && r.m.languages.some((l) => l.toLowerCase().startsWith(mine.lang === 'en' ? 'ang' : 'fr'))) reasons.push('même langue');
+  return { ...r, reasons, slots: upcomingSlots(r.m.slots as WeeklySlot[], taken.filter((t) => t.mentorId === r.id).map((t) => t.at)) };
+}).sort((a, b) => b.reasons.length - a.reasons.length);
+---
+<div class="grid g2">
+  {scored.map((r) => (
+    <div class="panel">
+      <div class="row between">
+        <div class="row"><span class="avatar">{initials(r.name)}</span><div><b>{r.name}</b><div class="small muted">{r.m.languages.join(', ')}</div></div></div>
+        {r.avg && <span class="tag gold">★ {r.avg}</span>}
+      </div>
+      <p class="small" style="margin:12px 0 6px">{r.m.expertise}</p>
+      {r.m.sectors.length > 0 && <div class="row" style="margin-bottom:8px">{r.m.sectors.map((s) => <span class="tag">{s}</span>)}</div>}
+      {r.reasons.length > 0 && <p class="xs" style="color:var(--ok);margin:0 0 8px">Correspondance : {r.reasons.join(' + ')}</p>}
+      {kind === 'expert' && <p class="small"><b><Money xof={r.m.priceXof} /></b> la consultation de 45 minutes</p>}
+      {me && me.id !== r.id ? (
+        r.slots.length ? (
+          <form data-api="/api/mentorat">
+            <input type="hidden" name="mentorId" value={r.id} />
+            <div class="row" style="gap:6px;margin-bottom:8px">{r.slots.map((s, i) => <label class="slot" style="display:inline-flex;gap:4px;align-items:center"><input type="radio" name="slot" value={s.iso} required={i === 0} /> {s.label}</label>)}</div>
+            <input class="in" name="goal" required minlength="5" maxlength="500" placeholder="Votre objectif pour cette séance" aria-label="Objectif" />
+            <button class="btn btn-primary btn-sm" type="submit">{kind === 'expert' ? 'Réserver et payer' : 'Réserver'}</button>
+          </form>
+        ) : <p class="small muted">Aucun créneau libre dans les 14 prochains jours.</p>
+      ) : !me && <a class="btn btn-primary btn-sm" href={`/connexion?retour=${Astro.url.pathname}`}>Se connecter pour réserver</a>}
+    </div>
+  ))}
+  {scored.length === 0 && <div class="empty">Aucun {kind === 'expert' ? 'expert' : 'mentor'} disponible pour le moment.</div>}
+</div>

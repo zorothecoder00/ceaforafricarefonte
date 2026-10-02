@@ -41,16 +41,16 @@ const finance = c.th === 'Finance' || c.th === 'Levée de fonds';
   </section>
 </BaseLayout>
 <script>
-  // Progression enregistrée dans le navigateur (lue par /espace/apprentissage).
+  // Progression enregistrée en base (compte connecté) ; certificat vérifiable délivré à 100 %.
   const ul = document.getElementById('lessons')!;
   const id = ul.dataset.course!;
   const items = [...ul.querySelectorAll<HTMLLIElement>('li')];
-  let en: Record<string, number[]> = {};
-  try { en = JSON.parse(localStorage.getItem('cea-enroll') || '{}'); } catch {}
-  const save = () => { try { localStorage.setItem('cea-enroll', JSON.stringify(en)); } catch {} };
-  const toast = (t: string) => (window as any).toast(t);
+  const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+  const enrollBtn = document.getElementById('enroll')!;
+  const prog = document.getElementById('prog')!;
+  const prefix = location.pathname.startsWith('/en/') ? '/en' : '';
+  let enrolled = false, done: number[] = [], cert: string | null = null;
   function draw() {
-    const done = en[id] || [];
     items.forEach((li, i) => {
       const ok = done.includes(i);
       li.setAttribute('aria-checked', String(ok));
@@ -58,19 +58,30 @@ const finance = c.th === 'Finance' || c.th === 'Levée de fonds';
       c.classList.toggle('done', ok);
       c.textContent = ok ? '✓' : String(i + 1);
     });
-    document.getElementById('prog')!.textContent = en[id] ? `Progression : ${Math.round((done.length / items.length) * 100)} %${done.length === items.length ? ' — certificat obtenu 🎓' : ''}` : 'Inscrivez-vous pour suivre votre progression.';
-    document.getElementById('enroll')!.hidden = !!en[id];
+    enrollBtn.hidden = enrolled;
+    prog.innerHTML = enrolled
+      ? `Progression : ${Math.round((done.length / items.length) * 100)} %${cert ? ` — <a href="/verifier/certificat/${cert}">voir mon certificat</a>` : ''}`
+      : 'Inscrivez-vous pour suivre votre progression et obtenir le certificat.';
   }
-  document.getElementById('enroll')!.addEventListener('click', () => { en[id] = en[id] || []; save(); draw(); toast('Inscription confirmée. Bonne formation !'); });
+  async function post(body: Record<string, unknown>) {
+    const res = await fetch('/api/academie/progression', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ courseId: id, ...body }) });
+    if (res.status === 401) { location.href = prefix + '/connexion?retour=' + encodeURIComponent(location.pathname); return null; }
+    const d = await res.json();
+    if (res.status === 402 && d.pay) { location.href = `/paiement?objet=${d.pay.purpose}&ref=${d.pay.item}`; return null; }
+    if (!d.ok) { toast(d.error || 'Erreur.'); return null; }
+    return d;
+  }
+  fetch('/api/academie/progression?course=' + id).then((r) => r.json()).then((d) => { enrolled = d.enrolled; done = d.done; cert = d.certificate; draw(); }).catch(draw);
+  enrollBtn.addEventListener('click', async () => { const d = await post({}); if (d) { enrolled = true; done = d.done; toast(d.message); draw(); } });
   items.forEach((li, i) => {
-    const flip = () => {
-      if (!en[id]) { toast("Inscrivez-vous d'abord au cours."); return; }
-      en[id] = en[id].includes(i) ? en[id].filter((x) => x !== i) : [...en[id], i];
-      save(); draw();
-      if (en[id].length === items.length) toast('Félicitations ! Votre certificat vérifiable est disponible.');
+    const flip = async () => {
+      if (!enrolled) return toast("Inscrivez-vous d'abord au cours.");
+      const d = await post({ lesson: i, done: !done.includes(i) });
+      if (!d) return;
+      done = d.done; cert = d.certificate; draw();
+      if (d.complete) toast(d.message);
     };
     li.addEventListener('click', flip);
     li.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(); } });
   });
-  draw();
 </script>

@@ -1,5 +1,6 @@
 ---
-/* Connexion / inscription (CDC §10) — interface prête ; l'authentification réelle arrive au lot 2. */
+/* Connexion / inscription (CDC §10) : téléphone + code (SMS ou WhatsApp), e-mail + mot de passe, clé d'accès,
+   double authentification, réseaux sociaux. Inscription par téléphone en 60 secondes (CDC §4.2). */
 import PageHead from '../PageHead.astro';
 import { lp, type Lang } from '../../i18n/ui';
 
@@ -8,69 +9,186 @@ const { lang } = Astro.props;
 const en = lang === 'en';
 const L = (p: string) => lp(lang, p);
 const w = (fr: string, e: string) => (en ? e : fr);
-const providers = ['Google', 'Apple', 'LinkedIn'];
+const providers = [['google', 'Google'], ['apple', 'Apple'], ['linkedin', 'LinkedIn']];
+const fs = 'border:0;padding:0;margin:0';
 ---
 <PageHead lang={lang} title={w('Se connecter ou créer un compte', 'Sign in or create an account')} lead={w('Un seul compte pour CEA FOR AFRICA et CEA Kapital Invest. Inscription en 60 secondes avec votre numéro de téléphone.', 'One account for CEA FOR AFRICA and CEA Kapital Invest. Sign up in 60 seconds with your phone number.')} crumbs={[['', w('Connexion', 'Sign in')]]} />
 <section class="block">
   <div class="wrap" style="max-width:520px">
-    <div class="tag info" style="display:block;border-radius:8px;padding:10px;margin-bottom:16px">{w('Démonstration : la connexion réelle (SMS, WhatsApp, Google, Apple, LinkedIn, clés d’accès) sera activée au lot 2.', 'Demo: real sign-in (SMS, WhatsApp, Google, Apple, LinkedIn, passkeys) will be enabled in phase 2.')}</div>
-    <form class="panel" id="authF" novalidate>
-      <div data-step="0">
-        <div class="filters" style="margin-top:0" role="tablist">
-          <button class="chip" type="button" aria-pressed="true" data-mode="tel">{w('Téléphone', 'Phone')}</button>
-          <button class="chip" type="button" aria-pressed="false" data-mode="mail">E-mail</button>
+    <div class="tag info" id="authMotif" hidden style="display:block;border-radius:8px;padding:10px;margin-bottom:16px"></div>
+    <div class="panel" id="auth" data-home={L('/espace')}>
+      <div class="filters" style="margin-top:0" role="tablist">
+        <button class="chip" type="button" role="tab" aria-pressed="true" data-tab="tel">{w('Téléphone', 'Phone')}</button>
+        <button class="chip" type="button" role="tab" aria-pressed="false" data-tab="mail">E-mail</button>
+      </div>
+
+      <!-- Téléphone -->
+      <form data-pane="tel" novalidate>
+        <fieldset data-step="1" style={fs}>
+          <label class="f" for="tel">{w('Numéro de téléphone (avec indicatif)', 'Phone number (with country code)')}</label>
+          <input class="in" id="tel" name="tel" required inputmode="tel" autocomplete="tel" placeholder="+228 90 00 00 00" />
+          <button class="btn btn-primary" type="submit" style="width:100%">{w('Recevoir un code', 'Get a code')}</button>
+          <p class="xs muted" style="margin:8px 0 0">{w('Le code arrive par WhatsApp, ou par SMS à défaut.', 'The code arrives by WhatsApp, or by SMS otherwise.')}</p>
+        </fieldset>
+        <fieldset data-step="2" style={fs} hidden>
+          <p class="small" data-sent></p>
+          <label class="f" for="otp">{w('Code à 6 chiffres', '6-digit code')}</label>
+          <input class="in" id="otp" name="otp" required pattern="[0-9]{6}" maxlength="6" inputmode="numeric" autocomplete="one-time-code" />
+          <button class="btn btn-primary" type="submit" style="width:100%">{w('Valider', 'Verify')}</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-back style="margin-top:10px">{w('Modifier le numéro', 'Change number')}</button>
+        </fieldset>
+      </form>
+
+      <!-- E-mail -->
+      <form data-pane="mail" novalidate hidden>
+        <div class="row small" style="margin-bottom:12px">
+          <label><input type="radio" name="mode" value="in" checked /> {w("J'ai déjà un compte", 'I have an account')}</label>
+          <label><input type="radio" name="mode" value="up" /> {w('Créer un compte', 'Create an account')}</label>
         </div>
-        <label class="f" for="authId" id="authLbl">{w('Numéro de téléphone', 'Phone number')}</label>
-        <input class="in" id="authId" required inputmode="tel" autocomplete="tel" placeholder="+228 90 00 00 00" />
-        <label class="row small" style="margin-bottom:12px"><input type="checkbox" checked /> {w('Recevoir le code par WhatsApp plutôt que par SMS', 'Receive the code by WhatsApp instead of SMS')}</label>
-        <button class="btn btn-primary" type="submit" style="width:100%">{w('Recevoir un code', 'Get a code')}</button>
-        <p class="small muted" style="text-align:center;margin:14px 0 8px">{w('ou', 'or')}</p>
-        <div class="grid" style="gap:8px">{providers.map((p) => <button class="btn btn-ghost" type="button" data-toast={w(`Connexion ${p} : disponible au lot 2.`, `${p} sign-in: available in phase 2.`)}>{w('Continuer avec', 'Continue with')} {p}</button>)}</div>
+        <div data-only="up" hidden>
+          <label class="f" for="name">{w('Nom complet', 'Full name')}</label>
+          <input class="in" id="name" name="name" autocomplete="name" />
+        </div>
+        <label class="f" for="email">E-mail</label>
+        <input class="in" id="email" name="email" type="email" required autocomplete="email" />
+        <label class="f" for="pw">{w('Mot de passe (10 caractères minimum)', 'Password (at least 10 characters)')}</label>
+        <input class="in" id="pw" name="pw" type="password" required minlength="10" autocomplete="current-password" />
+        <div data-only="up" hidden>
+          <label class="row small"><input type="checkbox" name="cgu" /> {w("J'accepte les", 'I accept the')} <a href={L('/legal/conditions')} target="_blank">{w("conditions d'utilisation", 'terms of use')}</a> {w('et la', 'and the')} <a href={L('/legal/confidentialite')} target="_blank">{w('politique de confidentialité', 'privacy policy')}</a>.</label>
+          <label class="row small"><input type="checkbox" name="marketing" /> {w("Recevoir la lettre d'information (facultatif)", 'Receive the newsletter (optional)')}</label>
+        </div>
+        <button class="btn btn-primary" type="submit" style="width:100%;margin-top:10px" data-submit>{w('Se connecter', 'Sign in')}</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-forgot style="margin-top:10px">{w('Mot de passe oublié ?', 'Forgot password?')}</button>
+      </form>
+
+      <!-- Double authentification -->
+      <form data-pane="2fa" novalidate hidden>
+        <p>{w("Votre compte est protégé par la double authentification. Saisissez le code de votre application d'authentification.", 'Your account is protected by two-factor authentication. Enter the code from your authenticator app.')}</p>
+        <label class="f" for="totp">{w('Code à 6 chiffres', '6-digit code')}</label>
+        <input class="in" id="totp" name="totp" required pattern="[0-9]{6}" maxlength="6" inputmode="numeric" autocomplete="one-time-code" />
+        <label class="row small"><input type="checkbox" name="trust" /> {w('Faire confiance à cet appareil pendant 30 jours', 'Trust this device for 30 days')}</label>
+        <button class="btn btn-primary" type="submit" style="width:100%;margin-top:10px">{w('Valider', 'Verify')}</button>
+      </form>
+
+      <p class="small" data-msg role="alert" style="margin:12px 0 0"></p>
+
+      <div data-alt>
+        <p class="small muted" style="text-align:center;margin:16px 0 8px">{w('ou', 'or')}</p>
+        <div class="grid" style="gap:8px">
+          <button class="btn btn-ghost" type="button" data-passkey>{w("Se connecter avec une clé d'accès", 'Sign in with a passkey')}</button>
+          {providers.map(([id, n]) => <button class="btn btn-ghost" type="button" data-social={id}>{w('Continuer avec', 'Continue with')} {n}</button>)}
+        </div>
       </div>
-      <div data-step="1" hidden>
-        <p>{w('Un code à 6 chiffres a été envoyé. Saisissez-le pour continuer (démo : n’importe quel code).', 'A 6-digit code has been sent. Enter it to continue (demo: any code).')}</p>
-        <label class="f" for="otp">{w('Code de vérification', 'Verification code')}</label>
-        <input class="in" id="otp" required pattern="[0-9]{6}" maxlength="6" inputmode="numeric" autocomplete="one-time-code" />
-        <button class="btn btn-primary" type="submit" style="width:100%">{w('Valider', 'Verify')}</button>
-        <button class="btn btn-ghost btn-sm" type="button" id="authBack" style="margin-top:10px">{w('Modifier le numéro', 'Change number')}</button>
-      </div>
-      <div data-step="2" hidden style="text-align:center">
-        <span class="tag ok">{w('Connecté (démo)', 'Signed in (demo)')}</span>
-        <h3 style="margin-top:12px">{w('Bienvenue !', 'Welcome!')}</h3>
-        <p class="small">{w('Prochaine étape : compléter votre profil et choisir votre formule.', 'Next step: complete your profile and choose your plan.')}</p>
-        <a class="btn btn-primary" href={L('/adherer')}>{w('Choisir ma formule', 'Choose my plan')}</a>
-      </div>
-    </form>
+    </div>
     <p class="small muted" style="margin-top:14px">{w('En continuant, vous acceptez les', 'By continuing, you accept the')} <a href={L('/legal/conditions')}>{w("conditions d'utilisation", 'terms of use')}</a> {w('et la', 'and the')} <a href={L('/legal/confidentialite')}>{w('politique de confidentialité', 'privacy policy')}</a>.</p>
   </div>
 </section>
 <script>
-  const f = document.getElementById('authF') as HTMLFormElement;
-  const steps = [...f.querySelectorAll<HTMLElement>('[data-step]')];
-  const id = document.getElementById('authId') as HTMLInputElement, lbl = document.getElementById('authLbl')!;
-  const en = document.documentElement.lang === 'en';
-  let step = 0;
-  const show = () => steps.forEach((s, i) => (s.hidden = i !== step));
-  f.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) => b.addEventListener('click', () => {
-    f.querySelectorAll('[data-mode]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-    const mail = b.dataset.mode === 'mail';
-    id.type = mail ? 'email' : 'text';
-    id.inputMode = mail ? 'email' : 'tel';
-    id.autocomplete = mail ? 'email' : 'tel';
-    id.placeholder = mail ? (en ? 'your@email.com' : 'votre@email.com') : '+228 90 00 00 00';
-    lbl.textContent = mail ? 'E-mail' : en ? 'Phone number' : 'Numéro de téléphone';
+  import { authClient } from '../../lib/auth-client';
+  const EN = document.documentElement.lang === 'en';
+  const t = (fr: string, en: string) => (EN ? en : fr);
+  const root = document.getElementById('auth')!;
+  const q = new URLSearchParams(location.search);
+  const back = q.get('retour');
+  const dest = back && back.startsWith('/') && !back.startsWith('//') ? back : root.dataset.home!;
+  const msg = root.querySelector<HTMLElement>('[data-msg]')!;
+  const say = (text: string, ok = false) => { msg.textContent = text; msg.style.color = ok ? 'var(--ok)' : 'var(--bad)'; };
+  const motif = q.get('motif');
+  if (motif) {
+    const m = document.getElementById('authMotif')!;
+    m.textContent = motif === 'admin' ? t('Connectez-vous avec un compte des équipes CEA.', 'Sign in with a CEA staff account.') : t('Connectez-vous pour accéder à votre espace.', 'Sign in to access your space.');
+    m.hidden = false;
+  }
+  const done = () => { say(t('Connexion réussie, redirection…', 'Signed in, redirecting…'), true); location.href = dest; };
+  const err = (e: { message?: string; status?: number } | null | undefined, fallback: string) => say(e?.message || fallback);
+
+  // Onglets
+  const panes = [...root.querySelectorAll<HTMLElement>('[data-pane]')];
+  const show = (name: string) => { panes.forEach((p) => (p.hidden = p.dataset.pane !== name)); msg.textContent = ''; root.querySelector<HTMLElement>('[data-alt]')!.hidden = name === '2fa'; };
+  root.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) => b.addEventListener('click', () => {
+    root.querySelectorAll('[data-tab]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    show(b.dataset.tab!);
   }));
-  f.addEventListener('submit', (e) => {
+
+  // Téléphone
+  const tel = root.querySelector<HTMLFormElement>('[data-pane="tel"]')!;
+  const telStep = (n: number) => tel.querySelectorAll<HTMLElement>('[data-step]').forEach((s) => (s.hidden = s.dataset.step !== String(n)));
+  const phone = () => '+' + (tel.querySelector<HTMLInputElement>('#tel')!.value.replace(/[^\d]/g, ''));
+  tel.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const field = steps[step].querySelector<HTMLInputElement>('input[required]');
-    if (field && (!field.value.trim() || !field.checkValidity() || (id.type !== 'email' && step === 0 && id.value.replace(/\D/g, '').length < 8))) {
-      field.setCustomValidity(en ? 'Please check this field.' : 'Vérifiez ce champ.');
-      field.reportValidity();
-      field.setCustomValidity('');
+    const step2 = !tel.querySelector<HTMLElement>('[data-step="2"]')!.hidden;
+    if (!step2) {
+      if (phone().length < 9) return say(t('Saisissez un numéro complet avec l’indicatif du pays.', 'Enter a full number with country code.'));
+      const { error } = await authClient.phoneNumber.sendOtp({ phoneNumber: phone() });
+      if (error) return err(error, t("Impossible d'envoyer le code.", 'Could not send the code.'));
+      tel.querySelector<HTMLElement>('[data-sent]')!.textContent = t(`Code envoyé au ${phone()}.`, `Code sent to ${phone()}.`);
+      telStep(2); msg.textContent = '';
+      tel.querySelector<HTMLInputElement>('#otp')!.focus();
       return;
     }
-    step++; show();
-    steps[step].querySelector<HTMLInputElement>('input')?.focus();
+    const code = tel.querySelector<HTMLInputElement>('#otp')!.value.trim();
+    if (!/^\d{6}$/.test(code)) return say(t('Le code contient 6 chiffres.', 'The code has 6 digits.'));
+    const { error } = await authClient.phoneNumber.verify({ phoneNumber: phone(), code });
+    if (error) return err(error, t('Code incorrect ou expiré.', 'Wrong or expired code.'));
+    done();
   });
-  document.getElementById('authBack')!.addEventListener('click', () => { step = 0; show(); });
+  tel.querySelector('[data-back]')!.addEventListener('click', () => telStep(1));
+
+  // E-mail
+  const mail = root.querySelector<HTMLFormElement>('[data-pane="mail"]')!;
+  const mode = () => (mail.querySelector<HTMLInputElement>('input[name="mode"]:checked')!.value as 'in' | 'up');
+  mail.querySelectorAll('input[name="mode"]').forEach((r) => r.addEventListener('change', () => {
+    const up = mode() === 'up';
+    mail.querySelectorAll<HTMLElement>('[data-only="up"]').forEach((x) => (x.hidden = !up));
+    mail.querySelector<HTMLButtonElement>('[data-submit]')!.textContent = up ? t('Créer mon compte', 'Create my account') : t('Se connecter', 'Sign in');
+    mail.querySelector<HTMLInputElement>('#pw')!.autocomplete = up ? 'new-password' : 'current-password';
+  }));
+  mail.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = new FormData(mail);
+    const email = String(f.get('email') || '').trim(), password = String(f.get('pw') || '');
+    if (!/^\S+@\S+\.\S+$/.test(email)) return say(t('Adresse e-mail invalide.', 'Invalid email address.'));
+    if (password.length < 10) return say(t('Le mot de passe doit contenir au moins 10 caractères.', 'The password must be at least 10 characters.'));
+    if (mode() === 'up') {
+      const name = String(f.get('name') || '').trim();
+      if (!name) return say(t('Indiquez votre nom.', 'Enter your name.'));
+      if (!f.get('cgu')) return say(t("Acceptez les conditions d'utilisation pour continuer.", 'Accept the terms of use to continue.'));
+      const { error } = await authClient.signUp.email({ name, email, password });
+      if (error) return err(error, t('Création du compte impossible.', 'Could not create the account.'));
+      if (f.get('marketing')) await fetch('/api/consentements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'marketing', granted: true }) }).catch(() => {});
+      return done();
+    }
+    const { data, error } = await authClient.signIn.email({ email, password });
+    if (error) return err(error, t('E-mail ou mot de passe incorrect.', 'Wrong email or password.'));
+    if ((data as { twoFactorRedirect?: boolean } | null)?.twoFactorRedirect) return show('2fa');
+    done();
+  });
+  mail.querySelector('[data-forgot]')!.addEventListener('click', async () => {
+    const email = mail.querySelector<HTMLInputElement>('#email')!.value.trim();
+    if (!/^\S+@\S+\.\S+$/.test(email)) return say(t("Saisissez d'abord votre adresse e-mail.", 'Enter your email address first.'));
+    const redirectTo = (EN ? '/en' : '') + '/connexion/nouveau-mot-de-passe';
+    await authClient.requestPasswordReset({ email, redirectTo });
+    say(t('Si un compte existe, un lien de réinitialisation vient d’être envoyé.', 'If an account exists, a reset link has just been sent.'), true);
+  });
+
+  // Double authentification
+  const tfa = root.querySelector<HTMLFormElement>('[data-pane="2fa"]')!;
+  tfa.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const code = tfa.querySelector<HTMLInputElement>('#totp')!.value.trim();
+    const { error } = await authClient.twoFactor.verifyTotp({ code, trustDevice: tfa.querySelector<HTMLInputElement>('[name="trust"]')!.checked });
+    if (error) return err(error, t('Code incorrect.', 'Wrong code.'));
+    done();
+  });
+
+  // Clé d'accès et réseaux sociaux
+  root.querySelector('[data-passkey]')!.addEventListener('click', async () => {
+    const res = await authClient.signIn.passkey();
+    if (res?.error) return err(res.error, t("Aucune clé d'accès utilisable sur cet appareil.", 'No usable passkey on this device.'));
+    done();
+  });
+  root.querySelectorAll<HTMLButtonElement>('[data-social]').forEach((b) => b.addEventListener('click', async () => {
+    const { error } = await authClient.signIn.social({ provider: b.dataset.social as 'google', callbackURL: dest });
+    if (error) err(error, t('Cette méthode de connexion n’est pas encore activée.', 'This sign-in method is not enabled yet.'));
+  }));
 </script>

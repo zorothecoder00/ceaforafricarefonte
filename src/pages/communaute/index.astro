@@ -1,43 +1,64 @@
 ---
+/* Annuaire des membres (CDC §7.8) : recherche par pays, secteur, compétence, besoin ; visibilité choisie par chaque membre. */
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
-import { MEMBERS, COUNTRIES, SUBS, country, initials } from '../../data/site';
+import { and, eq, ilike, inArray, or, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { profile, userRole } from '../../db/schema/app';
+import { user } from '../../db/schema/auth';
+import { COUNTRIES, SUBS, country, initials } from '../../data/site';
+import { ROLE_LABEL, type Role } from '../../lib/rbac';
+
+export const prerender = false;
+const me = Astro.locals.user;
+const q = Astro.url.searchParams;
+const term = (q.get('q') ?? '').trim();
+const c = q.get('c') ?? '';
+const role = q.get('role') ?? '';
+const visible = me ? inArray(profile.visibility, ['public', 'membres']) : eq(profile.visibility, 'public');
+const like = `%${term}%`;
+const rows = await db
+  .select({ id: user.id, name: user.name, p: profile, roles: sql<string[]>`coalesce(array_agg(${userRole.role}) filter (where ${userRole.role} is not null), '{}')` })
+  .from(profile)
+  .innerJoin(user, eq(user.id, profile.userId))
+  .leftJoin(userRole, eq(userRole.userId, user.id))
+  .where(and(visible, c ? eq(profile.country, c) : undefined, term ? or(ilike(user.name, like), ilike(profile.sector, like), ilike(profile.needs, like), ilike(profile.offers, like), ilike(profile.headline, like), sql`array_to_string(${profile.skills}, ' ') ilike ${like}`) : undefined))
+  .groupBy(user.id, profile.userId)
+  .limit(60);
+const members = role ? rows.filter((r) => r.roles.includes(role)) : rows;
+const BADGE: Partial<Record<Role, string>> = { mentor: 'Mentor', investisseur: 'Investisseur vérifié', entrepreneur: 'Entrepreneur', employeur: 'Recruteur' };
 ---
 <BaseLayout title="Communauté">
   <PageHead title="Annuaire des membres" lead="Trouvez un pair, un mentor, un partenaire ou un investisseur. Chaque membre choisit ce qui est visible." crumbs={[['', 'Communauté']]} subnav={SUBS.communaute} />
   <section class="block" style="padding-top:20px">
     <div class="wrap">
-      <div class="filters">
-        <input class="in" id="mq" placeholder="Nom, secteur, besoin, compétence" aria-label="Rechercher un membre" style="flex:1;min-width:200px" />
-        <select class="in" id="mc" aria-label="Pays"><option value="">Tous les pays</option>{Object.entries(COUNTRIES).map(([k, v]) => <option value={k}>{v}</option>)}</select>
-      </div>
-      <p class="small muted" id="mn">{MEMBERS.length} membres</p>
-      <div class="grid g3" id="ml">
-        {MEMBERS.map((m) => (
-          <div class="panel" data-c={m.c} data-q={`${m.n} ${m.s} ${m.need} ${m.offer} ${m.r}`}>
-            <div class="row"><span class="avatar">{initials(m.n)}</span><div><b>{m.n}</b><div class="small muted">{m.r} · {m.s} · {country(m.c)}</div></div></div>
-            <div class="row" style="margin:10px 0">{m.b.map((x) => <span class={`tag ${x.includes('Vérifi') ? 'ok' : 'gold'}`}>{x}</span>)}</div>
-            <p class="small" style="margin:0"><b>Cherche :</b> {m.need}</p>
-            <p class="small"><b>Propose :</b> {m.offer}</p>
-            <a class="btn btn-ghost btn-sm" href="/adherer">Envoyer un message</a>
+      <form class="filters" method="get">
+        <input class="in" name="q" value={term} placeholder="Nom, secteur, besoin, compétence" aria-label="Rechercher un membre" style="flex:1;min-width:200px" />
+        <select class="in" name="c" aria-label="Pays"><option value="">Tous les pays</option>{Object.entries(COUNTRIES).map(([k, v]) => <option value={k} selected={k === c}>{v}</option>)}</select>
+        <select class="in" name="role" aria-label="Profil"><option value="">Tous les profils</option>{['entrepreneur', 'mentor', 'investisseur', 'employeur'].map((r) => <option value={r} selected={r === role}>{ROLE_LABEL[r as Role]}</option>)}</select>
+        <button class="btn btn-primary btn-sm" type="submit">Rechercher</button>
+      </form>
+      {!me && <p class="small muted"><a href="/connexion?retour=/communaute">Connectez-vous</a> pour voir tous les membres et leur écrire.</p>}
+      <p class="small muted">{members.length} membre{members.length > 1 ? 's' : ''}</p>
+      <div class="grid g3">
+        {members.map((m) => (
+          <div class="panel">
+            <div class="row"><span class="avatar">{initials(m.name)}</span><div><b>{m.name}</b><div class="small muted">{[m.p.headline, m.p.sector, m.p.country ? country(m.p.country) : ''].filter(Boolean).join(' · ')}</div></div></div>
+            <div class="row" style="margin:10px 0">{m.roles.filter((r) => BADGE[r as Role]).map((r) => <span class={`tag ${r === 'investisseur' ? 'ok' : 'gold'}`}>{BADGE[r as Role]}</span>)}</div>
+            {m.p.needs && <p class="small" style="margin:0"><b>Cherche :</b> {m.p.needs}</p>}
+            {m.p.offers && <p class="small"><b>Propose :</b> {m.p.offers}</p>}
+            {m.p.skills.length > 0 && <div class="row" style="margin-bottom:10px">{m.p.skills.slice(0, 5).map((s) => <span class="tag">{s}</span>)}</div>}
+            {me && me.id !== m.id && (
+              <form data-api="/api/messages" class="row" style="gap:6px">
+                <input type="hidden" name="to" value={m.id} />
+                <input class="in" name="body" required placeholder="Votre message…" aria-label={`Message à ${m.name}`} style="flex:1;margin:0;min-width:140px" />
+                <button class="btn btn-ghost btn-sm" type="submit">Envoyer</button>
+              </form>
+            )}
           </div>
         ))}
       </div>
+      {members.length === 0 && <div class="empty">Aucun membre ne correspond. Retirez un filtre.</div>}
     </div>
   </section>
 </BaseLayout>
-<script>
-  const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-  const q = document.getElementById('mq') as HTMLInputElement, c = document.getElementById('mc') as HTMLSelectElement;
-  function apply() {
-    let n = 0;
-    document.querySelectorAll<HTMLElement>('#ml > .panel').forEach((el) => {
-      const ok = (!c.value || el.dataset.c === c.value) && norm(el.dataset.q!).includes(norm(q.value));
-      el.hidden = !ok;
-      if (ok) n++;
-    });
-    document.getElementById('mn')!.textContent = `${n} membre${n > 1 ? 's' : ''}`;
-  }
-  q.addEventListener('input', apply);
-  c.addEventListener('change', apply);
-</script>

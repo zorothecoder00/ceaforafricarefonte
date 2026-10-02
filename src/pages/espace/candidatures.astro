@@ -1,0 +1,41 @@
+---
+/* Suivi des candidatures (programmes, Mastermind, emplois) — CDC §7.4 et §7.6. */
+import EspaceLayout from '../../layouts/EspaceLayout.astro';
+import { desc, eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { programmeApplication, jobApplication, job } from '../../db/schema/app';
+
+export const prerender = false;
+const user = Astro.locals.user!;
+const progs = await db.select().from(programmeApplication).where(eq(programmeApplication.userId, user.id)).orderBy(desc(programmeApplication.updatedAt));
+const jobs = await db.select({ a: jobApplication, title: job.title, company: job.company }).from(jobApplication).innerJoin(job, eq(job.id, jobApplication.jobId)).where(eq(jobApplication.userId, user.id)).orderBy(desc(jobApplication.updatedAt));
+const PROG: Record<string, string> = { 'accelerateur-c4': 'Accélérateur — Cohorte 4', 'investor-ready': 'Investor Ready', mastermind: 'Mastermind Circles' };
+const STEPS = ['recue', 'en_evaluation', 'entretien', 'admise'];
+const JOB_COLS: [string, string][] = [['envoyee', 'Envoyée'], ['vue', 'Vue'], ['entretien', 'Entretien'], ['offre', 'Offre'], ['refus', 'Refus']];
+---
+<EspaceLayout title="Mes candidatures" lead="Suivez chaque étape. Vous êtes notifié par WhatsApp et e-mail à chaque changement.">
+  <h2 style="font-size:1.2rem">Programmes</h2>
+  {progs.length ? progs.map((p) => {
+    const i = STEPS.indexOf(p.status);
+    return (
+      <div class="panel" style="margin-bottom:12px">
+        <div class="row between"><b>{PROG[p.programme] ?? p.programme}</b><span class="small muted num">{p.reference}</span></div>
+        {['refusee', 'retiree', 'liste_attente'].includes(p.status)
+          ? <p class="small" style="margin:8px 0 0"><span class="tag">{p.status.replace('_', ' ')}</span></p>
+          : <div class="steps" style="margin:12px 0 4px">{STEPS.map((_, k) => <span class={k <= i ? 'on' : ''}></span>)}</div>}
+        <div class="xs muted">Statut : {p.status.replace('_', ' ')} · mis à jour le {p.updatedAt.toLocaleDateString('fr-FR')}</div>
+      </div>
+    );
+  }) : <div class="empty">Aucune candidature. <a href="/programmes">Voir les programmes</a></div>}
+
+  <h2 style="font-size:1.2rem;margin-top:28px">Emplois</h2>
+  {jobs.length ? (
+    <div class="kanban" style="grid-template-columns:repeat(5,minmax(160px,1fr))">
+      {JOB_COLS.map(([k, l]) => (
+        <div class="col"><h4><span>{l}</span><span>{jobs.filter((j) => j.a.status === k).length}</span></h4>
+          {jobs.filter((j) => j.a.status === k).map((j) => <div class="kcard"><b>{j.title}</b><div class="xs muted">{j.company}</div></div>)}
+        </div>
+      ))}
+    </div>
+  ) : <div class="empty">Aucune candidature à une offre. <a href="/opportunites">Voir les offres</a></div>}
+</EspaceLayout>

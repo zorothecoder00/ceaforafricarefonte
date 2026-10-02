@@ -35,8 +35,10 @@ const feats: Record<Feature, { k: string; title: string; text: string; href: str
       <button class="icon-btn" id="searchBtn" type="button" aria-label={t('search')}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg></button>
       <LocalePicker id="locPop" />
       <a class="btn btn-gold btn-sm" href={L('/kapital')} aria-label="CEA Kapital Invest"><span class="kfull">Kapital Invest</span><span class="kshort">Kapital</span></a>
-      <a class="btn btn-ghost btn-sm top-login" href={L('/connexion')}>{t('login')}</a>
-      <a class="btn btn-primary btn-sm" href={L('/adherer')}>{t('join')}</a>
+      <a class="btn btn-ghost btn-sm top-login" href={L('/connexion')} data-auth="out">{t('login')}</a>
+      <a class="btn btn-primary btn-sm" href={L('/adherer')} data-auth="out">{t('join')}</a>
+      <a class="icon-btn" href="/espace/notifications" data-auth="in" hidden aria-label={t('notifs')}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10 21a2 2 0 0 0 4 0" /></svg><span class="dotn" data-unread hidden></span></a>
+      <a class="btn btn-primary btn-sm" href="/espace" data-auth="in" hidden><span data-username>{t('mySpace')}</span></a>
       <button class="icon-btn menu-btn" id="menuBtn" type="button" aria-label={t('menu')} aria-expanded="false" aria-controls="drawer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18" /></svg></button>
     </div>
   </div>
@@ -90,8 +92,10 @@ const feats: Record<Feature, { k: string; title: string; text: string; href: str
   </div>
   <div class="drawer-b">
     <div class="drawer-actions">
-      <a class="btn btn-primary" href={L('/adherer')} style="flex:1">{t('join')}</a>
-      <a class="btn btn-ghost" href={L('/connexion')} style="flex:1">{t('login')}</a>
+      <a class="btn btn-primary" href={L('/adherer')} style="flex:1" data-auth="out">{t('join')}</a>
+      <a class="btn btn-ghost" href={L('/connexion')} style="flex:1" data-auth="out">{t('login')}</a>
+      <a class="btn btn-primary" href="/espace" style="flex:1" data-auth="in" hidden>{t('mySpace')}</a>
+      <button class="btn btn-ghost" type="button" style="flex:1" data-auth="in" data-logout hidden>{t('logout')}</button>
     </div>
     {MEGA.map((m) => (
       <details open={m.k === cur}>

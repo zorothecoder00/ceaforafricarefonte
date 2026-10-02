@@ -17,16 +17,17 @@ const motifs: Record<string, string> = {
   <PageHead title="Nous contacter" lead="Choisissez le motif : votre message est envoyé directement à la bonne équipe, dans votre pays." crumbs={[['', 'Contact']]} />
   <section class="block">
     <div class="wrap split">
-      <form class="panel" id="cform" data-demo="Message envoyé. Réponse sous 2 jours ouvrés.">
+      <form class="panel" id="cform" data-api="/api/contact" data-reset style="position:relative">
+        <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px" />
         <label class="f" for="cm">Motif</label>
-        <select class="in" id="cm">{Object.entries(motifs).map(([m, team]) => <option data-team={team}>{m}</option>)}</select>
+        <select class="in" id="cm" name="motif">{Object.entries(motifs).map(([m, team]) => <option data-team={team}>{m}</option>)}</select>
         <p class="small" id="route" style="margin-top:-6px"></p>
         <label class="f" for="cp">Pays</label>
-        <select class="in" id="cp">{Object.entries(COUNTRIES).map(([k, v]) => <option value={k}>{v}</option>)}</select>
-        <label class="f" for="cn">Nom</label><input class="in" id="cn" required />
-        <label class="f" for="ce">E-mail ou téléphone</label><input class="in" id="ce" required />
-        <label class="f" for="cmsg">Message</label><textarea class="in" id="cmsg" required></textarea>
-        <label class="row small"><input type="checkbox" required /> J'accepte que CEA traite ces données pour répondre à ma demande.</label>
+        <select class="in" id="cp" name="country">{Object.entries(COUNTRIES).map(([k, v]) => <option value={k}>{v}</option>)}</select>
+        <label class="f" for="cn">Nom</label><input class="in" id="cn" name="name" required minlength="2" autocomplete="name" />
+        <label class="f" for="ce">E-mail ou téléphone</label><input class="in" id="ce" name="contact" required minlength="5" />
+        <label class="f" for="cmsg">Message</label><textarea class="in" id="cmsg" name="message" required minlength="10"></textarea>
+        <label class="row small"><input type="checkbox" name="consent" required /> J'accepte que CEA traite ces données pour répondre à ma demande.</label>
         <button class="btn btn-primary" type="submit" style="margin-top:12px">Envoyer</button>
       </form>
       <aside>

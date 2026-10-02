@@ -1,25 +1,34 @@
 ---
+/* Page événement immersive (CDC §7.3) : compte à rebours, programme filtrable, intervenants, lieu, sponsors,
+   billetterie (gratuit / payant, quantité, code promo, tarif de groupe, liste d'attente), ajout à l'agenda. */
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Money from '../../components/Money.astro';
 import KapitalAd from '../../components/KapitalAd.astro';
-import { EVENTS, dateFr } from '../../data/site';
+import { EVENTS, dateFr, country, initials } from '../../data/site';
+import { EXTRA } from '../../data/events-extra';
 
 export function getStaticPaths() {
   return EVENTS.map((e) => ({ params: { id: e.id }, props: { e } }));
 }
 const { e } = Astro.props;
-const program = [
-  ['Plénière d\'ouverture', 'Ateliers financement', 'Rencontres B2B'],
-  ['Masterclass', 'Rencontres investisseurs', 'Soirée networking'],
-  ['Demo Day CEA Kapital Invest', 'Remise des prix', 'Clôture'],
-];
+const x = EXTRA[e.id];
+const days = [...new Set(x.sessions.map((s) => s.day))];
+const themes = [...new Set(x.sessions.map((s) => s.theme))];
+const start = `${e.date}T${x.time}:00`;
+const ics = [
+  'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//CEA FOR AFRICA//FR', 'BEGIN:VEVENT',
+  `UID:${e.id}@cea4africa.com`, `DTSTART:${start.replace(/[-:]/g, '')}`, `SUMMARY:${e.t}`,
+  `LOCATION:${x.venue ? `${x.venue.name}, ${x.venue.address}` : 'En ligne'}`, `DESCRIPTION:${e.d}`, 'END:VEVENT', 'END:VCALENDAR',
+].join('\r\n');
+const osm = x.venue ? `https://www.openstreetmap.org/?mlat=${x.venue.lat}&mlon=${x.venue.lon}#map=16/${x.venue.lat}/${x.venue.lon}` : '';
 ---
 <BaseLayout title={e.t} description={e.d}>
   <section class="hero">
     <div class="wrap" style="padding:40px 20px">
       <div class="crumbs" style="color:#A9BDD3"><a href="/evenements">Événements</a> / {e.city}</div>
       <h1>{e.t}</h1>
-      <p class="lead">{dateFr(e.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · {e.city} · {e.fmt}</p>
+      <p class="lead">{dateFr(e.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · {x.time} · {e.city} · {e.fmt}</p>
+      <div class="cd" data-countdown={start} style="margin-top:14px"></div>
     </div>
   </section>
   <section class="block">
@@ -27,30 +36,91 @@ const program = [
       <div>
         <h2>À propos</h2>
         <p>{e.d}</p>
-        <h3>Qui sera là</h3>
-        <div class="row">{e.sp.map((s) => <span class="tag info">{s}</span>)}</div>
-        {e.big && (
-          <>
-            <h3 style="margin-top:26px">Programme</h3>
-            <div class="grid g3">
-              {program.map((day, i) => <div class="panel"><b style="font-family:var(--display);color:var(--gold-ink)">Jour {i + 1}</b><ul class="small">{day.map((x) => <li>{x}</li>)}</ul></div>)}
+        <div class="row" style="margin-bottom:8px">{e.sp.map((s) => <span class="tag info">{s}</span>)}</div>
+
+        <h2 style="margin-top:28px">Programme</h2>
+        <div class="filters" id="progF">
+          {days.length > 1 && days.map((d, i) => <button class="chip" type="button" aria-pressed={i === 0 ? 'true' : 'false'} data-day={d}>Jour {d}</button>)}
+          {themes.length > 1 && <select class="in" data-theme-filter aria-label="Thème"><option value="">Tous les thèmes</option>{themes.map((t) => <option>{t}</option>)}</select>}
+        </div>
+        <div id="progL">
+          {x.sessions.map((s) => (
+            <div class="panel" style="margin-bottom:10px" data-day={s.day} data-theme={s.theme} hidden={days.length > 1 && s.day !== days[0]}>
+              <div class="row between"><b>{s.time} · {s.title}</b><span class="tag">{s.theme}</span></div>
+              <div class="small muted">{s.room}{s.speakers.length ? ` · ${s.speakers.join(', ')}` : ''}</div>
             </div>
+          ))}
+        </div>
+
+        {x.speakers.length > 0 && (
+          <>
+            <h2 style="margin-top:28px">Intervenants</h2>
+            <div class="grid g3">{x.speakers.map((p) => <div class="panel row"><span class="avatar">{initials(p.n)}</span><div><b>{p.n}</b><div class="small muted">{p.r} · {country(p.c)}</div></div></div>)}</div>
+          </>
+        )}
+
+        <h2 style="margin-top:28px">Lieu</h2>
+        {x.venue ? (
+          <div class="panel"><b>{x.venue.name}</b><p class="small" style="margin:4px 0 10px">{x.venue.address}</p><a class="btn btn-ghost btn-sm" href={osm} target="_blank" rel="noopener">Voir sur la carte</a></div>
+        ) : <div class="panel small">Événement en ligne : le lien de connexion est envoyé avec votre billet.</div>}
+
+        {x.practical && (
+          <>
+            <h2 style="margin-top:28px">Hébergement et visa</h2>
+            <div class="grid g2"><div class="panel"><h3>Hébergement</h3><ul class="small">{x.practical.hotels.map((h) => <li>{h}</li>)}</ul></div><div class="panel"><h3>Visa</h3><p class="small" style="margin:0">{x.practical.visa}</p></div></div>
+          </>
+        )}
+
+        {x.sponsors.length > 0 && (
+          <>
+            <h2 style="margin-top:28px">Sponsors et partenaires</h2>
+            <div class="grid g4">{x.sponsors.map((s) => <div class="panel" style="text-align:center"><span class="tag gold">{s.tier}</span><b style="display:block;margin-top:8px">{s.n}</b></div>)}</div>
+            <p class="small" style="margin-top:10px"><a href="/evenements/organiser">Devenir sponsor ou exposant</a></p>
           </>
         )}
       </div>
       <aside>
-        <form class="panel" data-demo="Réservation confirmée. Votre billet QR est envoyé par e-mail et WhatsApp.">
+        <form class="panel" data-api="/api/billets">
           <h3>Billets</h3>
+          <input type="hidden" name="eventId" value={e.id} />
           {e.tk.map((t, i) => (
             <label class="row between" style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer">
-              <span><input type="radio" name="tk" checked={i === 0} /> {t.n}</span><b><Money xof={t.p} /></b>
+              <span><input type="radio" name="ticket" value={String(i)} checked={i === 0} /> {t.n}</span><b><Money xof={t.p} /></b>
             </label>
           ))}
-          <p class="xs muted">Paiement par Orange Money, MTN MoMo, Wave, Moov, M-Pesa ou carte.</p>
-          <button class="btn btn-primary" type="submit" style="width:100%">Réserver</button>
+          <div class="grid g2" style="gap:0 10px">
+            <div><label class="f" for="qty">Nombre</label><input class="in" id="qty" name="qty" type="number" min="1" max="20" value="1" /></div>
+            <div><label class="f" for="promo">Code promo</label><input class="in" id="promo" name="promo" maxlength="30" /></div>
+          </div>
+          <p class="xs muted">Tarif de groupe : −10 % dès 5 billets. Paiement par Orange Money, MTN MoMo, Wave, Moov, M-Pesa ou carte. Billet QR envoyé par e-mail et WhatsApp.</p>
+          <button class="btn btn-primary" type="submit" style="width:100%">S'inscrire</button>
         </form>
+        <form class="panel" data-api="/api/billets/attente" data-reset style="margin-top:12px">
+          <input type="hidden" name="eventId" value={e.id} />
+          <p class="small" style="margin-top:0"><b>Complet ?</b> Laissez votre e-mail pour la liste d'attente.</p>
+          <div class="row"><input class="in" name="email" type="email" required placeholder="votre@email.com" aria-label="E-mail" style="flex:1;margin:0" /><button class="btn btn-ghost btn-sm" type="submit">M'inscrire</button></div>
+        </form>
+        <div class="panel" style="margin-top:12px">
+          <a class="btn btn-ghost btn-sm" download={`${e.id}.ics`} href={`data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`}>Ajouter à mon agenda</a>
+        </div>
         <div style="margin-top:16px"><KapitalAd variant={1} /></div>
       </aside>
     </div>
   </section>
 </BaseLayout>
+<script>
+  const f = document.getElementById('progF');
+  if (f) {
+    let day = f.querySelector<HTMLButtonElement>('[data-day]')?.dataset.day ?? '';
+    const sel = f.querySelector<HTMLSelectElement>('[data-theme-filter]');
+    const apply = () => document.querySelectorAll<HTMLElement>('#progL > [data-day]').forEach((el) => {
+      el.hidden = (!!day && el.dataset.day !== day) || (!!sel?.value && el.dataset.theme !== sel.value);
+    });
+    f.querySelectorAll<HTMLButtonElement>('[data-day]').forEach((b) => b.addEventListener('click', () => {
+      day = b.dataset.day!;
+      f.querySelectorAll('[data-day]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      apply();
+    }));
+    sel?.addEventListener('change', apply);
+  }
+</script>

@@ -1,27 +1,59 @@
 ---
+/* Fil d'actualité personnalisé (CDC §7.8) : publications des membres et des espaces suivis. */
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import KapitalAd from '../../components/KapitalAd.astro';
-import { FEED, SUBS, initials } from '../../data/site';
+import { and, count, desc, eq, inArray, or, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { post, postLike, space, spaceMember } from '../../db/schema/app';
+import { user } from '../../db/schema/auth';
+import { SUBS, initials } from '../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user;
+const only = Astro.url.searchParams.get('espace') ?? '';
+const followed = me ? (await db.select({ id: spaceMember.spaceId }).from(spaceMember).where(eq(spaceMember.userId, me.id))).map((r) => r.id) : [];
+const spaces = await db.select().from(space).orderBy(space.name);
+const posts = await db
+  .select({ id: post.id, body: post.body, at: post.createdAt, author: user.name, authorId: post.authorId, spaceId: post.spaceId, likes: sql<number>`(select count(*) from ${postLike} where ${postLike.postId} = ${post.id})::int`, liked: me ? sql<boolean>`exists(select 1 from ${postLike} where ${postLike.postId} = ${post.id} and ${postLike.userId} = ${me.id})` : sql<boolean>`false` })
+  .from(post).innerJoin(user, eq(user.id, post.authorId))
+  .where(and(eq(post.status, 'publie'), only ? eq(post.spaceId, only) : undefined))
+  .orderBy(desc(post.createdAt)).limit(50);
+// Personnalisation : d'abord les espaces suivis
+const sorted = only ? posts : [...posts].sort((a, b) => Number(followed.includes(b.spaceId ?? '')) - Number(followed.includes(a.spaceId ?? '')) || b.at.getTime() - a.at.getTime());
+const spaceName = (id: string | null) => spaces.find((s) => s.id === id)?.name ?? 'Général';
 ---
 <BaseLayout title="Fil d'actualité">
-  <PageHead title="Fil d'actualité" lead="Les réussites, questions et opportunités partagées par le réseau." crumbs={[['/communaute', 'Communauté'], ['', "Fil d'actualité"]]} subnav={SUBS.communaute} />
+  <PageHead title="Fil d'actualité" lead="Les réussites, questions et opportunités partagées par le réseau. Les espaces que vous suivez apparaissent en premier." crumbs={[['/communaute', 'Communauté'], ['', "Fil d'actualité"]]} subnav={SUBS.communaute} />
   <section class="block">
     <div class="wrap split">
       <div>
-        <form class="panel" data-demo="Publication envoyée en modération.">
-          <textarea class="in" required placeholder="Partagez une réussite, une question, une opportunité…" aria-label="Votre publication"></textarea>
-          <button class="btn btn-primary btn-sm" type="submit">Publier</button>
-        </form>
-        {FEED.map((f) => (
-          <div class="panel" style="margin-top:14px">
-            <div class="row"><span class="avatar" style={f.k ? 'background:var(--gold);color:#1B1305' : ''}>{initials(f.a)}</span><div><b>{f.a}</b><div class="xs muted">{f.sp}</div></div></div>
-            <p style="margin:12px 0">{f.t}</p>
-            <button class="btn btn-ghost btn-sm" data-toast="Merci pour votre soutien !">♥ {f.l}</button>
-          </div>
+        {me ? (
+          <form class="panel" data-api="/api/publications" data-reset data-reload>
+            <textarea class="in" name="body" required minlength="3" maxlength="3000" placeholder="Partagez une réussite, une question, une opportunité…" aria-label="Votre publication"></textarea>
+            <div class="row between">
+              <select class="in" name="spaceId" aria-label="Espace" style="width:auto;margin:0"><option value="">Général</option>{spaces.map((s) => <option value={s.id} selected={s.id === only}>{s.name}</option>)}</select>
+              <button class="btn btn-primary btn-sm" type="submit">Publier</button>
+            </div>
+            <p class="xs muted" style="margin:8px 0 0">Code de conduite : respect, pas de sollicitation financière. Les contenus suspects sont vérifiés par la modération.</p>
+          </form>
+        ) : <div class="panel small"><a href="/connexion?retour=/communaute/fil">Connectez-vous</a> pour publier et réagir.</div>}
+        {sorted.map((f) => (
+          <article class="panel" style="margin-top:14px">
+            <div class="row"><span class="avatar">{initials(f.author)}</span><div><b>{f.author}</b><div class="xs muted">{spaceName(f.spaceId)} · {f.at.toLocaleDateString('fr-FR')}</div></div></div>
+            <p style="margin:12px 0;white-space:pre-wrap">{f.body}</p>
+            <div class="row">
+              {me ? <button class="btn btn-ghost btn-sm" type="button" data-post="/api/publications" data-body={JSON.stringify({ like: f.id })} data-reload aria-pressed={f.liked ? 'true' : 'false'}>{f.liked ? '♥' : '♡'} {f.likes}</button> : <span class="small muted">♥ {f.likes}</span>}
+              {me && me.id !== f.authorId && <a class="small" href={`/signalement`}>Signaler</a>}
+            </div>
+          </article>
         ))}
+        {sorted.length === 0 && <div class="empty" style="margin-top:14px">Aucune publication pour le moment.</div>}
       </div>
-      <aside><KapitalAd variant={1} /></aside>
+      <aside>
+        <div class="panel"><h3>Espaces</h3>{spaces.map((s) => <a class="small" href={`/communaute/fil?espace=${s.id}`} style="display:block;padding:4px 0">{followed.includes(s.id) ? '★ ' : ''}{s.name}</a>)}<a class="small" href="/communaute/espaces">Gérer mes espaces</a></div>
+        <div style="margin-top:16px"><KapitalAd variant={1} /></div>
+      </aside>
     </div>
   </section>
 </BaseLayout>

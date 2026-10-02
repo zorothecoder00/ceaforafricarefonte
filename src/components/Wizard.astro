@@ -1,10 +1,11 @@
 ---
-/* Formulaire multi-étapes avec brouillon enregistré dans le navigateur.
-   Chaque étape est un enfant <fieldset data-step="Titre"> du slot ; les champs [required] de l'étape sont vérifiés avant de continuer. */
-interface Props { id: string; submitLabel: string; success: string; prefix: string }
-const { id, submitLabel, success, prefix } = Astro.props;
+/* Formulaire multi-étapes (CDC §10 « formulaires intelligents ») : étapes, brouillon enregistré, envoi à l'API avec accusé numéroté.
+   Chaque étape est un enfant <fieldset data-step="Titre"> du slot ; les champs [required] de l'étape sont vérifiés avant de continuer.
+   api : point d'envoi ; programme : si défini, le corps envoyé est { programme, data } (sinon les champs eux-mêmes). */
+interface Props { id: string; submitLabel: string; success: string; prefix: string; api: string; programme?: string }
+const { id, submitLabel, success, prefix, api, programme } = Astro.props;
 ---
-<form class="panel" data-wizard={id} data-success={success} data-prefix={prefix} novalidate>
+<form class="panel" data-wizard={id} data-success={success} data-prefix={prefix} data-endpoint={api} data-programme={programme} novalidate>
   <div class="steps" data-steps></div>
   <h3 data-title></h3>
   <slot />
@@ -12,7 +13,7 @@ const { id, submitLabel, success, prefix } = Astro.props;
     <button class="btn btn-ghost" type="button" data-prev>Précédent</button>
     <button class="btn btn-primary" type="button" data-next data-submit-label={submitLabel}>Continuer</button>
   </div>
-  <p class="demo-note" style="margin-top:12px">Brouillon enregistré automatiquement dans ce navigateur.</p>
+  <p class="demo-note" style="margin-top:12px">Brouillon enregistré automatiquement sur cet appareil. Connexion requise pour l’envoi.</p>
 </form>
 <div class="panel" data-done={id} hidden style="text-align:center;padding:30px"></div>
 <script>
@@ -45,14 +46,25 @@ const { id, submitLabel, success, prefix } = Astro.props;
     }
     form.addEventListener('submit', (e) => { e.preventDefault(); next.click(); });
     prev.addEventListener('click', () => { step--; render(); });
-    next.addEventListener('click', () => {
+    const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+    next.addEventListener('click', async () => {
       const bad = [...steps[step].querySelectorAll<HTMLInputElement>('[required]')].find((f) => !f.checkValidity());
       if (bad) { bad.reportValidity(); return; }
       if (step < steps.length - 1) { step++; render(); return; }
-      const ref = `${form.dataset.prefix}-2026-${Math.floor(1000 + Math.random() * 8999)}`;
+      // Cases à cocher de la dernière étape (consentements, partage)
+      form.querySelectorAll<HTMLInputElement>('input[type=checkbox][name]').forEach((c) => { (d as Record<string, unknown>)[c.name] = c.checked; });
+      const payload = form.dataset.programme ? { programme: form.dataset.programme, data: d } : d;
+      next.disabled = true;
+      const res = await fetch(form.dataset.endpoint!, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => null);
+      next.disabled = false;
+      if (!res) return toast('Erreur réseau : votre brouillon est conservé, réessayez.');
+      if (res.status === 401) { location.href = (location.pathname.startsWith('/en/') ? '/en' : '') + '/connexion?retour=' + encodeURIComponent(location.pathname); return; }
+      const r = await res.json().catch(() => ({}));
+      if (!res.ok || r.ok === false) return toast(r.error || 'Envoi impossible. Votre brouillon est conservé.');
       try { localStorage.removeItem(key); } catch {}
       const done = document.querySelector<HTMLElement>(`[data-done="${id}"]`)!;
-      done.innerHTML = `<span class="tag ok">Envoyé</span><h2 style="margin-top:12px">Merci${d.nom ? ', ' + d.nom.split(' ')[0].replace(/[<>&"]/g, '') : ''} !</h2><p>Numéro de dossier : <b class="num">${ref}</b>. ${form.dataset.success}</p>`;
+      const first = (d.nom || d.entreprise || '').split(' ')[0].replace(/[<>&"]/g, '');
+      done.innerHTML = `<span class="tag ok">Envoyé</span><h2 style="margin-top:12px">Merci${first ? ', ' + first : ''} !</h2><p>Numéro de dossier : <b class="num">${String(r.reference ?? '').replace(/[<>&"]/g, '')}</b>. ${form.dataset.success}</p><a class="btn btn-primary" href="${r.redirect || '/espace/candidatures'}">Suivre mon dossier</a>`;
       form.hidden = true;
       done.hidden = false;
     });

@@ -1,0 +1,133 @@
+---
+/* Sécurité du compte (CDC §10, §14) : mot de passe, double authentification, clés d'accès, sessions. */
+import EspaceLayout from '../../layouts/EspaceLayout.astro';
+import { and, desc, eq, gt, isNotNull } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { account, passkey, session } from '../../db/schema/auth';
+import { needs2fa } from '../../lib/rbac';
+
+export const prerender = false;
+const user = Astro.locals.user!;
+const hasPassword = (await db.select({ id: account.id }).from(account).where(and(eq(account.userId, user.id), eq(account.providerId, 'credential'), isNotNull(account.password))).limit(1)).length > 0;
+const keys = await db.select().from(passkey).where(eq(passkey.userId, user.id));
+const sessions = await db.select().from(session).where(and(eq(session.userId, user.id), gt(session.expiresAt, new Date()))).orderBy(desc(session.updatedAt));
+const required = needs2fa(user.roles);
+const motif = Astro.url.searchParams.get('motif');
+const ua = (s: string | null) => (s ? (/(Android|iPhone|iPad|Windows|Mac OS X|Linux)/.exec(s)?.[1] ?? 'Appareil') + ' · ' + (/(Chrome|Firefox|Safari|Edg)/.exec(s)?.[1] ?? 'Navigateur') : 'Appareil inconnu');
+---
+<EspaceLayout title="Sécurité" lead="Protégez votre compte : mot de passe, double authentification et clés d'accès.">
+  {motif === '2fa' && <div class="lock" style="margin-bottom:16px"><div><b>Double authentification obligatoire</b><br />Votre rôle donne accès à des données sensibles : activez la double authentification pour ouvrir le back-office.</div></div>}
+  <div class="grid g2" id="sec" data-has-password={hasPassword ? '1' : '0'} data-tfa={user.twoFactorEnabled ? '1' : '0'}>
+    <section class="panel">
+      <h3>Mot de passe</h3>
+      {hasPassword ? (
+        <form id="pwChange">
+          <label class="f" for="cp1">Mot de passe actuel</label><input class="in" id="cp1" type="password" required autocomplete="current-password" />
+          <label class="f" for="cp2">Nouveau mot de passe (10 caractères minimum)</label><input class="in" id="cp2" type="password" minlength="10" required autocomplete="new-password" />
+          <label class="row small"><input type="checkbox" id="cp3" checked /> Déconnecter mes autres appareils</label>
+          <button class="btn btn-primary btn-sm" type="submit" style="margin-top:10px">Changer le mot de passe</button>
+        </form>
+      ) : (
+        <form data-api="/api/moi/mot-de-passe" data-reload>
+          <p class="small muted">Votre compte a été créé par téléphone. Définissez un mot de passe pour pouvoir activer la double authentification.</p>
+          <label class="f" for="np">Nouveau mot de passe (10 caractères minimum)</label><input class="in" id="np" name="newPassword" type="password" minlength="10" required autocomplete="new-password" />
+          <button class="btn btn-primary btn-sm" type="submit">Définir le mot de passe</button>
+        </form>
+      )}
+    </section>
+
+    <section class="panel">
+      <h3>Double authentification {user.twoFactorEnabled ? <span class="tag ok">Activée</span> : <span class={`tag ${required ? 'bad' : ''}`}>{required ? 'Obligatoire' : 'Désactivée'}</span>}</h3>
+      <p class="small muted">Un code à 6 chiffres de votre application d'authentification (Google Authenticator, Microsoft Authenticator, Aegis…) vous sera demandé à la connexion.</p>
+      <form id="tfaForm">
+        <label class="f" for="tfaPw">Mot de passe du compte</label>
+        <input class="in" id="tfaPw" type="password" required autocomplete="current-password" disabled={!hasPassword} />
+        <button class="btn btn-primary btn-sm" type="submit" disabled={!hasPassword}>{user.twoFactorEnabled ? 'Désactiver' : 'Activer'}</button>
+      </form>
+      <div id="tfaSetup" hidden style="margin-top:14px">
+        <p class="small">1. Scannez ce QR code avec votre application :</p>
+        <div class="qrbox" id="tfaQr"></div>
+        <p class="small" style="margin-top:10px">2. Conservez ces codes de secours en lieu sûr (un seul usage chacun) :</p>
+        <pre class="small" id="tfaCodes" style="background:var(--surface-2);padding:10px;border-radius:8px;white-space:pre-wrap"></pre>
+        <form id="tfaVerify">
+          <label class="f" for="tfaCode">3. Saisissez le code affiché par l'application</label>
+          <input class="in" id="tfaCode" required pattern="[0-9]{6}" maxlength="6" inputmode="numeric" autocomplete="one-time-code" />
+          <button class="btn btn-primary btn-sm" type="submit">Confirmer l'activation</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h3>Clés d'accès</h3>
+      <p class="small muted">Connectez-vous avec l'empreinte, le visage ou le code de votre téléphone, sans mot de passe.</p>
+      {keys.length ? keys.map((k) => <div class="list-row"><span>{k.name || 'Clé d’accès'} <span class="xs muted">· {k.deviceType}</span></span><button class="btn btn-ghost btn-sm" type="button" data-del-key={k.id}>Supprimer</button></div>) : <p class="small">Aucune clé enregistrée.</p>}
+      <button class="btn btn-primary btn-sm" type="button" id="addKey" style="margin-top:10px">Ajouter une clé d'accès sur cet appareil</button>
+    </section>
+
+    <section class="panel">
+      <h3>Appareils connectés</h3>
+      {sessions.map((s) => (
+        <div class="list-row"><span>{ua(s.userAgent)}<br /><span class="xs muted">{s.ipAddress ?? ''} · {s.updatedAt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</span></span><button class="btn btn-ghost btn-sm" type="button" data-revoke={s.token}>Déconnecter</button></div>
+      ))}
+      <button class="btn btn-ghost btn-sm" type="button" id="revokeOthers" style="margin-top:10px">Déconnecter tous les autres appareils</button>
+    </section>
+  </div>
+</EspaceLayout>
+<script>
+  import { authClient } from '../../lib/auth-client';
+  import QRCode from 'qrcode';
+  const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+  const root = document.getElementById('sec')!;
+  const reload = () => setTimeout(() => location.reload(), 700);
+
+  document.getElementById('pwChange')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const v = (id: string) => (document.getElementById(id) as HTMLInputElement);
+    const { error } = await authClient.changePassword({ currentPassword: v('cp1').value, newPassword: v('cp2').value, revokeOtherSessions: v('cp3').checked });
+    if (error) return toast(error.message || 'Mot de passe actuel incorrect.');
+    toast('Mot de passe modifié.'); (e.target as HTMLFormElement).reset();
+  });
+
+  const enabled = root.dataset.tfa === '1';
+  document.getElementById('tfaForm')!.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const password = (document.getElementById('tfaPw') as HTMLInputElement).value;
+    if (enabled) {
+      const { error } = await authClient.twoFactor.disable({ password });
+      if (error) return toast(error.message || 'Mot de passe incorrect.');
+      toast('Double authentification désactivée.'); return reload();
+    }
+    const { data, error } = await authClient.twoFactor.enable({ password });
+    if (error || !data) return toast(error?.message || 'Mot de passe incorrect.');
+    if (!('totpURI' in data)) return toast('Méthode de double authentification inattendue.');
+    document.getElementById('tfaQr')!.innerHTML = await QRCode.toString(data.totpURI, { type: 'svg', margin: 1 });
+    document.getElementById('tfaCodes')!.textContent = data.backupCodes.join('\n');
+    document.getElementById('tfaSetup')!.hidden = false;
+  });
+  document.getElementById('tfaVerify')!.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const code = (document.getElementById('tfaCode') as HTMLInputElement).value.trim();
+    const { error } = await authClient.twoFactor.verifyTotp({ code });
+    if (error) return toast(error.message || 'Code incorrect.');
+    toast('Double authentification activée.'); reload();
+  });
+
+  document.getElementById('addKey')!.addEventListener('click', async () => {
+    const res = await authClient.passkey.addPasskey({ name: navigator.platform || 'Appareil' });
+    if (res?.error) return toast(res.error.message || 'Enregistrement annulé.');
+    toast("Clé d'accès ajoutée."); reload();
+  });
+  root.querySelectorAll<HTMLButtonElement>('[data-del-key]').forEach((b) => b.addEventListener('click', async () => {
+    const { error } = await authClient.passkey.deletePasskey({ id: b.dataset.delKey! });
+    if (error) return toast(error.message || 'Suppression impossible.');
+    toast('Clé supprimée.'); reload();
+  }));
+  root.querySelectorAll<HTMLButtonElement>('[data-revoke]').forEach((b) => b.addEventListener('click', async () => {
+    await authClient.revokeSession({ token: b.dataset.revoke! });
+    toast('Appareil déconnecté.'); reload();
+  }));
+  document.getElementById('revokeOthers')!.addEventListener('click', async () => {
+    await authClient.revokeOtherSessions();
+    toast('Autres appareils déconnectés.'); reload();
+  });
+</script>

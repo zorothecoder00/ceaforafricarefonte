@@ -1,0 +1,56 @@
+---
+/* Espace connecté (CDC §9) : barre latérale sur ordinateur, barre d'onglets en bas de l'écran sur mobile. */
+import BaseLayout from './BaseLayout.astro';
+import { ROLE_LABEL, isStaff, type Role } from '../lib/rbac';
+
+interface Props { title: string; lead?: string }
+const { title, lead } = Astro.props;
+const user = Astro.locals.user!;
+const path = Astro.url.pathname.replace(/\/$/, '');
+const roles = user.roles as Role[];
+const has = (...r: Role[]) => r.some((x) => roles.includes(x));
+
+const groups: [string, [string, string, boolean?][]][] = [
+  ['Mon compte', [['/espace', 'Tableau de bord'], ['/espace/profil', 'Profil 360°'], ['/espace/carte', 'Carte de membre'], ['/espace/notifications', 'Notifications'], ['/espace/securite', 'Sécurité'], ['/espace/confidentialite', 'Confidentialité']]],
+  ['Mes activités', [
+    ['/espace/apprentissage', 'Apprentissage'], ['/espace/candidatures', 'Candidatures'], ['/espace/billets', 'Billets'], ['/espace/messages', 'Messagerie'],
+    ['/espace/projets', 'Mes projets', has('entrepreneur', 'membre')], ['/espace/mentorat', 'Mentorat'], ['/espace/cercle', 'Mon cercle Mastermind'],
+  ]],
+  ['Rôles', [
+    ['/espace/recruteur', 'Espace recruteur', has('employeur')], ['/espace/mentor', 'Espace mentor', has('mentor')],
+    ['/kapital/entreprise', 'Kapital — entreprise', has('entrepreneur')], ['/kapital/investisseur', 'Kapital — investisseur', has('investisseur')],
+    ['/admin', 'Back-office CEA OS', isStaff(roles)],
+  ]],
+];
+const tabs: [string, string, string][] = [
+  ['/espace', 'Accueil', 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z'],
+  ['/espace/apprentissage', 'Apprendre', 'M2 9l10-5 10 5-10 5zM6 11v5c3 2 9 2 12 0v-5'],
+  ['/communaute', 'Réseau', 'M9 8a3.5 3.5 0 1 0 0-.01M2 20c0-3.3 3.1-6 7-6s7 2.7 7 6M17 9a2.5 2.5 0 1 0 0-.01M22 19c0-2.3-1.8-4.3-4.3-4.9'],
+  ['/opportunites', 'Opportunités', 'M3 7h18v13H3zM9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2'],
+  ['/espace/profil', 'Profil', 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4 3.6-7 8-7s8 3 8 7'],
+];
+---
+<BaseLayout title={title}>
+  <div class="wrap dash">
+    <nav class="side" aria-label="Mon espace">
+      <div class="small" style="padding:0 12px 8px"><b>{user.name}</b><br /><span class="muted xs">{roles.map((r) => ROLE_LABEL[r] ?? r).join(' · ')}</span></div>
+      {groups.map(([h, links]) => (
+        <>
+          <h5>{h}</h5>
+          {links.filter((l) => l[2] !== false).map(([href, label]) => <a href={href} aria-current={path === href ? 'page' : undefined}>{label}</a>)}
+        </>
+      ))}
+      <button class="btn btn-ghost btn-sm" type="button" data-logout style="margin:14px 12px">Se déconnecter</button>
+    </nav>
+    <div>
+      <h1 style="font-size:clamp(1.6rem,3vw,2.2rem)">{title}</h1>
+      {lead && <p class="muted">{lead}</p>}
+      <slot />
+    </div>
+  </div>
+  <nav class="tabbar" aria-label="Navigation de l'espace">
+    {tabs.map(([href, label, d]) => (
+      <a href={href} aria-current={path === href ? 'page' : undefined}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={d} /></svg>{label}</a>
+    ))}
+  </nav>
+</BaseLayout>

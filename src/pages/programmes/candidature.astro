@@ -11,7 +11,7 @@ const recap: [string, string][] = [['Nom', 'nom'], ['Téléphone', 'tel'], ['Ent
   <PageHead title="Candidater à l'Accélérateur — Cohorte 4" lead="Environ 10 minutes. Vous pouvez interrompre et reprendre plus tard." crumbs={[['/programmes', 'Programmes'], ['', 'Candidature']]} subnav={SUBS.programmes} />
   <section class="block">
     <div class="wrap" style="max-width:740px">
-      <Wizard id="accel" prefix="CAND" submitLabel="Envoyer ma candidature" success="Vous recevrez un message WhatsApp à chaque étape. Prochaine étape : le diagnostic de maturité.">
+      <Wizard id="accel" prefix="CAND" api="/api/candidatures" programme="accelerateur-c4" submitLabel="Envoyer ma candidature" success="Vous recevrez un message WhatsApp à chaque étape. Prochaine étape : le diagnostic de maturité.">
         <fieldset data-step="Vous" style="border:0;padding:0;margin:0">
           <label class="f" for="a1">Nom complet</label><input class="in" id="a1" name="nom" required />
           <label class="f" for="a2">Téléphone (WhatsApp)</label><input class="in" id="a2" name="tel" required placeholder="+228 90 00 00 00" inputmode="tel" />

@@ -294,3 +294,79 @@ $$('#sugg button').forEach((b) => b.addEventListener('click', () => answer(b.tex
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
 }
+
+/* ===== état de connexion dans l'en-tête (pages statiques) ===== */
+fetch('/api/moi', { credentials: 'same-origin' })
+  .then((r) => (r.ok ? r.json() : null))
+  .then((d: { user: { name: string } | null; unread?: number } | null) => {
+    const inside = !!d?.user;
+    $$('[data-auth="out"]').forEach((el) => (el.hidden = inside));
+    $$('[data-auth="in"]').forEach((el) => (el.hidden = !inside));
+    if (!d?.user) return;
+    const first = d.user.name.split(' ')[0];
+    $$('[data-username]').forEach((el) => (el.textContent = first.length > 14 ? (EN ? 'My space' : 'Mon espace') : first));
+    const n = d.unread ?? 0;
+    $$('[data-unread]').forEach((el) => { el.hidden = n === 0; el.textContent = n > 9 ? '9+' : String(n); });
+  })
+  .catch(() => {});
+$$('[data-logout]').forEach((b) => b.addEventListener('click', async () => {
+  await fetch('/api/auth/sign-out', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {});
+  location.href = EN ? '/en/' : '/';
+}));
+
+/* ===== formulaires branchés sur l'API (data-api) =====
+   <form data-api="/api/xxx" [data-method="PUT"] [data-success="…"] [data-reset] [data-reload] [data-redirect="/…"]>
+   - champs nommés → JSON ; cases à cocher avec value partageant un nom → tableau ; case sans value → booléen ;
+   - input[type=number] ou data-type="number" → nombre ; data-type="list" → liste séparée par des virgules. */
+function formJson(f: HTMLFormElement) {
+  const out: Record<string, unknown> = {};
+  const els = [...f.elements] as (HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement)[];
+  const groups = new Set(els.filter((e) => e instanceof HTMLInputElement && e.type === 'checkbox' && e.hasAttribute('value')).map((e) => e.name));
+  for (const el of els) {
+    if (!el.name || el.disabled || (el as HTMLInputElement).type === 'submit' || (el as HTMLInputElement).type === 'file') continue;
+    const inp = el as HTMLInputElement;
+    if (inp.type === 'checkbox') {
+      if (groups.has(inp.name)) { const arr = (out[inp.name] as string[]) ?? []; if (inp.checked) arr.push(inp.value); out[inp.name] = arr; }
+      else out[inp.name] = inp.checked;
+      continue;
+    }
+    if (inp.type === 'radio') { if (inp.checked) out[inp.name] = inp.value; continue; }
+    const t = el.dataset.type || (inp.type === 'number' ? 'number' : '');
+    const v = el.value.trim();
+    out[el.name] = t === 'number' ? (v === '' ? null : Number(v)) : t === 'list' ? v.split(',').map((x) => x.trim()).filter(Boolean) : v;
+  }
+  return out;
+}
+$$<HTMLFormElement>('form[data-api]').forEach((f) => f.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!f.checkValidity()) { f.reportValidity(); return; }
+  const btn = f.querySelector<HTMLButtonElement>('[type="submit"]');
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch(f.dataset.api!, { method: f.dataset.method || 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formJson(f)) });
+    const d = await res.json().catch(() => ({}));
+    if (res.status === 401) { location.href = withLang('/connexion') + '?retour=' + encodeURIComponent(location.pathname); return; }
+    if (!res.ok || d.ok === false) { toast(d.error || (EN ? 'Something went wrong. Please try again.' : 'Une erreur est survenue. Réessayez.')); return; }
+    toast(d.message || f.dataset.success || (EN ? 'Saved.' : 'Enregistré.'));
+    if (f.hasAttribute('data-reset')) f.reset();
+    if (d.redirect || f.dataset.redirect) setTimeout(() => (location.href = d.redirect || f.dataset.redirect!), 700);
+    else if (f.hasAttribute('data-reload')) setTimeout(() => location.reload(), 700);
+  } catch {
+    toast(EN ? 'Network error. Check your connection.' : 'Erreur réseau. Vérifiez votre connexion.');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}));
+/* Boutons d'action simples : <button data-post="/api/xxx" data-body='{"…"}' [data-reload]> */
+$$<HTMLButtonElement>('[data-post]').forEach((b) => b.addEventListener('click', async () => {
+  if (b.dataset.confirm && !confirm(b.dataset.confirm)) return;
+  b.disabled = true;
+  const res = await fetch(b.dataset.post!, { method: b.dataset.method || 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: b.dataset.body || '{}' }).catch(() => null);
+  const d = res ? await res.json().catch(() => ({})) : {};
+  b.disabled = false;
+  if (res?.status === 401) { location.href = withLang('/connexion') + '?retour=' + encodeURIComponent(location.pathname); return; }
+  if (!res || !res.ok || d.ok === false) { toast(d.error || (EN ? 'Something went wrong.' : 'Une erreur est survenue.')); return; }
+  toast(d.message || (EN ? 'Done.' : 'C’est fait.'));
+  if (d.redirect) setTimeout(() => (location.href = d.redirect), 600);
+  else if (b.hasAttribute('data-reload')) setTimeout(() => location.reload(), 600);
+}));

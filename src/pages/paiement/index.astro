@@ -1,0 +1,44 @@
+---
+/* Récapitulatif de commande avant paiement (Mobile Money ou carte via l'agrégateur). */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import Money from '../../components/Money.astro';
+import { resolveItem, provider } from '../../lib/payments';
+
+export const prerender = false;
+const user = Astro.locals.user;
+const q = Astro.url.searchParams;
+if (!user) return Astro.redirect(`/connexion?retour=${encodeURIComponent(Astro.url.pathname + Astro.url.search)}`);
+const objet = q.get('objet') ?? '', ref = q.get('ref') ?? '', qty = Number(q.get('qty') ?? 1), promo = q.get('promo') ?? '', slot = q.get('creneau') ?? '';
+const item = await resolveItem(objet, objet === 'expert' && slot ? `${ref}:${slot}` : ref, { qty, promo });
+const prov = provider();
+const methods = ['Orange Money', 'MTN MoMo', 'Wave', 'Moov Money', 'M-Pesa', 'Airtel Money', 'Carte bancaire'];
+---
+<BaseLayout title="Paiement">
+  <PageHead title="Paiement sécurisé" lead="Mobile Money ou carte bancaire. La saisie se fait chez notre agrégateur agréé : CEA ne voit ni ne conserve vos données de paiement." crumbs={[['', 'Paiement']]} />
+  <section class="block">
+    <div class="wrap" style="max-width:620px">
+      {!item ? (
+        <div class="empty">Cet article n'existe pas ou n'est plus disponible.</div>
+      ) : (
+        <form class="panel" data-api="/api/paiements">
+          <input type="hidden" name="objet" value={objet} />
+          <input type="hidden" name="ref" value={ref} />
+          {qty > 1 && <input type="hidden" name="qty" value={qty} data-type="number" />}
+          {promo && <input type="hidden" name="promo" value={promo} />}
+          {slot && <input type="hidden" name="slot" value={slot} />}
+          <p class="muted small" style="margin:0">Votre commande</p>
+          <h2 style="margin:4px 0 6px;font-size:1.3rem">{item.label}</h2>
+          <p style="font-family:var(--display);font-size:2rem;color:var(--navy);margin:0 0 16px"><Money xof={item.amountXof} /></p>
+          {item.meta?.promo && <p class="small"><span class="tag ok">Code {String(item.meta.promo)} appliqué</span></p>}
+          {Number(item.meta?.qty ?? 1) >= 5 && !item.meta?.promo && <p class="small"><span class="tag ok">Tarif de groupe −10 % appliqué</span></p>}
+          <p class="small muted">Moyens acceptés : {methods.join(', ')}. Vous choisirez le moyen sur la page suivante.</p>
+          {prov === 'simulation' && <div class="lock" style="margin-bottom:12px"><div><b>Mode simulation (développement)</b><br />Aucun prestataire de paiement n'est configuré : le paiement sera simulé.</div></div>}
+          {!prov && <div class="lock" style="margin-bottom:12px"><div><b>Paiement en ligne bientôt disponible</b><br />Contactez-nous pour régler par virement ou Mobile Money : <a href="/contact">formulaire de contact</a>.</div></div>}
+          <button class="btn btn-primary" type="submit" style="width:100%" disabled={!prov}>Payer <Money xof={item.amountXof} /></button>
+          <p class="xs muted" style="margin:10px 0 0">Un reçu est disponible dans « Mon espace › Paiements » après confirmation.</p>
+        </form>
+      )}
+    </div>
+  </section>
+</BaseLayout>

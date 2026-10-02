@@ -156,17 +156,18 @@ const w = (fr: string, e: string) => (en ? e : fr);
       <VoteBox v={c.consults[0]} lang={lang} />
       <a class="panel row between" href={L('/voix/positions')} style="text-decoration:none;margin-top:12px"><span><span class="xs muted">{w('Dernière position publiée', 'Latest published position')}</span><b style="display:block">{c.positions[0].t}</b></span><span aria-hidden="true">›</span></a>
     </div>
-    <form class="panel" data-demo={w('Inscription confirmée. Un e-mail de vérification vous a été envoyé.', 'Subscription confirmed. A verification email has been sent.')}>
+    <form class="panel" data-api="/api/newsletter" data-reset style="position:relative">
+      <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px" />
       <h2 style="font-size:1.4rem">{w("Lettre d'information", 'Newsletter')}</h2>
       <p class="small muted">{w('Choisissez vos sujets, votre pays et votre langue.', 'Choose your topics, country and language.')}</p>
       <fieldset style="border:0;padding:0;margin:0 0 12px"><legend class="f">{w('Sujets', 'Topics')}</legend>
-        <div class="row">{(en ? ['Funding', 'Training', 'Events', 'Kapital Invest', 'Advocacy'] : ['Financement', 'Formation', 'Événements', 'Kapital Invest', 'Plaidoyer']).map((x, i) => <label class="chip"><input type="checkbox" checked={i < 2} /> {x}</label>)}</div>
+        <div class="row">{(en ? ['Funding', 'Training', 'Events', 'Kapital Invest', 'Advocacy'] : ['Financement', 'Formation', 'Événements', 'Kapital Invest', 'Plaidoyer']).map((x, i) => <label class="chip"><input type="checkbox" name="topics" value={x} checked={i < 2} /> {x}</label>)}</div>
       </fieldset>
       <div class="grid g2" style="gap:10px">
-        <label class="f">{w('Pays', 'Country')}<select class="in">{[...HUBS].sort((a, b) => country(a.c).localeCompare(country(b.c))).map((h) => <option>{country(h.c)}</option>)}</select></label>
-        <label class="f">{w('Langue', 'Language')}<select class="in"><option selected={!en}>Français</option><option selected={en}>English</option></select></label>
+        <label class="f">{w('Pays', 'Country')}<select class="in" name="country">{[...HUBS].sort((a, b) => country(a.c).localeCompare(country(b.c))).map((h) => <option>{country(h.c)}</option>)}</select></label>
+        <label class="f">{w('Langue', 'Language')}<select class="in" name="lang"><option value="fr" selected={!en}>Français</option><option value="en" selected={en}>English</option></select></label>
       </div>
-      <div class="row"><input class="in" type="email" required placeholder={w('votre@email.com', 'your@email.com')} aria-label="E-mail" style="flex:1;margin:0;min-width:200px" /><button class="btn btn-primary" type="submit">{w("S'abonner", 'Subscribe')}</button></div>
+      <div class="row"><input class="in" name="email" type="email" required placeholder={w('votre@email.com', 'your@email.com')} aria-label="E-mail" style="flex:1;margin:0;min-width:200px" /><button class="btn btn-primary" type="submit">{w("S'abonner", 'Subscribe')}</button></div>
     </form>
   </div>
 </section>

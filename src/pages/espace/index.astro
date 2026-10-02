@@ -1,0 +1,132 @@
+---
+/* Tableau de bord personnalisé (CDC §9) : widgets selon le rôle actif, sélecteur de rôle, widgets réorganisables. */
+import EspaceLayout from '../../layouts/EspaceLayout.astro';
+import { and, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import * as s from '../../db/schema';
+import { EVENTS, COURSES, CONSULTS, ARTICLES, OPPS, country, dateFr } from '../../data/site';
+import { ROLE_LABEL, isStaff, type Role } from '../../lib/rbac';
+
+export const prerender = false;
+const user = Astro.locals.user!;
+const roles = user.roles as Role[];
+const choices = roles.filter((r) => r !== 'membre');
+const active = (Astro.url.searchParams.get('role') as Role) || choices[0] || 'membre';
+const role: Role = roles.includes(active) ? active : 'membre';
+
+const [prof] = await db.select().from(s.profile).where(eq(s.profile.userId, user.id));
+const [member] = await db.select().from(s.membership).where(and(eq(s.membership.userId, user.id), eq(s.membership.status, 'active'))).orderBy(desc(s.membership.startsAt)).limit(1);
+const enrolls = await db.select().from(s.enrollment).where(eq(s.enrollment.userId, user.id));
+const votes = await db.select({ id: s.consultationVote.consultationId }).from(s.consultationVote).where(eq(s.consultationVote.userId, user.id));
+const nextEvents = [...EVENTS].filter((e) => e.date >= new Date().toISOString().slice(0, 10)).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3);
+const myCountry = prof?.country ?? null;
+const news = ARTICLES.filter((a) => !myCountry || a.c === country(myCountry) || a.c === 'Panafricain').slice(0, 3);
+const openConsults = CONSULTS.filter((c) => !votes.some((v) => v.id === c.id));
+
+type W = { id: string; title: string; href?: string; cta?: string; rows?: [string, string][]; big?: string; note?: string };
+const widgets: W[] = [];
+const add = (w: W) => widgets.push(w);
+
+// Membre (toujours)
+add({ id: 'events', title: 'Prochains événements', href: '/evenements', cta: 'Agenda', rows: nextEvents.map((e) => [e.t, `${dateFr(e.date, { day: 'numeric', month: 'short' })} · ${e.city}`]) });
+add({ id: 'courses', title: 'Mes cours en cours', href: '/espace/apprentissage', cta: 'Tout voir', rows: enrolls.filter((e) => !e.completedAt).slice(0, 4).map((e) => { const c = COURSES.find((x) => x.id === e.courseId); return [c?.t ?? e.courseId, `${Math.round((e.completedLessons.length / (c?.ls.length ?? 1)) * 100)} %`]; }), note: enrolls.length ? undefined : 'Aucun cours commencé. Commencez par un cours gratuit.' });
+add({ id: 'news', title: myCountry ? `Actualités — ${country(myCountry)}` : 'Actualités', href: '/ressources', cta: 'Le média', rows: news.map((a) => [a.t, a.cat]) });
+add({ id: 'consult', title: 'Consultations ouvertes', href: '/voix', cta: 'Je participe', rows: openConsults.map((c) => [c.t, `Clôture ${dateFr(c.close)}`]), note: openConsults.length ? undefined : 'Vous avez répondu à toutes les consultations.' });
+add({ id: 'card', title: 'Ma carte de membre', href: member ? '/espace/carte' : '/adherer', cta: member ? 'Afficher' : 'Adhérer', big: member ? member.plan.toUpperCase() : '—', note: member ? `N° ${member.cardNumber}` : 'Aucune adhésion active.' });
+
+if (role === 'entrepreneur') {
+  const [diag] = await db.select().from(s.diagnostic).where(eq(s.diagnostic.userId, user.id)).orderBy(desc(s.diagnostic.createdAt)).limit(1);
+  const apps = await db.select().from(s.programmeApplication).where(eq(s.programmeApplication.userId, user.id)).orderBy(desc(s.programmeApplication.updatedAt)).limit(4);
+  const meetings = await db.select().from(s.mentoringSession).where(and(eq(s.mentoringSession.menteeId, user.id), sql`${s.mentoringSession.startsAt} > now()`)).orderBy(s.mentoringSession.startsAt).limit(3);
+  const dossiers = await db.select().from(s.dossier).where(eq(s.dossier.ownerId, user.id)).limit(3);
+  widgets.unshift(
+    { id: 'ir', title: 'Jauge Investor Ready', href: '/kapital/diagnostic', cta: diag ? 'Refaire' : 'Faire le diagnostic', big: diag ? `${diag.score}/100` : '—', note: diag ? `Diagnostic du ${dateFr(diag.createdAt.toISOString())}` : 'Pas encore de diagnostic.' },
+    { id: 'apps', title: 'Programmes et jalons', href: '/espace/candidatures', cta: 'Suivre', rows: apps.map((a) => [a.programme, a.status.replace('_', ' ')]), note: apps.length ? undefined : 'Aucune candidature en cours.' },
+    { id: 'mentor', title: 'Prochains rendez-vous de mentorat', href: '/communaute/mentorat', cta: 'Réserver un mentor', rows: meetings.map((m) => [m.kind === 'expert' ? 'Expert' : 'Mentor', m.startsAt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })]) },
+    { id: 'kapital', title: 'Mes dossiers Kapital', href: '/kapital/entreprise', cta: 'Mon espace entreprise', rows: dossiers.map((d) => [d.companyName, d.status.replaceAll('_', ' ')]), note: dossiers.length ? undefined : 'Prêt à lever ? Soumettez votre dossier.' },
+  );
+}
+if (role === 'investisseur') {
+  const [ip] = await db.select().from(s.investorProfile).where(eq(s.investorProfile.userId, user.id));
+  const watch = await db.select().from(s.watchlist).where(eq(s.watchlist.userId, user.id)).limit(5);
+  const ndas = await db.select({ n: count() }).from(s.nda).where(and(eq(s.nda.investorId, user.id), isNull(s.nda.revokedAt)));
+  const reco = OPPS.filter((o) => !ip?.sectors.length || ip.sectors.some((x) => o.s.includes(x))).slice(0, 3);
+  widgets.unshift(
+    { id: 'reco', title: 'Opportunités recommandées', href: '/kapital/opportunites', cta: 'Toutes', rows: reco.map((o) => [o.n, `${o.s} · ${country(o.c)}`]) },
+    { id: 'kyc', title: 'Vérification investisseur', href: '/kapital/devenir-investisseur', cta: ip?.kycStatus === 'verifie' ? 'Détails' : 'Me faire vérifier', big: ip?.kycStatus === 'verifie' ? 'Vérifié' : 'Non vérifié', note: ip?.category ? `Catégorie : ${ip.category}` : undefined },
+    { id: 'watch', title: 'Ma liste de suivi', href: '/kapital/suivi', cta: 'Gérer', rows: watch.map((w) => [w.item, w.alertPct ? `Alerte ±${w.alertPct} %` : '']), note: watch.length ? undefined : 'Liste vide.' },
+    { id: 'dr', title: 'Data rooms ouvertes', href: '/kapital/investisseur', cta: 'Ouvrir', big: String(ndas[0].n), note: 'Accords de confidentialité actifs' },
+  );
+}
+if (role === 'employeur') {
+  const jobs = await db.select({ id: s.job.id, title: s.job.title, status: s.job.status }).from(s.job).where(eq(s.job.employerId, user.id));
+  const ids = jobs.map((j) => j.id);
+  const apps = ids.length ? await db.select({ n: count() }).from(s.jobApplication).where(inArray(s.jobApplication.jobId, ids)) : [{ n: 0 }];
+  const hires = await db.select({ n: count() }).from(s.hireDeclaration).where(eq(s.hireDeclaration.employerId, user.id));
+  widgets.unshift(
+    { id: 'jobs', title: 'Mes offres', href: '/espace/recruteur', cta: 'Publier une offre', rows: jobs.slice(0, 5).map((j) => [j.title, j.status.replace('_', ' ')]) },
+    { id: 'apps-recv', title: 'Candidatures reçues', href: '/espace/recruteur', cta: 'Trier', big: String(apps[0].n) },
+    { id: 'hires', title: 'Embauches déclarées', href: '/espace/recruteur', cta: 'Déclarer', big: String(hires[0].n) },
+  );
+}
+if (role === 'mentor') {
+  const sessions = await db.select().from(s.mentoringSession).where(eq(s.mentoringSession.mentorId, user.id)).orderBy(desc(s.mentoringSession.startsAt)).limit(6);
+  const toDoc = sessions.filter((x) => x.status === 'realisee' && !x.mentorNotes).length;
+  widgets.unshift(
+    { id: 'agenda', title: 'Mon agenda', href: '/espace/mentor', cta: 'Ouvrir mes disponibilités', rows: sessions.filter((x) => x.startsAt > new Date()).map((x) => ['Séance', x.startsAt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })]) },
+    { id: 'todoc', title: 'Séances à documenter', href: '/espace/mentor', cta: 'Rédiger', big: String(toDoc) },
+    { id: 'hours', title: 'Heures de mentorat', big: String(sessions.filter((x) => x.status === 'realisee').length), note: 'Séances réalisées' },
+  );
+}
+if (role === 'talent' || role === 'membre') {
+  const apps = await db.select({ t: s.job.title, st: s.jobApplication.status }).from(s.jobApplication).innerJoin(s.job, eq(s.job.id, s.jobApplication.jobId)).where(eq(s.jobApplication.userId, user.id)).limit(5);
+  const filled = [prof?.headline, prof?.skills.length ? 'x' : '', prof?.bio, prof?.country].filter(Boolean).length;
+  add({ id: 'talent', title: 'Mes candidatures emploi', href: '/espace/candidatures', cta: 'Suivi', rows: apps.map((a) => [a.t, a.st]), note: apps.length ? undefined : 'Aucune candidature.' });
+  add({ id: 'complete', title: 'Profil complété', href: '/espace/profil', cta: 'Compléter', big: `${Math.round((filled / 4) * 100)} %` });
+}
+if (isStaff(roles) && (role === 'admin' || role === 'direction' || role === 'analyste' || role === 'charge_programme' || role === 'editeur' || role === 'conformite' || role === 'comite' || role === 'responsable_pays')) {
+  const [msgs] = await db.select({ n: count() }).from(s.contactMessage).where(eq(s.contactMessage.status, 'nouveau'));
+  const [reps] = await db.select({ n: count() }).from(s.report).where(eq(s.report.status, 'nouveau'));
+  const [mod] = await db.select({ n: count() }).from(s.job).where(eq(s.job.status, 'en_moderation'));
+  const [late] = await db.select({ n: count() }).from(s.dossier).where(sql`${s.dossier.updatedAt} < now() - interval '5 days' and ${s.dossier.status} not in ('finance','cloture')`);
+  const [kyc] = await db.select({ n: count() }).from(s.investorProfile).where(eq(s.investorProfile.kycStatus, 'en_cours'));
+  widgets.unshift({ id: 'queue', title: 'File de travail', href: '/admin', cta: 'Back-office', rows: [['Messages de contact', String(msgs.n)], ['Signalements', String(reps.n)], ['Offres à modérer', String(mod.n)], ['Dossiers Kapital hors délai (5 j)', String(late.n)], ['Vérifications KYC en attente', String(kyc.n)]] });
+}
+---
+<EspaceLayout title={`Bonjour ${user.name.split(' ')[0]}`} lead="Votre tableau de bord. Glissez-déposez les cartes pour les réorganiser.">
+  {choices.length > 1 && (
+    <form class="filters" method="get" style="margin-top:0">
+      <label class="f" style="margin:0;align-self:center" for="role">Rôle affiché</label>
+      <select class="in" id="role" name="role" onchange="this.form.submit()">{choices.map((r) => <option value={r} selected={r === role}>{ROLE_LABEL[r]}</option>)}</select>
+    </form>
+  )}
+  <div class="widget-grid" id="widgets" data-key={`cea-widgets-${role}`}>
+    {widgets.map((w) => (
+      <section class="panel widget" draggable="true" data-id={w.id}>
+        <h3 style="font-size:1rem">{w.title} {w.href && <a class="small" href={w.href}>{w.cta}</a>}</h3>
+        {w.big && <b style="font-family:var(--display);font-size:2rem;color:var(--navy);display:block">{w.big}</b>}
+        {w.rows && w.rows.length > 0 && <div>{w.rows.map(([a, b]) => <div class="list-row"><span>{a}</span><span class="muted">{b}</span></div>)}</div>}
+        {w.note && <p class="small muted" style="margin:6px 0 0">{w.note}</p>}
+      </section>
+    ))}
+  </div>
+</EspaceLayout>
+<script>
+  // Réorganisation des widgets par glisser-déposer, mémorisée par rôle dans le navigateur
+  const grid = document.getElementById('widgets')!;
+  const key = grid.dataset.key!;
+  try {
+    const order: string[] = JSON.parse(localStorage.getItem(key) || '[]');
+    order.forEach((id) => { const el = grid.querySelector(`[data-id="${id}"]`); if (el) grid.appendChild(el); });
+  } catch {}
+  let dragged: HTMLElement | null = null;
+  grid.addEventListener('dragstart', (e) => { dragged = (e.target as HTMLElement).closest('.widget'); dragged?.classList.add('over'); });
+  grid.addEventListener('dragend', () => { dragged?.classList.remove('over'); dragged = null; try { localStorage.setItem(key, JSON.stringify([...grid.children].map((c) => (c as HTMLElement).dataset.id))); } catch {} });
+  grid.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    const over = (e.target as HTMLElement).closest('.widget');
+    if (!dragged || !over || over === dragged) return;
+    const r = over.getBoundingClientRect();
+    grid.insertBefore(dragged, e.clientY - r.top > r.height / 2 ? over.nextSibling : over);
+  });
+</script>

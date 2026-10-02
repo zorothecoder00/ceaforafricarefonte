@@ -1,0 +1,46 @@
+---
+/* Retour de l'agrégateur : le statut est vérifié côté serveur (jamais d'après l'URL). */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+
+export const prerender = false;
+const user = Astro.locals.user;
+if (!user) return Astro.redirect(`/connexion?retour=${encodeURIComponent(Astro.url.pathname + Astro.url.search)}`);
+const ref = Astro.url.searchParams.get('ref') ?? '';
+const NEXT: Record<string, [string, string]> = {
+  adhesion: ['/espace/carte', 'Voir ma carte de membre'], billet: ['/espace/billets', 'Voir mes billets'], cours: ['/espace/apprentissage', 'Commencer le cours'],
+  expert: ['/espace/mentorat', 'Voir ma consultation'], mastermind: ['/espace/candidatures', 'Suivre ma demande'], programme: ['/espace/candidatures', 'Suivre ma candidature'],
+  mise_en_avant: ['/espace/recruteur', 'Espace recruteur'], recherche: ['/kapital/recherche', 'Lire les analyses'],
+};
+---
+<BaseLayout title="Paiement">
+  <PageHead title="Paiement" lead={`Référence ${ref}`} crumbs={[['', 'Paiement']]} />
+  <section class="block">
+    <div class="wrap" style="max-width:560px">
+      <div class="panel" id="st" data-ref={ref} data-next={JSON.stringify(NEXT)} style="text-align:center">
+        <p data-text>Vérification du paiement auprès du prestataire…</p>
+        <div class="progress"><span style="width:60%"></span></div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+<script>
+  const box = document.getElementById('st')!;
+  const NEXT: Record<string, [string, string]> = JSON.parse(box.dataset.next!);
+  let tries = 0;
+  async function poll() {
+    const r = await fetch('/api/paiements/statut?ref=' + encodeURIComponent(box.dataset.ref!)).then((x) => x.json()).catch(() => null);
+    if (r?.status === 'reussi') {
+      const [href, label] = NEXT[r.purpose] ?? ['/espace/paiements', 'Mes paiements'];
+      box.innerHTML = `<span class="tag ok">Paiement accepté</span><h2 style="margin:12px 0 6px">Merci !</h2><p>${r.label ?? ''}</p><div class="row" style="justify-content:center"><a class="btn btn-primary" href="${href}">${label}</a><a class="btn btn-ghost" href="/espace/recu/${box.dataset.ref}">Reçu</a></div>`;
+      return;
+    }
+    if (r?.status === 'echoue') {
+      box.innerHTML = '<span class="tag bad">Paiement non abouti</span><p style="margin-top:12px">Aucun montant n’a été débité. Vous pouvez réessayer ou choisir un autre moyen de paiement.</p><a class="btn btn-primary" href="javascript:history.go(-2)">Réessayer</a>';
+      return;
+    }
+    if (++tries < 20) setTimeout(poll, 3000);
+    else box.querySelector('[data-text]')!.textContent = 'Paiement toujours en attente de confirmation. Vous recevrez une notification dès sa validation.';
+  }
+  poll();
+</script>

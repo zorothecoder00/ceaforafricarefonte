@@ -1,0 +1,32 @@
+---
+import EspaceLayout from '../../layouts/EspaceLayout.astro';
+import { desc, eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { eventTicket } from '../../db/schema/app';
+import { EVENTS, dateFr } from '../../data/site';
+import { qrSvg, verifyUrl } from '../../lib/qr';
+
+export const prerender = false;
+const user = Astro.locals.user!;
+const rows = await db.select().from(eventTicket).where(eq(eventTicket.userId, user.id)).orderBy(desc(eventTicket.createdAt));
+const tickets = await Promise.all(rows.map(async (t) => ({ t, e: EVENTS.find((x) => x.id === t.eventId), qr: await qrSvg(verifyUrl(Astro.url.origin, 'billet', t.code)) })));
+const ST: Record<string, string> = { valide: 'ok', utilise: 'info', rembourse: '', transfere: '', annule: 'bad' };
+---
+<EspaceLayout title="Mes billets" lead="Présentez le QR code à l'entrée. Il fonctionne aussi hors connexion une fois la page ouverte.">
+  {tickets.length ? (
+    <div class="grid g2">
+      {tickets.map(({ t, e, qr }) => (
+        <div class="ticket panel">
+          <div>
+            <span class={`tag ${ST[t.status]}`}>{t.status}</span>
+            <h3 style="margin:8px 0 4px">{e?.t ?? t.eventId}</h3>
+            <div class="small muted">{e ? `${dateFr(e.date)} · ${e.city}` : ''}</div>
+            <div class="small">{t.ticketType}</div>
+            <div class="xs num">{t.code}</div>
+          </div>
+          <div class="qrbox" set:html={qr} />
+        </div>
+      ))}
+    </div>
+  ) : <div class="empty">Aucun billet. <a href="/evenements">Voir l'agenda</a></div>}
+</EspaceLayout>

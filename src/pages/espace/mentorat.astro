@@ -1,0 +1,31 @@
+---
+/* Mes séances de mentorat et consultations (côté entrepreneur) : suivi, annulation, évaluation. */
+import EspaceLayout from '../../layouts/EspaceLayout.astro';
+import { desc, eq } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
+import { db } from '../../lib/db';
+import { mentoringSession } from '../../db/schema/app';
+import { user } from '../../db/schema/auth';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const mentor = alias(user, 'mentor');
+const rows = await db.select({ s: mentoringSession, mentor: mentor.name }).from(mentoringSession).innerJoin(mentor, eq(mentor.id, mentoringSession.mentorId)).where(eq(mentoringSession.menteeId, me.id)).orderBy(desc(mentoringSession.startsAt));
+const ST: Record<string, string> = { demandee: 'gold', confirmee: 'ok', realisee: 'info', annulee: 'bad' };
+---
+<EspaceLayout title="Mentorat" lead="Vos séances avec les mentors et les experts.">
+  <div class="row" style="margin-bottom:14px"><a class="btn btn-primary btn-sm" href="/communaute/mentorat">Réserver un mentor</a><a class="btn btn-ghost btn-sm" href="/academie/experts">Consulter un expert</a></div>
+  {rows.length ? rows.map(({ s, mentor }) => (
+    <div class="panel" style="margin-bottom:12px">
+      <div class="row between"><b>{s.kind === 'expert' ? 'Consultation' : 'Mentorat'} avec {mentor}</b><span class={`tag ${ST[s.status]}`}>{s.status}</span></div>
+      <div class="small muted">{s.startsAt.toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'short' })}</div>
+      {s.goal && <p class="small" style="margin:8px 0">Objectif : {s.goal}</p>}
+      <div class="row">
+        {s.status === 'confirmee' && <a class="btn btn-primary btn-sm" href={`https://meet.jit.si/CEA-${s.id.slice(0, 8)}`} target="_blank" rel="noopener">Rejoindre la visio</a>}
+        {['demandee', 'confirmee'].includes(s.status) && s.startsAt > new Date() && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/mentorat" data-method="PATCH" data-body={JSON.stringify({ id: s.id, status: 'annulee' })} data-confirm="Annuler cette séance ?" data-reload>Annuler</button>}
+        {s.status === 'realisee' && !s.menteeRating && [1, 2, 3, 4, 5].map((n) => <button class="slot" type="button" data-post="/api/mentorat" data-method="PATCH" data-body={JSON.stringify({ id: s.id, rating: n })} data-reload>{n} ★</button>)}
+        {s.menteeRating && <span class="small">Votre note : {s.menteeRating} ★</span>}
+      </div>
+    </div>
+  )) : <div class="empty">Aucune séance pour le moment.</div>}
+</EspaceLayout>

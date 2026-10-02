@@ -1,6 +1,6 @@
 /* Tables gérées par Better Auth (utilisateurs, sessions, comptes, vérifications).
-   Les champs correspondent à getAuthTables() de better-auth 1.7 + plugin phone-number. Ne pas renommer les propriétés. */
-import { pgTable, text, boolean, timestamp, index } from 'drizzle-orm/pg-core';
+   Les champs correspondent à getAuthTables() de better-auth 1.7 + plugins phone-number, two-factor et passkey. Ne pas renommer les propriétés. */
+import { pgTable, text, boolean, timestamp, index, integer } from 'drizzle-orm/pg-core';
 
 export const user = pgTable('user', {
   id: text('id').primaryKey(),
@@ -10,6 +10,7 @@ export const user = pgTable('user', {
   image: text('image'),
   phoneNumber: text('phone_number').unique(),
   phoneNumberVerified: boolean('phone_number_verified'),
+  twoFactorEnabled: boolean('two_factor_enabled').default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -49,3 +50,29 @@ export const verification = pgTable('verification', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index('verification_identifier_idx').on(t.identifier)]);
+
+/* Double authentification TOTP (obligatoire pour les rôles sensibles, CDC §10 et §14) */
+export const twoFactor = pgTable('two_factor', {
+  id: text('id').primaryKey(),
+  secret: text('secret').notNull(),
+  backupCodes: text('backup_codes').notNull(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  verified: boolean('verified').default(true),
+  failedVerificationCount: integer('failed_verification_count').default(0),
+  lockedUntil: timestamp('locked_until', { withTimezone: true }),
+}, (t) => [index('two_factor_user_idx').on(t.userId)]);
+
+/* Clés d'accès (passkeys, WebAuthn) */
+export const passkey = pgTable('passkey', {
+  id: text('id').primaryKey(),
+  name: text('name'),
+  publicKey: text('public_key').notNull(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  credentialID: text('credential_id').notNull(),
+  counter: integer('counter').notNull(),
+  deviceType: text('device_type').notNull(),
+  backedUp: boolean('backed_up').notNull(),
+  transports: text('transports'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  aaguid: text('aaguid'),
+}, (t) => [index('passkey_user_idx').on(t.userId), index('passkey_credential_idx').on(t.credentialID)]);

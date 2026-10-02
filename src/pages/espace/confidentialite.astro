@@ -1,0 +1,69 @@
+---
+/* Centre de confidentialité (CDC §9.1, §15.1) : consentements séparés et révocables, export, suppression du compte. */
+import EspaceLayout from '../../layouts/EspaceLayout.astro';
+import { desc, eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { consent, profile } from '../../db/schema/app';
+
+export const prerender = false;
+const user = Astro.locals.user!;
+const rows = await db.select().from(consent).where(eq(consent.userId, user.id)).orderBy(desc(consent.at));
+const state: Record<string, boolean> = {};
+for (const r of rows) if (!(r.kind in state)) state[r.kind] = r.granted;
+const [p] = await db.select({ visibility: profile.visibility }).from(profile).where(eq(profile.userId, user.id));
+const items: [string, string, string][] = [
+  ['profil_public', 'Profil visible dans l’annuaire', 'Les autres membres peuvent trouver votre profil (selon la visibilité choisie dans votre profil).'],
+  ['marketing', 'Communications', 'Lettre d’information, invitations et offres des programmes CEA.'],
+  ['partage_investisseurs', 'Partage avec des investisseurs', 'Autorise la présentation d’un résumé de vos dossiers Kapital aux investisseurs vérifiés. Révocable à tout moment.'],
+  ['cookies_mesure', 'Mesure d’audience', 'Statistiques de fréquentation anonymisées (sans publicité).'],
+];
+---
+<EspaceLayout title="Confidentialité" lead="Vous décidez de ce qui est visible et partagé. Chaque choix est enregistré, daté et révocable.">
+  <div class="split">
+    <div>
+      <section class="panel">
+        <h3>Mes consentements</h3>
+        {items.map(([k, t, d]) => (
+          <div class="list-row" style="align-items:center">
+            <span><b>{t}</b><br /><span class="small muted">{d}</span></span>
+            <button class="toggle" type="button" role="switch" aria-checked={state[k] ? 'true' : 'false'} aria-label={t} data-consent={k}></button>
+          </div>
+        ))}
+        <p class="xs muted" style="margin:10px 0 0">Visibilité actuelle du profil : <b>{p?.visibility ?? 'membres'}</b> — <a href="/espace/profil">modifier</a>.</p>
+      </section>
+      <section class="panel" style="margin-top:16px">
+        <h3>Historique de mes choix</h3>
+        {rows.slice(0, 12).map((r) => <div class="list-row"><span>{r.kind.replaceAll('_', ' ')}</span><span class="muted small">{r.granted ? 'accordé' : 'retiré'} · {r.at.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</span></div>)}
+      </section>
+    </div>
+    <aside>
+      <section class="panel">
+        <h3>Mes données</h3>
+        <p class="small">Téléchargez l'ensemble de vos données (profil, activités, paiements, consentements) au format JSON.</p>
+        <a class="btn btn-primary btn-sm" href="/api/moi/export">Télécharger mes données</a>
+      </section>
+      <section class="panel" style="margin-top:16px;border-color:var(--bad)">
+        <h3>Supprimer mon compte</h3>
+        <p class="small">La suppression est définitive : profil, inscriptions et messages sont effacés. Les écritures comptables et le journal d'audit sont conservés selon les obligations légales.</p>
+        <button class="btn btn-ghost btn-sm" type="button" id="del" style="color:var(--bad);border-color:var(--bad)">Supprimer mon compte</button>
+      </section>
+    </aside>
+  </div>
+</EspaceLayout>
+<script>
+  import { authClient } from '../../lib/auth-client';
+  const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+  document.querySelectorAll<HTMLButtonElement>('[data-consent]').forEach((b) => b.addEventListener('click', async () => {
+    const granted = b.getAttribute('aria-checked') !== 'true';
+    const res = await fetch('/api/consentements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: b.dataset.consent, granted }) });
+    if (!res.ok) return toast('Enregistrement impossible.');
+    b.setAttribute('aria-checked', String(granted));
+    toast(granted ? 'Consentement accordé.' : 'Consentement retiré.');
+  }));
+  document.getElementById('del')!.addEventListener('click', async () => {
+    if (!confirm('Supprimer définitivement votre compte ? Cette action est irréversible.')) return;
+    const { error } = await authClient.deleteUser();
+    if (error) return toast(error.message || 'Suppression impossible.');
+    location.href = '/';
+  });
+</script>

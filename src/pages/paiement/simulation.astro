@@ -1,0 +1,35 @@
+---
+/* Simulation de l'agrégateur de paiement — uniquement en développement, sans prestataire configuré. */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import Money from '../../components/Money.astro';
+import { and, eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { payment } from '../../db/schema/app';
+import { provider } from '../../lib/payments';
+
+export const prerender = false;
+const user = Astro.locals.user;
+if (!user || provider() !== 'simulation') return Astro.redirect('/');
+const ref = Astro.url.searchParams.get('ref') ?? '';
+const [pay] = await db.select().from(payment).where(and(eq(payment.reference, ref), eq(payment.userId, user.id)));
+const methods: [string, string][] = [['orange_money', 'Orange Money'], ['mtn_momo', 'MTN MoMo'], ['wave', 'Wave'], ['moov', 'Moov Money'], ['mpesa', 'M-Pesa'], ['carte', 'Carte bancaire']];
+---
+<BaseLayout title="Paiement (simulation)">
+  <PageHead title="Agrégateur de paiement — simulation" lead="Cette page remplace l'agrégateur (CinetPay) tant qu'aucune clé n'est configurée. Elle n'existe pas en production." />
+  <section class="block">
+    <div class="wrap" style="max-width:560px">
+      {!pay ? <div class="empty">Paiement introuvable.</div> : (
+        <form class="panel" data-api="/api/paiements/simulation">
+          <input type="hidden" name="ref" value={pay.reference} />
+          <p class="small muted" style="margin:0">{(pay.metadata as { label?: string }).label} · {pay.reference}</p>
+          <p style="font-family:var(--display);font-size:1.8rem;color:var(--navy);margin:4px 0 14px"><Money xof={pay.amountXof} /></p>
+          <div class="pay-opts">{methods.map(([v, l], i) => <label><input type="radio" name="method" value={v} checked={i === 0} /><span>{l}</span></label>)}</div>
+          <label class="f">Issue simulée</label>
+          <div class="row" style="margin-bottom:14px"><label class="chip"><input type="radio" name="issue" value="reussi" checked /> Paiement accepté</label><label class="chip"><input type="radio" name="issue" value="echoue" /> Paiement refusé</label></div>
+          <button class="btn btn-primary" type="submit" style="width:100%">Valider</button>
+        </form>
+      )}
+    </div>
+  </section>
+</BaseLayout>

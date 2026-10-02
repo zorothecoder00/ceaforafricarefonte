@@ -14,16 +14,17 @@ const cats = en
 <PageHead lang={lang} title={w('Signaler un contenu ou une fraude', 'Report content or fraud')} lead={w('Votre signalement est traité par l’équipe de modération sous 48 heures. Vous pouvez rester anonyme.', 'Your report is handled by the moderation team within 48 hours. You can stay anonymous.')} crumbs={[['', w('Signalement', 'Report')]]} />
 <section class="block">
   <div class="wrap split">
-    <form class="panel" data-demo={w('Signalement reçu. Merci : la modération vérifie sous 48 heures.', 'Report received. Thank you: moderation will check within 48 hours.')}>
+    <form class="panel" data-api="/api/signalement" data-reset style="position:relative">
+      <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px" />
       <label class="f" for="rk">{w('Type de signalement', 'Type of report')}</label>
-      <select class="in" id="rk">{cats.map((c) => <option>{c}</option>)}</select>
+      <select class="in" id="rk" name="category">{cats.map((c) => <option>{c}</option>)}</select>
       <label class="f" for="ru">{w('Page ou profil concerné (adresse)', 'Page or profile concerned (address)')}</label>
-      <input class="in" id="ru" type="url" placeholder="https://cea4africa.com/…" />
+      <input class="in" id="ru" name="url" type="url" placeholder="https://cea4africa.com/…" />
       <label class="f" for="rd">{w('Description', 'Description')}</label>
-      <textarea class="in" id="rd" required minlength="10"></textarea>
+      <textarea class="in" id="rd" name="description" required minlength="10"></textarea>
       <label class="f" for="rc">{w('Votre contact (facultatif)', 'Your contact (optional)')}</label>
-      <input class="in" id="rc" placeholder={w('E-mail ou téléphone', 'Email or phone')} />
-      <label class="row small"><input type="checkbox" checked /> {w('Rester anonyme', 'Stay anonymous')}</label>
+      <input class="in" id="rc" name="contact" placeholder={w('E-mail ou téléphone', 'Email or phone')} />
+      <label class="row small"><input type="checkbox" name="anonymous" checked /> {w('Rester anonyme', 'Stay anonymous')}</label>
       <button class="btn btn-primary" type="submit" style="margin-top:12px">{w('Envoyer le signalement', 'Send report')}</button>
     </form>
     <aside>

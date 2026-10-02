@@ -49,13 +49,13 @@ for (const p of PEOPLE) {
   const res = await auth.api.signUpEmail({ body: { name: p.name, email: p.email, password: PASSWORD } });
   ids[p.key] = res.user.id;
   await db.update(s.user).set({ emailVerified: true }).where(eq(s.user.id, res.user.id));
-  await db.insert(s.userRole).values(p.roles.map((role) => ({ userId: res.user.id, role })));
+  await db.insert(s.userRole).values(p.roles.map((role) => ({ userId: res.user.id, role }))).onConflictDoNothing();
   const m = MEMBERS.find((x) => x.n === p.member);
-  await db.insert(s.profile).values({
-    userId: res.user.id, country: p.country, sector: m?.s, headline: m?.r, needs: m?.need, offers: m?.offer,
+  await db.update(s.profile).set({
+    country: p.country, sector: m?.s, headline: m?.r, needs: m?.need, offers: m?.offer,
     lang: 'fr', currency: p.country === 'NG' ? 'NGN' : p.country === 'GH' ? 'GHS' : p.country === 'CM' ? 'XAF' : p.country === 'RW' ? 'USD' : 'XOF',
-  });
-  await db.insert(s.consent).values([{ userId: res.user.id, kind: 'compte', granted: true }, { userId: res.user.id, kind: 'profil_public', granted: true }]);
+  }).where(eq(s.profile.userId, res.user.id));
+  await db.insert(s.consent).values({ userId: res.user.id, kind: 'profil_public', granted: true });
 }
 console.log(`• ${PEOPLE.length} comptes créés (mot de passe commun : ${PASSWORD}).`);
 

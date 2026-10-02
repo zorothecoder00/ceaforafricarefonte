@@ -1,0 +1,33 @@
+---
+/* Reçu de paiement imprimable (CDC §10 : factures et reçus automatiques). */
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { and, eq } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { payment } from '../../../db/schema/app';
+import { money } from '../../../data/site';
+
+export const prerender = false;
+const user = Astro.locals.user!;
+const [r] = await db.select().from(payment).where(and(eq(payment.reference, Astro.params.ref ?? ''), eq(payment.userId, user.id), eq(payment.status, 'reussi')));
+if (!r) return new Response('Reçu introuvable', { status: 404 });
+const label = (r.metadata as { label?: string }).label ?? r.purpose;
+const METHOD: Record<string, string> = { orange_money: 'Orange Money', mtn_momo: 'MTN MoMo', wave: 'Wave', moov: 'Moov Money', mpesa: 'M-Pesa', carte: 'Carte bancaire' };
+---
+<BaseLayout title={`Reçu ${r.reference}`}>
+  <section class="block">
+    <div class="wrap" style="max-width:720px">
+      <div class="panel" style="padding:32px">
+        <div class="row between"><span><span class="brand-mark" style="font-size:1.4rem">CEA</span><br /><span class="brand-sub">FOR AFRICA</span></span><div style="text-align:right"><b style="font-family:var(--display);font-size:1.4rem">REÇU</b><br /><span class="small num">{r.reference}</span></div></div>
+        <div class="grid g2" style="margin-top:24px">
+          <div class="small"><b>Émetteur</b><br />CEA FOR AFRICA<br />Lomé, Togo</div>
+          <div class="small"><b>Client</b><br />{user.name}<br />{user.email.endsWith('@telephone.cea4africa.com') ? user.phoneNumber : user.email}</div>
+        </div>
+        <table class="t" style="margin-top:24px"><thead><tr><th>Désignation</th><th style="text-align:right">Montant</th></tr></thead>
+          <tbody><tr><td>{label}</td><td class="num" style="text-align:right">{money(r.amountXof)}</td></tr><tr><td><b>Total réglé</b></td><td class="num" style="text-align:right"><b>{money(r.amountXof)}</b></td></tr></tbody></table>
+        <p class="small" style="margin-top:16px">Payé le {r.paidAt?.toLocaleString('fr-FR')} par {METHOD[r.method ?? ''] ?? r.method ?? '—'} · référence prestataire {r.providerRef ?? '—'}</p>
+        <p class="xs muted">Reçu généré automatiquement. Les mentions fiscales définitives (numéro d'identification, TVA) seront ajoutées selon le statut juridique retenu (CDC §24).</p>
+      </div>
+      <button class="btn btn-primary" type="button" onclick="window.print()" style="margin-top:14px">Imprimer / PDF</button>
+    </div>
+  </section>
+</BaseLayout>

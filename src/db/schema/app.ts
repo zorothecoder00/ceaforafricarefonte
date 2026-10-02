@@ -115,8 +115,14 @@ export const programmeApplication = pgTable('programme_application', {
 }, (t) => [index('programme_application_user_idx').on(t.userId), index('programme_application_prog_idx').on(t.programme, t.status)]);
 
 export const mentoringStatusEnum = pgEnum('mentoring_status', ['demandee', 'confirmee', 'realisee', 'annulee']);
+export const sessionKindEnum = pgEnum('session_kind', ['mentorat', 'expert']);
 export const mentoringSession = pgTable('mentoring_session', {
   id: uuid('id').primaryKey().defaultRandom(),
+  kind: sessionKindEnum('kind').notNull().default('mentorat'),
+  priceXof: bigint('price_xof', { mode: 'number' }).notNull().default(0),
+  paymentId: uuid('payment_id'),
+  goal: text('goal'),
+  mentorNotes: text('mentor_notes'), // confidentiel : mentor, entrepreneur, chargé de programme (CDC §7.6)
   mentorId: userRef('mentor_id').notNull(),
   menteeId: userRef('mentee_id').notNull(),
   startsAt: ts('starts_at').notNull(),
@@ -269,3 +275,134 @@ export const auditLog = pgTable('audit_log', {
   ip: text('ip'),
   meta: jsonb('meta').notNull().default({}),
 }, (t) => [index('audit_log_at_idx').on(t.at)]);
+
+/* ===== Mentors et experts (profils publics) ===== */
+export const mentorProfile = pgTable('mentor_profile', {
+  userId: userRef('user_id').primaryKey(),
+  kind: sessionKindEnum('kind').notNull().default('mentorat'),
+  expertise: text('expertise').notNull(),
+  sectors: text('sectors').array().notNull().default([]),
+  languages: text('languages').array().notNull().default([]),
+  timezone: text('timezone').notNull().default('Africa/Lome'),
+  priceXof: bigint('price_xof', { mode: 'number' }).notNull().default(0),
+  slots: jsonb('slots').notNull().default([]), // créneaux hebdomadaires proposés
+  rating: integer('rating'), // note moyenne × 10
+  active: boolean('active').notNull().default(true),
+});
+
+/* ===== Communauté (CDC §7.8) : espaces, fil, messagerie, blocages ===== */
+export const space = pgTable('space', {
+  id: text('id').primaryKey(), // slug
+  name: text('name').notNull(),
+  description: text('description'),
+  kind: text('kind').notNull().default('theme'), // pays, secteur, profil, theme
+  country: text('country'),
+});
+export const spaceMember = pgTable('space_member', {
+  spaceId: text('space_id').notNull().references(() => space.id, { onDelete: 'cascade' }),
+  userId: userRef('user_id').notNull(),
+  joinedAt: ts('joined_at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.spaceId, t.userId] })]);
+
+export const post = pgTable('post', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  authorId: userRef('author_id').notNull(),
+  spaceId: text('space_id').references(() => space.id, { onDelete: 'set null' }),
+  body: text('body').notNull(),
+  status: text('status').notNull().default('publie'), // publie, en_moderation, masque
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('post_created_idx').on(t.createdAt)]);
+export const postLike = pgTable('post_like', {
+  postId: uuid('post_id').notNull().references(() => post.id, { onDelete: 'cascade' }),
+  userId: userRef('user_id').notNull(),
+}, (t) => [primaryKey({ columns: [t.postId, t.userId] })]);
+
+export const conversation = pgTable('conversation', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: text('title'),
+  isGroup: boolean('is_group').notNull().default(false),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+export const conversationMember = pgTable('conversation_member', {
+  conversationId: uuid('conversation_id').notNull().references(() => conversation.id, { onDelete: 'cascade' }),
+  userId: userRef('user_id').notNull(),
+  lastReadAt: ts('last_read_at'),
+}, (t) => [primaryKey({ columns: [t.conversationId, t.userId] })]);
+export const message = pgTable('message', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  conversationId: uuid('conversation_id').notNull().references(() => conversation.id, { onDelete: 'cascade' }),
+  senderId: userRef('sender_id').notNull(),
+  body: text('body').notNull(),
+  attachmentKey: text('attachment_key'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('message_conv_idx').on(t.conversationId, t.createdAt)]);
+
+export const userBlock = pgTable('user_block', {
+  blockerId: userRef('blocker_id').notNull(),
+  blockedId: userRef('blocked_id').notNull(),
+  at: ts('at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.blockerId, t.blockedId] })]);
+
+/* ===== Mastermind Circles (CDC §7.5) ===== */
+export const circle = pgTable('circle', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  stage: text('stage').notNull(),
+  lang: text('lang').notNull().default('fr'),
+  format: text('format').notNull().default('en_ligne'),
+  facilitatorId: text('facilitator_id').references(() => user.id, { onDelete: 'set null' }),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+export const circleMember = pgTable('circle_member', {
+  circleId: uuid('circle_id').notNull().references(() => circle.id, { onDelete: 'cascade' }),
+  userId: userRef('user_id').notNull(),
+}, (t) => [primaryKey({ columns: [t.circleId, t.userId] })]);
+export const circleSession = pgTable('circle_session', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  circleId: uuid('circle_id').notNull().references(() => circle.id, { onDelete: 'cascade' }),
+  startsAt: ts('starts_at').notNull(),
+  agenda: text('agenda'),
+  minutes: text('minutes'), // compte rendu visible des seuls membres du cercle
+});
+export const commitmentStatusEnum = pgEnum('commitment_status', ['en_cours', 'atteint', 'reporte']);
+export const circleCommitment = pgTable('circle_commitment', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  circleId: uuid('circle_id').notNull().references(() => circle.id, { onDelete: 'cascade' }),
+  userId: userRef('user_id').notNull(),
+  text: text('text').notNull(),
+  quarter: text('quarter').notNull(), // ex. 2026-T4
+  status: commitmentStatusEnum('status').notNull().default('en_cours'),
+});
+
+/* ===== Favoris, alertes, billetterie avancée ===== */
+export const savedItem = pgTable('saved_item', {
+  userId: userRef('user_id').notNull(),
+  kind: text('kind').notNull(), // job, course, event, article
+  itemId: text('item_id').notNull(),
+  at: ts('at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.userId, t.kind, t.itemId] })]);
+
+export const jobAlert = pgTable('job_alert', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: userRef('user_id').notNull(),
+  query: jsonb('query').notNull().default({}),
+  channel: text('channel').notNull().default('whatsapp'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+
+export const promoCode = pgTable('promo_code', {
+  code: text('code').primaryKey(),
+  eventId: text('event_id'),
+  percent: integer('percent').notNull(),
+  maxUses: integer('max_uses'),
+  used: integer('used').notNull().default(0),
+  expiresAt: ts('expires_at'),
+});
+
+export const eventWaitlist = pgTable('event_waitlist', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  eventId: text('event_id').notNull(),
+  email: text('email').notNull(),
+  userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [uniqueIndex('event_waitlist_unique').on(t.eventId, t.email)]);

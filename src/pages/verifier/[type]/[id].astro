@@ -1,0 +1,50 @@
+---
+/* Vérification publique d'une carte de membre, d'un certificat ou d'un billet (QR code). */
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import PageHead from '../../../components/PageHead.astro';
+import { eq } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { membership, certificate, eventTicket } from '../../../db/schema/app';
+import { user } from '../../../db/schema/auth';
+import { EVENTS, dateFr } from '../../../data/site';
+
+export const prerender = false;
+const { type = '', id = '' } = Astro.params;
+let ok = false, title = 'Document introuvable', lines: [string, string][] = [];
+const mask = (n: string) => n.split(' ').map((w, i) => (i === 0 ? w : w[0] + '.')).join(' ');
+
+if (type === 'carte') {
+  const [r] = await db.select({ m: membership, name: user.name }).from(membership).innerJoin(user, eq(user.id, membership.userId)).where(eq(membership.cardNumber, id));
+  if (r) {
+    ok = r.m.status === 'active' && (!r.m.endsAt || r.m.endsAt > new Date());
+    title = ok ? 'Carte de membre valide' : 'Carte de membre expirée ou annulée';
+    lines = [['Titulaire', mask(r.name)], ['Formule', r.m.plan], ['Numéro', r.m.cardNumber], ['Validité', r.m.endsAt ? dateFr(r.m.endsAt.toISOString()) : '—']];
+  }
+} else if (type === 'certificat') {
+  const [r] = await db.select({ c: certificate, name: user.name }).from(certificate).innerJoin(user, eq(user.id, certificate.userId)).where(eq(certificate.number, id));
+  if (r) {
+    ok = !r.c.revokedAt;
+    title = ok ? 'Certificat authentique' : 'Certificat révoqué';
+    lines = [['Titulaire', r.name], ['Intitulé', r.c.title], ['Délivré le', dateFr(r.c.issuedAt.toISOString())], ['Numéro', r.c.number]];
+  }
+} else if (type === 'billet') {
+  const [r] = await db.select().from(eventTicket).where(eq(eventTicket.code, id));
+  if (r) {
+    ok = r.status === 'valide';
+    title = ok ? 'Billet valide' : `Billet ${r.status}`;
+    lines = [['Événement', EVENTS.find((e) => e.id === r.eventId)?.t ?? r.eventId], ['Catégorie', r.ticketType], ['Code', r.code]];
+  }
+}
+---
+<BaseLayout title="Vérification">
+  <PageHead title={title} crumbs={[['', 'Vérification']]} />
+  <section class="block">
+    <div class="wrap" style="max-width:560px">
+      <div class="panel">
+        <span class={`tag ${ok ? 'ok' : 'bad'}`}>{ok ? '✓ Vérifié' : '✗ Non valide'}</span>
+        {lines.length > 0 ? <div style="margin-top:12px">{lines.map(([k, v]) => <div class="list-row"><span class="muted">{k}</span><b>{v}</b></div>)}</div> : <p style="margin-top:12px">Aucun document ne correspond à ce code. Vérifiez qu'il a été saisi sans erreur.</p>}
+        <p class="xs muted" style="margin:12px 0 0">Vérification effectuée le {new Date().toLocaleString('fr-FR')} par CEA FOR AFRICA.</p>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

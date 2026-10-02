@@ -1,0 +1,38 @@
+---
+/* Carte de membre numérique avec QR code (CDC §9.1). */
+import EspaceLayout from '../../layouts/EspaceLayout.astro';
+import { and, desc, eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { membership } from '../../db/schema/app';
+import { qrSvg, verifyUrl } from '../../lib/qr';
+import { dateFr } from '../../data/site';
+
+export const prerender = false;
+const user = Astro.locals.user!;
+const [m] = await db.select().from(membership).where(and(eq(membership.userId, user.id), eq(membership.status, 'active'))).orderBy(desc(membership.startsAt)).limit(1);
+const qr = m ? await qrSvg(verifyUrl(Astro.url.origin, 'carte', m.cardNumber)) : '';
+const PLAN: Record<string, string> = { gratuit: 'Gratuit', membre: 'Membre', premium: 'Premium', entreprise: 'Entreprise' };
+---
+<EspaceLayout title="Carte de membre" lead="Présentez-la à l'entrée des événements et chez les partenaires. Le QR code ouvre la page de vérification.">
+  {m ? (
+    <>
+      <div class="membercard" id="card">
+        <div>
+          <span class="brand-sub">CEA FOR AFRICA</span>
+          <h2 style="color:#fff;margin:8px 0 4px">{user.name}</h2>
+          <div>Formule {PLAN[m.plan]}</div>
+          <div class="num small">{m.cardNumber}</div>
+          <div class="xs" style="color:#B9C9DA">{m.endsAt ? `Valable jusqu'au ${dateFr(m.endsAt.toISOString())}` : 'Sans date de fin'}</div>
+        </div>
+        <div class="qrbox" set:html={qr} />
+      </div>
+      <div class="row" style="margin-top:16px">
+        <button class="btn btn-primary" type="button" onclick="window.print()">Imprimer / enregistrer en PDF</button>
+        <a class="btn btn-ghost" href={`/verifier/carte/${m.cardNumber}`}>Page de vérification</a>
+      </div>
+      <p class="small muted" style="margin-top:12px">L'ajout au portefeuille du téléphone (Apple Wallet, Google Wallet) sera proposé dès l'ouverture des comptes émetteurs correspondants. En attendant, enregistrez la carte en PDF ou faites une capture d'écran : le QR code reste valable.</p>
+    </>
+  ) : (
+    <div class="empty">Aucune adhésion active. <a href="/adherer">Choisir une formule</a></div>
+  )}
+</EspaceLayout>

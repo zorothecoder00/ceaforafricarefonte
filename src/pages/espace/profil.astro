@@ -1,0 +1,56 @@
+---
+import EspaceLayout from '../../layouts/EspaceLayout.astro';
+import { eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { profile, userRole } from '../../db/schema/app';
+import { HUBS, country } from '../../data/site';
+import { CURRENCIES } from '../../data/currency';
+import { ROLE_LABEL, type Role } from '../../lib/rbac';
+
+export const prerender = false;
+const user = Astro.locals.user!;
+const [p] = await db.select().from(profile).where(eq(profile.userId, user.id));
+const roles = (await db.select().from(userRole).where(eq(userRole.userId, user.id))).map((r) => r.role as Role);
+const countries = [...HUBS].sort((a, b) => country(a.c).localeCompare(country(b.c), 'fr'));
+const filled = [p?.headline, p?.bio, p?.country, p?.sector, p?.skills?.length ? '1' : '', p?.needs, p?.offers].filter(Boolean).length;
+---
+<EspaceLayout title="Profil 360°" lead="Un profil unique : identité, entreprise, compétences, besoins et offres. Vous choisissez qui le voit.">
+  <div class="split">
+    <form class="panel" data-api="/api/profil" data-method="PUT" data-reload>
+      <div class="row between"><b>Profil complété à {Math.round((filled / 7) * 100)} %</b></div>
+      <div class="progress" style="margin:8px 0 18px"><span style={`width:${Math.round((filled / 7) * 100)}%`}></span></div>
+      <label class="f" for="pn">Nom complet</label><input class="in" id="pn" name="name" required minlength="2" value={user.name} />
+      <label class="f" for="ph">Titre professionnel</label><input class="in" id="ph" name="headline" maxlength="140" value={p?.headline ?? ''} placeholder="Ex. Fondatrice de Manioc+" />
+      <div class="grid g2" style="gap:0 14px">
+        <div><label class="f" for="pc">Pays</label><select class="in" id="pc" name="country"><option value="">—</option>{countries.map((h) => <option value={h.c} selected={p?.country === h.c}>{country(h.c)}</option>)}</select></div>
+        <div><label class="f" for="pv">Ville</label><input class="in" id="pv" name="city" value={p?.city ?? ''} /></div>
+        <div><label class="f" for="pe">Entreprise</label><input class="in" id="pe" name="companyName" value={p?.companyName ?? ''} /></div>
+        <div><label class="f" for="ps">Secteur</label><input class="in" id="ps" name="sector" value={p?.sector ?? ''} /></div>
+      </div>
+      <label class="f" for="pb">Présentation</label><textarea class="in" id="pb" name="bio" maxlength="2000">{p?.bio ?? ''}</textarea>
+      <label class="f" for="pk">Compétences (séparées par des virgules)</label><input class="in" id="pk" name="skills" data-type="list" value={p?.skills?.join(', ') ?? ''} />
+      <label class="f" for="pnd">Ce que je cherche</label><input class="in" id="pnd" name="needs" maxlength="500" value={p?.needs ?? ''} />
+      <label class="f" for="po">Ce que je propose</label><input class="in" id="po" name="offers" maxlength="500" value={p?.offers ?? ''} />
+      <div class="grid g3" style="gap:0 14px">
+        <div><label class="f" for="pvis">Visibilité du profil</label><select class="in" id="pvis" name="visibility"><option value="public" selected={p?.visibility === 'public'}>Public</option><option value="membres" selected={!p || p.visibility === 'membres'}>Membres connectés</option><option value="prive" selected={p?.visibility === 'prive'}>Privé</option></select></div>
+        <div><label class="f" for="pl">Langue</label><select class="in" id="pl" name="lang"><option value="fr" selected={p?.lang !== 'en'}>Français</option><option value="en" selected={p?.lang === 'en'}>English</option></select></div>
+        <div><label class="f" for="pcur">Devise</label><select class="in" id="pcur" name="currency">{CURRENCIES.map((c) => <option value={c.code} selected={(p?.currency ?? 'XOF') === c.code}>{c.code}</option>)}</select></div>
+      </div>
+      <button class="btn btn-primary" type="submit">Enregistrer</button>
+    </form>
+    <aside>
+      <div class="panel">
+        <h3>Mes rôles</h3>
+        <div class="row">{roles.map((r) => <span class="tag info">{ROLE_LABEL[r]}</span>)}</div>
+        <p class="small muted" style="margin-top:10px">Une même personne peut être entrepreneur, mentor et investisseur. Pour un nouveau rôle (mentor, investisseur vérifié, employeur…), faites la démarche correspondante :</p>
+        <a class="small" href="/kapital/devenir-investisseur" style="display:block">Devenir investisseur vérifié</a>
+        <a class="small" href="/espace/mentor" style="display:block">Devenir mentor</a>
+        <a class="small" href="/espace/recruteur" style="display:block">Recruter (espace employeur)</a>
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <h3>Identité</h3>
+        <p class="small" style="margin:0">{user.email.endsWith('@telephone.cea4africa.com') ? 'Compte créé par téléphone' : user.email}<br />{user.phoneNumber ?? ''}</p>
+      </div>
+    </aside>
+  </div>
+</EspaceLayout>

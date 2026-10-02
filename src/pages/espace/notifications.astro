@@ -1,0 +1,22 @@
+---
+import EspaceLayout from '../../layouts/EspaceLayout.astro';
+import { desc, eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { notification } from '../../db/schema/app';
+
+export const prerender = false;
+const user = Astro.locals.user!;
+const rows = await db.select().from(notification).where(eq(notification.userId, user.id)).orderBy(desc(notification.createdAt)).limit(100);
+const unread = rows.filter((r) => !r.readAt).length;
+---
+<EspaceLayout title="Notifications" lead={`${unread} non lue${unread > 1 ? 's' : ''}. Les notifications importantes sont aussi envoyées par e-mail et WhatsApp selon vos préférences.`}>
+  {unread > 0 && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/notifications" data-reload style="margin-bottom:12px">Tout marquer comme lu</button>}
+  <div class="panel">
+    {rows.length ? rows.map((n) => (
+      <div class="list-row" style={n.readAt ? '' : 'font-weight:600'}>
+        <span>{n.link ? <a href={n.link}>{n.title}</a> : n.title}</span>
+        <span class="muted small">{n.createdAt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+      </div>
+    )) : <p class="muted" style="margin:0">Aucune notification pour le moment.</p>}
+  </div>
+</EspaceLayout>

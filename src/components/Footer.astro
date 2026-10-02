@@ -22,9 +22,11 @@ const kapital: [string, string][] = lang === 'en'
       <div>
         <h4>CEA FOR AFRICA</h4>
         <p class="small">{t('tagline')}</p>
-        <form class="row" data-demo={t('nlOk')} style="margin:14px 0">
+        <form class="row" data-api="/api/newsletter" data-reset style="margin:14px 0;position:relative">
+          <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px" />
+          <input type="hidden" name="lang" value={lang} />
           <label class="sr" for="fnl">E-mail</label>
-          <input class="in" id="fnl" type="email" required placeholder={lang === 'en' ? 'your@email.com' : 'votre@email.com'} style="flex:1;margin:0;min-width:160px" />
+          <input class="in" id="fnl" name="email" type="email" required placeholder={lang === 'en' ? 'your@email.com' : 'votre@email.com'} style="flex:1;margin:0;min-width:160px" />
           <button class="btn btn-gold btn-sm" type="submit">{t('nlBtn')}</button>
         </form>
         {social.length > 0 && <div class="social" aria-label={t('follow')}>{social.map((s) => <a href={s.href} aria-label={s.n} rel="noopener"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={s.path} /></svg></a>)}</div>}

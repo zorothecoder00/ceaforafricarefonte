@@ -11,7 +11,7 @@ const fs = 'border:0;padding:0;margin:0';
   <PageHead title="Soumettre mon dossier" lead="Environ 15 minutes. Brouillon enregistré automatiquement." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Soumettre mon dossier']]} />
   <section class="block">
     <div class="wrap" style="max-width:740px">
-      <Wizard id="kapital" prefix="D" submitLabel="Soumettre le dossier" success="Un analyste vous contacte sous 5 jours ouvrés. Suivez l'avancement dans votre espace entreprise.">
+      <Wizard id="kapital" prefix="D" api="/api/kapital/dossiers" submitLabel="Soumettre le dossier" success="Un analyste vous contacte sous 5 jours ouvrés. Suivez l'avancement dans votre espace entreprise.">
         <fieldset data-step="Entreprise" style={fs}>
           <label class="f" for="k1">Nom de l'entreprise</label><input class="in" id="k1" name="entreprise" required />
           <label class="f" for="k2">Pays du siège</label><select class="in" id="k2" name="pays">{Object.entries(COUNTRIES).map(([k, v]) => <option value={k}>{v}</option>)}</select>
@@ -29,9 +29,9 @@ const fs = 'border:0;padding:0;margin:0';
         </fieldset>
         <fieldset data-step="Partage et consentements" style={fs}>
           <p class="small">Votre dossier est <b>privé par défaut</b>. Rien n'est partagé avec un investisseur sans votre autorisation, que vous pouvez retirer à tout moment.</p>
-          <label class="row small" style="margin:6px 0"><input type="checkbox" required /> J'atteste l'exactitude des informations fournies.</label>
-          <label class="row small" style="margin:6px 0"><input type="checkbox" required /> J'autorise CEA à vérifier l'entreprise et ses dirigeants (KYB).</label>
-          <label class="row small" style="margin:6px 0"><input type="checkbox" /> J'autorise la présentation d'un résumé anonymisé aux investisseurs vérifiés.</label>
+          <label class="row small" style="margin:6px 0"><input type="checkbox" name="attest" required /> J'atteste l'exactitude des informations fournies.</label>
+          <label class="row small" style="margin:6px 0"><input type="checkbox" name="kyb" required /> J'autorise CEA à vérifier l'entreprise et ses dirigeants (KYB).</label>
+          <label class="row small" style="margin:6px 0"><input type="checkbox" name="partage" /> J'autorise la présentation d'un résumé anonymisé aux investisseurs vérifiés.</label>
         </fieldset>
       </Wizard>
       <p class="small" style="margin-top:14px">Pas encore fait le diagnostic ? <a href="/kapital/diagnostic">Suis-je prêt ?</a></p>

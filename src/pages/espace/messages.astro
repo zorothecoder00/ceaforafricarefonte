@@ -1,0 +1,71 @@
+---
+/* Messagerie sécurisée (CDC §7.8) : conversations privées, notifications, blocage, signalement. */
+import EspaceLayout from '../../layouts/EspaceLayout.astro';
+import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { conversation, conversationMember, message } from '../../db/schema/app';
+import { user } from '../../db/schema/auth';
+import { initials } from '../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const mine = await db.select({ id: conversationMember.conversationId, lastReadAt: conversationMember.lastReadAt }).from(conversationMember).where(eq(conversationMember.userId, me.id));
+const ids = mine.map((m) => m.id);
+const others = ids.length ? await db.select({ c: conversationMember.conversationId, id: user.id, name: user.name }).from(conversationMember).innerJoin(user, eq(user.id, conversationMember.userId)).where(and(inArray(conversationMember.conversationId, ids), ne(conversationMember.userId, me.id))) : [];
+const last = ids.length ? await db.select({ c: message.conversationId, body: sql<string>`(array_agg(${message.body} order by ${message.createdAt} desc))[1]`, at: sql<Date>`max(${message.createdAt})` }).from(message).where(inArray(message.conversationId, ids)).groupBy(message.conversationId) : [];
+const convs = ids.map((id) => {
+  const o = others.filter((x) => x.c === id);
+  const l = last.find((x) => x.c === id);
+  const read = mine.find((m) => m.id === id)?.lastReadAt;
+  return { id, title: o.map((x) => x.name).join(', ') || 'Conversation', otherId: o[0]?.id, last: l?.body ?? '', at: l?.at ? new Date(l.at) : new Date(0), unread: !!l?.at && (!read || new Date(l.at) > read) };
+}).sort((a, b) => b.at.getTime() - a.at.getTime());
+const current = Astro.url.searchParams.get('c') ?? convs[0]?.id ?? '';
+const cur = convs.find((c) => c.id === current);
+---
+<EspaceLayout title="Messagerie" lead="Conversations privées, chiffrées en transit. Pour écrire à un membre, ouvrez son profil depuis l’annuaire.">
+  {convs.length ? (
+    <div class="chatbox" id="chat2" data-conv={current}>
+      <div class="conv">
+        {convs.map((c) => (
+          <a href={`/espace/messages?c=${c.id}`} style="display:flex;gap:10px;padding:12px;text-decoration:none;border-bottom:1px solid var(--line);background:${c.id === current ? 'var(--surface-2)' : 'transparent'}">
+            <span class="avatar" style="width:36px;height:36px;font-size:.72rem">{initials(c.title)}</span>
+            <span><b class="small" style={c.unread ? '' : 'font-weight:600'}>{c.title}{c.unread && ' •'}</b><br /><span class="xs muted">{c.last.slice(0, 40)}</span></span>
+          </a>
+        ))}
+      </div>
+      <div class="thread">
+        <div class="row between" style="padding:12px 14px;border-bottom:1px solid var(--line)">
+          <b>{cur?.title}</b>
+          {cur?.otherId && <div class="row"><button class="btn btn-ghost btn-sm" type="button" data-post="/api/blocages" data-body={JSON.stringify({ userId: cur.otherId, block: true })} data-confirm="Bloquer ce membre ? Il ne pourra plus vous écrire.">Bloquer</button><a class="btn btn-ghost btn-sm" href="/signalement">Signaler</a></div>}
+        </div>
+        <div class="msgs" id="msgs"><p class="small muted">Chargement…</p></div>
+        <form class="chat-f" id="mf"><input id="mi" placeholder="Votre message" aria-label="Votre message" autocomplete="off" maxlength="4000" /><button class="btn btn-primary btn-sm" type="submit">Envoyer</button></form>
+      </div>
+    </div>
+  ) : <div class="empty">Aucune conversation. Trouvez un membre dans <a href="/communaute">l’annuaire</a> et cliquez sur « Envoyer un message ».</div>}
+</EspaceLayout>
+<script>
+  const box = document.getElementById('chat2');
+  if (box) {
+    const conv = box.dataset.conv!;
+    const list = document.getElementById('msgs')!;
+    const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+    async function load() {
+      const d = await fetch('/api/messages?conversation=' + conv).then((r) => r.json()).catch(() => null);
+      if (!d?.ok) { list.innerHTML = '<p class="small muted">Conversation indisponible.</p>'; return; }
+      list.innerHTML = d.messages.map((m: { body: string; senderId: string; at: string }) => `<div class="msg ${m.senderId === d.me ? 'u' : 'a'}" title="${new Date(m.at).toLocaleString('fr-FR')}">${esc(m.body)}</div>`).join('') || '<p class="small muted">Écrivez le premier message.</p>';
+      list.scrollTop = list.scrollHeight;
+    }
+    document.getElementById('mf')!.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const i = document.getElementById('mi') as HTMLInputElement;
+      const body = i.value.trim();
+      if (!body) return;
+      i.value = '';
+      await fetch('/api/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ conversation: conv, body }) });
+      load();
+    });
+    load();
+    setInterval(load, 15000);
+  }
+</script>

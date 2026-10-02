@@ -22,7 +22,7 @@ export function localizeHtml(html: string, lang: Lang): string {
 }
 
 /** Pages réellement traduites en anglais (les autres affichent un bandeau « page en français »). */
-export const TRANSLATED = new Set(['/', '/commencer', '/plan-du-site', '/connexion', '/signalement', '/hors-ligne']);
+export const TRANSLATED = new Set(['/', '/connexion/nouveau-mot-de-passe', '/commencer', '/plan-du-site', '/connexion', '/signalement', '/hors-ligne']);
 
 const ui = {
   proto: { fr: "Prototype fonctionnel — toutes les données sont fictives, aucun paiement ni investissement réel n'est effectué.", en: 'Working prototype — all data is fictitious; no real payment or investment takes place.' },
@@ -32,6 +32,9 @@ const ui = {
   search: { fr: 'Rechercher (Ctrl+K ou /)', en: 'Search (Ctrl+K or /)' },
   login: { fr: 'Se connecter', en: 'Sign in' },
   join: { fr: 'Rejoindre', en: 'Join' },
+  mySpace: { fr: 'Mon espace', en: 'My space' },
+  logout: { fr: 'Se déconnecter', en: 'Sign out' },
+  notifs: { fr: 'Notifications', en: 'Notifications' },
   menu: { fr: 'Ouvrir le menu', en: 'Open menu' },
   close: { fr: 'Fermer', en: 'Close' },
   mainNav: { fr: 'Navigation principale', en: 'Main navigation' },

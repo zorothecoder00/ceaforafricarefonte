@@ -1,0 +1,80 @@
+---
+/* Espace mentor / expert (CDC §9) : profil, disponibilités, séances à confirmer, comptes rendus confidentiels, heures. */
+import EspaceLayout from '../../layouts/EspaceLayout.astro';
+import { desc, eq } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
+import { db } from '../../lib/db';
+import { mentorProfile, mentoringSession } from '../../db/schema/app';
+import { user } from '../../db/schema/auth';
+import { hasRole } from '../../lib/rbac';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const [mp] = await db.select().from(mentorProfile).where(eq(mentorProfile.userId, me.id));
+const mentee = alias(user, 'mentee');
+const sessions = await db.select({ s: mentoringSession, who: mentee.name }).from(mentoringSession).innerJoin(mentee, eq(mentee.id, mentoringSession.menteeId)).where(eq(mentoringSession.mentorId, me.id)).orderBy(desc(mentoringSession.startsAt));
+const isMentor = hasRole(me.roles, 'mentor');
+const DAYS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+const TIMES = ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00'];
+const slots = (mp?.slots ?? []) as { day: number; time: string }[];
+const done = sessions.filter((x) => x.s.status === 'realisee').length;
+---
+<EspaceLayout title="Espace mentor" lead={isMentor ? `${done} séance${done > 1 ? 's' : ''} réalisée${done > 1 ? 's' : ''}. Merci pour votre engagement.` : 'Partagez votre expérience avec les entrepreneurs du continent.'}>
+  {!isMentor && <div class="lock" style="margin-bottom:16px"><div><b>{mp ? 'Candidature en cours de validation' : 'Devenir mentor ou expert'}</b><br />Renseignez votre expertise et vos disponibilités : l’équipe programmes valide votre profil avant publication.</div></div>}
+  <div class="split">
+    <div>
+      <h2 style="font-size:1.2rem">Séances</h2>
+      {sessions.length ? sessions.map(({ s, who }) => (
+        <div class="panel" style="margin-bottom:12px">
+          <div class="row between"><b>{who}</b><span class="tag">{s.status}</span></div>
+          <div class="small muted">{s.startsAt.toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'short' })} · {s.kind}</div>
+          {s.goal && <p class="small" style="margin:8px 0">Objectif : {s.goal}</p>}
+          <div class="row">
+            {s.status === 'demandee' && <button class="btn btn-primary btn-sm" type="button" data-post="/api/mentorat" data-method="PATCH" data-body={JSON.stringify({ id: s.id, status: 'confirmee' })} data-reload>Confirmer</button>}
+            {s.status === 'confirmee' && <a class="btn btn-ghost btn-sm" href={`https://meet.jit.si/CEA-${s.id.slice(0, 8)}`} target="_blank" rel="noopener">Visio</a>}
+            {s.status === 'confirmee' && s.startsAt < new Date() && <button class="btn btn-primary btn-sm" type="button" data-post="/api/mentorat" data-method="PATCH" data-body={JSON.stringify({ id: s.id, status: 'realisee' })} data-reload>Marquer réalisée</button>}
+          </div>
+          {s.status === 'realisee' && (
+            <form data-api="/api/mentorat" data-method="PATCH" style="margin-top:10px">
+              <input type="hidden" name="id" value={s.id} />
+              <label class="f" for={`n-${s.id}`}>Compte rendu (confidentiel : vous, l’entrepreneur et le chargé de programme)</label>
+              <textarea class="in" id={`n-${s.id}`} name="mentorNotes" maxlength="5000">{s.mentorNotes ?? ''}</textarea>
+              <button class="btn btn-ghost btn-sm" type="submit">Enregistrer le compte rendu</button>
+            </form>
+          )}
+        </div>
+      )) : <div class="empty">Aucune séance pour le moment.</div>}
+    </div>
+    <aside>
+      <form class="panel" id="mpf">
+        <h3>Mon profil de mentor</h3>
+        <label class="f" for="mx">Expertise</label><input class="in" id="mx" name="expertise" required minlength="5" value={mp?.expertise ?? ''} placeholder="Ex. Levée de fonds, modèle financier" />
+        <label class="f" for="ms">Secteurs (virgules)</label><input class="in" id="ms" name="sectors" data-type="list" value={mp?.sectors.join(', ') ?? ''} />
+        <label class="f" for="ml">Langues (virgules)</label><input class="in" id="ml" name="languages" data-type="list" value={mp?.languages.join(', ') ?? 'Français'} />
+        <label class="f" for="mk">Type</label><select class="in" id="mk" name="kind"><option value="mentorat" selected={mp?.kind !== 'expert'}>Mentorat (bénévole)</option><option value="expert" selected={mp?.kind === 'expert'}>Expert (consultation payante)</option></select>
+        <label class="f" for="mpx">Tarif d'une consultation (FCFA, experts)</label><input class="in" id="mpx" name="priceXof" type="number" min="0" step="1000" value={mp?.priceXof ?? 0} />
+        <fieldset style="border:0;padding:0;margin:0 0 12px"><legend class="f">Disponibilités hebdomadaires</legend>
+          {[1, 2, 3, 4, 5, 6].map((d) => (
+            <div class="small" style="margin-bottom:4px"><b style="display:inline-block;width:80px">{DAYS[d]}</b>{TIMES.map((t) => <label style="margin-right:6px"><input type="checkbox" data-slot={`${d}|${t}`} checked={slots.some((s) => s.day === d && s.time === t)} /> {t}</label>)}</div>
+          ))}
+        </fieldset>
+        <button class="btn btn-primary btn-sm" type="submit">{isMentor ? 'Enregistrer' : 'Envoyer ma candidature'}</button>
+      </form>
+    </aside>
+  </div>
+</EspaceLayout>
+<script>
+  const f = document.getElementById('mpf') as HTMLFormElement;
+  const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!f.checkValidity()) return f.reportValidity();
+    const v = (n: string) => (f.elements.namedItem(n) as HTMLInputElement).value;
+    const list = (n: string) => v(n).split(',').map((x) => x.trim()).filter(Boolean);
+    const slots = [...f.querySelectorAll<HTMLInputElement>('[data-slot]:checked')].map((c) => { const [day, time] = c.dataset.slot!.split('|'); return { day: Number(day), time }; });
+    const res = await fetch('/api/mentorat/profil', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expertise: v('expertise'), sectors: list('sectors'), languages: list('languages'), kind: v('kind'), priceXof: Number(v('priceXof') || 0), slots }) });
+    const d = await res.json().catch(() => ({}));
+    toast(d.message || d.error || 'Erreur.');
+    if (d.ok) setTimeout(() => location.reload(), 800);
+  });
+</script>

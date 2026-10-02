@@ -1,0 +1,40 @@
+---
+import PageHead from '../PageHead.astro';
+import { lp, type Lang } from '../../i18n/ui';
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+const en = lang === 'en';
+const w = (fr: string, e: string) => (en ? e : fr);
+---
+<PageHead lang={lang} title={w('Choisir un nouveau mot de passe', 'Choose a new password')} crumbs={[[lp(lang, '/connexion'), w('Connexion', 'Sign in')], ['', w('Nouveau mot de passe', 'New password')]]} />
+<section class="block">
+  <div class="wrap" style="max-width:480px">
+    <form class="panel" id="resetF" data-login={lp(lang, '/connexion')} novalidate>
+      <label class="f" for="np1">{w('Nouveau mot de passe (10 caractères minimum)', 'New password (at least 10 characters)')}</label>
+      <input class="in" id="np1" type="password" minlength="10" required autocomplete="new-password" />
+      <label class="f" for="np2">{w('Confirmer', 'Confirm')}</label>
+      <input class="in" id="np2" type="password" minlength="10" required autocomplete="new-password" />
+      <button class="btn btn-primary" type="submit" style="width:100%">{w('Enregistrer', 'Save')}</button>
+      <p class="small" data-msg role="alert" style="margin:12px 0 0"></p>
+    </form>
+  </div>
+</section>
+<script>
+  import { authClient } from '../../lib/auth-client';
+  const EN = document.documentElement.lang === 'en';
+  const f = document.getElementById('resetF') as HTMLFormElement;
+  const msg = f.querySelector<HTMLElement>('[data-msg]')!;
+  const token = new URLSearchParams(location.search).get('token');
+  if (!token) msg.textContent = EN ? 'This link is invalid or has expired.' : 'Ce lien est invalide ou a expiré.';
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const a = (f.querySelector('#np1') as HTMLInputElement).value, b = (f.querySelector('#np2') as HTMLInputElement).value;
+    if (a.length < 10) return (msg.textContent = EN ? 'At least 10 characters.' : '10 caractères minimum.');
+    if (a !== b) return (msg.textContent = EN ? 'The two passwords differ.' : 'Les deux mots de passe sont différents.');
+    const { error } = await authClient.resetPassword({ newPassword: a, token: token ?? '' });
+    if (error) return (msg.textContent = error.message || (EN ? 'Link invalid or expired.' : 'Lien invalide ou expiré.'));
+    msg.style.color = 'var(--ok)';
+    msg.textContent = EN ? 'Password updated. You can sign in.' : 'Mot de passe modifié. Vous pouvez vous connecter.';
+    setTimeout(() => (location.href = f.dataset.login!), 1200);
+  });
+</script>

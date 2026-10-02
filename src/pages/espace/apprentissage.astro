@@ -1,52 +1,63 @@
 ---
-import BaseLayout from '../../layouts/BaseLayout.astro';
-import PageHead from '../../components/PageHead.astro';
-import { COURSES, PATHS, SUBS } from '../../data/site';
+/* Mon apprentissage (CDC §7.6) : cours en cours, parcours, certificats vérifiables, recommandations. */
+import EspaceLayout from '../../layouts/EspaceLayout.astro';
+import { desc, eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { enrollment, certificate, diagnostic } from '../../db/schema';
+import { COURSES, PATHS } from '../../data/site';
+
+export const prerender = false;
+const user = Astro.locals.user!;
+const enrolls = await db.select().from(enrollment).where(eq(enrollment.userId, user.id)).orderBy(desc(enrollment.startedAt));
+const certs = await db.select().from(certificate).where(eq(certificate.userId, user.id)).orderBy(desc(certificate.issuedAt));
+const [diag] = await db.select().from(diagnostic).where(eq(diagnostic.userId, user.id)).orderBy(desc(diagnostic.createdAt)).limit(1);
+const pct = (id: string, done: number[]) => Math.round((done.length / (COURSES.find((c) => c.id === id)?.ls.length ?? 1)) * 100);
+const finished = new Set(enrolls.filter((e) => e.completedAt).map((e) => e.courseId));
+// Parcours adaptatif : recommandations selon le diagnostic Investor Ready (CDC §7.6)
+const AXES_COURSE: Record<number, string> = { 0: 'c7', 1: 'c4', 2: 'c5', 3: 'c5', 4: 'c2', 5: 'c2', 6: 'c6', 7: 'c1' };
+const weak = diag ? diag.answers.map((v, i) => [v, i] as const).filter(([v]) => v < 5).map(([, i]) => AXES_COURSE[i]) : ['c1', 'c5'];
+const reco = [...new Set(weak)].filter((id) => !enrolls.some((e) => e.courseId === id)).slice(0, 3).map((id) => COURSES.find((c) => c.id === id)!).filter(Boolean);
 ---
-<BaseLayout title="Mon apprentissage">
-  <PageHead title="Mon apprentissage" lead="Vos cours en cours, vos parcours et vos certificats." crumbs={[['/academie', 'Académie'], ['', 'Mon apprentissage']]} subnav={SUBS.espace} />
-  <section class="block">
-    <div class="wrap split">
-      <div>
-        <h2>Mes cours</h2>
-        <div id="myCourses" data-courses={JSON.stringify(COURSES.map((c) => ({ id: c.id, t: c.t, n: c.ls.length, ls: c.ls })))}></div>
-        <div class="empty" id="noCourse" hidden>Vous n'avez encore commencé aucun cours. <a href="/academie">Parcourir le catalogue</a></div>
-        <h2 style="margin-top:30px">Parcours certifiants</h2>
-        <div class="grid g2">
-          {PATHS.map((p) => (
-            <div class="panel" data-path={p.c.join(',')}>
+<EspaceLayout title="Mon apprentissage" lead="Vos cours, vos parcours et vos certificats vérifiables.">
+  <div class="split">
+    <div>
+      <h2 style="font-size:1.2rem">Mes cours</h2>
+      {enrolls.length ? enrolls.map((e) => {
+        const c = COURSES.find((x) => x.id === e.courseId);
+        const p = pct(e.courseId, e.completedLessons);
+        return (
+          <a class="panel" href={`/academie/${e.courseId}`} style="display:block;text-decoration:none;margin-bottom:10px">
+            <div class="row between"><b>{c?.t ?? e.courseId}</b><span class="small">{p} %</span></div>
+            <div class="progress" style="margin-top:8px"><span style={`width:${p}%`}></span></div>
+          </a>
+        );
+      }) : <div class="empty">Vous n'avez encore commencé aucun cours. <a href="/academie">Parcourir le catalogue</a></div>}
+
+      <h2 style="font-size:1.2rem;margin-top:28px">Parcours certifiants</h2>
+      <div class="grid g2">
+        {PATHS.map((p) => {
+          const n = p.c.filter((id) => finished.has(id)).length;
+          return (
+            <div class="panel">
               <h3>{p.t}</h3>
               <p class="small muted">{p.d}</p>
-              <div class="progress"><span style="width:0"></span></div>
-              <p class="xs muted" style="margin:6px 0 0" data-path-txt>0 / {p.c.length} cours terminés</p>
+              <div class="progress"><span style={`width:${(n / p.c.length) * 100}%`}></span></div>
+              <p class="xs muted" style="margin:6px 0 0">{n} / {p.c.length} cours terminés</p>
             </div>
-          ))}
-        </div>
+          );
+        })}
       </div>
-      <aside>
-        <div class="panel"><h3>Mes certificats</h3><div id="certs"><p class="small muted">Terminez un cours pour obtenir votre premier certificat vérifiable.</p></div></div>
-        <div class="panel" style="margin-top:16px"><h3>Hors ligne</h3><p class="small muted">Les leçons téléchargées restent lisibles sans connexion, sur ce téléphone.</p></div>
-      </aside>
     </div>
-  </section>
-</BaseLayout>
-<script>
-  // Progression enregistrée par les fiches de cours (clé cea-enroll : { idCours: [indices des leçons terminées] }).
-  type C = { id: string; t: string; n: number; ls: string[] };
-  const box = document.getElementById('myCourses')!;
-  const courses: C[] = JSON.parse(box.dataset.courses!);
-  let en: Record<string, number[]> = {};
-  try { en = JSON.parse(localStorage.getItem('cea-enroll') || '{}'); } catch {}
-  const pct = (c: C) => Math.round(((en[c.id] || []).length / c.n) * 100);
-  const mine = courses.filter((c) => en[c.id]);
-  document.getElementById('noCourse')!.hidden = mine.length > 0;
-  box.innerHTML = mine.map((c) => `<a class="panel" href="/academie/${c.id}" style="display:block;text-decoration:none;margin-bottom:10px"><div class="row between"><b>${c.t}</b><span class="small">${pct(c)} %</span></div><div class="progress" style="margin-top:8px"><span style="width:${pct(c)}%"></span></div></a>`).join('');
-  const done = courses.filter((c) => pct(c) === 100);
-  if (done.length) document.getElementById('certs')!.innerHTML = done.map((c) => `<div class="row small" style="padding:6px 0;border-bottom:1px solid var(--line)">🎓 ${c.t}</div>`).join('');
-  document.querySelectorAll<HTMLElement>('[data-path]').forEach((p) => {
-    const ids = p.dataset.path!.split(',');
-    const n = ids.filter((id) => done.some((c) => c.id === id)).length;
-    p.querySelector<HTMLElement>('.progress span')!.style.width = (n / ids.length) * 100 + '%';
-    p.querySelector('[data-path-txt]')!.textContent = `${n} / ${ids.length} cours terminés`;
-  });
-</script>
+    <aside>
+      <div class="panel">
+        <h3>Mes certificats</h3>
+        {certs.length ? certs.map((c) => <div class="list-row"><span>🎓 {c.title}</span><a class="small" href={`/verifier/certificat/${c.number}`}>Vérifier</a></div>) : <p class="small muted" style="margin:0">Terminez un cours pour obtenir votre premier certificat vérifiable.</p>}
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <h3>Recommandés pour vous</h3>
+        <p class="small muted">{diag ? `D'après votre diagnostic (${diag.score}/100).` : 'Pour bien démarrer.'}</p>
+        {reco.map((c) => <a class="small" href={`/academie/${c.id}`} style="display:block;padding:4px 0">{c.t}</a>)}
+      </div>
+    </aside>
+  </div>
+</EspaceLayout>
