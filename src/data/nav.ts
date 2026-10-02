@@ -112,7 +112,8 @@ export const MEGA: Mega[] = [
     match: ['/opportunites', '/projets/competences'],
     cols: [
       { h: { fr: 'Trouver', en: 'Find' }, items: [
-        i('/opportunites', 'job', { fr: "Offres d'emploi et stages", en: 'Jobs and internships' }, { fr: 'Offres vérifiées', en: 'Verified offers' }),
+        i('/opportunites', 'job', { fr: "Offres d'emploi", en: 'Jobs' }, { fr: 'Offres vérifiées', en: 'Verified offers' }),
+        i('/opportunites/stages', 'cap', { fr: 'Stages et alternance', en: 'Internships and work-study' }, { fr: 'Étudiants et jeunes diplômés', en: 'Students and graduates' }),
         i('/opportunites/missions', 'tool', { fr: 'Missions et appels à consultants', en: 'Missions and consultant calls' }, { fr: 'Freelance et expertise', en: 'Freelance and expertise' }),
         i('/opportunites/appels-offres', 'doc', { fr: "Appels d'offres et marchés", en: 'Tenders and contracts' }, { fr: 'Marchés et prestations', en: 'Contracts and services' }),
       ] },

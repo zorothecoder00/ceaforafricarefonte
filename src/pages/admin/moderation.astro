@@ -3,20 +3,35 @@
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '../../lib/db';
-import { post, profile, space } from '../../db/schema/app';
+import { post, profile, space, courseReview } from '../../db/schema/app';
+import { COURSES } from '../../data/site';
 import { user } from '../../db/schema/auth';
 import { countriesFor } from '../../lib/admin';
 
 export const prerender = false;
 const me = Astro.locals.user!;
 const cs = await countriesFor(me, 'moderation');
-const view = Astro.url.searchParams.get('vue') === 'masque' ? 'masque' : 'en_moderation';
-const rows = await db.select({ p: post, name: user.name, c: profile.country, space: space.name }).from(post).innerJoin(user, eq(user.id, post.authorId)).leftJoin(profile, eq(profile.userId, post.authorId)).leftJoin(space, eq(space.id, post.spaceId))
-  .where(and(eq(post.status, view), cs ? inArray(profile.country, cs.length ? cs : ['--']) : undefined)).orderBy(desc(post.createdAt)).limit(200);
+const v = Astro.url.searchParams.get('vue');
+const view = v === 'masque' ? 'masque' : v === 'avis' ? 'avis' : 'en_moderation';
+const countryFilter = cs ? inArray(profile.country, cs.length ? cs : ['--']) : undefined;
+// Avis de cours : d'abord ceux retenus (lien) ou masqués, puis les plus récents
+const reviews = view === 'avis' ? await db.select({ r: courseReview, name: user.name }).from(courseReview).innerJoin(user, eq(user.id, courseReview.userId)).leftJoin(profile, eq(profile.userId, courseReview.userId))
+  .where(countryFilter).orderBy(desc(courseReview.hidden), desc(courseReview.at)).limit(200) : [];
+const courseTitle = (id: string) => COURSES.find((c) => c.id === id)?.t ?? id;
+const rows = view === 'avis' ? [] : await db.select({ p: post, name: user.name, c: profile.country, space: space.name }).from(post).innerJoin(user, eq(user.id, post.authorId)).leftJoin(profile, eq(profile.userId, post.authorId)).leftJoin(space, eq(space.id, post.spaceId))
+  .where(and(eq(post.status, view === 'masque' ? 'masque' : 'en_moderation'), countryFilter)).orderBy(desc(post.createdAt)).limit(200);
 ---
 <AdminLayout title="Modération" lead="Délai cible : 24 heures. Les décisions sont notifiées à l'auteur et tracées." obj="moderation">
-  <nav class="subnav" style="margin:0 0 12px"><a href="?vue=en_moderation" aria-current={view === 'en_moderation' ? 'page' : undefined}>À examiner</a><a href="?vue=masque" aria-current={view === 'masque' ? 'page' : undefined}>Masquées</a><a href="/admin/messages?onglet=signalements">Signalements</a></nav>
-  {rows.length === 0 && <div class="empty">Aucune publication dans cette file.</div>}
+  <nav class="subnav" style="margin:0 0 12px"><a href="?vue=en_moderation" aria-current={view === 'en_moderation' ? 'page' : undefined}>À examiner</a><a href="?vue=masque" aria-current={view === 'masque' ? 'page' : undefined}>Masquées</a><a href="?vue=avis" aria-current={view === 'avis' ? 'page' : undefined}>Avis de cours</a><a href="/admin/messages?onglet=signalements">Signalements</a></nav>
+  {view === 'avis' && reviews.length === 0 && <div class="empty">Aucun avis.</div>}
+  {reviews.map(({ r, name }) => (
+    <div class="panel" style="margin-bottom:10px">
+      <div class="row between"><span class="xs muted">{name} · {courseTitle(r.courseId)} · {r.at.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</span>{r.hidden && <span class="tag gold">non publié</span>}</div>
+      <p class="small" style="white-space:pre-wrap;margin:6px 0">{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)} {r.comment}</p>
+      <button class={`btn btn-sm ${r.hidden ? 'btn-primary' : 'btn-ghost'}`} type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'review.hidden', userId: r.userId, courseId: r.courseId, hidden: !r.hidden })} data-reload>{r.hidden ? 'Publier' : 'Masquer'}</button>
+    </div>
+  ))}
+  {view !== 'avis' && rows.length === 0 && <div class="empty">Aucune publication dans cette file.</div>}
   {rows.map(({ p, name, space: sp }) => (
     <div class="panel" style="margin-bottom:10px">
       <div class="xs muted">{name}{sp ? ` · ${sp}` : ''} · {p.createdAt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</div>

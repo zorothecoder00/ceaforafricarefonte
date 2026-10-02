@@ -3,7 +3,7 @@ import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../../lib/db';
-import { contactMessage, report, post, job, jobAlert, programmeApplication, userRole, proposal, space, hireDeclaration, roleEnum, ticketFlowEnum, applicationStatusEnum, proposalStatusEnum, profile } from '../../db/schema/app';
+import { contactMessage, report, post, courseReview, job, jobAlert, programmeApplication, userRole, proposal, space, hireDeclaration, roleEnum, ticketFlowEnum, applicationStatusEnum, proposalStatusEnum, profile } from '../../db/schema/app';
 import { dossier, dossierEvent, committeeDecision, kycCheck, investorProfile, featureFlag, dossierStatusEnum, verificationLevelEnum, committeeDecisionEnum, kycStatusEnum } from '../../db/schema/kapital';
 import { json, fail, audit, clientIp } from '../../lib/session';
 import { staffApi, countriesFor } from '../../lib/admin';
@@ -18,6 +18,7 @@ const Body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('contact.status'), id, status: z.enum(ticketFlowEnum.enumValues) }),
   z.object({ action: z.literal('report.status'), id, status: z.enum(ticketFlowEnum.enumValues) }),
   z.object({ action: z.literal('post.status'), id, status: z.enum(['publie', 'masque']) }),
+  z.object({ action: z.literal('review.hidden'), userId: z.string().min(1).max(64), courseId: z.string().max(20), hidden: z.boolean() }),
   z.object({ action: z.literal('job.moderate'), id, status: z.enum(['publiee', 'refusee', 'fermee']), featured: z.boolean().optional() }),
   z.object({ action: z.literal('application.update'), id, status: z.enum(applicationStatusEnum.enumValues), score: z.coerce.number().int().min(0).max(100).nullish() }),
   z.object({ action: z.literal('dossier.status'), id, status: z.enum(dossierStatusEnum.enumValues), note: z.string().max(2000).optional() }),
@@ -58,6 +59,15 @@ export const POST: APIRoute = async ({ locals, request }) => {
       await db.update(report).set({ status: b.status }).where(eq(report.id, b.id));
       await audit(u.id, 'admin.signalement.statut', b.id, { status: b.status }, ip);
       return ok();
+    }
+    case 'review.hidden': {
+      const u = guard('moderation', 'M'); if (u instanceof Response) return u;
+      const [r] = await db.select({ c: profile.country }).from(courseReview).leftJoin(profile, eq(profile.userId, courseReview.userId)).where(and(eq(courseReview.userId, b.userId), eq(courseReview.courseId, b.courseId)));
+      const cs = await countriesFor(u, 'moderation', 'M');
+      if (!r || (cs && !cs.includes(r.c ?? ''))) return fail('Accès refusé.', 403);
+      await db.update(courseReview).set({ hidden: b.hidden }).where(and(eq(courseReview.userId, b.userId), eq(courseReview.courseId, b.courseId)));
+      await audit(u.id, 'admin.avis.' + (b.hidden ? 'masque' : 'publie'), `${b.courseId}:${b.userId}`, {}, ip);
+      return ok(b.hidden ? 'Avis masqué.' : 'Avis publié.');
     }
     case 'post.status': {
       const u = guard('moderation', 'M'); if (u instanceof Response) return u;

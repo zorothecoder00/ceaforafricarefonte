@@ -118,3 +118,17 @@ export const CONTENT: Record<string, { lessons: Lesson[]; quiz: Question[] }> = 
     ],
   },
 };
+
+/* Fiche cours (CDC §7.6) : langues disponibles, formateur, bande-annonce.
+   La vidéo de bande-annonce n'est affichée que si son adresse est renseignée (aucune vidéo factice). */
+export type CourseMeta = { langs: string[]; trainer: { role: string; bio: string }; trailer?: string; captions?: string };
+export const META: Record<string, CourseMeta> = {
+  c1: { langs: ['Français'], trainer: { role: 'Avocate d’affaires, barreau de Lomé', bio: 'Accompagne depuis 15 ans la création et la structuration de PME dans l’espace OHADA.' } },
+  c2: { langs: ['Français', 'Anglais'], trainer: { role: 'Analyste financier CFA', bio: 'Ancien chargé d’investissement dans un fonds ouest-africain ; a modélisé plus de 120 entreprises.' } },
+  c3: { langs: ['Français', 'Anglais'], trainer: { role: 'Coach en levée de fonds', bio: 'A préparé plus de 60 fondateurs à leurs présentations devant des investisseurs africains et internationaux.' } },
+  c4: { langs: ['Anglais', 'Français'], trainer: { role: 'Économiste du commerce', bio: 'Spécialiste des accords commerciaux africains, conseiller auprès de chambres de commerce sur la ZLECAf.' } },
+  c5: { langs: ['Français', 'Anglais', 'Kiswahili'], trainer: { role: 'Consultante marketing digital', bio: 'Aide les petites entreprises d’Afrique de l’Est à vendre en ligne avec des budgets limités.' } },
+  c6: { langs: ['Français'], trainer: { role: 'Conseil en gouvernance', bio: 'Accompagne les PME familiales dans l’ouverture de leur capital et la mise en place d’un conseil.' } },
+  c7: { langs: ['Français'], trainer: { role: 'Directrice des ressources humaines', bio: 'A structuré la fonction RH de plusieurs entreprises en croissance en Afrique de l’Ouest.' } },
+  c8: { langs: ['Français'], trainer: { role: 'Ancien gérant de SGI', bio: 'Vulgarise le fonctionnement de la BRVM auprès des épargnants et des dirigeants de PME.' } },
+};

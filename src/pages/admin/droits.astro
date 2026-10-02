@@ -1,0 +1,33 @@
+---
+/* Matrice complète des droits (CDC §18, livrable du lot 0) : générée depuis src/lib/rbac.ts, la source appliquée par le code,
+   et vérifiée par les tests automatisés (tests/rbac.test.ts, tests/droits.e2e.test.ts). */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { MATRIX, ROLES, ROLE_LABEL, SENSITIVE, type Obj } from '../../lib/rbac';
+
+export const prerender = false;
+const OBJ_LABEL: Record<Obj, string> = {
+  contenus: 'Contenus publics', profil: 'Profil personnel', fiche_projet: 'Fiche projet', candidature: 'Candidature programme',
+  notes_mentorat: 'Notes de mentorat', dossier_kapital: 'Dossier Kapital', data_room: 'Data room', decision_comite: 'Décision de comité',
+  pieces_kyc: 'Pièces KYC', journal_audit: "Journal d'audit", offre_emploi: "Offre d'emploi", moderation: 'Modération',
+  membres: 'Membres et rôles', parametres: 'Paramétrage', paiements: 'Paiements', messages_contact: 'Messages de contact', interrupteurs: 'Interrupteurs par pays',
+};
+const objs = Object.keys(OBJ_LABEL) as Obj[];
+---
+<AdminLayout title="Matrice des droits" lead="L = lecture · C = création · M = modification · V = validation · * = limité aux éléments propres, partagés ou assignés · — = aucun accès. Cette matrice est celle qu'applique la plateforme." obj="contenus">
+  <div class="panel scroll-x">
+    <table class="t">
+      <thead><tr><th>Objet</th>{ROLES.map((r) => <th class="xs" style="writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap">{ROLE_LABEL[r]}{SENSITIVE.includes(r) ? ' 🔐' : ''}</th>)}</tr></thead>
+      <tbody>{objs.map((o) => <tr><th class="small" style="text-align:left">{OBJ_LABEL[o]}</th>{ROLES.map((r) => { const v = MATRIX[r][o]; return <td class="xs" style={`text-align:center;${v ? 'font-weight:600' : 'color:var(--muted)'}`}>{v ?? '—'}</td>; })}</tr>)}</tbody>
+    </table>
+  </div>
+  <div class="panel" style="margin-top:14px">
+    <h3>Règles complémentaires</h3>
+    <ul class="small">
+      <li>🔐 Rôles sensibles : double authentification obligatoire pour accéder au back-office et à son API.</li>
+      <li>Les pièces KYC ne sont lisibles que par le responsable conformité.</li>
+      <li>Le responsable pays n'agit que sur les contenus, membres et messages de son pays.</li>
+      <li>Le journal d'audit est en ajout seul : personne ne peut le modifier ni l'effacer.</li>
+      <li>Un visiteur non connecté n'accède qu'aux contenus publics, à l'inscription et aux formulaires publics.</li>
+    </ul>
+  </div>
+</AdminLayout>

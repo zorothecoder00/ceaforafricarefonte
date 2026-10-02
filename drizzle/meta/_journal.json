@@ -43,6 +43,13 @@
       "when": 1790948031868,
       "tag": "0005_evenements",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790950258950,
+      "tag": "0006_avis_cours",
+      "breakpoints": true
     }
   ]
 }

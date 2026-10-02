@@ -6,6 +6,7 @@ import Money from '../../components/Money.astro';
 import KapitalAd from '../../components/KapitalAd.astro';
 import { EVENTS, dateFr, country, initials } from '../../data/site';
 import { EXTRA } from '../../data/events-extra';
+import { calendar } from '../../lib/ics';
 
 export function getStaticPaths() {
   return EVENTS.map((e) => ({ params: { id: e.id }, props: { e } }));
@@ -15,11 +16,7 @@ const x = EXTRA[e.id];
 const days = [...new Set(x.sessions.map((s) => s.day))];
 const themes = [...new Set(x.sessions.map((s) => s.theme))];
 const start = `${e.date}T${x.time}:00`;
-const ics = [
-  'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//CEA FOR AFRICA//FR', 'BEGIN:VEVENT',
-  `UID:${e.id}@cea4africa.com`, `DTSTART:${start.replace(/[-:]/g, '')}`, `SUMMARY:${e.t}`,
-  `LOCATION:${x.venue ? `${x.venue.name}, ${x.venue.address}` : 'En ligne'}`, `DESCRIPTION:${e.d}`, 'END:VEVENT', 'END:VCALENDAR',
-].join('\r\n');
+const ics = calendar([e], Astro.site?.origin, e.t);
 const osm = x.venue ? `https://www.openstreetmap.org/?mlat=${x.venue.lat}&mlon=${x.venue.lon}#map=16/${x.venue.lat}/${x.venue.lon}` : '';
 ---
 <BaseLayout title={e.t} description={e.d}>

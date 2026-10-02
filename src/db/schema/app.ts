@@ -92,6 +92,16 @@ export const enrollment = pgTable('enrollment', {
   completedAt: ts('completed_at'),
 }, (t) => [primaryKey({ columns: [t.userId, t.courseId] })]);
 
+/* Avis sur un cours (CDC §7.6) : réservés aux inscrits, un avis par personne, masquables par la modération. */
+export const courseReview = pgTable('course_review', {
+  userId: userRef('user_id').notNull(),
+  courseId: text('course_id').notNull(),
+  rating: integer('rating').notNull(), // 1 à 5
+  comment: text('comment'),
+  hidden: boolean('hidden').notNull().default(false),
+  at: ts('at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.userId, t.courseId] }), index('course_review_course_idx').on(t.courseId)]);
+
 export const certificate = pgTable('certificate', {
   id: uuid('id').primaryKey().defaultRandom(),
   number: text('number').notNull().unique(), // vérifiable par QR

@@ -4,8 +4,10 @@ import PageHead from '../../components/PageHead.astro';
 import CourseCard from '../../components/CourseCard.astro';
 import KapitalAd from '../../components/KapitalAd.astro';
 import { COURSES, SUBS } from '../../data/site';
+import { META } from '../../data/course-content';
 
 const themes = ['Tous', ...new Set(COURSES.map((c) => c.th))];
+const langs = [...new Set(COURSES.flatMap((c) => META[c.id]?.langs ?? ['Français']))];
 ---
 <BaseLayout title="Académie">
   <PageHead title="CEA Academy" lead="Des cours courts, pratiques et certifiants, pensés pour le téléphone et les petits forfaits. Téléchargeables hors ligne." crumbs={[['', 'Académie']]} subnav={SUBS.academie} />
@@ -14,6 +16,8 @@ const themes = ['Tous', ...new Set(COURSES.map((c) => c.th))];
       <div class="filters" role="group" aria-label="Filtrer les cours" id="cf">
         {themes.map((t, i) => <button class="chip" type="button" aria-pressed={i === 0 ? 'true' : 'false'} data-th={t}>{t}</button>)}
         <select class="in" id="lvSel" aria-label="Niveau"><option value="">Tous niveaux</option><option>Débutant</option><option>Intermédiaire</option><option>Avancé</option></select>
+        <select class="in" id="langSel" aria-label="Langue"><option value="">Toutes langues</option>{langs.map((l) => <option>{l}</option>)}</select>
+        <select class="in" id="durSel" aria-label="Durée"><option value="">Toutes durées</option><option value="0-90">Moins d’1 h 30</option><option value="90-150">1 h 30 à 2 h 30</option><option value="150-9999">Plus de 2 h 30</option></select>
         <label class="chip"><input type="checkbox" id="free" /> Gratuits</label>
         <input class="in" id="cq" type="search" placeholder="Rechercher un cours, un formateur…" aria-label="Rechercher un cours" style="flex:1;min-width:200px" />
         <select class="in" id="sortSel" aria-label="Trier"><option value="">Ordre par défaut</option><option value="court">Plus courts d’abord</option><option value="prix">Prix croissant</option></select>
@@ -40,6 +44,8 @@ const themes = ['Tous', ...new Set(COURSES.map((c) => c.th))];
   const chips = [...document.querySelectorAll<HTMLButtonElement>('#cf [data-th]')];
   const lv = document.getElementById('lvSel') as HTMLSelectElement;
   const free = document.getElementById('free') as HTMLInputElement;
+  const lang = document.getElementById('langSel') as HTMLSelectElement, dur = document.getElementById('durSel') as HTMLSelectElement;
+  const inDur = (el: HTMLElement) => { if (!dur.value) return true; const [a, b] = dur.value.split('-').map(Number); const m = Number(el.dataset.min); return m >= a && m < b; };
   const q = document.getElementById('cq') as HTMLInputElement;
   const sort = document.getElementById('sortSel') as HTMLSelectElement;
   const list = document.getElementById('cl')!;
@@ -48,7 +54,7 @@ const themes = ['Tous', ...new Set(COURSES.map((c) => c.th))];
   function apply() {
     let n = 0;
     document.querySelectorAll<HTMLElement>('#cl > a').forEach((el) => {
-      const ok = (th === 'Tous' || el.dataset.th === th) && (!lv.value || el.dataset.lv === lv.value) && (!free.checked || el.dataset.free === '1') && norm(el.dataset.q ?? '').includes(norm(q.value.trim()));
+      const ok = (th === 'Tous' || el.dataset.th === th) && (!lv.value || el.dataset.lv === lv.value) && (!free.checked || el.dataset.free === '1') && norm(el.dataset.q ?? '').includes(norm(q.value.trim())) && (!lang.value || (el.dataset.lang ?? '').split('|').includes(lang.value)) && inDur(el);
       el.hidden = !ok;
       if (ok) n++;
     });
@@ -63,6 +69,8 @@ const themes = ['Tous', ...new Set(COURSES.map((c) => c.th))];
   }));
   lv.addEventListener('change', apply);
   free.addEventListener('change', apply);
+  lang.addEventListener('change', apply);
+  dur.addEventListener('change', apply);
   q.addEventListener('input', apply);
   sort.addEventListener('change', apply);
 </script>

@@ -1,0 +1,29 @@
+---
+/* Modèles juridiques à adapter (CDC §7.1, MVP) : pacte d'associés et statuts, consultables, imprimables et téléchargeables. */
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import PageHead from '../../../components/PageHead.astro';
+import { SUBS } from '../../../data/site';
+import { MODELES, MODELE_AVERTISSEMENT } from '../../../data/modeles';
+---
+<BaseLayout title="Modèles de pacte et de statuts">
+  <PageHead title="Modèles de pacte d'associés et de statuts" lead="Des trames conformes au droit OHADA pour préparer l'ouverture de votre capital, à faire relire et adapter par un conseil." crumbs={[['/actionnariat', 'Actionnariat'], ['', 'Modèles']]} subnav={SUBS.actionnariat} />
+  <section class="block">
+    <div class="wrap">
+      <div class="lock" style="margin-bottom:18px"><div class="small">{MODELE_AVERTISSEMENT}</div></div>
+      <div class="grid g3">
+        {MODELES.map((m) => (
+          <div class="panel" style="display:flex;flex-direction:column;gap:8px">
+            <h2 style="font-size:1.15rem;margin:0">{m.title}</h2>
+            <p class="small" style="margin:0">{m.short}</p>
+            <p class="xs muted" style="margin:0;flex:1">{m.usage}</p>
+            <div class="row" style="gap:6px">
+              <a class="btn btn-primary btn-sm" href={`/actionnariat/modeles/${m.slug}`}>Consulter</a>
+              <a class="btn btn-ghost btn-sm" href={`/actionnariat/modeles/${m.slug}.doc`} download>Télécharger (Word)</a>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div class="call" style="margin-top:28px"><div><h2>Besoin d'un regard d'expert ?</h2><p>Réservez une consultation courte avec un avocat d'affaires OHADA ou suivez le cours « Ouvrir le capital de sa PME ».</p></div><div class="row"><a class="btn btn-primary" href="/academie/experts">Consulter un expert</a><a class="btn btn-ghost" href="/academie/c6">Suivre le cours</a></div></div>
+    </div>
+  </section>
+</BaseLayout>

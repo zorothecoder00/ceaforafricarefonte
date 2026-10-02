@@ -1,0 +1,32 @@
+---
+/* Modèle juridique consultable et imprimable (PDF via l'impression du navigateur). */
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import PageHead from '../../../components/PageHead.astro';
+import { MODELES, MODELE_AVERTISSEMENT } from '../../../data/modeles';
+
+export function getStaticPaths() {
+  return MODELES.map((m) => ({ params: { slug: m.slug }, props: { m } }));
+}
+const { m } = Astro.props;
+---
+<BaseLayout title={m.title} description={m.short}>
+  <PageHead title={m.title} lead={m.usage} crumbs={[['/actionnariat', 'Actionnariat'], ['/actionnariat/modeles', 'Modèles'], ['', m.title]]} />
+  <section class="block" style="padding-top:20px">
+    <div class="wrap split">
+      <article class="panel prose" id="modele">
+        <p class="small" style="border-left:3px solid var(--gold);padding-left:10px"><b>Avertissement.</b> {MODELE_AVERTISSEMENT}</p>
+        <h2 style="text-align:center;font-size:1.3rem">{m.title}</h2>
+        {m.sections.map(([h, paras]) => (<><h3 style="font-size:1rem;margin-top:20px">{h}</h3>{paras.map((p) => <p>{p}</p>)}</>))}
+      </article>
+      <aside>
+        <div class="panel">
+          <h3>Utiliser ce modèle</h3>
+          <p class="small">Les éléments entre [crochets] sont à compléter. Supprimez les options qui ne s'appliquent pas.</p>
+          <a class="btn btn-primary btn-sm" href={`/actionnariat/modeles/${m.slug}.doc`} download style="margin-bottom:8px">Télécharger (Word)</a>
+          <button class="btn btn-ghost btn-sm" type="button" onclick="window.print()">Imprimer ou enregistrer en PDF</button>
+        </div>
+        <div class="panel" style="margin-top:14px"><h3>Autres modèles</h3>{MODELES.filter((x) => x.slug !== m.slug).map((x) => <a class="small" href={`/actionnariat/modeles/${x.slug}`} style="display:block;margin-bottom:6px">{x.title}</a>)}</div>
+      </aside>
+    </div>
+  </section>
+</BaseLayout>

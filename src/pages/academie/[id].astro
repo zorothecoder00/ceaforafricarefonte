@@ -6,24 +6,27 @@ import PageHead from '../../components/PageHead.astro';
 import KapitalAd from '../../components/KapitalAd.astro';
 import Money from '../../components/Money.astro';
 import { COURSES } from '../../data/site';
-import { CONTENT, PASS_MARK } from '../../data/course-content';
+import { CONTENT, PASS_MARK, META } from '../../data/course-content';
+import { initials } from '../../data/site';
 
 export function getStaticPaths() {
   return COURSES.map((c) => ({ params: { id: c.id }, props: { c } }));
 }
 const { c } = Astro.props;
 const content = CONTENT[c.id];
+const meta = META[c.id];
 const finance = c.th === 'Finance' || c.th === 'Levée de fonds';
 const last = c.ls.length - 1;
 const related = COURSES.filter((x) => x.id !== c.id && (x.th === c.th || x.lv === c.lv)).slice(0, 3);
 ---
 <BaseLayout title={c.t}>
-  <PageHead title={c.t} lead={`${c.th} · ${c.lv} · ${c.dur} · par ${c.by}`} crumbs={[['/academie', 'Académie'], ['', c.th]]} />
+  <PageHead title={c.t} lead={`${c.th} · ${c.lv} · ${c.dur} · ${meta?.langs.join(', ') ?? 'Français'} · par ${c.by}`} crumbs={[['/academie', 'Académie'], ['', c.th]]} />
   <section class="block" style="padding-top:28px">
     <div class="wrap split" id="course" data-course={c.id} data-last={last}>
       <div>
         <div class="player" id="intro">
-          <div style="text-align:center;padding:20px">
+          {meta?.trailer && <video controls preload="none" playsinline style="width:100%;border-radius:12px" aria-label={`Bande-annonce : ${c.t}`}><source src={meta.trailer} />{meta.captions && <track kind="captions" src={meta.captions} srclang="fr" label="Français" default />}</video>}
+          <div style="text-align:center;padding:20px" hidden={!!meta?.trailer}>
             <h2 style="color:#fff">{c.t}</h2>
             <p style="color:#C9D6E5">{c.ls.length - 1} leçons de moins de 15 minutes + quiz final · certificat vérifiable</p>
             <button class="btn btn-gold" type="button" id="enroll">S'inscrire — <Money xof={c.price} /></button>
@@ -65,6 +68,27 @@ const related = COURSES.filter((x) => x.id !== c.id && (x.th === c.th || x.lv ==
           <h3>Ce que vous allez apprendre</h3>
           <p>{c.ls.slice(0, -1).join(', ')}. Chaque leçon s'appuie sur des exemples d'entreprises africaines.</p>
           <button class="btn btn-ghost btn-sm" type="button" id="offline">Enregistrer pour lecture hors ligne</button>
+        </div>
+
+        {meta && (
+          <div class="panel row" style="margin-top:18px;gap:14px;align-items:flex-start">
+            <span class="avatar" aria-hidden="true">{initials(c.by)}</span>
+            <div><h3 style="margin:0">Votre formateur : {c.by}</h3><p class="small muted" style="margin:2px 0 6px">{meta.trainer.role}</p><p class="small" style="margin:0">{meta.trainer.bio}</p></div>
+          </div>
+        )}
+
+        <div class="panel" style="margin-top:18px" id="reviews" data-course={c.id}>
+          <div class="row between"><h3 style="margin:0">Avis des apprenants</h3><b id="revAvg" class="small"></b></div>
+          <div id="revList" class="small" style="margin-top:8px"><p class="muted">Chargement des avis…</p></div>
+          <form id="revForm" hidden style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
+            <fieldset style="border:0;padding:0;margin:0 0 8px"><legend class="small" style="font-weight:600">Votre note</legend>
+              <div class="row" style="gap:4px">{[1, 2, 3, 4, 5].map((n) => <label class="chip"><input type="radio" name="rating" value={n} required /> {n} ★</label>)}</div>
+            </fieldset>
+            <label class="f" for="revC">Votre commentaire (facultatif)</label>
+            <textarea class="in" id="revC" name="comment" maxlength="1500" placeholder="Ce que ce cours vous a apporté…"></textarea>
+            <button class="btn btn-primary btn-sm" type="submit">Publier mon avis</button>
+          </form>
+          <p class="xs muted" id="revHint" style="margin:10px 0 0">Seuls les inscrits au cours peuvent donner leur avis.</p>
         </div>
       </div>
       <aside>
@@ -109,6 +133,7 @@ const related = COURSES.filter((x) => x.id !== c.id && (x.th === c.th || x.lv ==
     });
     document.querySelectorAll<HTMLButtonElement>('[data-done]').forEach((b) => { const ok = done.includes(Number(b.dataset.done)); b.textContent = ok ? '✓ Terminée' : 'Marquer comme terminée'; b.classList.toggle('btn-primary', !ok); b.classList.toggle('btn-ghost', ok); });
     enrollBtn.hidden = enrolled;
+    showReviewForm();
     const pct = Math.round((done.length / items.length) * 100);
     bar.style.width = (enrolled ? pct : 0) + '%';
     prog.innerHTML = enrolled
@@ -167,6 +192,37 @@ const related = COURSES.filter((x) => x.id !== c.id && (x.th === c.th || x.lv ==
       toast('Cours enregistré : il restera lisible sans connexion.');
     } catch { toast('Lecture hors ligne indisponible sur ce navigateur.'); }
   });
+  // Avis : chargés depuis l'API (la page est statique)
+  const revList = document.getElementById('revList')!, revForm = document.getElementById('revForm') as HTMLFormElement;
+  const escH = (t: string) => t.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]!);
+  type Rev = { name: string; country: string | null; rating: number; comment: string | null; at: string };
+  async function loadReviews() {
+    const d = await fetch('/api/academie/avis?course=' + id).then((r) => r.json()).catch(() => null);
+    if (!d?.ok) { revList.innerHTML = '<p class="muted">Avis indisponibles hors connexion.</p>'; return; }
+    document.getElementById('revAvg')!.textContent = d.average ? `${String(d.average).replace('.', ',')} ★ · ${d.count} avis` : '';
+    revList.innerHTML = d.reviews.length
+      ? d.reviews.map((r: Rev) => `<div style="padding:8px 0;border-bottom:1px solid var(--line)"><b>${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</b> <span class="muted">${escH(r.name)} · ${new Date(r.at).toLocaleDateString('fr-FR')}</span>${r.comment ? `<p style="margin:4px 0 0;white-space:pre-wrap">${escH(r.comment)}</p>` : ''}</div>`).join('')
+      : '<p class="muted">Pas encore d’avis : soyez le premier à partager votre expérience.</p>';
+    if (d.mine) {
+      revForm.querySelector<HTMLInputElement>(`input[name="rating"][value="${d.mine.rating}"]`)!.checked = true;
+      (revForm.elements.namedItem('comment') as HTMLTextAreaElement).value = d.mine.comment ?? '';
+      revForm.querySelector('button')!.textContent = 'Mettre à jour mon avis';
+      pending = d.mine.hidden;
+      if (pending) document.getElementById('revHint')!.textContent = 'Votre avis est en attente de vérification par la modération.';
+      showReviewForm();
+    }
+  }
+  let pending = false;
+  function showReviewForm() { revForm.hidden = !enrolled; document.getElementById('revHint')!.hidden = enrolled && !pending; }
+  revForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(revForm);
+    const r = await fetch('/api/academie/avis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ courseId: id, rating: Number(fd.get('rating')), comment: fd.get('comment') }) });
+    const d = await r.json().catch(() => ({ error: 'Erreur réseau.' }));
+    toast(d.message ?? d.error);
+    if (d.ok) loadReviews();
+  });
+  loadReviews();
   let start = 0;
   try { start = Number(localStorage.getItem(`cea-course-${id}-at`) ?? 0); } catch { /* ignoré */ }
   show(Math.min(Math.max(start, 0), last), false);

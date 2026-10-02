@@ -1,0 +1,53 @@
+---
+/* Stages et alternance (CDC §7.4, MVP) : offres réservées aux étudiants et jeunes diplômés, repères pratiques,
+   partenariats avec les écoles et universités (demande routée vers la direction des partenariats). */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import JobsBoard from '../../components/JobsBoard.astro';
+import { SUBS, COUNTRIES } from '../../data/site';
+import { listJobs } from '../../lib/jobs';
+
+export const prerender = false;
+const uid = Astro.locals.user?.id;
+const jobs = await listJobs({ userId: uid, types: ['Stage', 'Alternance'] });
+const steps: [string, string][] = [
+  ['Complétez votre profil talent', 'École, diplôme préparé, période de disponibilité et compétences : les recruteurs filtrent sur ces informations.'],
+  ['Postulez en un clic', 'Votre profil et votre CV sont transmis directement ; vous suivez chaque candidature depuis votre espace.'],
+  ['Signez une convention', "Un stage s'accompagne d'une convention tripartite entre vous, l'entreprise et votre établissement ; l'alternance, d'un contrat de travail."],
+  ['Faites valider votre expérience', "À la fin du stage, l'entreprise peut confirmer votre mission sur votre profil : un atout pour votre premier emploi."],
+];
+---
+<BaseLayout title="Stages et alternance">
+  <PageHead title="Stages et alternance" lead="Des offres réservées aux étudiants et aux jeunes diplômés, publiées par des entreprises africaines vérifiées par notre équipe." crumbs={[['/opportunites', 'Opportunités'], ['', 'Stages et alternance']]} subnav={SUBS.opps} />
+  <section class="block" style="padding-bottom:0">
+    <div class="wrap grid g4">
+      {steps.map(([t, d], i) => <div class="panel"><span class="tag info">Étape {i + 1}</span><h3 style="font-size:1rem;margin:8px 0 4px">{t}</h3><p class="small" style="margin:0">{d}</p></div>)}
+    </div>
+  </section>
+  <JobsBoard jobs={jobs} />
+  <section class="block" style="padding-top:0">
+    <div class="wrap split">
+      <div class="panel">
+        <h2 style="font-size:1.3rem">Bon à savoir</h2>
+        <ul class="small">
+          <li>Une offre de stage doit décrire de vraies missions d'apprentissage, une durée et un tuteur. Signalez toute offre qui demande de payer pour être recruté.</li>
+          <li>La gratification et la durée maximale d'un stage dépendent de la loi de chaque pays : vérifiez-les avec votre établissement.</li>
+          <li>Les recruteurs s'engagent à ne pas discriminer selon le genre, l'origine, la religion ou le handicap.</li>
+        </ul>
+        <a class="btn btn-ghost btn-sm" href="/opportunites/profil">Compléter mon profil talent</a>
+      </div>
+      <form class="panel" data-api="/api/contact" data-reset>
+        <h2 style="font-size:1.3rem">Écoles et universités : devenez partenaires</h2>
+        <p class="small">Diffusez nos offres auprès de vos étudiants, accédez aux statistiques d'insertion et co-organisez des journées de recrutement.</p>
+        <input type="hidden" name="motif" value="Partenariat" />
+        <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px" />
+        <label class="f" for="un">Établissement et nom du contact</label><input class="in" id="un" name="name" required minlength="2" maxlength="120" />
+        <label class="f" for="uc">E-mail ou téléphone</label><input class="in" id="uc" name="contact" required minlength="5" maxlength="160" />
+        <label class="f" for="up">Pays</label><select class="in" id="up" name="country">{Object.entries(COUNTRIES).map(([c, n]) => <option value={c}>{n}</option>)}</select>
+        <label class="f" for="um">Votre projet de partenariat</label><textarea class="in" id="um" name="message" required minlength="10" maxlength="5000">Partenariat universitaire (stages et alternance) : </textarea>
+        <label class="row small" style="margin:8px 0"><input type="checkbox" name="consent" required /> J'accepte que CEA utilise ces informations pour répondre à ma demande.</label>
+        <button class="btn btn-primary btn-sm" type="submit">Envoyer la demande</button>
+      </form>
+    </div>
+  </section>
+</BaseLayout>

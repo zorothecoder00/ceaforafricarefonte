@@ -1,11 +1,14 @@
 ---
 import Money from './Money.astro';
+import { META } from '../data/course-content';
 interface Props { c: { id: string; t: string; th: string; lv: string; dur: string; price: number; by: string; ls: string[] } }
 const { c } = Astro.props;
+const langs = META[c.id]?.langs ?? ['Français'];
 ---
-<a class="panel" href={`/academie/${c.id}`} style="text-decoration:none;display:flex;flex-direction:column;gap:8px" data-th={c.th} data-lv={c.lv} data-free={c.price ? '0' : '1'} data-q={`${c.t} ${c.by} ${c.th} ${c.ls.join(' ')}`} data-price={c.price} data-min={c.dur.replace(/(\d+) h ?(\d*)/, (_, h, m) => String(Number(h) * 60 + Number(m || 0)))}>
+<a class="panel" href={`/academie/${c.id}`} style="text-decoration:none;display:flex;flex-direction:column;gap:8px" data-th={c.th} data-lv={c.lv} data-free={c.price ? '0' : '1'} data-q={`${c.t} ${c.by} ${c.th} ${c.ls.join(' ')}`} data-price={c.price} data-lang={langs.join('|')} data-min={c.dur.replace(/(\d+) h ?(\d*)/, (_, h, m) => String(Number(h) * 60 + Number(m || 0)))}>
   <div class="row between"><span class="tag info">{c.th}</span><span class={`tag ${c.price ? 'gold' : 'ok'}`}><Money xof={c.price} /></span></div>
   <h3 style="margin:0">{c.t}</h3>
   <span class="small muted">{c.by}</span>
+  <span class="xs muted">{c.dur} · {langs.join(', ')}</span>
   <span class="xs muted" style="margin-top:auto">{c.lv} · {c.dur} · {c.ls.length} leçons · certificat</span>
 </a>
