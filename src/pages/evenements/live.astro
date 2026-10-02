@@ -1,4 +1,6 @@
 ---
+import MediaPlayer from '../../components/MediaPlayer.astro';
+import { LIVE_STREAM } from '../../data/media';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import VoteBox from '../../components/VoteBox.astro';
@@ -12,11 +14,7 @@ const questions: [string, number][] = [["Quel est le coût d'acquisition client 
   <section class="block" style="padding-top:24px">
     <div class="wrap split">
       <div>
-        <div class="player">
-          <span class="live">EN DIRECT</span>
-          <button class="playbtn" type="button" aria-label="Lire le direct" data-toast="Diffusion en direct (simulation). Sous-titres et traduction disponibles."><svg width="28" height="28" viewBox="0 0 24 24" fill="#1B1305"><path d="M8 5v14l11-7z" /></svg></button>
-          <div class="cap">SolarVillage présente son projet · organisé avec CEA Kapital Invest</div>
-        </div>
+        <MediaPlayer title={LIVE_STREAM} live ratio="16/9" cap="SolarVillage présente son projet · organisé avec CEA Kapital Invest" />
         <div class="row" style="margin-top:12px" id="rooms">
           {['Salle principale', 'Salle B — ateliers', 'Salle C — anglais'].map((s, i) => <button class="chip" type="button" aria-pressed={i === 0 ? 'true' : 'false'}>{s}</button>)}
           <select class="sel" aria-label="Sous-titres"><option>Sous-titres FR</option><option>Subtitles EN</option></select>

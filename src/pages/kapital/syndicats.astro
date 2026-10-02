@@ -12,7 +12,7 @@ export const prerender = false;
     <div class="wrap">
       <Lock feature="kap_sub" text="Les syndicats exigent un véhicule dédié et un partenaire agréé dans chaque juridiction." />
       <div class="grid g3" style="margin-top:18px">
-        {clubs.map(([n, l, m]) => <div class="panel"><h3>{n}</h3><p class="small muted">{l} · {m} membres</p><button class="btn btn-primary btn-sm" type="button" data-toast="Demande d'adhésion envoyée au chef de file.">Demander à rejoindre</button></div>)}
+        {clubs.map(([n, l, m]) => <div class="panel"><h3>{n}</h3><p class="small muted">{l} · {m} membres</p><button class="btn btn-primary btn-sm" type="button" data-post="/api/kapital/demande" data-body={JSON.stringify({ kind: 'syndicat', ref: n })}>Demander à rejoindre</button></div>)}
       </div>
     </div>
   </section>

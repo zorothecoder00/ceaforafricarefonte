@@ -18,6 +18,7 @@ export const ADMIN_NAV: [string, string, Obj][] = [
   ['/admin/interrupteurs', 'Interrupteurs par pays', 'interrupteurs'],
   ['/admin/paiements', 'Paiements', 'paiements'],
   ['/admin/contenus', 'Contenus et voix', 'contenus'],
+  ['/admin/assemblees', 'Assemblées et votes', 'journal_audit'],
   ['/admin/audit', "Journal d'audit", 'journal_audit'],
   ['/admin/droits', 'Matrice des droits', 'contenus'],
 ];

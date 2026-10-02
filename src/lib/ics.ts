@@ -2,7 +2,7 @@
    Heures « flottantes » : l'heure locale du lieu de l'événement, sans conversion de fuseau. */
 import { EXTRA } from '../data/events-extra';
 
-type Ev = { id: string; t: string; d: string; date: string; city: string };
+type Ev = { id: string; t: string; d: string; date: string; city: string; path?: string };
 
 const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
 // Lignes de 75 octets maximum, continuées par une espace (RFC 5545 §3.1)
@@ -29,7 +29,7 @@ function vevent(e: Ev, site: string) {
   return [
     'BEGIN:VEVENT', `UID:${e.id}@cea4africa.com`, `DTSTAMP:${stamp(new Date())}`, `DTSTART:${start}`, `DTEND:${end}`,
     `SUMMARY:${esc(e.t)}`, `LOCATION:${esc(x?.venue ? `${x.venue.name}, ${x.venue.address}` : e.city)}`,
-    `DESCRIPTION:${esc(`${e.d}\n${site}/evenements/${e.id}`)}`, `URL:${site}/evenements/${e.id}`, 'END:VEVENT',
+    `DESCRIPTION:${esc(`${e.d}\n${site}${e.path ?? `/evenements/${e.id}`}`)}`, `URL:${site}${e.path ?? `/evenements/${e.id}`}`, 'END:VEVENT',
   ];
 }
 

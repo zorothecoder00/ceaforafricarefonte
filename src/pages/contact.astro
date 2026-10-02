@@ -2,6 +2,11 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHead from '../components/PageHead.astro';
 import { COUNTRIES } from '../data/site';
+import { TEAM_SLOTS } from '../data/teams';
+
+// Numéro WhatsApp officiel (format international sans « + »), fourni par variable d'environnement : sans numéro, le canal est masqué
+const wa = (import.meta.env.PUBLIC_WHATSAPP_NUMBER ?? '').replace(/\D/g, '');
+const teams = Object.keys(TEAM_SLOTS);
 
 const motifs: Record<string, string> = {
   Accompagnement: 'Équipe programmes',
@@ -23,7 +28,7 @@ const motifs: Record<string, string> = {
         <select class="in" id="cm" name="motif">{Object.entries(motifs).map(([m, team]) => <option data-team={team}>{m}</option>)}</select>
         <p class="small" id="route" style="margin-top:-6px"></p>
         <label class="f" for="cp">Pays</label>
-        <select class="in" id="cp" name="country">{Object.entries(COUNTRIES).map(([k, v]) => <option value={k}>{v}</option>)}</select>
+        <select class="in" id="cp" name="country" data-from-query="pays">{Object.entries(COUNTRIES).map(([k, v]) => <option value={k}>{v}</option>)}</select>
         <label class="f" for="cn">Nom</label><input class="in" id="cn" name="name" required minlength="2" autocomplete="name" />
         <label class="f" for="ce">E-mail ou téléphone</label><input class="in" id="ce" name="contact" required minlength="5" />
         <label class="f" for="cmsg">Message</label><textarea class="in" id="cmsg" name="message" required minlength="10"></textarea>
@@ -33,15 +38,24 @@ const motifs: Record<string, string> = {
       <aside>
         <div class="panel">
           <h3>Autres canaux</h3>
-          <p class="small">WhatsApp : +228 00 00 00 00 (fictif)<br />Délai de réponse indicatif : 2 jours ouvrés</p>
-          <button class="btn btn-ghost btn-sm" data-toast="Ouverture de WhatsApp (simulation).">Écrire sur WhatsApp</button>
+          <p class="small">Délai de réponse indicatif : 2 jours ouvrés.</p>
+          {wa && <a class="btn btn-ghost btn-sm" href={`https://wa.me/${wa}?text=${encodeURIComponent('Bonjour CEA FOR AFRICA, ')}`} target="_blank" rel="noopener">Écrire sur WhatsApp</a>}
           <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="openChat()">Demander à CEA Copilot</button>
         </div>
-        <div class="panel" style="margin-top:16px">
-          <h3>Prendre rendez-vous</h3>
-          <div class="row" data-slots>{['Lun 10:00', 'Mar 14:00', 'Jeu 11:30'].map((s) => <button class="slot" type="button" aria-pressed="false">{s}</button>)}</div>
-          <button class="btn btn-primary btn-sm" style="margin-top:10px" data-toast="Rendez-vous confirmé. Lien de visio envoyé.">Confirmer</button>
-        </div>
+        <form class="panel" id="rdv" style="margin-top:16px">
+          <h3>Prendre rendez-vous en visio</h3>
+          <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px" />
+          <label class="f" for="rt">Équipe</label>
+          <select class="in" id="rt" name="team">{teams.map((t) => <option>{t}</option>)}</select>
+          <p class="f" id="rsl">Créneau (heure de Lomé, GMT)</p>
+          <div class="row" data-slots id="rslots" role="radiogroup" aria-labelledby="rsl"><span class="small muted">Chargement…</span></div>
+          <label class="f" for="rn">Nom</label><input class="in" id="rn" name="name" required minlength="2" autocomplete="name" />
+          <label class="f" for="re">E-mail (pour recevoir le lien de visio)</label><input class="in" id="re" name="contact" type="email" required autocomplete="email" />
+          <label class="f" for="rs">Sujet (facultatif)</label><input class="in" id="rs" name="topic" maxlength="1000" />
+          <label class="row small" style="margin:8px 0"><input type="checkbox" name="consent" required /> J'accepte que CEA utilise ces informations pour organiser le rendez-vous.</label>
+          <button class="btn btn-primary btn-sm" type="submit">Confirmer le rendez-vous</button>
+          <p class="small" id="rok" aria-live="polite" style="margin:10px 0 0"></p>
+        </form>
       </aside>
     </div>
   </section>
@@ -54,4 +68,42 @@ const motifs: Record<string, string> = {
   cm.addEventListener('change', upd);
   cp.addEventListener('change', upd);
   upd();
+
+  // Rendez-vous : créneaux libres lus en base, réservation confirmée par e-mail
+  const rdv = document.getElementById('rdv') as HTMLFormElement, rt = document.getElementById('rt') as HTMLSelectElement, box = document.getElementById('rslots')!;
+  const say = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+  let chosen = '';
+  async function loadSlots() {
+    chosen = '';
+    box.innerHTML = '<span class="small muted">Chargement…</span>';
+    const d = await fetch('/api/rendez-vous?team=' + encodeURIComponent(rt.value)).then((r) => r.json()).catch(() => null);
+    if (!d?.ok) { box.innerHTML = '<span class="small muted">Créneaux indisponibles hors connexion.</span>'; return; }
+    box.innerHTML = '';
+    if (!d.slots.length) box.innerHTML = '<span class="small muted">Aucun créneau libre sur les 14 prochains jours : écrivez-nous via le formulaire.</span>';
+    for (const s of d.slots as { iso: string; label: string }[]) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'slot'; b.textContent = s.label; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', 'false');
+      b.addEventListener('click', () => { chosen = s.iso; box.querySelectorAll('.slot').forEach((x) => { x.setAttribute('aria-checked', String(x === b)); x.setAttribute('aria-pressed', String(x === b)); }); });
+      box.appendChild(b);
+    }
+  }
+  rt.addEventListener('change', loadSlots);
+  loadSlots();
+  rdv.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!chosen) return say('Choisissez un créneau.');
+    const f = new FormData(rdv);
+    const btn = rdv.querySelector<HTMLButtonElement>('[type="submit"]')!;
+    btn.disabled = true;
+    const r = await fetch('/api/rendez-vous', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ team: rt.value, at: chosen, name: f.get('name'), contact: f.get('contact'), topic: f.get('topic') || undefined, consent: f.get('consent') === 'on', website: f.get('website') }) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : { error: 'Erreur réseau.' };
+    btn.disabled = false;
+    say(d.message ?? d.error);
+    if (d.ok) { document.getElementById('rok')!.innerHTML = `✓ ${d.message} <a href="${d.visio}" target="_blank" rel="noopener">Lien de visio</a>`; rdv.reset(); loadSlots(); }
+    else if (r?.status === 409) loadSlots();
+  });
+  // Pays présélectionné depuis une page pays (/contact?pays=TG)
+  const qp = new URLSearchParams(location.search).get('pays')?.toUpperCase();
+  const paysSel = document.querySelector<HTMLSelectElement>('select[data-from-query="pays"]');
+  if (qp && paysSel && [...paysSel.options].some((o) => o.value === qp)) paysSel.value = qp;
 </script>

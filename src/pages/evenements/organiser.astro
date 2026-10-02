@@ -22,17 +22,20 @@ const packs: [string, number, string[]][] = [
             <h3>{n}</h3>
             <b style="font-family:var(--display);font-size:1.3rem;color:var(--navy)"><Money xof={p} /></b>
             <ul class="small">{items.map((x) => <li>{x}</li>)}</ul>
-            <button class="btn btn-primary btn-sm" type="button" data-toast={`Dossier sponsor « ${n} » envoyé par e-mail.`}>Demander le dossier</button>
+            <button class="btn btn-primary btn-sm" type="button" data-post="/api/demande" data-body={JSON.stringify({ type: 'sponsor', message: `Dossier de sponsoring : formule ${n}` })}>Demander le dossier</button>
           </div>
         ))}
       </div>
-      <form class="panel" style="margin-top:24px;max-width:720px" data-demo="Proposition reçue. L'équipe Events vous recontacte sous 5 jours ouvrés.">
+      <form class="panel" style="margin-top:24px;max-width:720px" data-api="/api/demande" data-reset>
+          <input type="hidden" name="type" value="evenement" /><input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px" />
         <h3>Proposer un événement</h3>
-        <label class="f" for="et">Titre</label><input class="in" id="et" required />
-        <label class="f" for="ec">Pays et ville</label><input class="in" id="ec" required />
-        <label class="f" for="ed">Date</label><input class="in" id="ed" type="date" />
-        <label class="f" for="ef">Format</label><select class="in" id="ef"><option>Présentiel</option><option>En ligne</option><option>Hybride</option></select>
-        <label class="f" for="ecap">Capacité</label><input class="in" id="ecap" type="number" value="100" min="1" />
+        <label class="f" for="eon">Nom</label><input class="in" id="eon" name="name" required minlength="2" autocomplete="name" />
+          <label class="f" for="eoc">E-mail ou téléphone</label><input class="in" id="eoc" name="contact" required minlength="5" autocomplete="email" />
+        <label class="f" for="et">Titre</label><input class="in" id="et" name="message" required minlength="3" />
+        <label class="f" for="ec">Pays et ville</label><input class="in" id="ec" name="Pays et ville" required />
+        <label class="f" for="ed">Date</label><input class="in" id="ed" name="Date" type="date" />
+        <label class="f" for="ef">Format</label><select class="in" id="ef" name="Format"><option>Présentiel</option><option>En ligne</option><option>Hybride</option></select>
+        <label class="f" for="ecap">Capacité</label><input class="in" id="ecap" name="Capacité" type="text" inputmode="numeric" pattern="[0-9]+" value="100" />
         <button class="btn btn-primary" type="submit">Soumettre</button>
       </form>
     </div>

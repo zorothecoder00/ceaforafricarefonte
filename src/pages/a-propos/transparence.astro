@@ -2,10 +2,9 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import Icon from '../../components/Icon.astro';
+import DocButton from '../../components/DocButton.astro';
 import { SUBS } from '../../data/site';
-
-const reports = ['Rapport annuel 2025', "Rapport d'impact 2025", 'États financiers 2025 (résumé)'];
-const policies = ['Charte éthique et anticorruption', 'Politique de protection des données', "Politique de lanceur d'alerte", 'Charte de neutralité politique', "Politique de gestion des conflits d'intérêts", "Politique d'usage de l'intelligence artificielle"];
+import { REPORTS as reports, POLICIES as policies } from '../../data/documents';
 const line = 'padding:10px 0;border-bottom:1px solid var(--line)';
 ---
 <BaseLayout title="Transparence">
@@ -14,17 +13,20 @@ const line = 'padding:10px 0;border-bottom:1px solid var(--line)';
     <div class="wrap grid g2">
       <div class="panel">
         <h3>Rapports</h3>
-        {reports.map((r) => <div class="row between" style={line}><span class="row"><Icon name="doc" /> {r}</span><button class="btn btn-ghost btn-sm" type="button" data-toast={`« ${r} » ouvert (simulation).`}>PDF</button></div>)}
+        {reports.map((r) => <div class="row between" style={line}><span class="row"><Icon name="doc" /> {r}</span><DocButton kind="transparence" title={r} label="PDF" /></div>)}
       </div>
       <div class="panel">
         <h3>Politiques</h3>
-        {policies.map((r) => <div class="row between" style={line}><span>{r}</span><button class="btn btn-ghost btn-sm" type="button" data-toast={`« ${r} » ouvert (simulation).`}>Lire</button></div>)}
+        {policies.map((r) => <div class="row between" style={line}><span>{r}</span><DocButton kind="transparence" title={r} label="Lire" /></div>)}
       </div>
-      <form class="panel" data-demo="Alerte reçue. Un code de suivi confidentiel vous a été attribué.">
+      <form class="panel" data-api="/api/signalement" data-reset>
+        <input type="hidden" name="category" value="Alerte éthique (lanceur d'alerte)" /><input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px" />
         <h3>Signaler une alerte</h3>
         <p class="small">Canal confidentiel, anonyme si vous le souhaitez.</p>
-        <textarea class="in" required minlength="10" placeholder="Décrivez les faits" aria-label="Description des faits"></textarea>
-        <label class="row small"><input type="checkbox" checked /> Rester anonyme</label>
+        <textarea class="in" name="description" required minlength="10" placeholder="Décrivez les faits" aria-label="Description des faits"></textarea>
+        <input class="in" name="contact" placeholder="Contact (facultatif si anonyme)" aria-label="Contact" style="margin-top:6px" />
+        <label class="row small"><input type="checkbox" name="anonymous" checked /> Rester anonyme</label>
+        <p class="xs muted" style="margin:6px 0 0">Traitée uniquement par le comité d'éthique. Aucune adresse IP n'est conservée en mode anonyme.</p>
         <button class="btn btn-primary btn-sm" type="submit" style="margin-top:10px">Envoyer l'alerte</button>
       </form>
     </div>

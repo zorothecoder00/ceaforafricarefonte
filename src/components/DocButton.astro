@@ -1,0 +1,15 @@
+---
+/* Bouton de document : page du site si le contenu y est publié, téléchargement direct si le fichier est en ligne,
+   sinon demande enregistrée (aucun bouton factice). */
+import { DOC_URLS, DOC_PAGES } from '../data/documents';
+interface Props { kind: 'etude' | 'appel_offres' | 'club' | 'presse' | 'transparence' | 'outil' | 'recherche'; title: string; label?: string; primary?: boolean }
+const { kind, title, label = 'Télécharger', primary = false } = Astro.props;
+const url = DOC_URLS[title];
+const page = DOC_PAGES[title];
+const cls = `btn btn-sm ${primary ? 'btn-primary' : 'btn-ghost'}`;
+---
+{page
+  ? <a class={cls} href={page}>{label === 'Télécharger' ? 'Consulter' : label}</a>
+  : url
+    ? <a class={cls} href={url} download target="_blank" rel="noopener">{label}</a>
+    : <button class={cls} type="button" data-post="/api/demande-document" data-body={JSON.stringify({ kind, ref: title })} title="Le document vous sera envoyé par e-mail">Recevoir par e-mail</button>}

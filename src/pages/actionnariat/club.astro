@@ -1,36 +1,42 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import DocButton from '../../components/DocButton.astro';
+import { CLUB_DOCS } from '../../data/documents';
 import PageHead from '../../components/PageHead.astro';
 import { SUBS } from '../../data/site';
+import { AG, AG_CHOICES } from '../../data/assemblee';
 
-const docs = ['Convocation', 'Rapport de gestion 2025', 'Comptes 2025', 'Texte des résolutions'];
-const resolutions = ['Approbation des comptes 2025', 'Affectation du résultat', "Renouvellement d'un administrateur"];
+const docs = CLUB_DOCS;
+const resolutions = AG.resolutions;
 ---
 <BaseLayout title="Club des actionnaires">
   <PageHead title="Club des actionnaires CEA" lead="Informations, documents et assemblées générales. Vote électronique sécurisé." crumbs={[['/actionnariat', 'Actionnariat'], ['', 'Club des actionnaires']]} subnav={SUBS.actionnariat} />
   <section class="block">
     <div class="wrap split">
       <div>
-        <h2>Assemblée générale ordinaire — 14 décembre 2026</h2>
+        <h2>{AG.title}</h2>
         <div class="panel">
           <h3>Documents</h3>
-          {docs.map((d) => <div class="row between" style="padding:8px 0;border-bottom:1px solid var(--line)"><span>{d}</span><button class="btn btn-ghost btn-sm" type="button" data-toast="Document ouvert (simulation).">Lire</button></div>)}
+          {docs.map((d) => <div class="row between" style="padding:8px 0;border-bottom:1px solid var(--line)"><span>{d}</span><DocButton kind="club" title={d} label="Lire" /></div>)}
         </div>
         <h3 style="margin-top:22px">Résolutions</h3>
         <div id="ag">
+          <p class="small muted" id="agState">Chargement de l'état du vote…</p>
           {resolutions.map((r, i) => (
             <div class="panel row between" style="margin-bottom:8px">
               <span>{i + 1}. {r}</span>
-              <span class="row" data-slots>{['Pour', 'Contre', 'Abstention'].map((o) => <button class="slot" type="button" aria-pressed="false" data-res={i}>{o}</button>)}</span>
+              <span class="row" role="radiogroup" aria-label={r}>{AG_CHOICES.map((o) => <button class="slot" type="button" aria-pressed="false" data-res={i} data-choice={o}>{o}</button>)}</span>
             </div>
           ))}
-          <button class="btn btn-primary" type="button" id="agGo">Valider mon vote (authentification forte)</button>
+          <button class="btn btn-primary" type="button" id="agGo" disabled>Valider mon vote (authentification forte)</button>
+          <p class="xs muted" style="margin-top:8px">Vote définitif, signé par un code à usage unique. Une empreinte de preuve vous est remise et l'opération est inscrite au journal d'audit. Le vote électronique n'ouvre qu'après validation juridique (droit OHADA et statuts).</p>
         </div>
       </div>
       <aside>
-        <form class="panel" data-demo="Question transmise. La réponse sera publiée avant l'assemblée.">
+        <form class="panel" data-api="/api/demande" data-reset>
+          <input type="hidden" name="type" value="question_ag" /><input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px" />
           <h3>Poser une question écrite</h3>
-          <textarea class="in" required aria-label="Votre question"></textarea>
+          <textarea class="in" name="message" required minlength="10" aria-label="Votre question"></textarea>
           <button class="btn btn-primary btn-sm" type="submit">Envoyer</button>
         </form>
       </aside>
@@ -39,24 +45,58 @@ const resolutions = ['Approbation des comptes 2025', 'Affectation du résultat',
   <dialog id="otp">
     <div class="dlg-h"><h3>Authentification forte</h3></div>
     <form class="dlg-b" id="otpF">
-      <p>Saisissez le code reçu par SMS pour signer votre vote (démo : 4 à 6 chiffres au choix).</p>
-      <input class="in" id="agc" required pattern="[0-9]{4,6}" maxlength="6" inputmode="numeric" aria-label="Code SMS" />
-      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" type="button" id="otpX">Annuler</button><button class="btn btn-primary" type="submit">Signer</button></div>
+      <p id="otpMsg">Envoi du code…</p>
+      <input class="in" id="agc" required pattern="[0-9]{6}" maxlength="6" inputmode="numeric" autocomplete="one-time-code" aria-label="Code à 6 chiffres" />
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" type="button" id="otpX">Annuler</button><button class="btn btn-ghost" type="button" id="otpR">Renvoyer</button><button class="btn btn-primary" type="submit">Signer</button></div>
     </form>
   </dialog>
 </BaseLayout>
 <script>
   const dlg = document.getElementById('otp') as HTMLDialogElement;
   const toast = (t: string) => (window as any).toast(t);
-  document.getElementById('agGo')!.addEventListener('click', () => {
-    const voted = new Set([...document.querySelectorAll<HTMLElement>('#ag .slot[aria-pressed="true"]')].map((b) => b.dataset.res));
-    if (voted.size < 3) return toast('Votez sur les trois résolutions.');
+  const go = document.getElementById('agGo') as HTMLButtonElement;
+  const st = document.getElementById('agState')!;
+  const slots = [...document.querySelectorAll<HTMLButtonElement>('#ag .slot')];
+  const post = async (body: unknown) => {
+    const r = await fetch('/api/ag', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null);
+    if (r?.status === 401 && !(body as any).code) { location.href = '/connexion?retour=' + encodeURIComponent(location.pathname); return null; }
+    return r ? r.json().catch(() => ({})) : { error: 'Erreur réseau.' };
+  };
+  const lock = (text: string) => { st.innerHTML = text; slots.forEach((b) => (b.disabled = true)); go.disabled = true; };
+  slots.forEach((b) => b.addEventListener('click', () => {
+    slots.filter((x) => x.dataset.res === b.dataset.res).forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  }));
+  fetch('/api/ag', { credentials: 'same-origin' }).then((r) => r.json()).then((d) => {
+    if (!d.logged) return lock('<a href="/connexion?retour=/actionnariat/club">Connectez-vous</a> pour voter.');
+    if (d.voted) return lock(`✓ Vous avez voté le ${new Date(d.voted.at).toLocaleString('fr-FR')}. Preuve : <code class="xs" style="overflow-wrap:anywhere">${d.voted.proof}</code>`);
+    if (!d.open) return lock("Le vote électronique n'est pas encore ouvert pour votre pays (validation juridique en cours). Vous pouvez voter en séance ou donner procuration.");
+    if (!d.eligible) return lock('Le vote est réservé aux membres à jour de leur adhésion. <a href="/adherer">Adhérer</a>');
+    st.textContent = 'Le vote électronique est ouvert.';
+    go.disabled = false;
+  }).catch(() => lock('État du vote indisponible. Réessayez plus tard.'));
+  const choices = () => [...new Set(slots.map((b) => b.dataset.res))].map((i) => slots.find((b) => b.dataset.res === i && b.getAttribute('aria-pressed') === 'true')?.dataset.choice);
+  async function sendCode() {
+    const msg = document.getElementById('otpMsg')!;
+    msg.textContent = 'Envoi du code…';
+    const d = await post({ action: 'code' });
+    if (!d) return;
+    msg.textContent = d.ok ? `${d.message} Saisissez-le pour signer votre vote.` : d.error;
+  }
+  go.addEventListener('click', () => {
+    if (choices().some((c) => !c)) return toast('Votez sur chaque résolution.');
     dlg.showModal();
+    sendCode();
   });
+  document.getElementById('otpR')!.addEventListener('click', sendCode);
   document.getElementById('otpX')!.addEventListener('click', () => dlg.close());
-  document.getElementById('otpF')!.addEventListener('submit', (e) => {
+  document.getElementById('otpF')!.addEventListener('submit', async (e) => {
     e.preventDefault();
+    const code = (document.getElementById('agc') as HTMLInputElement).value;
+    const d = await post({ action: 'voter', choices: choices(), code });
+    if (!d) return;
+    if (!d.ok) return toast(d.error ?? 'Erreur.');
     dlg.close();
-    toast(`Vote enregistré. Preuve horodatée n° VOTE-2026-${Math.floor(1000 + Math.random() * 8999)}.`);
+    toast(d.message);
+    lock(`✓ Vote enregistré le ${new Date(d.at).toLocaleString('fr-FR')}. Preuve : <code class="xs" style="overflow-wrap:anywhere">${d.proof}</code>`);
   });
 </script>

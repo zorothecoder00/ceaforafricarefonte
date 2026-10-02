@@ -14,9 +14,12 @@ const faq = [
   <section class="block">
     <div class="wrap grid g2">
       {faq.map(([q, a]) => <details class="panel"><summary><b>{q}</b></summary><p class="small" style="margin:10px 0 0">{a}</p></details>)}
-      <form class="panel" data-demo="Ticket créé. Réponse sous 1 jour ouvré.">
+      <form class="panel" data-api="/api/demande" data-reset>
+          <input type="hidden" name="type" value="support" /><input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px" />
         <h3>Ouvrir un ticket</h3>
-        <textarea class="in" required aria-label="Décrivez votre problème"></textarea>
+        <label class="f" for="ain">Nom</label><input class="in" id="ain" name="name" required minlength="2" autocomplete="name" />
+          <label class="f" for="aic">E-mail ou téléphone</label><input class="in" id="aic" name="contact" required minlength="5" autocomplete="email" />
+          <label class="f" for="am">Votre problème</label><textarea class="in" id="am" name="message" required minlength="10"></textarea>
         <button class="btn btn-primary btn-sm" type="submit">Envoyer</button>
       </form>
     </div>

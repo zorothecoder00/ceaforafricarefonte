@@ -2,10 +2,11 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { SUBS } from '../../data/site';
+import { MODELES } from '../../data/modeles';
 
 const checks = ["Nous avons un pacte d'associés signé", 'Le conseil se réunit au moins 4 fois par an', 'Les comptes sont certifiés', 'Les décisions importantes sont consignées dans des procès-verbaux', "Les conflits d'intérêts sont déclarés"];
 const cal = [['31 mars', 'Dépôt des états financiers'], ['30 juin', 'Assemblée générale annuelle'], ['Trimestriel', 'Réunion du conseil']];
-const models = ['Procès-verbal de conseil', "Procès-verbal d'assemblée", 'Règlement intérieur du conseil'];
+const models = MODELES.filter((m) => m.cat === 'gouvernance');
 ---
 <BaseLayout title="Kit de gouvernance">
   <PageHead title="Kit de gouvernance" lead="Conseil d'administration, procès-verbaux, calendrier des obligations et auto-évaluation." crumbs={[['/actionnariat', 'Actionnariat'], ['', 'Gouvernance']]} subnav={SUBS.actionnariat} />
@@ -20,7 +21,8 @@ const models = ['Procès-verbal de conseil', "Procès-verbal d'assemblée", 'Rè
         <h3>Calendrier des obligations</h3>
         <ol class="timeline">{cal.map(([d, t]) => <li><b>{d}</b> — {t}</li>)}</ol>
         <h3>Modèles</h3>
-        {models.map((t) => <button class="btn btn-ghost btn-sm" type="button" style="margin:3px" data-toast="Modèle téléchargé (simulation).">{t}</button>)}
+        {models.map((m) => <a class="btn btn-ghost btn-sm" style="margin:3px" href={`/actionnariat/modeles/${m.slug}`}>{m.title}</a>)}
+        <p class="xs muted" style="margin:6px 0 0">Consultables, imprimables et téléchargeables au format Word. <a href="/actionnariat/modeles">Tous les modèles</a></p>
       </div>
     </div>
   </section>

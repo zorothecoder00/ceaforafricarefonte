@@ -2,6 +2,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import Icon from '../../components/Icon.astro';
+import DocButton from '../../components/DocButton.astro';
 import { TOOLS, SUBS } from '../../data/site';
 ---
 <BaseLayout title="Boîte à outils">
@@ -9,7 +10,7 @@ import { TOOLS, SUBS } from '../../data/site';
   <section class="block">
     <div class="wrap grid g3">
       {TOOLS.map((t) => (
-        <div class="panel row between"><span class="row"><Icon name="doc" /> <b>{t.t}</b></span><button class="btn btn-ghost btn-sm" data-toast={`Téléchargement : ${t.t} (simulation).`}>{t.f}</button></div>
+        <div class="panel row between"><span class="row"><Icon name="doc" /> <b>{t.t}</b></span><DocButton kind="outil" title={t.t} label={t.f} /></div>
       ))}
     </div>
   </section>

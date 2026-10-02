@@ -1,0 +1,38 @@
+---
+/* Lecteur vidéo ou audio : lit le média publié (src/data/media.ts), ou affiche « à venir » s'il n'est pas encore en ligne.
+   Les vidéos YouTube/Vimeo ne sont chargées qu'au clic (aucun cookie tiers avant lecture). */
+import { MEDIA, embedUrl } from '../data/media';
+interface Props { title: string; kind?: 'video' | 'audio'; cap?: string; live?: boolean; ratio?: string; soon?: string }
+const { title, kind = 'video', cap, live = false, ratio = '16/10', soon } = Astro.props;
+const m = MEDIA[title];
+const embed = m ? embedUrl(m.url) : null;
+const pending = soon ?? (kind === 'audio' ? 'Épisode à venir' : live ? 'Le direct démarre à l’heure prévue' : 'Vidéo bientôt en ligne');
+---
+{kind === 'audio'
+  ? (m ? <audio controls preload="none" src={m.url} style="max-width:260px;height:36px" aria-label={`Écouter ${title}`}></audio> : <span class="tag">{pending}</span>)
+  : (
+    <div class="player" style={`aspect-ratio:${ratio}`} data-embed={embed ?? undefined}>
+      {live && <span class="live">EN DIRECT</span>}
+      {m && !embed && (
+        <video controls preload="none" style="position:absolute;inset:0;width:100%;height:100%;border-radius:inherit;background:#000" aria-label={title}>
+          <source src={m.url} />
+          {m.captions?.map((c, i) => <track kind="subtitles" srclang={c.lang} label={c.label} src={c.src} default={i === 0} />)}
+        </video>
+      )}
+      {embed && <button class="playbtn" type="button" aria-label={`Lire ${title}`} data-play-embed><svg width="28" height="28" viewBox="0 0 24 24" fill="#1B1305"><path d="M8 5v14l11-7z" /></svg></button>}
+      {!m && <span class="tag" style="position:relative;z-index:1">{pending}</span>}
+      {cap && !(m && !embed) && <span class="cap">{cap}</span>}
+    </div>
+  )}
+<script>
+  document.querySelectorAll<HTMLButtonElement>('[data-play-embed]').forEach((b) => b.addEventListener('click', () => {
+    const box = b.closest<HTMLElement>('[data-embed]')!;
+    const f = document.createElement('iframe');
+    f.src = box.dataset.embed!;
+    f.title = b.getAttribute('aria-label') ?? 'Vidéo';
+    f.allow = 'autoplay; fullscreen; picture-in-picture';
+    f.allowFullscreen = true;
+    f.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;border-radius:inherit';
+    box.replaceChildren(f);
+  }));
+</script>

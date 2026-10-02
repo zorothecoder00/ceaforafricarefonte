@@ -14,7 +14,7 @@ const items = ['Comptes certifiés sur 3 exercices', "Conseil d'administration a
         <p id="ipor" style="margin-top:12px"></p>
       </div>
       <aside>
-        <div class="panel"><h3>Être accompagné</h3><p class="small">Mise en relation avec des conseillers agréés, sans rémunération non déclarée.</p><button class="btn btn-primary btn-sm" type="button" data-toast="Demande transmise à l'équipe Capital Markets.">Demander un accompagnement</button></div>
+        <div class="panel"><h3>Être accompagné</h3><p class="small">Mise en relation avec des conseillers agréés, sans rémunération non déclarée.</p><form data-api="/api/kapital/demande" data-reset><input type="hidden" name="kind" value="ipo" /><label class="f" for="ipoCo">Entreprise</label><input class="in" id="ipoCo" name="ref" required maxlength="120" placeholder="Nom de votre entreprise" /><label class="f" for="ipoMsg">Votre projet de cotation (facultatif)</label><textarea class="in" id="ipoMsg" name="message" maxlength="2000" placeholder="Bourse visée, horizon, chiffre d'affaires…"></textarea><button class="btn btn-primary btn-sm" type="submit">Demander un accompagnement</button></form></div>
         <div class="panel" style="margin-top:14px"><h3>Club des émetteurs</h3><p class="small muted">Communauté des entreprises cotées ou en préparation.</p></div>
       </aside>
     </div>

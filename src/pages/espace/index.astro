@@ -22,6 +22,8 @@ const nextEvents = [...EVENTS].filter((e) => e.date >= new Date().toISOString().
 const myCountry = prof?.country ?? null;
 const news = ARTICLES.filter((a) => !myCountry || a.c === country(myCountry) || a.c === 'Panafricain').slice(0, 3);
 const openConsults = CONSULTS.filter((c) => !votes.some((v) => v.id === c.id));
+const saved = await db.select().from(s.savedItem).where(and(eq(s.savedItem.userId, user.id), inArray(s.savedItem.kind, ['article', 'course', 'event']))).orderBy(desc(s.savedItem.at)).limit(5);
+const savedRow = (x: typeof saved[number]): [string, string] => x.kind === 'article' ? [ARTICLES.find((a) => a.id === x.itemId)?.t ?? x.itemId, 'Article'] : x.kind === 'course' ? [COURSES.find((c) => c.id === x.itemId)?.t ?? x.itemId, 'Cours'] : [EVENTS.find((e) => e.id === x.itemId)?.t ?? x.itemId, 'Événement'];
 
 type W = { id: string; title: string; href?: string; cta?: string; rows?: [string, string][]; big?: string; note?: string };
 const widgets: W[] = [];
@@ -30,6 +32,7 @@ const add = (w: W) => widgets.push(w);
 // Membre (toujours)
 add({ id: 'events', title: 'Prochains événements', href: '/evenements', cta: 'Agenda', rows: nextEvents.map((e) => [e.t, `${dateFr(e.date, { day: 'numeric', month: 'short' })} · ${e.city}`]) });
 add({ id: 'courses', title: 'Mes cours en cours', href: '/espace/apprentissage', cta: 'Tout voir', rows: enrolls.filter((e) => !e.completedAt).slice(0, 4).map((e) => { const c = COURSES.find((x) => x.id === e.courseId); return [c?.t ?? e.courseId, `${Math.round((e.completedLessons.length / (c?.ls.length ?? 1)) * 100)} %`]; }), note: enrolls.length ? undefined : 'Aucun cours commencé. Commencez par un cours gratuit.' });
+if (saved.length) add({ id: 'saved', title: 'Mes favoris', rows: saved.map(savedRow) });
 add({ id: 'news', title: myCountry ? `Actualités — ${country(myCountry)}` : 'Actualités', href: '/ressources', cta: 'Le média', rows: news.map((a) => [a.t, a.cat]) });
 add({ id: 'consult', title: 'Consultations ouvertes', href: '/voix', cta: 'Je participe', rows: openConsults.map((c) => [c.t, `Clôture ${dateFr(c.close)}`]), note: openConsults.length ? undefined : 'Vous avez répondu à toutes les consultations.' });
 add({ id: 'card', title: 'Ma carte de membre', href: member ? '/espace/carte' : '/adherer', cta: member ? 'Afficher' : 'Adhérer', big: member ? member.plan.toUpperCase() : '—', note: member ? `N° ${member.cardNumber}` : 'Aucune adhésion active.' });

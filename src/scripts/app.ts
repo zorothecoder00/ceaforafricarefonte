@@ -383,7 +383,7 @@ $$<HTMLFormElement>('form[data-api]').forEach((f) => f.addEventListener('submit'
     const res = await fetch(f.dataset.api!, { method: f.dataset.method || 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formJson(f)) });
     const d = await res.json().catch(() => ({}));
     if (res.status === 401) { location.href = withLang('/connexion') + '?retour=' + encodeURIComponent(location.pathname); return; }
-    if (!res.ok || d.ok === false) { toast(d.error || (EN ? 'Something went wrong. Please try again.' : 'Une erreur est survenue. Réessayez.')); return; }
+    if (!res.ok || d.ok === false) { toast(d.error || (EN ? 'Something went wrong. Please try again.' : 'Une erreur est survenue. Réessayez.')); if (d.redirect) setTimeout(() => (location.href = d.redirect), 1500); return; }
     toast(d.message || f.dataset.success || (EN ? 'Saved.' : 'Enregistré.'));
     if (f.hasAttribute('data-reset')) f.reset();
     if (d.redirect || f.dataset.redirect) setTimeout(() => (location.href = d.redirect || f.dataset.redirect!), 700);
@@ -402,7 +402,7 @@ $$<HTMLButtonElement>('[data-post]').forEach((b) => b.addEventListener('click', 
   const d = res ? await res.json().catch(() => ({})) : {};
   b.disabled = false;
   if (res?.status === 401) { location.href = withLang('/connexion') + '?retour=' + encodeURIComponent(location.pathname); return; }
-  if (!res || !res.ok || d.ok === false) { toast(d.error || (EN ? 'Something went wrong.' : 'Une erreur est survenue.')); return; }
+  if (!res || !res.ok || d.ok === false) { toast(d.error || (EN ? 'Something went wrong.' : 'Une erreur est survenue.')); if (d.redirect) setTimeout(() => (location.href = d.redirect), 1500); return; }
   toast(d.message || (EN ? 'Done.' : 'C’est fait.'));
   if (d.redirect) setTimeout(() => (location.href = d.redirect), 600);
   else if (b.hasAttribute('data-reload')) setTimeout(() => location.reload(), 600);

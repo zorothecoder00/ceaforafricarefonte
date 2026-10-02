@@ -7,10 +7,13 @@ import { db } from '../../../lib/db';
 import { membership, certificate, eventTicket } from '../../../db/schema/app';
 import { user } from '../../../db/schema/auth';
 import { EVENTS, dateFr } from '../../../data/site';
+import { qrSvg, verifyUrl } from '../../../lib/qr';
+import { linkedinCertUrl } from '../../../lib/share';
 
 export const prerender = false;
 const { type = '', id = '' } = Astro.params;
 let ok = false, title = 'Document introuvable', lines: [string, string][] = [];
+let qr = '', linkedin = '';
 const mask = (n: string) => n.split(' ').map((w, i) => (i === 0 ? w : w[0] + '.')).join(' ');
 
 if (type === 'carte') {
@@ -26,6 +29,11 @@ if (type === 'carte') {
     ok = !r.c.revokedAt;
     title = ok ? 'Certificat authentique' : 'Certificat révoqué';
     lines = [['Titulaire', r.name], ['Intitulé', r.c.title], ['Délivré le', dateFr(r.c.issuedAt.toISOString())], ['Numéro', r.c.number]];
+    if (ok) {
+      const v = verifyUrl(Astro.url.origin, 'certificat', r.c.number);
+      qr = await qrSvg(v);
+      linkedin = linkedinCertUrl({ title: r.c.title, number: r.c.number, issuedAt: r.c.issuedAt, verifyUrl: v });
+    }
   }
 } else if (type === 'billet') {
   const [r] = await db.select().from(eventTicket).where(eq(eventTicket.code, id));
@@ -52,6 +60,8 @@ if (type === 'carte') {
       <div class="panel">
         <span class={`tag ${ok ? 'ok' : 'bad'}`}>{ok ? '✓ Vérifié' : '✗ Non valide'}</span>
         {lines.length > 0 ? <div style="margin-top:12px">{lines.map(([k, v]) => <div class="list-row"><span class="muted">{k}</span><b>{v}</b></div>)}</div> : <p style="margin-top:12px">Aucun document ne correspond à ce code. Vérifiez qu'il a été saisi sans erreur.</p>}
+        {qr && <div style="width:140px;margin:14px auto 0" set:html={qr} aria-label="QR code de vérification" />}
+        {linkedin && <a class="btn btn-primary btn-sm" href={linkedin} target="_blank" rel="noopener" style="margin-top:12px">Ajouter au profil LinkedIn</a>}
         {type === 'presence' && ok && <button class="btn btn-primary btn-sm" type="button" onclick="window.print()" style="margin-top:12px">Imprimer / enregistrer en PDF</button>}
         <p class="xs muted" style="margin:12px 0 0">Vérification effectuée le {new Date().toLocaleString('fr-FR')} par CEA FOR AFRICA.</p>
       </div>

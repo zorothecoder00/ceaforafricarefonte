@@ -2,6 +2,7 @@
 import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import Money from '../../components/Money.astro';
+import DocButton from '../../components/DocButton.astro';
 import { RESEARCH } from '../../data/site';
 ---
 <KapitalLayout title="Recherche et analyses">
@@ -14,7 +15,7 @@ import { RESEARCH } from '../../data/site';
             <div><b>{r.t}</b><div class="small muted">{r.p ? 'Premium' : 'Gratuit'}</div></div>
             {r.p
               ? <a class="btn btn-gold btn-sm" href="#abo">S'abonner</a>
-              : <button class="btn btn-ghost btn-sm" type="button" data-toast={`Lecture : ${r.t} (simulation).`}>Lire</button>}
+              : <DocButton kind="recherche" title={r.t} label="Lire" />}
           </div>
         ))}
       </div>

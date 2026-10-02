@@ -13,7 +13,7 @@ import { SUBS } from '../../data/site';
         <label class="f" for="pool">Réserve pour les salariés (ESOP) : <span data-v="pool"></span></label><input type="range" id="pool" min="0" max="20" step="1" value="10" />
         <label class="f" for="r2">Simuler une 2e levée (série A) : <span data-v="r2"></span></label><input type="range" id="r2" min="0" max="3000" step="50" value="0" />
         <p class="demo-note">Montants en millions de FCFA. Hypothèses : réserve salariés créée avant la levée ; série A à valorisation triple.</p>
-        <button class="btn btn-ghost btn-sm" type="button" data-toast="Table de capitalisation exportée en Excel (simulation).">Exporter la table</button>
+        <div class="row" style="gap:6px"><button class="btn btn-ghost btn-sm" type="button" id="exportCsv">Exporter la table (Excel, CSV)</button><button class="btn btn-ghost btn-sm" type="button" onclick="window.print()">Imprimer / PDF</button></div>
       </div>
       <div class="panel">
         <h3>Répartition après la levée</h3>
@@ -28,6 +28,7 @@ import { SUBS } from '../../data/site';
 <script>
   const v = (id: string) => Number((document.getElementById(id) as HTMLInputElement).value);
   const fmt = (n: number) => n.toLocaleString('fr-FR');
+  let last: { pre: number; raise: number; pool: number; r2: number; post: number; parts: [string, number, string][] } | null = null;
   function r() {
     const pre = v('pre'), raise = v('raise'), pool = v('pool') / 100, r2 = v('r2');
     const post = pre + raise, inv = raise / post;
@@ -36,6 +37,7 @@ import { SUBS } from '../../data/site';
     const set = (k: string, t: string) => (document.querySelector(`[data-v="${k}"]`)!.textContent = t);
     set('pre', fmt(pre) + ' M'); set('raise', fmt(raise) + ' M'); set('pool', Math.round(pool * 100) + ' %'); set('r2', r2 ? fmt(r2) + ' M' : 'aucune');
     const parts = ([['Fondateurs', founders, '#082B4C'], ['Salariés (ESOP)', esop, '#5B8DB8'], ['Investisseurs amorçage', inv1, '#C9962B'], ['Investisseurs série A', invA, '#7A5A12']] as [string, number, string][]).filter((p) => p[1] > 0);
+    last = { pre, raise, pool, r2, post, parts };
     // Anneau SVG : cercle de circonférence 100 (r = 15,915)
     let off = 25;
     document.getElementById('donut')!.innerHTML = parts.map(([, x, c]) => {
@@ -46,6 +48,23 @@ import { SUBS } from '../../data/site';
     document.getElementById('capt')!.innerHTML = parts.map(([n, x, c]) => `<div class="row between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="row"><span style="width:12px;height:12px;border-radius:3px;background:${c}"></span>${n}</span><b class="num">${(x * 100).toFixed(1)} %</b></div>`).join('') +
       `<p class="small" style="margin-top:10px">Valorisation après levée : <b>${fmt(post)} M FCFA</b>. Les fondateurs conservent <b>${(founders * 100).toFixed(1)} %</b>${founders < 0.5 ? ' — attention : ils perdent la majorité.' : '.'}</p>`;
   }
+  // Export CSV (séparateur « ; », UTF-8 avec BOM : s'ouvre directement dans Excel en français)
+  document.getElementById('exportCsv')!.addEventListener('click', () => {
+    if (!last) return;
+    const n = (x: number) => String(x).replace('.', ',');
+    const rows = [
+      ['Table de capitalisation simulée — CEA Studio de capital', ''], ['Date', new Date().toLocaleDateString('fr-FR')], [''],
+      ['Hypothèse', 'Valeur'], ['Valorisation pré-money (M FCFA)', n(last.pre)], ['Montant levé (M FCFA)', n(last.raise)], ['Réserve salariés (ESOP)', n(Math.round(last.pool * 100)) + ' %'], ['Série A (M FCFA)', n(last.r2)], ['Valorisation post-money (M FCFA)', n(last.post)], [''],
+      ['Actionnaire', 'Part du capital (%)'], ...last.parts.map(([name, x]) => [name, n(Math.round(x * 1000) / 10)]), [''],
+      ['Simulation pédagogique : ne constitue pas un conseil en investissement.'],
+    ];
+    const csv = '﻿' + rows.map((r) => r.map((c) => (/[;"]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c)).join(';')).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = 'table-de-capitalisation-cea.csv';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
   ['pre', 'raise', 'pool', 'r2'].forEach((id) => document.getElementById(id)!.addEventListener('input', r));
   r();
 </script>

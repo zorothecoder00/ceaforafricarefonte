@@ -2,13 +2,15 @@
    Référence : Acte uniforme OHADA relatif au droit des sociétés commerciales et du GIE (AUSCGIE), révisé le 30 janvier 2014.
    Les [crochets] sont à compléter. Les montants minimaux et formalités varient selon l'État : à vérifier avec un professionnel. */
 
-export type Modele = { slug: string; title: string; short: string; usage: string; sections: [string, string[]][] };
+export type Modele = { slug: string; cat: 'capital' | 'gouvernance'; title: string; short: string; usage: string; sections: [string, string[]][] };
+export const CATEGORIES: Record<Modele['cat'], string> = { capital: 'Ouvrir son capital', gouvernance: 'Gouvernance et procès-verbaux' };
 
 const AVERT = "Ce modèle est fourni à titre pédagogique par CEA FOR AFRICA. Il ne constitue pas un conseil juridique et doit être relu et adapté par un avocat, un notaire ou un conseil juridique avant toute signature, en fonction de votre situation et du droit de l'État où la société est immatriculée.";
 
 export const MODELES: Modele[] = [
   {
     slug: 'pacte-associes',
+    cat: 'capital',
     title: "Pacte d'associés (SAS ou SARL)",
     short: "Organise les relations entre associés au-delà des statuts : gouvernance, sortie, entrée d'investisseurs.",
     usage: "À signer lors de l'entrée d'un nouvel associé ou d'un investisseur. Le pacte reste confidentiel, contrairement aux statuts déposés au RCCM.",
@@ -58,6 +60,7 @@ export const MODELES: Modele[] = [
   },
   {
     slug: 'statuts-sas',
+    cat: 'capital',
     title: 'Statuts de société par actions simplifiée (SAS)',
     short: "Forme souple, adaptée à l'entrée d'investisseurs et aux start-up.",
     usage: "À adapter avant le dépôt au RCCM, au guichet unique de création d'entreprise du pays.",
@@ -90,6 +93,7 @@ export const MODELES: Modele[] = [
   },
   {
     slug: 'statuts-sarl',
+    cat: 'capital',
     title: 'Statuts de société à responsabilité limitée (SARL)',
     short: 'La forme la plus courante pour une PME : cadre légal sécurisant, gérance simple.',
     usage: "Adaptée à un ou plusieurs associés souhaitant une gouvernance encadrée par la loi.",
@@ -108,6 +112,67 @@ export const MODELES: Modele[] = [
       ['Article 9 — Commissaire aux comptes', ["Un commissaire aux comptes est désigné lorsque les seuils fixés par l'AUSCGIE sont dépassés."]],
       ['Article 10 — Dissolution, litiges', ["La dissolution et la liquidation interviennent dans les conditions de l'AUSCGIE. Les contestations sont soumises [au tribunal de commerce de … / à l'arbitrage CCJA]."]],
       ['Signatures', ["Fait à [ville], le [date], en [nombre] exemplaires. Signatures des associés."]],
+    ],
+  },
+  {
+    slug: 'pv-conseil-administration',
+    cat: 'gouvernance',
+    title: "Procès-verbal de réunion du conseil d'administration",
+    short: 'Trame de procès-verbal pour consigner les délibérations et décisions du conseil.',
+    usage: "À établir après chaque réunion, signer par le président de séance et au moins un administrateur, puis conserver au registre des procès-verbaux.",
+    sections: [
+      ['En-tête', ["[Dénomination sociale], société anonyme au capital de [montant] FCFA, siège social [adresse], RCCM [numéro].", "Procès-verbal de la réunion du conseil d'administration du [date]."]],
+      ['Convocation, présence et quorum', [
+        "Le conseil d'administration s'est réuni le [date] à [heure], à [lieu / par visioconférence], sur convocation du président en date du [date].",
+        "Présents : [noms]. Représentés : [noms et mandataires]. Absents excusés : [noms]. Assistent également : [commissaire aux comptes, invités].",
+        "[Nombre] administrateurs sur [nombre] étant présents ou représentés, le quorum prévu par les statuts et l'AUSCGIE est atteint ; le conseil peut valablement délibérer.",
+      ]],
+      ['Ordre du jour', ['1. Approbation du procès-verbal de la réunion précédente.', '2. [Point].', '3. [Point].', '4. Questions diverses.']],
+      ['Déclaration des conflits d’intérêts', ["Le président demande à chaque administrateur de déclarer tout conflit d'intérêts au regard de l'ordre du jour. [Aucun conflit déclaré / M. ou Mme … déclare un intérêt sur le point … et ne prend pas part au vote.]"]],
+      ['Délibérations', ["Point [n°] — [intitulé]. Exposé : [résumé des documents présentés et des échanges]. Après en avoir délibéré, le conseil [adopte / rejette] la résolution suivante : « [texte de la décision] ». Vote : pour [n], contre [n], abstentions [n]."]],
+      ['Clôture', ["L'ordre du jour étant épuisé, la séance est levée à [heure]. De tout ce qui précède, il a été dressé le présent procès-verbal, signé par le président de séance et [un administrateur]."]],
+      ['Signatures', ['Le président de séance : [nom, signature]', "L'administrateur : [nom, signature]"]],
+    ],
+  },
+  {
+    slug: 'pv-assemblee-generale',
+    cat: 'gouvernance',
+    title: "Procès-verbal d'assemblée générale ordinaire annuelle",
+    short: 'Approbation des comptes, affectation du résultat, renouvellement des mandats.',
+    usage: "L'assemblée ordinaire annuelle se tient dans les six mois de la clôture de l'exercice. Le procès-verbal est signé par les membres du bureau.",
+    sections: [
+      ['En-tête', ["[Dénomination sociale], [forme] au capital de [montant] FCFA, siège social [adresse], RCCM [numéro].", "Procès-verbal de l'assemblée générale ordinaire annuelle du [date]."]],
+      ['Constitution du bureau', [
+        "Les associés ou actionnaires se sont réunis le [date] à [heure], à [lieu], sur convocation [du conseil d'administration / du gérant / du président] adressée le [date].",
+        "L'assemblée est présidée par [nom]. [Noms] sont désignés scrutateurs et [nom] secrétaire. Une feuille de présence a été émargée.",
+        "Les actionnaires présents ou représentés possèdent [nombre] actions sur [nombre] ; le quorum requis est atteint.",
+      ]],
+      ['Documents mis à disposition', ["Le président dépose sur le bureau : la feuille de présence, les pouvoirs, les comptes annuels de l'exercice [année] établis selon le SYSCOHADA révisé, le rapport de gestion, le rapport du commissaire aux comptes [le cas échéant] et le texte des résolutions. Ces documents ont été tenus à la disposition des actionnaires dans les délais légaux."]],
+      ['Ordre du jour', ["Approbation des comptes de l'exercice clos le [date] et quitus aux dirigeants.", 'Affectation du résultat.', 'Approbation des conventions réglementées [le cas échéant].', 'Renouvellement ou nomination de [administrateurs / commissaire aux comptes].', 'Pouvoirs pour les formalités.']],
+      ['Résolutions', [
+        "Première résolution — L'assemblée, après avoir pris connaissance des rapports, approuve les comptes de l'exercice clos le [date] faisant apparaître un [bénéfice / une perte] de [montant] FCFA. Vote : pour [n], contre [n], abstentions [n].",
+        'Deuxième résolution — L’assemblée décide d’affecter le résultat comme suit : réserve légale [montant] ; dividendes [montant] ; report à nouveau [montant]. Vote : [résultat].',
+        'Troisième résolution — [Texte]. Vote : [résultat].',
+        "Dernière résolution — L'assemblée confère tous pouvoirs au porteur d'une copie du présent procès-verbal pour accomplir les formalités légales.",
+      ]],
+      ['Clôture et signatures', ["Rien n'étant plus à l'ordre du jour, la séance est levée à [heure]. Le présent procès-verbal est signé par le président, les scrutateurs et le secrétaire.", 'Le président : [signature] — Les scrutateurs : [signatures] — Le secrétaire : [signature]']],
+    ],
+  },
+  {
+    slug: 'reglement-interieur-conseil',
+    cat: 'gouvernance',
+    title: "Règlement intérieur du conseil d'administration",
+    short: 'Fixe le fonctionnement du conseil : réunions, information, comités, déontologie.',
+    usage: 'Adopté par le conseil, il complète les statuts sans pouvoir y déroger. Il est remis à chaque nouvel administrateur.',
+    sections: [
+      ['Article 1 — Objet', ["Le présent règlement précise les modalités de fonctionnement du conseil d'administration de [dénomination], en complément des statuts et de l'AUSCGIE."]],
+      ['Article 2 — Composition et administrateurs indépendants', ["Le conseil comprend [nombre] administrateurs, dont au moins [nombre] indépendants, c'est-à-dire sans lien d'intérêt avec la société, ses dirigeants ou ses actionnaires de référence. La qualité d'indépendant est revue chaque année."]],
+      ['Article 3 — Réunions', ["Le conseil se réunit au moins [quatre] fois par an, sur convocation du président adressée [huit] jours à l'avance avec l'ordre du jour et les documents utiles. La participation par visioconférence est admise [sauf pour l'arrêté des comptes]."]],
+      ['Article 4 — Information des administrateurs', ["Chaque administrateur reçoit les informations nécessaires à l'accomplissement de sa mission et peut demander tout document complémentaire au président. Un tableau de bord trimestriel (activité, trésorerie, risques) est présenté au conseil."]],
+      ['Article 5 — Comités', ["Le conseil peut créer un comité d'audit et des risques et un comité des rémunérations, composés majoritairement d'administrateurs indépendants. Les comités préparent les décisions du conseil et lui rendent compte."]],
+      ['Article 6 — Déontologie et conflits d’intérêts', ["Chaque administrateur agit dans l'intérêt social, déclare tout conflit d'intérêts, même potentiel, et s'abstient de participer aux délibérations correspondantes. Il respecte la confidentialité des informations reçues et les règles relatives aux informations privilégiées."]],
+      ['Article 7 — Évaluation', ["Une fois par an, le conseil consacre un point de son ordre du jour à l'évaluation de son fonctionnement. Une évaluation externe est réalisée tous les [trois] ans."]],
+      ['Article 8 — Modification', ["Le présent règlement peut être modifié par décision du conseil à la majorité de [fraction] des administrateurs présents ou représentés."]],
     ],
   },
 ];

@@ -1,4 +1,6 @@
 ---
+import MediaPlayer from '../../components/MediaPlayer.astro';
+import { MEDIA, PRESIDENT_VIDEO } from '../../data/media';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import AfricaMap from '../../components/AfricaMap.astro';
@@ -28,9 +30,9 @@ const history = [
         </div>
         <div class="panel" style="background:#082B4C;border:0"><AfricaMap /></div>
       </div>
-      <div class="panel row between" style="margin-top:30px">
-        <div><h3 style="margin:0">Le mot du Président</h3><p class="muted small" style="margin:0">Vidéo de 2 minutes, sous-titrée en français et en anglais.</p></div>
-        <button class="btn btn-primary" data-toast="Lecture de la vidéo (simulation).">Regarder</button>
+      <div class="panel" style="margin-top:30px">
+        <h3 style="margin:0">Le mot du Président</h3><p class="muted small">Vidéo de 2 minutes, sous-titrée en français et en anglais.</p>
+        {MEDIA[PRESIDENT_VIDEO] ? <MediaPlayer title={PRESIDENT_VIDEO} ratio="16/9" /> : <p class="small" style="margin:0">La vidéo sera publiée prochainement. En attendant, découvrez <a href="/a-propos/gouvernance">notre gouvernance</a> et <a href="/a-propos/transparence">nos engagements</a>.</p>}
       </div>
     </div>
   </section>

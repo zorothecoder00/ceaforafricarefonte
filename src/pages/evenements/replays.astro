@@ -1,4 +1,5 @@
 ---
+import MediaPlayer from '../../components/MediaPlayer.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { REPLAYS, SUBS } from '../../data/site';
@@ -9,10 +10,7 @@ import { REPLAYS, SUBS } from '../../data/site';
     <div class="wrap grid g3">
       {REPLAYS.map((r) => (
         <div class="panel">
-          <div class="player" style="aspect-ratio:16/10">
-            <button class="playbtn" aria-label="Lire" data-toast="Lecture du replay (simulation)."><svg width="28" height="28" viewBox="0 0 24 24" fill="#1B1305"><path d="M8 5v14l11-7z" /></svg></button>
-            <span class="cap">{r.d} · {r.v} vues</span>
-          </div>
+          <MediaPlayer title={r.t} cap={`${r.d} · ${r.v} vues`} soon="Replay en cours de montage" />
           <h3 style="margin-top:14px">{r.t}</h3>
           <ol class="small muted" style="margin:0;padding-left:18px">{r.ch.map((c) => <li>{c}</li>)}</ol>
         </div>

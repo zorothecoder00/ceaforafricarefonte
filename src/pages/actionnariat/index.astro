@@ -11,7 +11,7 @@ const steps = ['Clarifier pourquoi ouvrir le capital (croissance, associés, tra
   <section class="block">
     <div class="wrap">
       <div class="grid g4">
-        {basics.map(([t, d, lv]) => <div class="panel"><span class="tag gold">Niveau {lv}</span><h3 style="margin-top:10px">{t}</h3><p class="small">{d}</p><button class="btn btn-ghost btn-sm" type="button" data-toast="Vidéo de 2 minutes (simulation).">Vidéo de 2 min</button></div>)}
+        {basics.map(([t, d, lv]) => <div class="panel"><span class="tag gold">Niveau {lv}</span><h3 style="margin-top:10px">{t}</h3><p class="small">{d}</p><a class="btn btn-ghost btn-sm" href="/academie/c6">Approfondir avec le cours</a></div>)}
       </div>
       <h2 style="margin-top:36px">Ouvrir le capital de sa PME, pas à pas</h2>
       <ol class="timeline">{steps.map((s, i) => <li class={i === 0 ? 'cur' : ''}><b>Étape {i + 1}</b> — {s}</li>)}</ol>

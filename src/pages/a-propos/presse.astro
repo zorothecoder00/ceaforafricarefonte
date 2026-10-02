@@ -1,9 +1,9 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
+import DocButton from '../../components/DocButton.astro';
 import { ARTICLES, SUBS, dateFr } from '../../data/site';
-
-const kit = ['Logos (SVG, PNG)', 'Photos officielles', 'Biographies', "Fiche d'identité"];
+import { PRESS_KIT } from '../../data/documents';
 ---
 <BaseLayout title="Presse">
   <PageHead title="Espace presse" lead="Communiqués, kit média et demandes d'interview." crumbs={[['/a-propos', 'À propos'], ['', 'Presse']]} subnav={SUBS.apropos} />
@@ -15,14 +15,17 @@ const kit = ['Logos (SVG, PNG)', 'Photos officielles', 'Biographies', "Fiche d'i
           <a class="panel" style="display:block;text-decoration:none;margin-bottom:10px" href={`/ressources/article/${a.id}`}><span class="xs muted">{dateFr(a.d)}</span><b style="display:block">{a.t}</b></a>
         ))}
         <h2 style="margin-top:24px">Kit média</h2>
-        <div class="row">{kit.map((k) => <button class="btn btn-ghost btn-sm" type="button" data-toast={`Téléchargement : ${k} (simulation).`}>{k}</button>)}</div>
+        {PRESS_KIT.map((k) => <div class="row between" style="padding:8px 0;border-bottom:1px solid var(--line)"><span>{k}</span><DocButton kind="presse" title={k} /></div>)}
       </div>
       <aside>
-        <form class="panel" data-demo="Demande transmise à l'équipe communication.">
+        <form class="panel" data-api="/api/demande" data-reset>
+          <input type="hidden" name="type" value="interview" /><input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px" />
           <h3>Demande d'interview</h3>
-          <label class="f" for="pm">Média</label><input class="in" id="pm" required />
-          <label class="f" for="ps">Sujet</label><input class="in" id="ps" />
-          <label class="f" for="pd">Date souhaitée</label><input class="in" id="pd" type="date" />
+          <label class="f" for="pin">Nom</label><input class="in" id="pin" name="name" required minlength="2" autocomplete="name" />
+          <label class="f" for="pic">E-mail ou téléphone</label><input class="in" id="pic" name="contact" required minlength="5" autocomplete="email" />
+          <label class="f" for="pm">Média</label><input class="in" id="pm" name="message" required minlength="3" />
+          <label class="f" for="ps">Sujet</label><input class="in" id="ps" name="Sujet" />
+          <label class="f" for="pd">Date souhaitée</label><input class="in" id="pd" name="Date souhaitée" type="date" />
           <button class="btn btn-primary" type="submit" style="width:100%">Envoyer</button>
         </form>
       </aside>

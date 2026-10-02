@@ -94,7 +94,7 @@ describe('Back-office et double authentification', () => {
 
   it('aucun rôle externe ne détient de droit sur les objets internes', () => {
     const external: Role[] = ['membre', 'entrepreneur', 'talent', 'employeur', 'mentor', 'investisseur', 'souscripteur', 'partenaire'];
-    const internal: Obj[] = ['journal_audit', 'membres', 'parametres', 'paiements', 'messages_contact', 'moderation', 'interrupteurs', 'decision_comite'];
+    const internal: Obj[] = ['journal_audit', 'membres', 'parametres', 'paiements', 'messages_contact', 'moderation', 'interrupteurs', 'decision_comite', 'controle_acces'];
     for (const r of external) for (const o of internal) for (const a of ACTIONS) {
       if (o === 'decision_comite' && r === 'entrepreneur' && a === 'L') continue; // décision sur son propre dossier (L*)
       expect(can([r], o, a), `${r} ${o} ${a}`).toBe(false);

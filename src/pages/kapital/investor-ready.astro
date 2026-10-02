@@ -18,7 +18,8 @@ const weeks = [['Semaines 1-2', 'Pitch et récit'], ['Semaines 3-4', 'Modèle fi
           <h3>Tarif</h3>
           <b style="font-family:var(--display);font-size:1.6rem;color:#E7BD62"><Money xof={250000} /></b>
           <p class="small muted">Bourses disponibles pour les entreprises dirigées par des femmes et les moins de 30 ans.</p>
-          <button class="btn btn-primary" style="width:100%" data-toast="Candidature Investor Ready reçue.">Candidater</button>
+          <button class="btn btn-primary" style="width:100%" type="button" data-post="/api/candidatures" data-body={JSON.stringify({ programme: 'investor-ready', data: { source: 'Page Investor Ready', cohorte: '2026-12-01' } })}>Candidater</button>
+          <p class="xs muted" style="margin:8px 0 0">Votre candidature apparaît dans <a href="/espace/candidatures">Mes candidatures</a> ; le règlement n'est demandé qu'après admission.</p>
           <a class="small" href="/kapital/diagnostic" style="display:block;margin-top:10px">Faire d'abord le diagnostic gratuit</a>
         </div>
       </aside>

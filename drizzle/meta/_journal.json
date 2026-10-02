@@ -50,6 +50,20 @@
       "when": 1790950258950,
       "tag": "0006_avis_cours",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790951244593,
+      "tag": "0007_rendez_vous",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790953104487,
+      "tag": "0008_ag_vote",
+      "breakpoints": true
     }
   ]
 }

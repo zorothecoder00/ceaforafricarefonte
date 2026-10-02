@@ -2,12 +2,13 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHead from '../components/PageHead.astro';
 import AfricaMap from '../components/AfricaMap.astro';
-import { HUBS, SUBS, country, fmt } from '../data/site';
+import { HUBS, SUBS, country, fmt, dateFr } from '../data/site';
+import { KPIS, JOBS_BY_QUARTER, DATASETS, IMPACT_ASOF, IMPACT_LICENSE } from '../data/impact';
 
-const kpis = [['Entrepreneurs formés', '18 420', 'Ayant terminé au moins un cours'], ['Emplois créés', '2 340', 'Vérifiés à 6 mois, CDI et CDD'], ['Financements obtenus', '9,8 Md FCFA', 'Montants clôturés et vérifiés'], ['Part de femmes', '46 %', 'Parmi les entrepreneurs accompagnés']];
+const kpis = KPIS;
 const top = [...HUBS].sort((a, b) => b.m - a.m).slice(0, 8);
 const maxM = top[0].m;
-const jobs: [string, number][] = [['T1 25', 120], ['T2 25', 190], ['T3 25', 260], ['T4 25', 310], ['T1 26', 380], ['T2 26', 470], ['T3 26', 610]];
+const jobs: [string, number][] = JOBS_BY_QUARTER.map(([q, n]) => [`${q.slice(5)} ${q.slice(2, 4)}`, n]);
 const W = 320, H = 160, maxJ = 650;
 const pts = jobs.map(([, v], i) => [20 + (i * (W - 40)) / (jobs.length - 1), H - 20 - (v / maxJ) * (H - 40)]);
 const line = pts.map((p) => p.join(',')).join(' ');
@@ -18,7 +19,13 @@ const area = `20,${H - 20} ${line} ${W - 20},${H - 20}`;
   <section class="block" style="padding-top:28px">
     <div class="wrap">
       <div class="grid g4">
-        {kpis.map(([k, v, d]) => <div class="panel"><div class="small muted">{k}</div><b style="font-family:var(--display);font-size:1.9rem;color:var(--navy)">{v}</b><div class="small muted">{d}</div></div>)}
+        {kpis.map((k) => (
+          <div class="panel">
+            <div class="small muted">{k.label}</div>
+            <b style="font-family:var(--display);font-size:1.9rem;color:var(--navy)">{k.display}</b>
+            <details class="xs" style="margin-top:6px"><summary class="muted" style="cursor:pointer">Définition et source</summary><p style="margin:6px 0 0">{k.definition}</p><p class="muted" style="margin:4px 0 0">Source : {k.source} · arrêté au {dateFr(k.asOf)}</p></details>
+          </div>
+        ))}
       </div>
       <div class="grid g2" style="margin-top:20px">
         <div class="panel" style="background:#082B4C;border:0"><h3 style="color:#fff">Carte de l'impact</h3><AfricaMap /></div>
@@ -46,7 +53,14 @@ const area = `20,${H - 20} ${line} ${W - 20},${H - 20}`;
       <div class="grid g3" style="margin-top:20px">
         <div class="panel"><h3>Alignement</h3><p class="small" style="margin:0">Objectifs de développement durable 1, 5, 8 et 9 ; Agenda 2063 de l'Union africaine.</p></div>
         <div class="panel"><h3>Méthodologie</h3><p class="small" style="margin:0">Un emploi est compté comme « créé » s'il existe depuis au moins 6 mois, prouvé par un contrat ou une déclaration sociale, vérifié par échantillonnage. Aucune cellule de moins de 10 personnes n'est publiée.</p></div>
-        <div class="panel"><h3>Données ouvertes</h3><p class="small">Jeux de données anonymisés et API publique.</p><div class="row"><button class="btn btn-ghost btn-sm" type="button" data-toast="CSV téléchargé (simulation).">CSV</button><button class="btn btn-ghost btn-sm" type="button" data-toast="Documentation de l'API ouverte (simulation).">API</button></div></div>
+        <div class="panel"><h3>Données ouvertes</h3>
+          <p class="small">Jeux de données agrégés et anonymisés, arrêtés au {dateFr(IMPACT_ASOF)}, sous licence {IMPACT_LICENSE} : réutilisation libre en citant la source.</p>
+          {DATASETS.map((d) => <a class="small" href={d.file} download style="display:block;margin-bottom:4px">⬇ {d.title} (CSV)</a>)}
+          <p class="small" style="margin:10px 0 4px"><b>API publique</b> (lecture seule, sans clé) :</p>
+          <code class="xs" style="display:block;overflow-wrap:anywhere">GET /api/ouvert/impact</code>
+          <code class="xs" style="display:block;overflow-wrap:anywhere">GET /api/ouvert/impact?pays=TG</code>
+          <a class="small" href="/api/ouvert/impact" target="_blank" rel="noopener">Voir la réponse JSON</a>
+        </div>
       </div>
     </div>
   </section>

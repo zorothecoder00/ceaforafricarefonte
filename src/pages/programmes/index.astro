@@ -16,7 +16,7 @@ const progs = PROGS.map(([n, dur, d, open, date]) => ({ n: String(n), dur, d, op
           <p class="small">{p.open ? 'Clôture' : 'Ouverture'} : {dateFr(p.date)}</p>
           {p.open
             ? <a class="btn btn-primary btn-sm" href={p.n.startsWith('Investor') ? '/kapital/investor-ready' : '/programmes/candidature'}>Postuler</a>
-            : <button class="btn btn-ghost btn-sm" data-toast={`Alerte créée : ${p.n}.`}>Être prévenu</button>}
+            : <button class="btn btn-ghost btn-sm" type="button" data-post="/api/demande" data-body={JSON.stringify({ type: 'alerte_programme', message: `Prévenir à l'ouverture : ${p.n}` })}>Être prévenu</button>}
         </div>
       ))}
     </div>

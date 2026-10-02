@@ -12,7 +12,7 @@ import { PATHS, COURSES, SUBS } from '../../data/site';
           <h3>{p.t}</h3>
           <p class="small muted">{p.d}</p>
           <ol class="timeline">{p.c.map((id) => { const c = COURSES.find((x) => x.id === id)!; return <li><a href={`/academie/${c.id}`}>{c.t}</a></li>; })}</ol>
-          <button class="btn btn-primary btn-sm" data-toast={`Inscription au ${p.t} enregistrée.`}>Suivre ce parcours</button>
+          <button class="btn btn-primary btn-sm" type="button" data-post="/api/academie/parcours" data-body={JSON.stringify({ pathId: p.id })}>Suivre ce parcours</button>
         </div>
       ))}
     </div>

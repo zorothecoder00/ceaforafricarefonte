@@ -6,11 +6,13 @@ import PageHead from '../../components/PageHead.astro';
   <PageHead title="Réclamations" lead="Accusé de réception sous 48 heures, réponse sous 15 jours." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Réclamations']]} />
   <section class="block">
     <div class="wrap" style="max-width:700px">
-      <form class="panel" data-demo="Réclamation enregistrée. Accusé de réception envoyé par e-mail.">
+      <form class="panel" data-api="/api/demande" data-reset>
+          <input type="hidden" name="type" value="reclamation" /><input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px" />
+        <label class="f" for="rcn">Nom</label><input class="in" id="rcn" name="name" required minlength="2" autocomplete="name" />
         <label class="f" for="rc1">Objet</label>
-        <select class="in" id="rc1"><option>Information sur une opportunité</option><option>Accès à une data room</option><option>Vérification d'identité</option><option>Comportement d'un utilisateur</option></select>
-        <label class="f" for="rc3">E-mail</label><input class="in" id="rc3" type="email" required />
-        <label class="f" for="rc2">Description</label><textarea class="in" id="rc2" required minlength="10"></textarea>
+        <select class="in" id="rc1" name="Objet"><option>Information sur une opportunité</option><option>Accès à une data room</option><option>Vérification d'identité</option><option>Comportement d'un utilisateur</option></select>
+        <label class="f" for="rc3">E-mail</label><input class="in" id="rc3" name="contact" type="email" required autocomplete="email" />
+        <label class="f" for="rc2">Description</label><textarea class="in" id="rc2" name="message" required minlength="10"></textarea>
         <button class="btn btn-primary" type="submit">Envoyer</button>
       </form>
     </div>

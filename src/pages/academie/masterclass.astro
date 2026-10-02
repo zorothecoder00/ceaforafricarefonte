@@ -1,4 +1,5 @@
 ---
+import MediaPlayer from '../../components/MediaPlayer.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { MASTERCLASS, SUBS } from '../../data/site';
@@ -9,10 +10,7 @@ import { MASTERCLASS, SUBS } from '../../data/site';
     <div class="wrap grid g3">
       {MASTERCLASS.map((m) => (
         <div class="panel">
-          <div class="player" style="aspect-ratio:16/10">
-            <button class="playbtn" aria-label={`Lire ${m.t}`} data-toast="Lecture de la masterclass (simulation)."><svg width="28" height="28" viewBox="0 0 24 24" fill="#1B1305"><path d="M8 5v14l11-7z" /></svg></button>
-            <span class="cap">{m.dur}</span>
-          </div>
+          <MediaPlayer title={m.t} cap={m.dur} />
           <h3 style="margin-top:14px">{m.t}</h3>
           <p class="small muted" style="margin:0">{m.by}</p>
         </div>

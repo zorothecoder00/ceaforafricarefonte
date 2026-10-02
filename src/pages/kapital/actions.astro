@@ -28,7 +28,7 @@ export const prerender = false;
               <tr><td class="muted">Clôture</td><td>{dateFr(o.close)}</td></tr>
             </tbody></table>
             <div class="progress" style="margin:10px 0"><span style={`width:${o.raised}%`}></span></div>
-            <div class="row between"><span class="small">{o.raised} % d'intérêt</span><button class="btn btn-primary btn-sm" type="button" data-toast="Intérêt enregistré, non engageant.">Manifester mon intérêt</button></div>
+            <div class="row between"><span class="small">{o.raised} % d'intérêt</span><button class="btn btn-primary btn-sm" type="button" data-post="/api/kapital/demande" data-body={JSON.stringify({ kind: 'offre_privee', ref: o.n })}>Manifester mon intérêt</button></div>
           </div>
         ))}
       </div>

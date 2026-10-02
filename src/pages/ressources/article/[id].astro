@@ -19,7 +19,7 @@ const others = ARTICLES.filter((x) => x.id !== a.id).slice(0, 2);
         <p style="font-size:1.15rem">{a.x}</p>
         <p>Ce texte est un contenu de démonstration. Dans la plateforme, chaque article est rédigé dans le respect de la charte éditoriale de CEA FOR AFRICA, relu par un expert du sujet, et disponible en français et en anglais.</p>
         <p>Les chiffres cités proviennent de sources publiques référencées en fin d'article. Les témoignages sont recueillis avec l'accord des personnes concernées.</p>
-        <div class="row" style="margin-top:20px"><button class="btn btn-ghost btn-sm" data-toast="Lien copié.">Partager</button><button class="btn btn-ghost btn-sm" data-toast="Article enregistré.">Enregistrer</button></div>
+        <div class="row" style="margin-top:20px"><button class="btn btn-ghost btn-sm" type="button" data-share={a.t}>Partager</button><button class="btn btn-ghost btn-sm" type="button" data-post="/api/favoris" data-body={JSON.stringify({ kind: 'article', itemId: a.id })}>Enregistrer</button></div>
         <h2 style="margin-top:40px">À lire aussi</h2>
         <div class="grid g2">{others.map((o) => <ArticleCard a={o} />)}</div>
       </article>

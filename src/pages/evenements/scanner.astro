@@ -1,51 +1,125 @@
 ---
+/* Contrôle d'accès (CDC §7.3) : outil de l'équipe d'accueil. Scan du QR code par la caméra (navigateurs compatibles)
+   ou saisie du code ; hors connexion, les codes sont mis en file d'attente et validés au retour du réseau. */
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
-import { SUBS } from '../../data/site';
+import { EVENTS, SUBS, dateFr } from '../../data/site';
+import { can } from '../../lib/rbac';
+
+export const prerender = false;
+const user = Astro.locals.user;
+const allowed = !!user && can(user.roles, 'controle_acces', 'V');
+const today = new Date().toISOString().slice(0, 10);
+const events = [...EVENTS].sort((a, b) => a.date.localeCompare(b.date));
+const current = events.find((e) => e.date >= today) ?? events[events.length - 1];
 ---
 <BaseLayout title="Contrôle d'accès">
-  <PageHead title="Contrôle d'accès" lead="Outil de l'équipe d'accueil : scannez ou saisissez le code du billet. Fonctionne hors connexion, synchronisation ensuite." crumbs={[['/evenements', 'Événements'], ['', "Contrôle d'accès"]]} subnav={SUBS.evenements} />
+  <PageHead title="Contrôle d'accès" lead="Outil de l'équipe d'accueil : scannez ou saisissez le code du billet. Hors connexion, les codes sont gardés et validés au retour du réseau." crumbs={[['/evenements', 'Événements'], ['', "Contrôle d'accès"]]} subnav={SUBS.evenements} />
   <section class="block">
-    <div class="wrap grid g2">
-      <form class="panel" id="scanF">
-        <div class="player" style="aspect-ratio:4/3;background:#000"><div class="cap" style="text-align:center">Caméra (simulation) — ou saisissez le code ci-dessous</div></div>
-        <label class="f" for="tc" style="margin-top:14px">Code du billet</label>
-        <input class="in" id="tc" placeholder="TKT-E1-12345" autocomplete="off" />
-        <div class="row"><button class="btn btn-primary" type="submit">Valider l'entrée</button><button class="btn btn-ghost" type="button" id="demo">Code de démonstration</button></div>
-        <div id="sr" style="margin-top:14px"></div>
-      </form>
-      <div class="panel">
-        <h3>Tableau de bord en temps réel</h3>
-        <div class="grid g2">
-          <div class="kpi"><span class="small muted">Entrées</span><b id="nIn">412</b></div>
-          <div class="kpi"><span class="small muted">Attendus</span><b>1 250</b></div>
-          <div class="kpi"><span class="small muted">Salle principale</span><b>68 %</b></div>
-          <div class="kpi"><span class="small muted">Salle B2B</span><b>41 %</b></div>
-        </div>
-        <h4 style="margin-top:16px">Dernières entrées</h4>
-        <div id="last"><p class="small muted">Aucune entrée sur cet appareil.</p></div>
+    {!allowed ? (
+      <div class="wrap" style="max-width:640px">
+        <div class="lock"><b>Accès réservé à l'équipe d'accueil.</b> {user ? "Votre compte n'a pas le droit de contrôler les entrées : demandez-le à l'administrateur." : <span>Connectez-vous avec votre compte d'équipe. <a href={`/connexion?retour=${encodeURIComponent('/evenements/scanner')}`}>Se connecter</a></span>}</div>
       </div>
-    </div>
+    ) : (
+      <div class="wrap grid g2">
+        <form class="panel" id="scanF">
+          <label class="f" for="ev">Événement</label>
+          <select class="in" id="ev">{events.map((e) => <option value={e.id} selected={e.id === current.id}>{e.t} — {dateFr(e.date)}</option>)}</select>
+          <div class="player" id="cam" style="aspect-ratio:4/3;background:#000;margin-top:12px">
+            <video id="vid" playsinline muted style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" hidden></video>
+            <button class="btn btn-gold btn-sm" type="button" id="camOn" style="position:relative;z-index:1">Activer la caméra</button>
+            <div class="cap" id="camCap" style="text-align:center"></div>
+          </div>
+          <label class="f" for="tc" style="margin-top:14px">Code du billet</label>
+          <input class="in" id="tc" placeholder="TKT-E1-AB12CD" autocomplete="off" autocapitalize="characters" />
+          <button class="btn btn-primary" type="submit">Valider l'entrée</button>
+          <div id="sr" style="margin-top:14px" aria-live="assertive"></div>
+          <p class="xs muted" id="queue" hidden></p>
+        </form>
+        <div class="panel">
+          <h3>Tableau de bord</h3>
+          <div class="grid g2">
+            <div class="kpi"><span class="small muted">Entrées</span><b id="nIn">—</b></div>
+            <div class="kpi"><span class="small muted">Billets émis</span><b id="nExp">—</b></div>
+          </div>
+          <h4 style="margin-top:16px">Dernières entrées</h4>
+          <div id="last"><p class="small muted">Aucune entrée enregistrée.</p></div>
+          <p class="xs muted" style="margin-top:12px">Actualisé toutes les 15 secondes. Chaque entrée est tracée dans le journal d'audit.</p>
+        </div>
+      </div>
+    )}
   </section>
 </BaseLayout>
 <script>
-  let checked: string[] = [];
-  try { checked = JSON.parse(localStorage.getItem('cea-checked') || '[]'); } catch {}
-  const tc = document.getElementById('tc') as HTMLInputElement, sr = document.getElementById('sr')!;
-  function draw() {
-    document.getElementById('nIn')!.textContent = String(412 + checked.length);
-    if (checked.length) document.getElementById('last')!.innerHTML = checked.slice(-5).reverse().map((c) => `<div class="small">✓ ${c}</div>`).join('');
+  const form = document.getElementById('scanF') as HTMLFormElement | null;
+  if (form) {
+    const $ = (id: string) => document.getElementById(id)!;
+    const tc = $('tc') as HTMLInputElement, sr = $('sr'), ev = $('ev') as HTMLSelectElement;
+    const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+    const KEY = 'cea-scan-queue';
+    const readQ = (): { code: string; event: string }[] => { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; } };
+    const writeQ = (q: { code: string; event: string }[]) => { try { localStorage.setItem(KEY, JSON.stringify(q)); } catch {} showQ(); };
+    const showQ = () => { const n = readQ().length; $('queue').hidden = !n; $('queue').textContent = `${n} code(s) en attente de connexion.`; };
+    const STYLE: Record<string, string> = { valide: 'background:var(--ok-soft);border-color:var(--ok)', inconnu: 'background:var(--bad-soft);border-color:var(--bad)', invalide: 'background:var(--bad-soft);border-color:var(--bad)', autre: 'background:var(--bad-soft);border-color:var(--bad)', deja: '' };
+
+    async function check(code: string, event: string) {
+      const r = await fetch('/api/billets/controle', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code, event }) });
+      return r.json();
+    }
+    async function submit(code: string) {
+      code = code.trim();
+      if (!code) return;
+      let d;
+      try { d = await check(code, ev.value); }
+      catch { writeQ([...readQ(), { code, event: ev.value }]); sr.innerHTML = `<div class="lock"><b>Hors connexion</b> — ${esc(code)} gardé, validé au retour du réseau.</div>`; return; }
+      if (!d.ok) { sr.innerHTML = `<div class="lock">${esc(d.error ?? 'Erreur.')}</div>`; return; }
+      sr.innerHTML = `<div class="lock" style="${STYLE[d.result] ?? ''}"><b>${esc(d.message)}</b>${d.ticket ? ` — ${esc(d.ticket.name ?? '')} · ${esc(d.ticket.type)} · ${esc(d.ticket.code)}` : ` — ${esc(code)}`}</div>`;
+      if (navigator.vibrate) navigator.vibrate(d.result === 'valide' ? 80 : [60, 60, 60]);
+      tc.value = '';
+      refresh();
+    }
+    async function flush() {
+      const q = readQ();
+      if (!q.length || !navigator.onLine) return;
+      const rest: typeof q = [];
+      for (const item of q) { try { await check(item.code, item.event); } catch { rest.push(item); } }
+      writeQ(rest);
+      refresh();
+    }
+    async function refresh() {
+      const r = await fetch(`/api/billets/controle?event=${encodeURIComponent(ev.value)}`, { credentials: 'same-origin' }).catch(() => null);
+      const d = r ? await r.json().catch(() => null) : null;
+      if (!d?.ok) return;
+      $('nIn').textContent = String(d.inside); $('nExp').textContent = String(d.expected);
+      $('last').innerHTML = d.last.length ? d.last.map((x: { code: string; name: string | null; type: string; at: string }) => `<div class="small">✓ ${new Date(x.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · ${esc(x.name ?? '—')} · ${esc(x.type)}</div>`).join('') : '<p class="small muted">Aucune entrée enregistrée.</p>';
+    }
+    form.addEventListener('submit', (e) => { e.preventDefault(); submit(tc.value); });
+    ev.addEventListener('change', refresh);
+    addEventListener('online', flush);
+    setInterval(refresh, 15000);
+    showQ(); refresh(); flush();
+
+    // Caméra : API BarcodeDetector (Chrome, Edge, Android). Sinon, saisie du code ou lecteur externe (qui « tape » le code).
+    const BD = (window as any).BarcodeDetector;
+    const camCap = $('camCap');
+    if (!BD) { ($('camOn') as HTMLButtonElement).hidden = true; camCap.textContent = 'Scan par caméra indisponible sur ce navigateur : saisissez le code ou utilisez un lecteur externe.'; }
+    else $('camOn').addEventListener('click', async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        const vid = $('vid') as HTMLVideoElement;
+        vid.srcObject = stream; vid.hidden = false; await vid.play();
+        $('camOn').hidden = true; camCap.textContent = 'Présentez le QR code du billet.';
+        const det = new BD({ formats: ['qr_code'] });
+        let lastCode = '', lastAt = 0;
+        const loop = async () => {
+          try {
+            const [hit] = await det.detect(vid);
+            if (hit && (hit.rawValue !== lastCode || Date.now() - lastAt > 4000)) { lastCode = hit.rawValue; lastAt = Date.now(); await submit(hit.rawValue); }
+          } catch { /* image non exploitable */ }
+          setTimeout(loop, 350);
+        };
+        loop();
+      } catch { camCap.textContent = "Accès à la caméra refusé : autorisez-le dans le navigateur, ou saisissez le code."; }
+    });
   }
-  document.getElementById('demo')!.addEventListener('click', () => { tc.value = 'TKT-E1-' + Math.floor(10000 + Math.random() * 89999); });
-  document.getElementById('scanF')!.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const c = tc.value.trim().toUpperCase();
-    const ok = /^TKT-E\d-\d{5}$/.test(c), dup = checked.includes(c);
-    sr.innerHTML = !ok
-      ? '<div class="lock" style="background:var(--bad-soft);border-color:var(--bad)"><b>Billet invalide</b> — code inconnu (format attendu : TKT-E1-12345).</div>'
-      : dup ? '<div class="lock"><b>Déjà scanné</b> — ce billet a déjà été utilisé.</div>'
-      : `<div class="lock" style="background:var(--ok-soft);border-color:var(--ok)"><b>Entrée validée</b> — ${c}</div>`;
-    if (ok && !dup) { checked.push(c); try { localStorage.setItem('cea-checked', JSON.stringify(checked)); } catch {} tc.value = ''; draw(); }
-  });
-  draw();
 </script>

@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import DocButton from '../../components/DocButton.astro';
 import PageHead from '../../components/PageHead.astro';
 import { STUDIES, SUBS } from '../../data/site';
 ---
@@ -8,7 +9,7 @@ import { STUDIES, SUBS } from '../../data/site';
   <section class="block">
     <div class="wrap grid g3">
       {STUDIES.map((s) => (
-        <div class="panel"><span class="tag info">{s.y}</span><h3 style="margin-top:10px">{s.t}</h3><button class="btn btn-primary btn-sm" data-toast="Téléchargement du PDF (simulation).">Télécharger le PDF</button></div>
+        <div class="panel"><span class="tag info">{s.y}</span><h3 style="margin-top:10px">{s.t}</h3><DocButton kind="etude" title={s.t} label="Télécharger le PDF" primary /></div>
       ))}
     </div>
   </section>

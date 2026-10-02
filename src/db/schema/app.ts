@@ -1,6 +1,7 @@
 /* Données de la plateforme CEA FOR AFRICA (schéma public). Les contenus éditoriaux (cours, événements…) restent
    pour l'instant dans src/data et sont référencés ici par leur identifiant texte (ex. « c1 », « e1 »). */
 import { pgTable, pgEnum, text, boolean, integer, bigint, timestamp, uuid, jsonb, primaryKey, index, uniqueIndex, date, bigserial } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { user } from './auth';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true });
@@ -300,6 +301,34 @@ export const contactMessage = pgTable('contact_message', {
   status: ticketFlowEnum('status').notNull().default('nouveau'),
   createdAt: ts('created_at').notNull().defaultNow(),
 });
+
+/* Rendez-vous en visio avec une équipe CEA (CDC §6.2, page Contact) : un créneau ne peut être réservé qu'une fois par équipe. */
+export const appointment = pgTable('appointment', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  reference: text('reference').notNull().unique(),
+  team: text('team').notNull(),
+  at: ts('at').notNull(),
+  name: text('name').notNull(),
+  contact: text('contact').notNull(),
+  topic: text('topic'),
+  visio: text('visio').notNull(),
+  userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
+  cancelledAt: ts('cancelled_at'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('appointment_at_idx').on(t.at), uniqueIndex('appointment_slot_unique').on(t.team, t.at).where(sql`${t.cancelledAt} is null`)]);
+
+/* Vote électronique en assemblée (CDC §7.1, RÉG) : un bulletin par votant et par assemblée, signé par un code à usage unique.
+   « proof » = empreinte SHA-256 du bulletin (assemblée, votant, choix, horodatage, aléa), remise au votant comme preuve de vote. */
+export const agBallot = pgTable('ag_ballot', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  assembly: text('assembly').notNull(),
+  userId: userRef('user_id').notNull(),
+  choices: jsonb('choices').$type<string[]>().notNull(),
+  proof: text('proof').notNull().unique(),
+  method: text('method').notNull(), // sms, whatsapp, email
+  ip: text('ip'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [uniqueIndex('ag_ballot_unique').on(t.assembly, t.userId)]);
 
 export const report = pgTable('report', {
   id: uuid('id').primaryKey().defaultRandom(),

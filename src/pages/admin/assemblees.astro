@@ -1,0 +1,32 @@
+---
+/* Assemblées (CDC §7.1, RÉG) : dépouillement du vote électronique et registre des preuves de vote. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { desc, eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { agBallot } from '../../db/schema/app';
+import { user } from '../../db/schema/auth';
+import { AG, AG_CHOICES } from '../../data/assemblee';
+import { dateFr } from '../../data/site';
+
+export const prerender = false;
+const ballots = await db.select({ b: agBallot, email: user.email }).from(agBallot).leftJoin(user, eq(user.id, agBallot.userId)).where(eq(agBallot.assembly, AG.id)).orderBy(desc(agBallot.createdAt));
+const tally = AG.resolutions.map((_, i) => AG_CHOICES.map((c) => ballots.filter(({ b }) => b.choices[i] === c).length));
+---
+<AdminLayout title="Assemblées et votes" lead="Dépouillement du vote électronique et registre des preuves. Les bulletins sont définitifs et ne peuvent pas être modifiés." obj="journal_audit">
+  <div class="panel">
+    <h3>{AG.title}</h3>
+    <p class="small muted">Clôture du vote électronique : {dateFr(AG.closesAt.slice(0, 10))} · {ballots.length} bulletin{ballots.length > 1 ? 's' : ''} · ouverture réglée par l'interrupteur « vote » (<a href="/admin/interrupteurs">interrupteurs par pays</a>).</p>
+    <div class="scroll-x">
+      <table class="t"><thead><tr><th>Résolution</th>{AG_CHOICES.map((c) => <th>{c}</th>)}<th>Résultat (exprimés)</th></tr></thead>
+        <tbody>{AG.resolutions.map((r, i) => { const [pour, contre] = tally[i]; const exp = pour + contre; return <tr><td class="small">{i + 1}. {r}</td>{tally[i].map((n) => <td>{n}</td>)}<td class="small">{exp ? `${Math.round((pour / exp) * 100)} % pour — ${pour > contre ? 'adoptée' : 'rejetée'}` : '—'}</td></tr>; })}</tbody>
+      </table>
+    </div>
+    <p class="xs muted" style="margin:8px 0 0">Résultats indicatifs du vote à distance : à consolider avec les votes en séance et les procurations, selon les règles de quorum et de majorité des statuts.</p>
+  </div>
+  <div class="panel scroll-x" style="margin-top:16px">
+    <h3>Registre des preuves</h3>
+    <table class="t"><thead><tr><th>Date</th><th>Votant</th><th>Méthode</th><th>Empreinte de preuve (SHA-256)</th></tr></thead>
+      <tbody>{ballots.length ? ballots.map(({ b, email }) => <tr><td class="xs">{b.createdAt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'medium' })}</td><td class="xs">{email ?? b.userId}</td><td class="xs">{b.method}</td><td class="xs" style="overflow-wrap:anywhere;max-width:340px"><code>{b.proof}</code></td></tr>) : <tr><td colspan="4" class="small muted">Aucun bulletin.</td></tr>}</tbody>
+    </table>
+  </div>
+</AdminLayout>
