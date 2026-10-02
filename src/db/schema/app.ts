@@ -149,6 +149,7 @@ export const mentoringSession = pgTable('mentoring_session', {
   startsAt: ts('starts_at').notNull(),
   status: mentoringStatusEnum('status').notNull().default('demandee'),
   menteeRating: integer('mentee_rating'),
+  remindedAt: ts('reminded_at'), // rappel de la veille envoyé (tâche planifiée /api/cron/rappels)
   createdAt: ts('created_at').notNull().defaultNow(),
 });
 
@@ -328,6 +329,7 @@ export const appointment = pgTable('appointment', {
   visio: text('visio').notNull(),
   userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
   cancelledAt: ts('cancelled_at'),
+  remindedAt: ts('reminded_at'), // rappel de la veille envoyé (tâche planifiée /api/cron/rappels)
   createdAt: ts('created_at').notNull().defaultNow(),
 }, (t) => [index('appointment_at_idx').on(t.at), uniqueIndex('appointment_slot_unique').on(t.team, t.at).where(sql`${t.cancelledAt} is null`)]);
 

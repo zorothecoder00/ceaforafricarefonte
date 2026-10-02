@@ -99,7 +99,22 @@ const motifs: Record<string, string> = {
     const d = r ? await r.json().catch(() => ({})) : { error: 'Erreur réseau.' };
     btn.disabled = false;
     say(d.message ?? d.error);
-    if (d.ok) { document.getElementById('rok')!.innerHTML = `✓ ${d.message} <a href="${d.visio}" target="_blank" rel="noopener">Lien de visio</a>`; rdv.reset(); loadSlots(); }
+    if (d.ok) {
+      const a = d.agenda ?? {};
+      const out = document.getElementById('rok')!;
+      out.textContent = `✓ ${d.message} `;
+      const row = document.createElement('div');
+      row.className = 'row'; row.style.marginTop = '8px';
+      for (const [href, label, ext] of [[d.visio, 'Lien de visio', true], [a.google, 'Google Agenda', true], [a.outlook, 'Outlook', true], [a.ics, 'Autre agenda (.ics)', false]] as [string, string, boolean][]) {
+        if (!href) continue;
+        const l = document.createElement('a');
+        l.className = 'btn btn-ghost btn-sm'; l.href = href; l.textContent = label;
+        if (ext) { l.target = '_blank'; l.rel = 'noopener'; }
+        row.appendChild(l);
+      }
+      out.appendChild(row);
+      rdv.reset(); loadSlots();
+    }
     else if (r?.status === 409) loadSlots();
   });
   // Pays présélectionné depuis une page pays (/contact?pays=TG)

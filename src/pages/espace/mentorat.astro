@@ -6,6 +6,8 @@ import { alias } from 'drizzle-orm/pg-core';
 import { db } from '../../lib/db';
 import { mentoringSession } from '../../db/schema/app';
 import { user } from '../../db/schema/auth';
+import AgendaLinks from '../../components/AgendaLinks.astro';
+import { mentoringMeeting, mentoringVisio } from '../../lib/agenda';
 
 export const prerender = false;
 const me = Astro.locals.user!;
@@ -21,7 +23,8 @@ const ST: Record<string, string> = { demandee: 'gold', confirmee: 'ok', realisee
       <div class="small muted">{s.startsAt.toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'short' })}</div>
       {s.goal && <p class="small" style="margin:8px 0">Objectif : {s.goal}</p>}
       <div class="row">
-        {s.status === 'confirmee' && <a class="btn btn-primary btn-sm" href={`https://meet.jit.si/CEA-${s.id.slice(0, 8)}`} target="_blank" rel="noopener">Rejoindre la visio</a>}
+        {s.status === 'confirmee' && <a class="btn btn-primary btn-sm" href={mentoringVisio(s.id)} target="_blank" rel="noopener">Rejoindre la visio</a>}
+            {s.status === 'confirmee' && s.startsAt > new Date() && <AgendaLinks meeting={mentoringMeeting(s, mentor)} ics={`/api/agenda.ics?mentorat=${s.id}`} />}
         {['demandee', 'confirmee'].includes(s.status) && s.startsAt > new Date() && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/mentorat" data-method="PATCH" data-body={JSON.stringify({ id: s.id, status: 'annulee' })} data-confirm="Annuler cette séance ?" data-reload>Annuler</button>}
         {s.status === 'realisee' && !s.menteeRating && [1, 2, 3, 4, 5].map((n) => <button class="slot" type="button" data-post="/api/mentorat" data-method="PATCH" data-body={JSON.stringify({ id: s.id, rating: n })} data-reload>{n} ★</button>)}
         {s.menteeRating && <span class="small">Votre note : {s.menteeRating} ★</span>}

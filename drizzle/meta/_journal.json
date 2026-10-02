@@ -92,6 +92,13 @@
       "when": 1790955440153,
       "tag": "0012_preferences_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790964261994,
+      "tag": "0013_rappels_rendez_vous",
+      "breakpoints": true
     }
   ]
 }

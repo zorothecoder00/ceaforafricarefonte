@@ -4,9 +4,9 @@ import { EXTRA } from '../data/events-extra';
 
 type Ev = { id: string; t: string; d: string; date: string; city: string; path?: string };
 
-const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+export const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
 // Lignes de 75 octets maximum, continuées par une espace (RFC 5545 §3.1)
-const fold = (line: string) => {
+export const fold = (line: string) => {
   const out: string[] = [];
   let cur = '';
   for (const ch of line) {
@@ -16,7 +16,7 @@ const fold = (line: string) => {
   out.push(cur);
   return out.join('\r\n ');
 };
-const stamp = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+export const stamp = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
 
 function vevent(e: Ev, site: string) {
   const x = EXTRA[e.id];

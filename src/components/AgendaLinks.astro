@@ -1,0 +1,19 @@
+---
+/* Boutons « Ajouter à mon agenda » (Google, Outlook, fichier .ics) pour un rendez-vous à venir (CDC §10). */
+import { googleUrl, outlookUrl, type Meeting } from '../lib/agenda';
+
+interface Props { meeting: Meeting; ics: string }
+const { meeting, ics } = Astro.props;
+---
+<details class="agenda-add">
+  <summary class="btn btn-ghost btn-sm">Ajouter à mon agenda</summary>
+  <div class="row" style="margin-top:6px">
+    <a class="btn btn-ghost btn-sm" href={googleUrl(meeting)} target="_blank" rel="noopener">Google Agenda</a>
+    <a class="btn btn-ghost btn-sm" href={outlookUrl(meeting)} target="_blank" rel="noopener">Outlook</a>
+    <a class="btn btn-ghost btn-sm" href={ics} download>Autre (.ics)</a>
+  </div>
+</details>
+<style>
+  .agenda-add summary { list-style: none; display: inline-flex; }
+  .agenda-add summary::-webkit-details-marker { display: none; }
+</style>

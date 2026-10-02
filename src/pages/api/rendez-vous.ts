@@ -12,6 +12,7 @@ import { sendEmail } from '../../lib/messaging';
 import { upcomingSlots } from '../../lib/slots';
 import { env } from '../../lib/env';
 import { TEAM_SLOTS } from '../../data/teams';
+import { agendaKey, agendaLinks, appointmentMeeting, siteUrl } from '../../lib/agenda';
 
 export const prerender = false;
 
@@ -61,8 +62,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const when = at.toLocaleString('fr-FR', { timeZone: 'Africa/Lome', dateStyle: 'full', timeStyle: 'short' });
   await db.insert(contactMessage).values({ reference: ref, motif: 'Rendez-vous', routedTeam: b.team, name: b.name, contact: b.contact, message: `Rendez-vous en visio le ${when} (heure de Lomé).\nLien : ${visio}${b.topic ? `\n\nSujet : ${b.topic}` : ''}`, userId: locals.user?.id ?? null });
   await audit(locals.user?.id, 'contact.rendez_vous', ref, { team: b.team, at: at.toISOString() }, clientIp(request));
-  await sendEmail(b.contact, `Votre rendez-vous CEA du ${when}`, `Bonjour ${b.name},\n\nVotre rendez-vous avec ${b.team} est confirmé le ${when} (heure de Lomé, GMT).\nLien de visio : ${visio}\nRéférence : ${ref}\n\nPour annuler, répondez à ce message en indiquant la référence.\n\nCEA FOR AFRICA`).catch(() => {});
+  const agenda = agendaLinks(appointmentMeeting({ reference: ref, team: b.team, at, topic: b.topic ?? null, visio }), `/api/agenda.ics?rdv=${ref}&k=${agendaKey(ref)}`, siteUrl());
+  await sendEmail(b.contact, `Votre rendez-vous CEA du ${when}`, `Bonjour ${b.name},\n\nVotre rendez-vous avec ${b.team} est confirmé le ${when} (heure de Lomé, GMT).\nLien de visio : ${visio}\nRéférence : ${ref}\n\nAjouter à votre agenda :\n- Google Agenda : ${agenda.google}\n- Outlook : ${agenda.outlook}\n- Autre agenda (fichier .ics) : ${agenda.ics}\nVous recevrez aussi un rappel la veille.\n\nPour annuler, répondez à ce message en indiquant la référence.\n\nCEA FOR AFRICA`).catch(() => {});
   const inbox = env('CONTACT_EMAIL');
   if (inbox) await sendEmail(inbox, `[${b.team}] Rendez-vous ${ref} — ${when}`, `${b.name} (${b.contact})\n${visio}\n\n${b.topic ?? ''}`).catch(() => {});
-  return json({ ok: true, reference: ref, visio, message: `Rendez-vous ${ref} confirmé le ${when}. Le lien de visio vous a été envoyé par e-mail.` });
+  return json({ ok: true, reference: ref, visio, agenda, message: `Rendez-vous ${ref} confirmé le ${when}. Le lien de visio vous a été envoyé par e-mail.` });
 };

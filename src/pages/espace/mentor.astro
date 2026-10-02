@@ -6,6 +6,8 @@ import { alias } from 'drizzle-orm/pg-core';
 import { db } from '../../lib/db';
 import { mentorProfile, mentoringSession } from '../../db/schema/app';
 import { user } from '../../db/schema/auth';
+import AgendaLinks from '../../components/AgendaLinks.astro';
+import { mentoringMeeting, mentoringVisio } from '../../lib/agenda';
 import { hasRole } from '../../lib/rbac';
 
 export const prerender = false;
@@ -31,7 +33,8 @@ const done = sessions.filter((x) => x.s.status === 'realisee').length;
           {s.goal && <p class="small" style="margin:8px 0">Objectif : {s.goal}</p>}
           <div class="row">
             {s.status === 'demandee' && <button class="btn btn-primary btn-sm" type="button" data-post="/api/mentorat" data-method="PATCH" data-body={JSON.stringify({ id: s.id, status: 'confirmee' })} data-reload>Confirmer</button>}
-            {s.status === 'confirmee' && <a class="btn btn-ghost btn-sm" href={`https://meet.jit.si/CEA-${s.id.slice(0, 8)}`} target="_blank" rel="noopener">Visio</a>}
+            {s.status === 'confirmee' && <a class="btn btn-ghost btn-sm" href={mentoringVisio(s.id)} target="_blank" rel="noopener">Visio</a>}
+            {s.status === 'confirmee' && s.startsAt > new Date() && <AgendaLinks meeting={mentoringMeeting(s, who)} ics={`/api/agenda.ics?mentorat=${s.id}`} />}
             {s.status === 'confirmee' && s.startsAt < new Date() && <button class="btn btn-primary btn-sm" type="button" data-post="/api/mentorat" data-method="PATCH" data-body={JSON.stringify({ id: s.id, status: 'realisee' })} data-reload>Marquer réalisée</button>}
           </div>
           {s.status === 'realisee' && (
