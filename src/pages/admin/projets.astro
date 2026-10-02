@@ -1,0 +1,22 @@
+---
+/* Projets du Project Studio (CDC §7.2) vus par les chargés de programme : maturité, statut, accès à l'espace de travail pour la revue. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { desc, eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { project } from '../../db/schema/app';
+import { user } from '../../db/schema/auth';
+import { maturityScore } from '../../lib/projects';
+import { country } from '../../data/site';
+
+export const prerender = false;
+const rows = await db.select({ p: project, owner: user.name }).from(project).innerJoin(user, eq(user.id, project.ownerId)).orderBy(desc(project.updatedAt)).limit(300);
+const ST: Record<string, string> = { brouillon: 'Brouillon', soumis: 'Soumis', en_structuration: 'En structuration', pret_investissement: "Prêt pour l'investissement", transmis_kapital: 'Transmis à Kapital', finance: 'Financé', archive: 'Archivé' };
+---
+<AdminLayout title="Projets" lead="Ouvrez un projet pour commenter sa fiche (revue d'expert)." obj="fiche_projet">
+  <div class="panel scroll-x">
+    <table class="t"><thead><tr><th>Projet</th><th>Porteur</th><th>Pays</th><th>Statut</th><th>Maturité</th><th>Public</th></tr></thead>
+      <tbody>{rows.map(({ p, owner }) => <tr><td><a href={`/espace/projets/${p.id}`}>{p.name}</a></td><td>{owner}</td><td>{p.country ? country(p.country) : '—'}</td><td>{ST[p.status]}</td><td class="num">{maturityScore(p.maturity as Record<string, number>)}</td><td>{p.public ? 'Oui' : 'Non'}</td></tr>)}</tbody>
+    </table>
+    {rows.length === 0 && <p class="small muted">Aucun projet.</p>}
+  </div>
+</AdminLayout>

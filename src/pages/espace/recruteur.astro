@@ -1,0 +1,98 @@
+---
+/* Espace recruteur (CDC §7.4) : publier une offre (modération, mise en avant payante), trier les candidatures, déclarer les embauches, rechercher des talents visibles. */
+import EspaceLayout from '../../layouts/EspaceLayout.astro';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { job, jobApplication, hireDeclaration, profile, jobTypeEnum } from '../../db/schema/app';
+import { user } from '../../db/schema/auth';
+import { COUNTRIES, country } from '../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const jobs = await db.select().from(job).where(eq(job.employerId, me.id)).orderBy(desc(job.createdAt));
+const ids = jobs.map((j) => j.id);
+const apps = ids.length ? await db.select({ a: jobApplication, name: user.name, email: user.email, headline: profile.headline, skills: profile.skills, cv: profile.cvKey }).from(jobApplication).innerJoin(user, eq(user.id, jobApplication.userId)).leftJoin(profile, eq(profile.userId, jobApplication.userId)).where(inArray(jobApplication.jobId, ids)).orderBy(desc(jobApplication.createdAt)) : [];
+const hires = await db.select().from(hireDeclaration).where(eq(hireDeclaration.employerId, me.id)).orderBy(desc(hireDeclaration.hiredOn));
+const sk = (Astro.url.searchParams.get('competence') ?? '').trim();
+const talents = sk ? await db.select({ id: user.id, name: user.name, headline: profile.headline, country: profile.country, skills: profile.skills }).from(profile).innerJoin(user, eq(user.id, profile.userId)).where(and(eq(profile.recruiterVisible, true), sql`exists(select 1 from unnest(${profile.skills}) s where s ilike ${'%' + sk + '%'})`)).limit(30) : [];
+const ST: Record<string, string> = { brouillon: 'Brouillon', en_moderation: 'En modération', publiee: 'Publiée', fermee: 'Fermée', refusee: 'Refusée' };
+const COLS: [string, string][] = [['envoyee', 'Reçues'], ['vue', 'Vues'], ['entretien', 'Entretien'], ['offre', 'Offre'], ['refus', 'Non retenues']];
+---
+<EspaceLayout title="Espace recruteur" lead="Publiez vos offres, triez les candidatures et déclarez vos embauches.">
+  <div class="kpis" style="margin-bottom:18px">
+    <div class="kpi"><b>{jobs.filter((j) => j.status === 'publiee').length}</b><span>offres publiées</span></div>
+    <div class="kpi"><b>{apps.length}</b><span>candidatures</span></div>
+    <div class="kpi"><b>{apps.filter((a) => a.a.status === 'entretien').length}</b><span>en entretien</span></div>
+    <div class="kpi"><b>{hires.length}</b><span>embauches déclarées</span></div>
+  </div>
+
+  <h2 style="font-size:1.2rem">Candidatures</h2>
+  {apps.length ? (
+    <div class="kanban" style="grid-template-columns:repeat(5,minmax(180px,1fr))">
+      {COLS.map(([k, l]) => (
+        <div class="col"><h4><span>{l}</span><span>{apps.filter((x) => x.a.status === k).length}</span></h4>
+          {apps.filter((x) => x.a.status === k).map((x) => (
+            <div class="kcard">
+              <b>{x.name}</b>
+              <div class="xs muted">{jobs.find((j) => j.id === x.a.jobId)?.title}</div>
+              {x.headline && <div class="xs">{x.headline}</div>}
+              {x.skills?.length ? <div class="xs muted">{x.skills.slice(0, 4).join(', ')}</div> : null}
+              <select class="in" aria-label="Statut" style="margin:6px 0 0;padding:3px;font-size:.8rem" data-app={x.a.id}>{COLS.map(([v, t]) => <option value={v} selected={v === k}>{t}</option>)}</select>
+              <form data-api="/api/messages" data-reset style="margin-top:4px"><input type="hidden" name="to" value={x.a.userId} /><input type="hidden" name="body" value={`Bonjour ${x.name}, merci pour votre candidature.`} /><button class="btn btn-ghost btn-sm" type="submit">Écrire</button></form>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  ) : <p class="small muted">Aucune candidature pour le moment.</p>}
+
+  <div class="grid g2" style="margin-top:24px">
+    <form class="panel" data-api="/api/emplois" data-reload data-reset>
+      <h3>Publier une offre</h3>
+      <input type="hidden" name="action" value="publier" />
+      <label class="f" for="jt">Intitulé du poste</label><input class="in" id="jt" name="title" required minlength="3" />
+      <label class="f" for="jc">Entreprise</label><input class="in" id="jc" name="company" required minlength="2" />
+      <div class="grid g2" style="gap:0 12px">
+        <div><label class="f" for="jp">Pays</label><select class="in" id="jp" name="country">{Object.entries(COUNTRIES).map(([k, v]) => <option value={k}>{v}</option>)}</select></div>
+        <div><label class="f" for="jy">Contrat</label><select class="in" id="jy" name="type">{jobTypeEnum.enumValues.map((t) => <option>{t}</option>)}</select></div>
+      </div>
+      <label class="f" for="js">Rémunération</label><input class="in" id="js" name="salary" placeholder="Ex. 450 000 – 600 000 FCFA / mois" />
+      <label class="f" for="jk">Compétences (séparées par des virgules)</label><input class="in" id="jk" name="skills" data-type="list" />
+      <label class="f" for="jd">Description</label><textarea class="in" id="jd" name="description" maxlength="6000"></textarea>
+      <label class="row small"><input type="checkbox" name="remote" /> Télétravail possible</label>
+      <label class="row small"><input type="checkbox" name="featured" /> Mettre en avant 30 jours (15 000 FCFA)</label>
+      <p class="xs muted">Critères d'âge, de religion, d'origine ou de sexe interdits. Publication après modération sous 24 heures.</p>
+      <button class="btn btn-primary" type="submit">Soumettre l'offre</button>
+    </form>
+    <div>
+      <div class="panel">
+        <h3>Mes offres</h3>
+        {jobs.length ? jobs.map((j) => <div class="list-row"><span class="small">{j.featured ? '★ ' : ''}{j.title} <span class="xs muted">· {country(j.country)}</span></span><span class="tag">{ST[j.status]}</span></div>) : <p class="small muted">Aucune offre.</p>}
+      </div>
+      <form class="panel" data-api="/api/emplois" data-reload data-reset style="margin-top:16px">
+        <h3>Déclarer une embauche</h3>
+        <input type="hidden" name="action" value="embauche" />
+        <label class="f" for="hn">Nom de la personne recrutée</label><input class="in" id="hn" name="personName" required minlength="2" />
+        <div class="grid g2" style="gap:0 12px">
+          <div><label class="f" for="hc">Contrat</label><select class="in" id="hc" name="contract">{jobTypeEnum.enumValues.map((t) => <option>{t}</option>)}</select></div>
+          <div><label class="f" for="hd">Date d'embauche</label><input class="in" id="hd" name="hiredOn" type="date" required /></div>
+        </div>
+        <button class="btn btn-ghost btn-sm" type="submit">Déclarer</button>
+        {hires.length > 0 && <p class="xs muted" style="margin-top:8px">{hires.length} embauche{hires.length > 1 ? 's' : ''} déclarée{hires.length > 1 ? 's' : ''} · vérification à 6 et 12 mois par l'équipe impact.</p>}
+      </form>
+    </div>
+  </div>
+
+  <h2 style="font-size:1.2rem;margin-top:26px">Rechercher des talents</h2>
+  <form method="get" class="row" style="gap:6px"><input class="in" name="competence" value={sk} placeholder="Compétence (ex. comptabilité, React)" aria-label="Compétence" style="flex:1;margin:0" /><button class="btn btn-primary btn-sm" type="submit">Rechercher</button></form>
+  <p class="xs muted">Seuls les talents ayant choisi d'être visibles des recruteurs apparaissent.</p>
+  {sk && (talents.length ? <div class="grid g3">{talents.map((t) => <div class="panel"><b>{t.name}</b><div class="small muted">{t.headline ?? ''}{t.country ? ` · ${country(t.country)}` : ''}</div><div class="xs" style="margin-top:6px">{(t.skills ?? []).join(', ')}</div></div>)}</div> : <p class="small muted">Aucun talent visible pour « {sk} ».</p>)}
+</EspaceLayout>
+<script>
+  document.querySelectorAll<HTMLSelectElement>('[data-app]').forEach((s) => s.addEventListener('change', async () => {
+    const r = await fetch('/api/emplois', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ applicationId: s.dataset.app, status: s.value }) });
+    const d = await r.json().catch(() => ({}));
+    (window as unknown as { toast: (t: string) => void }).toast(d.message || d.error || 'Erreur.');
+    if (d.ok) setTimeout(() => location.reload(), 500);
+  }));
+</script>

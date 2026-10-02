@@ -25,11 +25,11 @@ export const SUBS: Record<string, Link[]> = {
   actionnariat: [['/actionnariat', 'Comprendre'], ['/actionnariat/studio', 'Studio de capital'], ['/actionnariat/salaries', 'Actionnariat salarié'], ['/actionnariat/club', 'Club des actionnaires'], ['/actionnariat/gouvernance', 'Gouvernance'], ['/actionnariat/quiz', 'Quiz et certificat']],
   programmes: [['/programmes', 'Tous les programmes'], ['/programmes/accelerateur', 'Accélérateur'], ['/programmes/calendrier', 'Calendrier'], ['/programmes/alumni', 'Alumni'], ['/programmes/candidature', 'Postuler'], ['/kapital/investor-ready', 'Investor Ready']],
   academie: [['/academie', 'Catalogue'], ['/academie/parcours', 'Parcours certifiants'], ['/academie/masterclass', 'Masterclass'], ['/academie/experts', 'Experts à la demande'], ['/communaute/mentorat', 'Mentorat']],
-  projets: [['/projets', 'Portefeuille'], ['/projets/competences', 'Appels à compétences']],
+  projets: [['/projets', 'Portefeuille'], ['/projets/nouveau', 'Proposer un projet'], ['/espace/projets', 'Mes projets'], ['/projets/competences', 'Appels à compétences']],
   communaute: [['/communaute', 'Annuaire'], ['/communaute/fil', "Fil d'actualité"], ['/communaute/espaces', 'Espaces'], ['/communaute/mentorat', 'Mentorat'], ['/communaute/mastermind', 'Mastermind'], ['/communaute/messages', 'Messagerie'], ['/adherer', 'Adhérer']],
   evenements: [['/evenements', 'Agenda'], ['/evenements/e1', 'Forum 2026'], ['/evenements/live', 'En direct'], ['/evenements/replays', 'Replays'], ['/evenements/organiser', 'Organiser avec nous'], ['/evenements/scanner', "Contrôle d'accès"]],
   opps: [['/opportunites', 'Emplois et stages'], ['/opportunites/missions', 'Missions'], ['/opportunites/appels-offres', "Appels d'offres"], ['/projets/competences', 'Projets à rejoindre'], ['/opportunites/entreprises', 'Entreprises'], ['/opportunites/diaspora', 'Diaspora'], ['/opportunites/profil', 'Mon profil talent'], ['/opportunites/recruteur', 'Espace recruteur']],
-  voix: [['/voix', 'Consultations'], ['/voix/positions', 'Nos positions'], ['/adherer', 'Adhérer']],
+  voix: [['/voix', 'Consultations'], ['/voix/barometre', 'Baromètre'], ['/voix/positions', 'Nos positions'], ['/adherer', 'Adhérer']],
   espace: [['/espace/apprentissage', 'Mon apprentissage'], ['/academie', 'Catalogue'], ['/academie/parcours', 'Parcours certifiants']],
   ressources: [['/ressources', 'Média'], ['/ressources/etudes', 'Études'], ['/ressources/podcasts', 'Podcasts et vidéos'], ['/ressources/outils', 'Boîte à outils'], ['/ressources/glossaire', 'Glossaire'], ['/impact', "Observatoire d'impact"]],
 };

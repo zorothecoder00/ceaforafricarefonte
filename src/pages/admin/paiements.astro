@@ -1,0 +1,30 @@
+---
+/* Paiements (CDC §12) : transactions, montants encaissés par objet, export comptable. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Money from '../../components/Money.astro';
+import { and, desc, eq, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { payment, paymentStatusEnum } from '../../db/schema/app';
+import { user } from '../../db/schema/auth';
+
+export const prerender = false;
+const st = Astro.url.searchParams.get('statut') ?? '';
+const rows = await db.select({ p: payment, email: user.email }).from(payment).leftJoin(user, eq(user.id, payment.userId))
+  .where(st && (paymentStatusEnum.enumValues as readonly string[]).includes(st) ? eq(payment.status, st as 'reussi') : undefined).orderBy(desc(payment.createdAt)).limit(300);
+const byPurpose = await db.select({ k: payment.purpose, n: sql<number>`count(*)::int`, s: sql<number>`coalesce(sum(${payment.amountXof}),0)::float` }).from(payment).where(and(eq(payment.status, 'reussi'))).groupBy(payment.purpose);
+const L: Record<string, string> = { en_attente: 'En attente', reussi: 'Réussi', echoue: 'Échoué', rembourse: 'Remboursé' };
+---
+<AdminLayout title="Paiements" lead="Les montants sont en FCFA (XOF). Les remboursements se font depuis le tableau de bord du prestataire de paiement." obj="paiements">
+  <div class="kpis" style="margin-bottom:18px">{byPurpose.map((b) => <div class="kpi"><b><Money xof={b.s} /></b><span>{b.k} · {b.n}</span></div>)}</div>
+  <form class="filters" method="get" style="margin-top:0">
+    <select class="in" name="statut" aria-label="Statut"><option value="">Tous les statuts</option>{paymentStatusEnum.enumValues.map((s) => <option value={s} selected={s === st}>{L[s]}</option>)}</select>
+    <button class="btn btn-primary btn-sm" type="submit">Filtrer</button>
+    <a class="btn btn-ghost btn-sm" href="/api/admin/export?type=paiements">Exporter (CSV)</a>
+  </form>
+  <div class="panel scroll-x">
+    <table class="t"><thead><tr><th>Référence</th><th>Date</th><th>Payeur</th><th>Objet</th><th>Montant</th><th>Moyen</th><th>Statut</th></tr></thead>
+      <tbody>{rows.map(({ p, email }) => <tr><td><a href={`/espace/recu/${p.reference}`}>{p.reference}</a></td><td class="xs">{p.createdAt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</td><td class="xs">{email ?? '—'}</td><td>{p.purpose}</td><td class="num"><Money xof={p.amountXof} /></td><td class="xs">{p.method ?? p.provider ?? '—'}</td><td><span class={`tag ${p.status === 'reussi' ? 'ok' : p.status === 'echoue' ? 'warn' : ''}`}>{L[p.status]}</span></td></tr>)}</tbody>
+    </table>
+    {rows.length === 0 && <p class="small muted">Aucun paiement.</p>}
+  </div>
+</AdminLayout>

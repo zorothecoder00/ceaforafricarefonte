@@ -1,0 +1,55 @@
+---
+/* Conformité (CDC §8.6, §13) : vérification des investisseurs (KYC), contrôles KYC/KYB, revues annuelles. Pièces consultables par la seule équipe conformité. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { asc, desc, eq, lte, or } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { investorProfile, kycCheck, dossier, kycStatusEnum } from '../../db/schema/kapital';
+import { user } from '../../db/schema/auth';
+import { can } from '../../lib/rbac';
+import { country } from '../../data/site';
+import Money from '../../components/Money.astro';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const decide = can(me.roles, 'pieces_kyc', 'V');
+const investors = await db.select({ i: investorProfile, name: user.name, email: user.email }).from(investorProfile).innerJoin(user, eq(user.id, investorProfile.userId))
+  .where(or(eq(investorProfile.kycStatus, 'en_cours'), eq(investorProfile.kycStatus, 'refuse'), lte(investorProfile.nextReviewAt, new Date(Date.now() + 30 * 864e5)))).orderBy(asc(investorProfile.kycStatus));
+const checks = await db.select({ k: kycCheck, name: user.name, company: dossier.companyName }).from(kycCheck).leftJoin(user, eq(user.id, kycCheck.userId)).leftJoin(dossier, eq(dossier.id, kycCheck.dossierId)).orderBy(desc(kycCheck.createdAt)).limit(200);
+const KL: Record<string, string> = { non_commence: 'Non commencé', en_cours: 'En cours', verifie: 'Vérifié', refuse: 'Refusé', expire: 'Expiré' };
+const CAT: Record<string, string> = { particulier: 'Particulier', averti: 'Investisseur averti', professionnel: 'Professionnel' };
+---
+<AdminLayout title="Conformité et KYC" lead="Vérification d'identité, sanctions, personnes politiquement exposées, origine des fonds. Revue annuelle des investisseurs." obj="pieces_kyc">
+  <h2 style="font-size:1.1rem">Investisseurs à traiter</h2>
+  {investors.length === 0 && <div class="empty">Aucun investisseur en attente ni revue à venir.</div>}
+  {investors.map(({ i, name, email }) => (
+    <div class="panel" style="margin-bottom:10px">
+      <div class="row between"><b>{name}</b><span class="tag info">{KL[i.kycStatus]}</span></div>
+      <div class="xs muted">{email} · {i.category ? CAT[i.category] : 'catégorie non déclarée'} · {i.countries.map(country).join(', ')}{i.nextReviewAt ? ` · revue le ${i.nextReviewAt.toLocaleDateString('fr-FR')}` : ''}</div>
+      <div class="xs">Ticket : {i.ticketMinXof ? <Money xof={i.ticketMinXof} /> : '—'} à {i.ticketMaxXof ? <Money xof={i.ticketMaxXof} /> : '—'} · secteurs : {i.sectors.join(', ') || '—'}</div>
+      {decide && <div class="row" style="gap:6px;margin-top:8px">
+        <button class="btn btn-primary btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'investor.kyc', userId: i.userId, status: 'verifie' })} data-confirm="Confirmer la vérification de cet investisseur ?" data-reload>Vérifier</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'investor.kyc', userId: i.userId, status: 'refuse' })} data-confirm="Refuser la vérification ?" data-reload>Refuser</button>
+        {i.kycStatus === 'verifie' && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'investor.kyc', userId: i.userId, status: 'expire' })} data-reload>Marquer expiré</button>}
+      </div>}
+    </div>
+  ))}
+
+  <h2 style="font-size:1.1rem;margin-top:24px">Contrôles KYC / KYB</h2>
+  <div class="panel scroll-x">
+    <table class="t"><thead><tr><th>Personne / entreprise</th><th>Contrôle</th><th>Prestataire</th><th>Statut</th><th></th></tr></thead>
+      <tbody>{checks.map(({ k, name, company }) => (
+        <tr><td>{company ?? name ?? '—'}</td><td>{k.kind}</td><td class="xs">{k.provider ?? 'manuel'}{k.providerRef ? ` · ${k.providerRef}` : ''}</td><td>{KL[k.status]}</td>
+          <td>{decide && <select class="in" aria-label="Statut du contrôle" style="margin:0;padding:3px" data-kyc={k.id}>{kycStatusEnum.enumValues.map((s) => <option value={s} selected={s === k.status}>{KL[s]}</option>)}</select>}</td></tr>
+      ))}</tbody>
+    </table>
+    {checks.length === 0 && <p class="small muted">Aucun contrôle.</p>}
+  </div>
+  <p class="xs muted">Le contrôle automatisé (identité, vivacité, listes de sanctions) sera branché sur le prestataire KYC dès réception des clés ; en attendant les contrôles sont saisis manuellement.</p>
+</AdminLayout>
+<script>
+  document.querySelectorAll<HTMLSelectElement>('[data-kyc]').forEach((s) => s.addEventListener('change', async () => {
+    const r = await fetch('/api/admin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'kyc.review', id: s.dataset.kyc, status: s.value }) });
+    const d = await r.json().catch(() => ({}));
+    (window as unknown as { toast: (t: string) => void }).toast(d.message || d.error || 'Erreur.');
+  }));
+</script>

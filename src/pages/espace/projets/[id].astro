@@ -1,0 +1,313 @@
+---
+/* Espace de travail d'un projet (CDC §7.2) : barre latérale Vue d'ensemble · Fiche · Conception · Plan · Finances · Équipe · Documents · Rapports. */
+import EspaceLayout from '../../../layouts/EspaceLayout.astro';
+import Money from '../../../components/Money.astro';
+import { and, asc, desc, eq } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { project, projectCanvas, projectTask, projectComment, projectMember, projectDoc, skillCall, skillCallResponse } from '../../../db/schema/app';
+import { user } from '../../../db/schema/auth';
+import { projectRole, canEdit, canComment, SHEET_FIELDS, DIMENSIONS, CANVAS, maturityScore } from '../../../lib/projects';
+import { financeModel, DEFAULT_FINANCE, type FinanceInputs } from '../../../lib/finance';
+import { country } from '../../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const id = Astro.params.id ?? '';
+if (!/^[0-9a-f-]{36}$/.test(id)) return new Response('Projet introuvable', { status: 404 });
+const role = await projectRole(me, id);
+if (!role) return new Response('Projet introuvable ou accès refusé', { status: 404 });
+const [p] = await db.select().from(project).where(eq(project.id, id));
+const edit = canEdit(role);
+const tab = Astro.url.searchParams.get('onglet') ?? 'apercu';
+const sheet = p.sheet as Record<string, string>;
+const maturity = p.maturity as Record<string, number>;
+const score = maturityScore(maturity);
+const fin = { ...DEFAULT_FINANCE, ...(p.finance as Partial<FinanceInputs>) };
+const model = financeModel(fin);
+const tasks = await db.select().from(projectTask).where(eq(projectTask.projectId, id)).orderBy(asc(projectTask.dueOn));
+const comments = await db.select({ c: projectComment, author: user.name }).from(projectComment).innerJoin(user, eq(user.id, projectComment.authorId)).where(eq(projectComment.projectId, id)).orderBy(desc(projectComment.createdAt));
+const members = await db.select({ name: user.name, role: projectMember.role }).from(projectMember).innerJoin(user, eq(user.id, projectMember.userId)).where(eq(projectMember.projectId, id));
+const docs = await db.select().from(projectDoc).where(eq(projectDoc.projectId, id)).orderBy(asc(projectDoc.name), desc(projectDoc.version));
+const calls = await db.select().from(skillCall).where(eq(skillCall.projectId, id));
+const responses = calls.length ? await db.select({ callId: skillCallResponse.callId, name: user.name, message: skillCallResponse.message, uid: user.id }).from(skillCallResponse).innerJoin(user, eq(user.id, skillCallResponse.userId)) : [];
+const kind = (Astro.url.searchParams.get('canvas') ?? 'bmc') as keyof typeof CANVAS;
+const versions = await db.select().from(projectCanvas).where(and(eq(projectCanvas.projectId, id), eq(projectCanvas.kind, kind as 'bmc'))).orderBy(desc(projectCanvas.version)).limit(10);
+const cv = versions[0]?.data as Record<string, string> | undefined;
+const prev = versions[1]?.data as Record<string, string> | undefined;
+const tabs: [string, string][] = [['apercu', "Vue d'ensemble"], ['fiche', 'Fiche'], ['conception', 'Conception'], ['plan', 'Plan'], ['finances', 'Finances'], ['equipe', 'Équipe'], ['documents', 'Documents'], ['rapports', 'Rapports']];
+const today = new Date().toISOString().slice(0, 10);
+const late = tasks.filter((t) => t.status !== 'termine' && t.dueOn && t.dueOn < today);
+const budget = tasks.reduce((a, t) => a + (t.budgetXof ?? 0), 0), spent = tasks.reduce((a, t) => a + (t.spentXof ?? 0), 0);
+// Diagramme de Gantt : échelle de la première à la dernière date
+const dated = tasks.filter((t) => t.startOn || t.dueOn);
+const t0 = dated.length ? Math.min(...dated.map((t) => new Date(t.startOn ?? t.dueOn!).getTime())) : 0;
+const t1 = dated.length ? Math.max(...dated.map((t) => new Date(t.dueOn ?? t.startOn!).getTime())) : 0;
+const span = Math.max(t1 - t0, 864e5);
+const pos = (d: string) => ((new Date(d).getTime() - t0) / span) * 100;
+const mio = (v: number) => (Math.round(v / 1e5) / 10).toLocaleString('fr-FR') + ' M';
+---
+<EspaceLayout title={p.name} lead={`${[p.sector, p.stage, p.country ? country(p.country) : ''].filter(Boolean).join(' · ')} — maturité ${score}/100`}>
+  <nav class="subnav" aria-label="Espace du projet" style="margin:0 0 18px">{tabs.map(([k, l]) => <a href={`?onglet=${k}`} aria-current={k === tab ? 'page' : undefined}>{l}</a>)}</nav>
+
+  {tab === 'apercu' && (
+    <div class="grid g3">
+      <div class="panel">
+        <h3>Jauge de maturité</h3>
+        <b style="font-family:var(--display);font-size:2.4rem;color:var(--navy)">{score}</b><span class="small muted">/100</span>
+        <div class="progress" style="margin:8px 0 14px"><span style={`width:${score}%`}></span></div>
+        <form id="matF" data-id={id}>
+          {DIMENSIONS.map(([k, l]) => <label class="f" style="font-weight:500">{l} : <b data-out={k}>{maturity[k] ?? 0}</b>/5<input type="range" min="0" max="5" name={k} value={maturity[k] ?? 0} disabled={!edit} /></label>)}
+          {edit && <button class="btn btn-primary btn-sm" type="submit">Enregistrer l'auto-évaluation</button>}
+        </form>
+      </div>
+      <div class="panel">
+        <h3>Jalons à venir</h3>
+        {tasks.filter((t) => t.milestone && t.status !== 'termine').slice(0, 5).map((t) => <div class="list-row"><span class="small">◆ {t.title}</span><span class="muted small">{t.dueOn ?? '—'}</span></div>)}
+        {!tasks.some((t) => t.milestone) && <p class="small muted">Ajoutez des jalons dans l’onglet Plan.</p>}
+        <h3 style="margin-top:16px">Risques</h3>
+        {late.length > 0 && <p class="small" style="color:var(--bad)">{late.length} tâche{late.length > 1 ? 's' : ''} en retard.</p>}
+        {model.alertes.slice(0, 2).map((a) => <p class="small" style="color:var(--bad)">{a}</p>)}
+        {!late.length && !model.alertes.length && <p class="small muted">Aucun risque détecté.</p>}
+      </div>
+      <div class="panel">
+        <h3>Prochaines actions</h3>
+        <ul class="small">
+          {!Object.values(sheet).every(Boolean) && <li><a href="?onglet=fiche">Compléter la fiche projet</a></li>}
+          {!versions.length && <li><a href="?onglet=conception">Remplir le Business Model Canvas</a></li>}
+          {!tasks.length && <li><a href="?onglet=plan">Planifier les jalons</a></li>}
+          {!(p.finance as object && Object.keys(p.finance as object).length) && <li><a href="?onglet=finances">Construire le modèle financier</a></li>}
+          {score >= 60 && !p.dossierId && <li><a href="?onglet=rapports">Transmettre à CEA Kapital Invest</a></li>}
+        </ul>
+        <p class="small">Budget : <Money xof={spent} /> réalisés sur <Money xof={budget} /> prévus.</p>
+      </div>
+    </div>
+  )}
+
+  {tab === 'fiche' && (
+    <div class="split">
+      <form class="panel" id="sheetF" data-id={id}>
+        <h3>Fiche projet normalisée</h3>
+        {SHEET_FIELDS.map(([k, l, help]) => <><label class="f" for={`f-${k}`}>{l}</label><p class="xs muted" style="margin:-4px 0 6px">{help}</p><textarea class="in" id={`f-${k}`} name={k} maxlength="5000" readonly={!edit}>{sheet[k] ?? ''}</textarea></>)}
+        {edit && <button class="btn btn-primary" type="submit">Enregistrer</button>}
+        <p class="xs muted" style="margin-top:8px">Les chiffres publiés portent la mention « déclaratif » tant qu’ils ne sont pas vérifiés par CEA.</p>
+      </form>
+      <aside>
+        <div class="panel">
+          <h3>Revue et commentaires</h3>
+          {canComment(role) && (
+            <form data-api={`/api/projets/${id}`} data-reload data-reset>
+              <input type="hidden" name="action" value="commentaire" />
+              <select class="in" name="section" aria-label="Rubrique">{SHEET_FIELDS.map(([k, l]) => <option value={k}>{l}</option>)}</select>
+              <textarea class="in" name="body" required minlength="2" placeholder="Votre commentaire" aria-label="Commentaire"></textarea>
+              <button class="btn btn-ghost btn-sm" type="submit">Commenter</button>
+            </form>
+          )}
+          {comments.map(({ c, author }) => <div style="border-top:1px solid var(--line);padding:8px 0"><div class="xs muted">{author} · {SHEET_FIELDS.find(([k]) => k === c.section)?.[1] ?? 'Général'} · {c.createdAt.toLocaleDateString('fr-FR')}</div><p class="small" style="margin:4px 0 0">{c.body}</p></div>)}
+        </div>
+      </aside>
+    </div>
+  )}
+
+  {tab === 'conception' && (
+    <div>
+      <div class="filters" style="margin-top:0">{Object.entries(CANVAS).map(([k, c]) => <a class="chip" href={`?onglet=conception&canvas=${k}`} aria-pressed={k === kind ? 'true' : 'false'}>{c.label}</a>)}</div>
+      <form id="canvasF" data-id={id} data-kind={kind}>
+        <div class={kind === 'bmc' || kind === 'lean' ? 'canvas9' : 'grid g2'}>
+          {CANVAS[kind].blocks.map(([k, l]) => (
+            <div class="cb panel" style="padding:10px">
+              <h5>{l}</h5>
+              <textarea name={k} readonly={!edit} maxlength="3000" aria-label={l}>{cv?.[k] ?? ''}</textarea>
+              {prev && prev[k] !== cv?.[k] && <p class="xs muted" style="margin:4px 0 0">Version précédente : {prev[k] || '(vide)'}</p>}
+            </div>
+          ))}
+        </div>
+        <div class="row" style="margin-top:12px">
+          {edit && <button class="btn btn-primary btn-sm" type="submit">Enregistrer une nouvelle version</button>}
+          <span class="small muted">{versions.length ? `Version ${versions[0].version} du ${versions[0].savedAt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}` : 'Aucune version enregistrée.'}{prev ? ' · les différences avec la version précédente sont indiquées sous chaque bloc.' : ''}</span>
+        </div>
+      </form>
+    </div>
+  )}
+
+  {tab === 'plan' && (
+    <div>
+      {edit && (
+        <form class="panel" data-api={`/api/projets/${id}`} data-reload data-reset style="margin-bottom:16px">
+          <input type="hidden" name="action" value="tache" />
+          <div class="grid g4" style="gap:0 12px;align-items:end">
+            <div><label class="f" for="tt">Tâche ou jalon</label><input class="in" id="tt" name="title" required minlength="2" /></div>
+            <div><label class="f" for="to">Responsable</label><input class="in" id="to" name="owner" /></div>
+            <div><label class="f" for="ts">Début</label><input class="in" id="ts" name="startOn" type="date" /></div>
+            <div><label class="f" for="td">Échéance</label><input class="in" id="td" name="dueOn" type="date" /></div>
+            <div><label class="f" for="tb">Budget (FCFA)</label><input class="in" id="tb" name="budgetXof" type="number" min="0" /></div>
+            <div><label class="row small" style="margin-bottom:14px"><input type="checkbox" name="milestone" /> Jalon</label></div>
+            <div><button class="btn btn-primary btn-sm" type="submit" style="margin-bottom:14px">Ajouter</button></div>
+          </div>
+        </form>
+      )}
+      <div class="kanban k3" style="grid-template-columns:repeat(3,minmax(200px,1fr))">
+        {[['a_faire', 'À faire'], ['en_cours', 'En cours'], ['termine', 'Terminé']].map(([k, l], ci, cols) => (
+          <div class="col"><h4><span>{l}</span><span>{tasks.filter((t) => t.status === k).length}</span></h4>
+            {tasks.filter((t) => t.status === k).map((t) => (
+              <div class="kcard">
+                <b>{t.milestone ? '◆ ' : ''}{t.title}</b>
+                <div class="xs muted">{[t.owner, t.dueOn].filter(Boolean).join(' · ')}{t.dueOn && t.dueOn < today && k !== 'termine' ? ' · en retard' : ''}</div>
+                {edit && <div class="row" style="gap:4px;margin-top:6px">
+                  {ci > 0 && <button class="btn btn-ghost btn-sm" type="button" data-post={`/api/projets/${id}`} data-method="PATCH" data-body={JSON.stringify({ taskId: t.id, status: cols[ci - 1][0] })} data-reload aria-label="Reculer">←</button>}
+                  {ci < 2 && <button class="btn btn-ghost btn-sm" type="button" data-post={`/api/projets/${id}`} data-method="PATCH" data-body={JSON.stringify({ taskId: t.id, status: cols[ci + 1][0] })} data-reload aria-label="Avancer">→</button>}
+                  <button class="btn btn-ghost btn-sm" type="button" data-post={`/api/projets/${id}`} data-method="DELETE" data-body={JSON.stringify({ taskId: t.id })} data-confirm="Supprimer cette tâche ?" data-reload aria-label="Supprimer">✕</button>
+                </div>}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+      <h3 style="margin-top:22px">Diagramme de Gantt</h3>
+      {dated.length ? (
+        <div class="panel">{dated.map((t) => { const a = pos(t.startOn ?? t.dueOn!), b = pos(t.dueOn ?? t.startOn!); return (
+          <div class="row" style="flex-wrap:nowrap;gap:10px;margin-bottom:6px"><span class="small" style="width:200px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{t.milestone ? '◆ ' : ''}{t.title}</span>
+            <div style="flex:1;position:relative;height:16px;background:var(--surface-2);border-radius:4px"><span style={`position:absolute;left:${a}%;width:${Math.max(b - a, 1.5)}%;top:0;bottom:0;border-radius:4px;background:${t.status === 'termine' ? 'var(--ok)' : t.milestone ? 'var(--gold)' : 'var(--navy-2)'}`}></span></div>
+          </div>
+        ); })}<p class="xs muted" style="margin:6px 0 0">Du {new Date(t0).toLocaleDateString('fr-FR')} au {new Date(t1).toLocaleDateString('fr-FR')}.</p></div>
+      ) : <p class="small muted">Ajoutez des dates aux tâches pour afficher le diagramme.</p>}
+    </div>
+  )}
+
+  {tab === 'finances' && (
+    <div class="split">
+      <div>
+        <div class="panel scroll-x" id="finOut">
+          <table class="t"><thead><tr><th>Année</th>{model.years.map((y) => <th>A{y.y}</th>)}</tr></thead>
+            <tbody>
+              <tr><td>Chiffre d'affaires</td>{model.years.map((y) => <td class="num">{mio(y.ca)}</td>)}</tr>
+              <tr><td>Marge brute</td>{model.years.map((y) => <td class="num">{mio(y.margeBrute)}</td>)}</tr>
+              <tr><td>Charges fixes</td>{model.years.map((y) => <td class="num">{mio(y.charges)}</td>)}</tr>
+              <tr><td><b>Résultat d'exploitation</b></td>{model.years.map((y) => <td class={`num ${y.ebe < 0 ? 'down' : 'up'}`}><b>{mio(y.ebe)}</b></td>)}</tr>
+              <tr><td>Trésorerie fin d'année</td>{model.cashflow.map((c) => <td class={`num ${c < 0 ? 'down' : ''}`}>{mio(c)}</td>)}</tr>
+            </tbody></table>
+          <p class="small" style="margin:10px 0 0">Besoin de financement estimé : <b>{model.besoin ? <Money xof={model.besoin} /> : 'aucun'}</b> (montants en millions de FCFA).</p>
+        </div>
+        {model.alertes.length > 0 && <div class="lock" style="margin-top:12px;border-color:var(--bad);background:var(--bad-soft)"><div><b>Incohérences détectées</b><ul class="small" style="margin:6px 0 0">{model.alertes.map((a) => <li>{a}</li>)}</ul></div></div>}
+        <p class="small" style="margin-top:12px"><a href="/ressources/outils">Télécharger le modèle financier Excel détaillé</a></p>
+      </div>
+      <form class="panel" id="finF" data-id={id}>
+        <h3>Hypothèses</h3>
+        {([['ca', "Chiffre d'affaires année 1 (FCFA)"], ['croissance', 'Croissance annuelle (%)'], ['marge', 'Marge brute (%)'], ['chargesMensuelles', 'Charges fixes mensuelles (FCFA)'], ['investissement', 'Investissement initial (FCFA)'], ['tresorerieInitiale', 'Trésorerie de départ (FCFA)'], ['bfrJours', 'Besoin en fonds de roulement (jours de CA)']] as [keyof FinanceInputs, string][]).map(([k, l]) => <><label class="f" for={`h-${k}`}>{l}</label><input class="in" id={`h-${k}`} name={k} type="number" value={fin[k]} readonly={!edit} /></>)}
+        {edit && <button class="btn btn-primary btn-sm" type="submit">Enregistrer et recalculer</button>}
+      </form>
+    </div>
+  )}
+
+  {tab === 'equipe' && (
+    <div class="grid g2">
+      <div class="panel">
+        <h3>Membres du projet</h3>
+        <div class="list-row"><span>Porteur</span><span class="muted small">propriétaire</span></div>
+        {members.map((m) => <div class="list-row"><span>{m.name}</span><span class="muted small">{m.role}</span></div>)}
+        {role === 'proprietaire' && (
+          <form data-api={`/api/projets/${id}`} data-reload data-reset style="margin-top:12px">
+            <input type="hidden" name="action" value="membre" />
+            <div class="row" style="gap:6px"><input class="in" name="email" type="email" required placeholder="E-mail du membre CEA" aria-label="E-mail" style="flex:1;margin:0" />
+              <select class="in" name="role" aria-label="Rôle" style="width:auto;margin:0"><option value="membre">Membre</option><option value="expert">Expert (revue)</option><option value="partenaire">Partenaire (lecture)</option></select>
+              <button class="btn btn-primary btn-sm" type="submit">Ajouter</button></div>
+          </form>
+        )}
+        <p class="small" style="margin-top:12px">Pour recruter l’équipe du projet : <a href="/espace/recruteur">publier une offre dans CEA Talents</a>.</p>
+      </div>
+      <div class="panel">
+        <h3>Appels à compétences</h3>
+        {calls.map((c) => <div style="border-top:1px solid var(--line);padding:8px 0"><b class="small">{c.need}</b> <span class="tag">{c.kind}</span>{responses.filter((r) => r.callId === c.id).map((r) => <div class="small muted" style="margin-top:4px">↳ {r.name} : {r.message} {edit && <form data-api="/api/messages" style="display:inline"><input type="hidden" name="to" value={r.uid} /><input type="hidden" name="body" value={`Bonjour, merci pour votre réponse à notre appel « ${c.need} ». Pouvons-nous échanger ?`} /><button class="btn btn-ghost btn-sm" type="submit">Répondre</button></form>}</div>)}</div>)}
+        {edit && (
+          <form data-api={`/api/projets/${id}`} data-reload data-reset style="margin-top:10px">
+            <input type="hidden" name="action" value="competence" />
+            <input class="in" name="need" required minlength="3" placeholder="Ex. Directeur·rice financier·e associé·e" aria-label="Besoin" />
+            <select class="in" name="kind" aria-label="Type"><option value="associe">Associé</option><option value="expert">Expert</option><option value="prestataire">Prestataire</option></select>
+            <button class="btn btn-primary btn-sm" type="submit">Publier l'appel</button>
+          </form>
+        )}
+      </div>
+    </div>
+  )}
+
+  {tab === 'documents' && (
+    <div class="panel">
+      <h3>Documents du projet</h3>
+      {docs.length ? docs.map((d) => <div class="list-row"><span>{d.name} <span class="xs muted">v{d.version}</span></span><span class="muted small">{d.uploadedAt.toLocaleDateString('fr-FR')}</span></div>) : <p class="small muted">Aucun document.</p>}
+      {edit && (
+        <form id="docF" data-id={id} style="margin-top:12px" class="row">
+          <input class="in" type="file" name="file" required accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.webp" style="flex:1;margin:0" />
+          <button class="btn btn-primary btn-sm" type="submit">Déposer</button>
+        </form>
+      )}
+      <p class="xs muted" style="margin-top:8px">Un nouveau dépôt du même nom crée une nouvelle version. Signature électronique des conventions : via le prestataire de signature (à configurer).</p>
+    </div>
+  )}
+
+  {tab === 'rapports' && (
+    <div class="grid g2">
+      <div class="panel">
+        <h3>Rapport mensuel</h3>
+        <p class="small">Synthèse aux couleurs de CEA pour vos partenaires et bailleurs : fiche, maturité, avancement du plan, budget, modèle financier.</p>
+        <a class="btn btn-primary btn-sm" href={`/espace/projets/${id}/rapport`}>Générer le rapport (PDF)</a>
+      </div>
+      <div class="panel">
+        <h3>Portefeuille public</h3>
+        <p class="small">Votre projet est <b>{p.public ? 'publié' : 'privé'}</b>. La publication exige votre accord explicite et n’affiche que le résumé.</p>
+        {role === 'proprietaire' && <button class="btn btn-ghost btn-sm" type="button" data-post={`/api/projets/${id}`} data-method="PUT" data-body={JSON.stringify({ public: !p.public })} data-reload>{p.public ? 'Retirer du portefeuille' : 'Publier dans le portefeuille'}</button>}
+      </div>
+      <div class="panel">
+        <h3>CEA Kapital Invest</h3>
+        {p.dossierId ? <p class="small">Projet transmis : suivez le dossier dans <a href="/kapital/entreprise">votre espace entreprise</a>.</p> : (
+          <>
+            <p class="small">Quand le projet atteint 60/100 de maturité, transmettez-le en un clic pour préparer la levée de fonds.</p>
+            {role === 'proprietaire' && <button class="btn btn-gold btn-sm" type="button" data-post={`/api/projets/${id}`} data-body={JSON.stringify({ action: 'kapital' })} disabled={score < 60}>Transmettre à Kapital Invest</button>}
+          </>
+        )}
+      </div>
+    </div>
+  )}
+</EspaceLayout>
+<script>
+  import { financeModel } from '../../../lib/finance';
+  const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+  async function put(id: string, body: unknown, reload = false) {
+    const res = await fetch(`/api/projets/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const d = await res.json().catch(() => ({}));
+    toast(d.message || d.error || 'Erreur.');
+    if (d.ok && reload) setTimeout(() => location.reload(), 600);
+  }
+  const mat = document.getElementById('matF') as HTMLFormElement | null;
+  mat?.querySelectorAll<HTMLInputElement>('input[type=range]').forEach((r) => r.addEventListener('input', () => { mat.querySelector(`[data-out="${r.name}"]`)!.textContent = r.value; }));
+  mat?.addEventListener('submit', (e) => { e.preventDefault(); put(mat.dataset.id!, { maturity: Object.fromEntries([...new FormData(mat)].map(([k, v]) => [k, Number(v)])) }, true); });
+  const sheet = document.getElementById('sheetF') as HTMLFormElement | null;
+  sheet?.addEventListener('submit', (e) => { e.preventDefault(); put(sheet.dataset.id!, { sheet: Object.fromEntries(new FormData(sheet)) }); });
+  const canvas = document.getElementById('canvasF') as HTMLFormElement | null;
+  canvas?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const res = await fetch(`/api/projets/${canvas.dataset.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'canvas', kind: canvas.dataset.kind, data: Object.fromEntries(new FormData(canvas)) }) });
+    const d = await res.json().catch(() => ({}));
+    toast(d.message || d.error || 'Erreur.');
+    if (d.ok) setTimeout(() => location.reload(), 600);
+  });
+  const fin = document.getElementById('finF') as HTMLFormElement | null;
+  fin?.addEventListener('submit', (e) => { e.preventDefault(); put(fin.dataset.id!, { finance: Object.fromEntries([...new FormData(fin)].map(([k, v]) => [k, Number(v)])) }, true); });
+  // Recalcul instantané pendant la saisie
+  fin?.addEventListener('input', () => {
+    const v = Object.fromEntries([...new FormData(fin)].map(([k, x]) => [k, Number(x)])) as Parameters<typeof financeModel>[0];
+    const m = financeModel(v);
+    const rows = document.querySelectorAll('#finOut tbody tr');
+    const mio = (x: number) => (Math.round(x / 1e5) / 10).toLocaleString('fr-FR') + ' M';
+    m.years.forEach((y, i) => {
+      [y.ca, y.margeBrute, y.charges, y.ebe].forEach((val, r) => { const td = rows[r]?.children[i + 1]; if (td) td.textContent = mio(val); });
+      const tdc = rows[4]?.children[i + 1]; if (tdc) tdc.textContent = mio(m.cashflow[i]);
+    });
+  });
+  const doc = document.getElementById('docF') as HTMLFormElement | null;
+  doc?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(doc); fd.set('projectId', doc.dataset.id!);
+    const d = await fetch('/api/projets/documents', { method: 'POST', body: fd }).then((r) => r.json()).catch(() => ({}));
+    toast(d.message || d.error || 'Erreur.');
+    if (d.ok) setTimeout(() => location.reload(), 600);
+  });
+</script>

@@ -2,7 +2,9 @@
 import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import Icon from '../../components/Icon.astro';
 import OppCard from '../../components/OppCard.astro';
-import { OPPS } from '../../data/site';
+import { listOpportunities } from '../../lib/kapital';
+export const prerender = false;
+const opps = await listOpportunities({ limit: 3 });
 
 const kpis = [['9,8 Md', 'FCFA levés par les entreprises accompagnées'], ['150', 'dossiers prêts pour les investisseurs'], ['420', 'investisseurs vérifiés'], ['16', 'pays couverts']];
 const universes = [
@@ -44,7 +46,7 @@ const steps = ['Soumission du dossier', 'Vérification et diagnostic', 'Prépara
         ))}
       </div>
       <h2 style="margin-top:46px">Opportunités du moment</h2>
-      <div class="grid g3">{OPPS.slice(0, 3).map((o) => <OppCard o={o} />)}</div>
+      {opps.length ? <div class="grid g3">{opps.map((o) => <OppCard o={o} />)}</div> : <div class="empty">Les premières opportunités vérifiées seront publiées après le comité d’investissement.</div>}
       <h2 style="margin-top:46px">Notre processus en cinq étapes</h2>
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">
         {steps.map((s, i) => <div class="panel"><b style="font-family:var(--display);color:var(--gold-ink);font-size:1.4rem">{i + 1}</b><h4 style="margin-top:6px">{s}</h4></div>)}

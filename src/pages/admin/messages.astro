@@ -1,0 +1,46 @@
+---
+/* Messages de contact (routés par équipe) et signalements (CDC §11). Responsable pays : limité à ses pays. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { desc, eq, inArray } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { contactMessage, report, ticketFlowEnum } from '../../db/schema/app';
+import { can } from '../../lib/rbac';
+import { countriesFor } from '../../lib/admin';
+import { country } from '../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const tab = Astro.url.searchParams.get('onglet') === 'signalements' && can(me.roles, 'moderation', 'L') ? 'signalements' : 'messages';
+const st = Astro.url.searchParams.get('statut') ?? 'nouveau';
+const status = (ticketFlowEnum.enumValues as readonly string[]).includes(st) ? (st as (typeof ticketFlowEnum.enumValues)[number]) : 'nouveau';
+const cs = await countriesFor(me, 'messages_contact');
+const msgs = tab === 'messages' && can(me.roles, 'messages_contact', 'L') ? await db.select().from(contactMessage).where(cs ? inArray(contactMessage.country, cs.length ? cs : ['--']) : undefined).orderBy(desc(contactMessage.createdAt)).limit(200) : [];
+const reps = tab === 'signalements' ? await db.select().from(report).orderBy(desc(report.createdAt)).limit(200) : [];
+const L: Record<string, string> = { nouveau: 'Nouveau', en_cours: 'En cours', traite: 'Traité', clos: 'Clos' };
+const list = (tab === 'messages' ? msgs : reps).filter((x) => x.status === status);
+---
+<AdminLayout title="Messages et signalements" lead={cs ? `Limité à : ${cs.map(country).join(', ') || 'aucun pays'}` : 'Tous pays.'} obj="messages_contact">
+  <nav class="subnav" style="margin:0 0 12px">
+    <a href="?onglet=messages" aria-current={tab === 'messages' ? 'page' : undefined}>Messages de contact</a>
+    {can(me.roles, 'moderation', 'L') && <a href="?onglet=signalements" aria-current={tab === 'signalements' ? 'page' : undefined}>Signalements</a>}
+  </nav>
+  <div class="filters" style="margin-top:0">{ticketFlowEnum.enumValues.map((s) => <a class="chip" href={`?onglet=${tab}&statut=${s}`} aria-pressed={s === status ? 'true' : 'false'}>{L[s]} ({(tab === 'messages' ? msgs : reps).filter((x) => x.status === s).length})</a>)}</div>
+  {list.length === 0 && <div class="empty">Rien dans cette file.</div>}
+  {tab === 'messages' && (list as typeof msgs).map((m) => (
+    <div class="panel" style="margin-bottom:10px">
+      <div class="row between"><b>{m.reference} · {m.motif}</b><span class="tag info">{m.routedTeam}</span></div>
+      <div class="xs muted">{m.name} · {m.contact}{m.country ? ` · ${country(m.country)}` : ''} · {m.createdAt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</div>
+      <p class="small" style="white-space:pre-wrap">{m.message}</p>
+      <div class="row" style="gap:6px">{ticketFlowEnum.enumValues.filter((s) => s !== m.status).map((s) => <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'contact.status', id: m.id, status: s })} data-reload>{L[s]}</button>)}
+        {m.contact.includes('@') && <a class="btn btn-primary btn-sm" href={`mailto:${m.contact}?subject=${encodeURIComponent('Votre message ' + m.reference)}`}>Répondre</a>}</div>
+    </div>
+  ))}
+  {tab === 'signalements' && (list as typeof reps).map((x) => (
+    <div class="panel" style="margin-bottom:10px">
+      <div class="row between"><b>{x.category}</b><span class="xs muted">{x.anonymous ? 'Anonyme' : x.contact}</span></div>
+      {x.url && <a class="xs" href={x.url} rel="noopener nofollow">{x.url}</a>}
+      <p class="small" style="white-space:pre-wrap">{x.description}</p>
+      <div class="row" style="gap:6px">{ticketFlowEnum.enumValues.filter((s) => s !== x.status).map((s) => <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'report.status', id: x.id, status: s })} data-reload>{L[s]}</button>)}</div>
+    </div>
+  ))}
+</AdminLayout>

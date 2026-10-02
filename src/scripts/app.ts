@@ -185,25 +185,45 @@ $$('[data-countdown]').forEach((el) => {
   setInterval(tick, 30000);
 });
 
-/* ===== consultations (votes) ===== */
-$$('[data-vote]').forEach((box) => {
-  const id = box.dataset.vote!;
-  const opts = $$<HTMLButtonElement>('.vote-opt', box);
-  const show = (chosen: number) => {
-    const counts = opts.map((b, i) => Number(b.dataset.n) + (i === chosen ? 1 : 0));
+/* ===== consultations (votes) : une voix par adhérent, résultats lus en base (/api/votes) ===== */
+const voteBoxes = $$('[data-vote]');
+if (voteBoxes.length) {
+  const draw = (box: HTMLElement, counts: number[], chosen?: number) => {
+    const opts = $$<HTMLButtonElement>('.vote-opt', box);
     const total = counts.reduce((a, b) => a + b, 0);
     opts.forEach((b, i) => {
-      const pct = Math.round((counts[i] / total) * 100);
-      ($('.bar', b) as HTMLElement).style.width = pct + '%';
-      $('.pct', b)!.textContent = pct + ' %' + (i === chosen ? ' ✓' : '');
-      b.disabled = true;
+      const pct = total ? Math.round(((counts[i] ?? 0) / total) * 100) : 0;
+      if (chosen !== undefined) { ($('.bar', b) as HTMLElement).style.width = pct + '%'; $('.pct', b)!.textContent = pct + ' %' + (i === chosen ? ' ✓' : ''); }
+      b.disabled = chosen !== undefined;
     });
     $('.vote-total', box)!.textContent = total.toLocaleString('fr-FR');
   };
-  const prev = store('cea-vote-' + id);
-  if (prev !== null) show(Number(prev));
-  opts.forEach((b, i) => b.addEventListener('click', () => { store('cea-vote-' + id, String(i)); show(i); toast(EN ? 'Thank you, your vote has been recorded.' : 'Merci, votre vote est enregistré.'); }));
-});
+  const load = () => fetch('/api/votes?ids=' + voteBoxes.map((b) => b.dataset.vote).join(','), { credentials: 'same-origin' }).then((r) => r.json()).catch(() => null);
+  load().then((d) => {
+    if (!d) return;
+    voteBoxes.forEach((box) => {
+      const id = box.dataset.vote!;
+      if (d.counts[id]) draw(box, d.counts[id], d.mine[id]);
+      $$<HTMLButtonElement>('.vote-opt', box).forEach((b, i) => b.addEventListener('click', async () => {
+        if (!d.logged) { location.href = (EN ? '/en' : '') + '/connexion?retour=' + encodeURIComponent(location.pathname); return; }
+        const r = await fetch('/api/votes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ consultationId: id, option: i }) });
+        const res = await r.json().catch(() => ({}));
+        toast(res.message || res.error || 'Erreur.');
+        const nd = await load();
+        if (nd?.counts[id]) draw(box, nd.counts[id], nd.mine[id]);
+      }));
+    });
+  });
+}
+
+/* ===== partage (API Web Share, sinon copie du lien) ===== */
+$$<HTMLButtonElement>('[data-share]').forEach((b) => b.addEventListener('click', async () => {
+  const data = { title: b.dataset.share || document.title, url: location.href };
+  try {
+    if (navigator.share) await navigator.share(data);
+    else { await navigator.clipboard.writeText(data.url); toast(EN ? 'Link copied.' : 'Lien copié.'); }
+  } catch { /* partage annulé */ }
+}));
 
 /* ===== boutons et formulaires de démonstration ===== */
 $$('[data-toast]').forEach((b) => b.addEventListener('click', () => toast(b.dataset.toast!)));

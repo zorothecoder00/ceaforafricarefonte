@@ -1,12 +1,12 @@
 ---
 import Money from './Money.astro';
 import { country } from '../data/site';
-interface Props { o: { id: string; n: string; c: string; s: string; st: string; inst: string; need: number; ver: string; prog: number }; lang?: 'fr' | 'en' }
-const { o, lang = 'fr' } = Astro.props;
+interface Props { o: { id: string; n: string; c: string; s: string; st: string; inst: string; need: number; ver: string; prog: number }; lang?: 'fr' | 'en'; href?: string }
+const { o, lang = 'fr', href } = Astro.props;
 const en = lang === 'en';
 const tag = /Vérifié|Verified/.test(o.ver) ? 'ok' : /Déclaratif|Self-reported/.test(o.ver) ? '' : 'gold';
 ---
-<a class="panel" href={`/kapital/opportunites/${o.id}`} style="text-decoration:none;display:flex;flex-direction:column;gap:10px" data-s={o.s} data-st={o.st} data-c={o.c} data-ver={o.ver}>
+<a class="panel" href={href ?? `/kapital/opportunites/${o.id}`} style="text-decoration:none;display:flex;flex-direction:column;gap:10px" data-s={o.s} data-st={o.st} data-c={o.c} data-ver={o.ver}>
   <div class="row between"><span class={`tag ${tag}`}>{o.ver}</span><span class="small muted">{country(o.c)}</span></div>
   <h3 style="margin:0">{o.n}</h3>
   <span class="small muted">{o.s} · {o.st} · {o.inst}</span>

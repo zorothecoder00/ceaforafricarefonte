@@ -1,0 +1,45 @@
+---
+/* Candidatures aux programmes (CDC §7.1, §11) : évaluation avec grille notée sur 100, décision notifiée au candidat. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { and, desc, eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { programmeApplication, applicationStatusEnum } from '../../db/schema/app';
+import { user } from '../../db/schema/auth';
+import { can } from '../../lib/rbac';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const canDecide = can(me.roles, 'candidature', 'V');
+const q = Astro.url.searchParams;
+const prog = q.get('programme') ?? '';
+const st = q.get('statut') ?? '';
+const progs = (await db.selectDistinct({ p: programmeApplication.programme }).from(programmeApplication)).map((r) => r.p).sort();
+const rows = await db.select({ a: programmeApplication, name: user.name, email: user.email }).from(programmeApplication).innerJoin(user, eq(user.id, programmeApplication.userId))
+  .where(and(prog ? eq(programmeApplication.programme, prog) : undefined, st && (applicationStatusEnum.enumValues as readonly string[]).includes(st) ? eq(programmeApplication.status, st as 'recue') : undefined)).orderBy(desc(programmeApplication.submittedAt)).limit(300);
+const L: Record<string, string> = { brouillon: 'Brouillon', recue: 'Reçue', en_evaluation: 'En évaluation', entretien: 'Entretien', admise: 'Admise', liste_attente: "Liste d'attente", refusee: 'Refusée', retiree: 'Retirée' };
+---
+<AdminLayout title="Candidatures programmes" lead={`${rows.length} candidature${rows.length > 1 ? 's' : ''}. Le candidat est notifié à chaque changement de statut.`} obj="candidature">
+  <form class="filters" method="get" style="margin-top:0">
+    <select class="in" name="programme" aria-label="Programme"><option value="">Tous les programmes</option>{progs.map((p) => <option selected={p === prog}>{p}</option>)}</select>
+    <select class="in" name="statut" aria-label="Statut"><option value="">Tous les statuts</option>{applicationStatusEnum.enumValues.map((s) => <option value={s} selected={s === st}>{L[s]}</option>)}</select>
+    <button class="btn btn-primary btn-sm" type="submit">Filtrer</button>
+  </form>
+  {rows.length === 0 && <div class="empty">Aucune candidature.</div>}
+  {rows.map(({ a, name, email }) => (
+    <details class="panel" style="margin-bottom:10px">
+      <summary class="row between" style="cursor:pointer"><span><b>{a.reference}</b> · {name} <span class="xs muted">· {a.programme}</span></span><span><span class="tag info">{L[a.status]}</span>{a.score != null && <span class="tag gold" style="margin-left:4px">{a.score}/100</span>}</span></summary>
+      <div class="xs muted" style="margin-top:6px">{email} · déposée le {a.submittedAt.toLocaleDateString('fr-FR')}</div>
+      <dl class="small" style="display:grid;grid-template-columns:minmax(120px,max-content) 1fr;gap:4px 12px;margin:10px 0">
+        {Object.entries(a.data as Record<string, unknown>).map(([k, v]) => <><dt class="muted">{k}</dt><dd style="margin:0;white-space:pre-wrap">{Array.isArray(v) ? v.join(', ') : String(v ?? '')}</dd></>)}
+      </dl>
+      {canDecide ? (
+        <form data-api="/api/admin" data-reload class="row" style="gap:6px;align-items:end">
+          <input type="hidden" name="action" value="application.update" /><input type="hidden" name="id" value={a.id} />
+          <div><label class="f" for={`s-${a.id}`}>Statut</label><select class="in" id={`s-${a.id}`} name="status" style="margin:0">{applicationStatusEnum.enumValues.map((s) => <option value={s} selected={s === a.status}>{L[s]}</option>)}</select></div>
+          <div><label class="f" for={`n-${a.id}`}>Note /100</label><input class="in" id={`n-${a.id}`} name="score" type="number" min="0" max="100" value={a.score ?? ''} style="margin:0;width:110px" /></div>
+          <button class="btn btn-primary btn-sm" type="submit">Enregistrer</button>
+        </form>
+      ) : <p class="xs muted">Lecture seule.</p>}
+    </details>
+  ))}
+</AdminLayout>

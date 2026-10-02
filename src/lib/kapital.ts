@@ -1,5 +1,5 @@
 /* Règles métier de CEA KAPITAL INVEST (CDC §8) : pipeline des dossiers, interrupteurs réglementaires par pays, accès gradué. */
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from './db';
 import * as s from '../db/schema';
 
@@ -42,6 +42,25 @@ export const FEATURES: [string, string][] = [
 export async function isOpen(feature: string, country = 'TG') {
   const [f] = await db.select({ on: s.featureFlag.enabled }).from(s.featureFlag).where(and(eq(s.featureFlag.country, country), eq(s.featureFlag.feature, feature)));
   return !!f?.on;
+}
+
+export const VERIF_LABEL: Record<string, string> = { verifie: 'Vérifié par CEA', diligence_en_cours: 'Diligence en cours', declaratif: 'Déclaratif' };
+
+/** Opportunités publiées (résumés), au format des cartes OppCard. */
+export async function listOpportunities(f: { sector?: string; stage?: string; country?: string; verification?: string; limit?: number } = {}) {
+  const rows = await db.select({
+    d: s.dossier,
+    pledged: sql<number>`coalesce((select sum(${s.interest.amountXof}) from ${s.interest} where ${s.interest.dossierId} = ${s.dossier.id}), 0)::bigint`,
+  }).from(s.dossier)
+    .where(and(eq(s.dossier.published, true), eq(s.dossier.shareConsent, true),
+      f.sector ? eq(s.dossier.sector, f.sector) : undefined, f.stage ? eq(s.dossier.stage, f.stage) : undefined,
+      f.country ? eq(s.dossier.country, f.country) : undefined, f.verification ? eq(s.dossier.verification, f.verification as 'verifie') : undefined))
+    .orderBy(desc(s.dossier.updatedAt)).limit(f.limit ?? 60);
+  return rows.map(({ d, pledged }) => ({
+    id: d.id, n: d.companyName, c: d.country, s: d.sector ?? '—', st: d.stage ?? '—', inst: d.instrument ? INSTRUMENT_LABEL[d.instrument] : '—',
+    need: d.amountXof ?? 0, ver: VERIF_LABEL[d.verification], prog: d.amountXof ? Math.min(100, Math.round((Number(pledged) / d.amountXof) * 100)) : 0,
+    tr: d.traction, use: d.useOfFunds, team: d.team, ref: d.reference, status: d.status,
+  }));
 }
 
 /** L'utilisateur est-il un investisseur vérifié (KYC validé) ? */

@@ -19,7 +19,8 @@ export const PROGRAMMES: Record<string, { label: string; prefix: string; role?: 
   'agritech-sahel': { label: 'Agritech Sahel', prefix: 'AS', role: 'entrepreneur' },
 };
 
-const Body = z.object({ programme: z.string().refine((p) => p in PROGRAMMES, 'Programme inconnu'), data: z.record(z.string(), z.unknown()).default({}) });
+// Corps : { programme, data } (formulaire en étapes) ou champs à plat (formulaire simple)
+const Body = z.looseObject({ programme: z.string().refine((p) => p in PROGRAMMES, 'Programme inconnu'), data: z.record(z.string(), z.unknown()).optional() }).transform(({ programme, data, website: _w, ...rest }) => ({ programme, data: data ?? rest }));
 
 export const POST: APIRoute = async ({ locals, request }) => {
   const u = requireUser(locals.user);

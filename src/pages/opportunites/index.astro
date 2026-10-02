@@ -2,9 +2,14 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import JobsBoard from '../../components/JobsBoard.astro';
-import { JOBS, SUBS } from '../../data/site';
+import { SUBS } from '../../data/site';
+import { listJobs } from '../../lib/jobs';
+
+export const prerender = false;
+const uid = Astro.locals.user?.id;
+const jobs = await listJobs({ userId: uid });
 ---
 <BaseLayout title="Opportunités">
   <PageHead title="Offres d'emploi et stages" lead="Les offres des entreprises africaines, vérifiées par notre équipe. Les compétences de votre profil sont surlignées." crumbs={[['', 'Opportunités']]} subnav={SUBS.opps} />
-  <JobsBoard jobs={JOBS} />
+  <JobsBoard jobs={jobs} />
 </BaseLayout>

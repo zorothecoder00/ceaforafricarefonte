@@ -1,0 +1,47 @@
+---
+/* Rapport automatique d'un projet pour les partenaires et bailleurs (CDC §7.2) — imprimable en PDF aux couleurs de CEA. */
+import BaseLayout from '../../../../layouts/BaseLayout.astro';
+import { asc, eq } from 'drizzle-orm';
+import { db } from '../../../../lib/db';
+import { project, projectTask } from '../../../../db/schema/app';
+import { projectRole, SHEET_FIELDS, DIMENSIONS, maturityScore } from '../../../../lib/projects';
+import { financeModel, DEFAULT_FINANCE, type FinanceInputs } from '../../../../lib/finance';
+import { country, money } from '../../../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const id = Astro.params.id ?? '';
+if (!(await projectRole(me, id))) return new Response('Accès refusé', { status: 403 });
+const [p] = await db.select().from(project).where(eq(project.id, id));
+const tasks = await db.select().from(projectTask).where(eq(projectTask.projectId, id)).orderBy(asc(projectTask.dueOn));
+const sheet = p.sheet as Record<string, string>, mat = p.maturity as Record<string, number>;
+const m = financeModel({ ...DEFAULT_FINANCE, ...(p.finance as Partial<FinanceInputs>) });
+const done = tasks.filter((t) => t.status === 'termine').length;
+const month = new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+---
+<BaseLayout title={`Rapport — ${p.name}`}>
+  <section class="block report">
+    <div class="wrap" style="max-width:860px">
+      <div class="panel" style="padding:32px">
+        <div class="row between"><span><span class="brand-mark" style="font-size:1.4rem">CEA</span><br /><span class="brand-sub">FOR AFRICA · PROJECT STUDIO</span></span><div style="text-align:right"><b>Rapport mensuel</b><br /><span class="small">{month}</span></div></div>
+        <h1 style="font-size:1.8rem;margin-top:22px">{p.name}</h1>
+        <p class="muted">{[p.sector, p.stage, p.country ? country(p.country) : ''].filter(Boolean).join(' · ')} — maturité <b>{maturityScore(mat)}/100</b></p>
+        <h2 style="font-size:1.2rem">Fiche projet</h2>
+        {SHEET_FIELDS.filter(([k]) => sheet[k]).map(([k, l]) => <p class="small"><b>{l} :</b> {sheet[k]}</p>)}
+        <h2 style="font-size:1.2rem">Maturité par dimension</h2>
+        <table class="t"><tbody>{DIMENSIONS.map(([k, l]) => <tr><td>{l}</td><td style="width:60%"><div class="progress"><span style={`width:${(mat[k] ?? 0) * 20}%`}></span></div></td><td class="num">{mat[k] ?? 0}/5</td></tr>)}</tbody></table>
+        <h2 style="font-size:1.2rem">Avancement du plan d'action</h2>
+        <p class="small">{done} tâche{done > 1 ? 's' : ''} terminée{done > 1 ? 's' : ''} sur {tasks.length}. Budget : {money(tasks.reduce((a, t) => a + (t.spentXof ?? 0), 0))} réalisés sur {money(tasks.reduce((a, t) => a + (t.budgetXof ?? 0), 0))} prévus.</p>
+        <table class="t"><thead><tr><th>Tâche / jalon</th><th>Échéance</th><th>Statut</th></tr></thead><tbody>{tasks.map((t) => <tr><td>{t.milestone ? '◆ ' : ''}{t.title}</td><td>{t.dueOn ?? '—'}</td><td>{t.status.replace('_', ' ')}</td></tr>)}</tbody></table>
+        <h2 style="font-size:1.2rem">Projection financière (déclarative)</h2>
+        <table class="t"><thead><tr><th></th>{m.years.map((y) => <th>A{y.y}</th>)}</tr></thead><tbody>
+          <tr><td>Chiffre d'affaires</td>{m.years.map((y) => <td class="num">{money(Math.round(y.ca))}</td>)}</tr>
+          <tr><td>Résultat d'exploitation</td>{m.years.map((y) => <td class="num">{money(Math.round(y.ebe))}</td>)}</tr>
+        </tbody></table>
+        {m.besoin > 0 && <p class="small">Besoin de financement estimé : <b>{money(m.besoin)}</b>.</p>}
+        <p class="xs muted" style="margin-top:20px">Rapport généré automatiquement le {new Date().toLocaleDateString('fr-FR')}. Chiffres déclaratifs sauf mention « vérifié par CEA ».</p>
+      </div>
+      <button class="btn btn-primary" type="button" onclick="window.print()" style="margin-top:14px">Imprimer / enregistrer en PDF</button>
+    </div>
+  </section>
+</BaseLayout>

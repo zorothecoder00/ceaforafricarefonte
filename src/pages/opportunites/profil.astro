@@ -1,54 +1,53 @@
 ---
+/* Profil talent (CDC §7.4) : CV, titre, compétences, visibilité auprès des recruteurs, offres correspondantes. */
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
+import { eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { profile, jobApplication, savedItem } from '../../db/schema/app';
 import { SUBS } from '../../data/site';
+import { listJobs } from '../../lib/jobs';
+
+export const prerender = false;
+const me = Astro.locals.user;
+if (!me) return Astro.redirect('/connexion?retour=/opportunites/profil');
+const [p] = await db.select().from(profile).where(eq(profile.userId, me.id));
+const skills = p?.skills ?? [];
+const done = [p?.headline, skills.length, p?.cvKey].filter(Boolean).length;
+const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const have = new Set(skills.map(norm));
+const jobs = (await listJobs({ userId: me.id })).map((j) => ({ ...j, m: j.skills.filter((s) => have.has(norm(s))).length })).filter((j) => j.m > 0).sort((a, b) => b.m - a.m).slice(0, 5);
+const nApps = (await db.select({ id: jobApplication.id }).from(jobApplication).where(eq(jobApplication.userId, me.id))).length;
+const nSaved = (await db.select({ id: savedItem.itemId }).from(savedItem).where(eq(savedItem.userId, me.id))).length;
 ---
 <BaseLayout title="Mon profil talent">
-  <PageHead title="Mon profil talent" lead="Importez votre CV : nous en extrayons vos compétences. Vous choisissez qui peut voir votre profil." crumbs={[['/opportunites', 'Opportunités'], ['', 'Mon profil talent']]} subnav={SUBS.opps} />
+  <PageHead title="Mon profil talent" lead="Votre CV et vos compétences servent à vous proposer les offres qui vous correspondent. Vous choisissez qui peut voir votre profil." crumbs={[['/opportunites', 'Opportunités'], ['', 'Mon profil talent']]} subnav={SUBS.opps} />
   <section class="block">
     <div class="wrap split">
-      <div class="panel">
-        <b id="pComp"></b>
-        <div class="progress" style="margin:8px 0 18px"><span id="pBar" style="width:0"></span></div>
-        <label class="f" for="cv">Importer mon CV (PDF)</label><input class="in" type="file" id="cv" accept=".pdf,.doc,.docx" />
-        <p class="small" id="cvName" style="margin-top:-8px"></p>
-        <label class="f" for="tt">Titre professionnel</label><input class="in" id="tt" placeholder="Ex. Développeur mobile" />
-        <label class="f" for="tsk">Compétences (séparées par des virgules)</label><input class="in" id="tsk" placeholder="Flutter, Excel, Anglais" />
-        <div class="row between" style="margin-bottom:14px"><span>Visible par les recruteurs vérifiés</span><button class="toggle" id="tv" type="button" role="switch" aria-checked="true" aria-label="Visibilité du profil"></button></div>
-        <div class="row"><button class="btn btn-primary" id="tsave" type="button">Enregistrer</button><a class="btn btn-ghost" href="/opportunites">Voir les offres correspondantes</a></div>
-        <p class="demo-note" style="margin-top:12px">Démonstration : le profil est enregistré dans votre navigateur uniquement.</p>
-      </div>
+      <form class="panel" id="talentF">
+        <b>Profil complété à {Math.round((done / 3) * 100)} %</b>
+        <div class="progress" style="margin:8px 0 18px"><span style={`width:${(done / 3) * 100}%`}></span></div>
+        <label class="f" for="cv">CV (PDF ou DOCX, 15 Mo max.)</label><input class="in" type="file" id="cv" name="cv" accept=".pdf,.docx" />
+        {p?.cvKey && <p class="small" style="margin-top:-8px">✓ CV déposé. Un nouveau dépôt remplace le précédent.</p>}
+        <label class="f" for="tt">Titre professionnel</label><input class="in" id="tt" name="headline" value={p?.headline ?? ''} placeholder="Ex. Développeur mobile" />
+        <label class="f" for="tsk">Compétences (séparées par des virgules)</label><input class="in" id="tsk" name="skills" value={skills.join(', ')} placeholder="Flutter, Excel, Anglais" />
+        <label class="row small" style="margin-bottom:14px"><input type="checkbox" name="visible" checked={p?.recruiterVisible} /> Visible par les recruteurs vérifiés de CEA Talents</label>
+        <button class="btn btn-primary" type="submit">Enregistrer</button>
+        <p class="small muted" style="margin-top:10px">{nApps} candidature{nApps > 1 ? 's' : ''} · {nSaved} élément{nSaved > 1 ? 's' : ''} sauvegardé{nSaved > 1 ? 's' : ''} — <a href="/espace/candidatures">suivre mes candidatures</a></p>
+      </form>
       <aside>
-        <div class="panel"><h3>Suggestions de formation</h3><p class="small muted">Pour combler l'écart avec les offres qui vous intéressent.</p><a class="small" href="/academie/c5" style="display:block">Marketing digital à petit budget</a><a class="small" href="/academie/c2" style="display:block">Construire un modèle financier</a></div>
-        <div class="panel" style="margin-top:16px"><h3>Préparer un entretien</h3><button class="btn btn-ghost btn-sm" type="button" onclick="openChat()">Demander conseil à CEA Copilot</button></div>
+        <div class="panel"><h3>Offres qui vous correspondent</h3>{jobs.length ? jobs.map((j) => <div class="list-row"><a class="small" href={`/opportunites?q=${encodeURIComponent(j.t)}`}>{j.t} — {j.co}</a><span class="xs muted">{j.m}/{j.skills.length}</span></div>) : <p class="small muted">Renseignez vos compétences pour voir les offres correspondantes.</p>}</div>
+        <div class="panel" style="margin-top:16px"><h3>Suggestions de formation</h3><p class="small muted">Pour combler l'écart avec les offres qui vous intéressent.</p><a class="small" href="/academie/c5" style="display:block">Marketing digital à petit budget</a><a class="small" href="/academie/c2" style="display:block">Construire un modèle financier</a></div>
       </aside>
     </div>
   </section>
 </BaseLayout>
 <script>
-  type P = { titre: string; skills: string; cv: string; visible: boolean };
-  let p: P = { titre: '', skills: '', cv: '', visible: true };
-  try { p = { ...p, ...JSON.parse(localStorage.getItem('cea-talent') || '{}') }; } catch {}
-  const $ = (id: string) => document.getElementById(id) as HTMLInputElement;
-  const save = () => { try { localStorage.setItem('cea-talent', JSON.stringify(p)); } catch {} };
-  function draw() {
-    const n = [p.titre, p.skills, p.cv].filter(Boolean).length;
-    $('pComp').textContent = `Profil complété à ${Math.round((n / 3) * 100)} %`;
-    $('pBar').style.width = (n / 3) * 100 + '%';
-    $('cvName').textContent = p.cv ? `✓ ${p.cv}` : '';
-    $('tt').value = p.titre;
-    $('tsk').value = p.skills;
-    $('tv').setAttribute('aria-checked', String(p.visible));
-  }
-  $('cv').addEventListener('change', (e) => {
-    const f = (e.target as HTMLInputElement).files?.[0];
-    if (!f) return;
-    p.cv = f.name;
-    if (!p.skills) p.skills = 'Excel, Rédaction, Anglais';
-    save(); draw();
-    (window as any).toast('CV analysé : 3 compétences détectées.');
+  const f = document.getElementById('talentF') as HTMLFormElement;
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const d = await fetch('/api/talent', { method: 'POST', body: new FormData(f) }).then((r) => r.json()).catch(() => ({}));
+    (window as unknown as { toast: (t: string) => void }).toast(d.message || d.error || 'Erreur.');
+    if (d.ok) setTimeout(() => location.reload(), 600);
   });
-  $('tv').addEventListener('click', () => { p.visible = !p.visible; save(); draw(); });
-  $('tsave').addEventListener('click', () => { p.titre = $('tt').value; p.skills = $('tsk').value; save(); draw(); (window as any).toast('Profil enregistré.'); });
-  draw();
 </script>

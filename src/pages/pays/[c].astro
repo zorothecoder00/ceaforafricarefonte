@@ -31,7 +31,7 @@ const kpis: [string, string | number][] = [['Membres', fmt(h.m)], ['Projets acco
           {mem.length ? <div class="grid g2">{mem.map((m) => <MemberCard m={m} />)}</div> : <div class="empty">Les membres de ce pays apparaîtront ici.</div>}
           <h2 style="margin-top:28px">Opportunités d'investissement</h2>
           {opp.length
-            ? opp.map((o) => <a class="panel row between" style="text-decoration:none;margin-bottom:8px" href={`/kapital/opportunites/${o.id}`}><b>{o.n}</b><span><Money xof={o.need} /></span></a>)
+            ? opp.map((o) => <a class="panel row between" style="text-decoration:none;margin-bottom:8px" href={`/kapital/opportunites?pays=${o.c}`}><b>{o.n}</b><span><Money xof={o.need} /></span></a>)
             : <p class="muted">Aucune opportunité publiée pour ce pays.</p>}
         </div>
         <aside>

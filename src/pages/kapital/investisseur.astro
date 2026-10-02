@@ -1,44 +1,73 @@
 ---
+/* Mon espace investisseur (CDC §8.8) : profil et préférences, opportunités recommandées (score expliqué), liste de suivi,
+   data rooms ouvertes, intérêts manifestés, portefeuille (après agrément). */
 import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
+import Money from '../../components/Money.astro';
 import Lock from '../../components/Lock.astro';
-import { OPPS, money } from '../../data/site';
+import { and, eq, isNull } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { investorProfile, nda, interest, dossier, watchlist } from '../../db/schema/kapital';
+import { listOpportunities } from '../../lib/kapital';
+import { COUNTRIES, country } from '../../data/site';
 
-const sectors = ['Agro-industrie', 'Fintech', 'Énergie', 'Santé', 'Éducation'];
+export const prerender = false;
+const me = Astro.locals.user;
+if (!me) return Astro.redirect('/connexion?retour=/kapital/investisseur');
+const [ip] = await db.select().from(investorProfile).where(eq(investorProfile.userId, me.id));
+const all = await listOpportunities();
+const sectors = [...new Set(['Agro-industrie', 'Fintech', 'Énergie', 'Santé', 'Éducation', 'BTP durable', ...all.map((o) => o.s)])].filter((x) => x !== '—');
+// Recommandations avec score expliqué (CDC §11)
+const reco = all.map((o) => {
+  const why: string[] = [];
+  if (ip?.sectors.includes(o.s)) why.push('secteur');
+  if (ip?.countries.includes(o.c)) why.push('pays');
+  if (ip?.ticketMinXof != null && ip?.ticketMaxXof != null && o.need >= ip.ticketMinXof) why.push('ticket compatible');
+  return { o, why };
+}).filter((r) => r.why.length).sort((a, b) => b.why.length - a.why.length).slice(0, 5);
+const ndas = await db.select({ id: dossier.id, name: dossier.companyName, at: nda.signedAt }).from(nda).innerJoin(dossier, eq(dossier.id, nda.dossierId)).where(and(eq(nda.investorId, me.id), isNull(nda.revokedAt)));
+const ints = await db.select({ id: dossier.id, name: dossier.companyName, amount: interest.amountXof }).from(interest).innerJoin(dossier, eq(dossier.id, interest.dossierId)).where(eq(interest.investorId, me.id));
+const watch = await db.select().from(watchlist).where(eq(watchlist.userId, me.id));
+const KYC: Record<string, [string, string]> = { en_cours: ['gold', 'En cours'], verifie: ['ok', 'Vérifié'], refuse: ['bad', 'Refusé'], expire: ['bad', 'À renouveler'], non_commence: ['', 'Non vérifié'] };
+const st = ip?.kycStatus ?? 'non_commence';
 ---
-<KapitalLayout title="Mon espace investisseur">
-  <PageHead title="Mon espace investisseur" lead="Préférences, recommandations, suivi et data rooms." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Mon espace investisseur']]} />
+<KapitalLayout title="Mon espace investisseur" group="investir">
+  <PageHead title="Mon espace investisseur" lead={`${me.name} · vérification : ${KYC[st][1].toLowerCase()}${ip?.category ? ` · catégorie ${ip.category}` : ''}`} crumbs={[['/kapital', 'Kapital Invest'], ['', 'Mon espace investisseur']]} />
   <section class="block">
-    <div class="wrap grid g3" id="inv" data-opps={JSON.stringify(OPPS.map((o) => ({ id: o.id, n: o.n, s: o.s, need: money(o.need) })))}>
-      <div class="panel">
-        <h3>Préférences</h3>
-        <p class="small">Tickets : 20 000 – 100 000 USD</p>
-        <div class="row">{sectors.map((s) => <button class="chip" type="button" aria-pressed={s === 'Fintech' || s === 'Énergie' ? 'true' : 'false'} data-ps={s}>{s}</button>)}</div>
+    <div class="wrap">
+      {st !== 'verifie' && <div class="lock" style="margin-bottom:16px"><div><b>Profil non vérifié</b><br />La vérification est nécessaire pour signer un accord de confidentialité et ouvrir les data rooms. <a href="/kapital/devenir-investisseur">{st === 'en_cours' ? 'Voir l’état' : 'Me faire vérifier'}</a></div></div>}
+      <div class="grid g3">
+        <form class="panel" data-api="/api/kapital/investisseur" data-method="PUT" data-reload>
+          <h3>Préférences</h3>
+          <fieldset style="border:0;padding:0;margin:0 0 10px"><legend class="f">Secteurs</legend><div class="row" style="gap:6px">{sectors.map((x) => <label class="chip"><input type="checkbox" name="sectors" value={x} checked={ip?.sectors.includes(x)} /> {x}</label>)}</div></fieldset>
+          <label class="f" for="ic">Pays (Ctrl + clic pour plusieurs)</label>
+          <select class="in" id="ic" multiple size="5" data-multi="countries">{Object.entries(COUNTRIES).map(([k, v]) => <option value={k} selected={ip?.countries.includes(k)}>{v}</option>)}</select>
+          <input type="hidden" name="countries" data-type="list" value={ip?.countries.join(',') ?? ''} />
+          <div class="grid g2" style="gap:0 10px">
+            <div><label class="f" for="tmin">Ticket min (FCFA)</label><input class="in" id="tmin" name="ticketMinXof" type="number" min="0" step="1000000" value={ip?.ticketMinXof ?? ''} /></div>
+            <div><label class="f" for="tmax">Ticket max (FCFA)</label><input class="in" id="tmax" name="ticketMaxXof" type="number" min="0" step="1000000" value={ip?.ticketMaxXof ?? ''} /></div>
+          </div>
+          <button class="btn btn-primary btn-sm" type="submit">Enregistrer</button>
+        </form>
+        <div class="panel">
+          <h3>Recommandées pour vous</h3>
+          {reco.length ? reco.map(({ o, why }) => <a class="list-row" href={`/kapital/opportunites/${o.id}`} style="text-decoration:none"><span>{o.n}<br /><span class="xs" style="color:var(--ok)">Correspondance : {why.join(' + ')}</span></span><span class="small"><Money xof={o.need} /></span></a>) : <p class="small muted">Indiquez vos secteurs et pays préférés pour recevoir des recommandations.</p>}
+        </div>
+        <div class="panel">
+          <h3>Ma liste de suivi</h3>
+          {watch.length ? <p class="small">{watch.length} élément{watch.length > 1 ? 's' : ''} suivi{watch.length > 1 ? 's' : ''}.</p> : <p class="small muted">Vide.</p>}
+          <a class="btn btn-ghost btn-sm" href="/kapital/suivi">Gérer ma liste et mes alertes</a>
+        </div>
+        <div class="panel"><h3>Data rooms ouvertes</h3>{ndas.length ? ndas.map((n) => <a class="list-row" href={`/kapital/opportunites/${n.id}`}><span>{n.name}</span><span class="muted small">NDA du {n.at.toLocaleDateString('fr-FR')}</span></a>) : <p class="small muted">Aucune.</p>}</div>
+        <div class="panel"><h3>Intérêts manifestés</h3>{ints.length ? ints.map((i) => <a class="list-row" href={`/kapital/opportunites/${i.id}`}><span>{i.name}</span><span class="small">{i.amount ? <Money xof={i.amount} /> : '—'}</span></a>) : <p class="small muted">Aucun.</p>}</div>
+        <div class="panel"><h3>Portefeuille</h3><Lock feature="kap_sub" /><p class="small muted" style="margin-top:8px">Vos participations apparaîtront ici après souscription via un partenaire agréé.</p></div>
       </div>
-      <div class="panel"><h3>Recommandées pour vous</h3><div id="reco"></div></div>
-      <div class="panel"><h3>Ma liste de suivi</h3><p class="small muted">Utilisez « Suivre » sur une opportunité pour l'ajouter ici.</p><a class="small" href="/kapital/opportunites">Parcourir les opportunités</a></div>
-      <div class="panel"><h3>Data rooms ouvertes</h3><p class="small muted">Aucune. L'accès exige un profil vérifié et un accord de confidentialité.</p><a class="small" href="/kapital/devenir-investisseur">Me faire vérifier</a></div>
-      <div class="panel"><h3>Intérêts manifestés</h3><p class="small muted">Aucun pour le moment.</p></div>
-      <div class="panel"><h3>Portefeuille</h3><Lock feature="kap_sub" /><p class="small muted" style="margin-top:8px">Vos participations apparaîtront ici après souscription via un partenaire agréé.</p></div>
     </div>
   </section>
 </KapitalLayout>
 <script>
-  const root = document.getElementById('inv')!;
-  const opps: { id: string; n: string; s: string; need: string }[] = JSON.parse(root.dataset.opps!);
-  const chips = [...root.querySelectorAll<HTMLButtonElement>('[data-ps]')];
-  let pref: string[] = chips.filter((c) => c.getAttribute('aria-pressed') === 'true').map((c) => c.dataset.ps!);
-  try { pref = JSON.parse(localStorage.getItem('cea-ipref') || 'null') || pref; } catch {}
-  function draw() {
-    chips.forEach((c) => c.setAttribute('aria-pressed', String(pref.includes(c.dataset.ps!))));
-    const l = opps.filter((o) => pref.some((s) => o.s.includes(s)));
-    document.getElementById('reco')!.innerHTML = l.map((o) => `<a class="small" href="/kapital/opportunites/${o.id}" style="display:block;padding:5px 0">${o.n} — ${o.need}</a>`).join('') || '<p class="small muted">Ajoutez des secteurs.</p>';
-  }
-  chips.forEach((c) => c.addEventListener('click', () => {
-    const s = c.dataset.ps!;
-    pref = pref.includes(s) ? pref.filter((x) => x !== s) : [...pref, s];
-    try { localStorage.setItem('cea-ipref', JSON.stringify(pref)); } catch {}
-    draw();
-  }));
-  draw();
+  // Sélection multiple des pays → champ caché « countries »
+  const sel = document.querySelector<HTMLSelectElement>('[data-multi="countries"]');
+  const hid = document.querySelector<HTMLInputElement>('input[name="countries"]');
+  sel?.addEventListener('change', () => { if (hid) hid.value = [...sel.selectedOptions].map((o) => o.value).join(','); });
 </script>

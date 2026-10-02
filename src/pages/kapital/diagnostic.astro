@@ -63,7 +63,11 @@ const QS = [
     document.getElementById('rScore')!.textContent = `${score} / 100`;
     document.getElementById('rWeak')!.innerHTML = `Score Investor Ready. Points à renforcer en priorité : <b style="color:#fff">${weak.join(', ') || 'aucun'}</b>.`;
     document.getElementById('rAxes')!.innerHTML = AXES.map((a, k) => `<div class="row between small" style="margin-bottom:6px"><span style="min-width:150px">${a}</span><div class="progress" style="flex:1"><span style="width:${ans[k] * 20}%"></span></div><b style="min-width:30px;text-align:right">${ans[k]}/5</b></div>`).join('');
-    try { localStorage.setItem('cea-diag', String(score)); } catch {}
+    // Enregistré dans le compte (jauge Investor Ready, recommandations de cours) si l'utilisateur est connecté
+    fetch('/api/kapital/diagnostic', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: ans }) })
+      .then((r) => r.json())
+      .then((d) => { if (!d.saved) document.getElementById('rWeak')!.insertAdjacentHTML('beforeend', ' <a href="/connexion?retour=/kapital/diagnostic">Connectez-vous</a> pour enregistrer ce résultat dans votre espace.'); })
+      .catch(() => {});
   }
   q.querySelectorAll<HTMLButtonElement>('[data-v]').forEach((b) => b.addEventListener('click', () => { ans[i] = Number(b.dataset.v); i++; render(); }));
   back.addEventListener('click', () => { i--; render(); });

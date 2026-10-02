@@ -1,0 +1,47 @@
+---
+/* Modération des offres d'emploi (CDC §7.4) : validation, refus, fermeture, mise en avant ; embauches déclarées. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { desc, eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { job, hireDeclaration, jobStatusEnum } from '../../db/schema/app';
+import { user } from '../../db/schema/auth';
+import { can } from '../../lib/rbac';
+import { country } from '../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const st = (Astro.url.searchParams.get('statut') ?? 'en_moderation') as (typeof jobStatusEnum.enumValues)[number];
+const rows = await db.select({ j: job, employer: user.email }).from(job).leftJoin(user, eq(user.id, job.employerId)).where(eq(job.status, jobStatusEnum.enumValues.includes(st) ? st : 'en_moderation')).orderBy(desc(job.createdAt)).limit(200);
+const hires = can(me.roles, 'parametres', 'M') ? await db.select().from(hireDeclaration).orderBy(desc(hireDeclaration.hiredOn)).limit(100) : [];
+const L: Record<string, string> = { brouillon: 'Brouillons', en_moderation: 'À valider', publiee: 'Publiées', fermee: 'Fermées', refusee: 'Refusées' };
+const sixMonths = Date.now() - 182 * 864e5, year = Date.now() - 365 * 864e5;
+---
+<AdminLayout title="Offres d'emploi" lead="Vérifier l'employeur, l'absence de critère discriminatoire et la réalité du poste." obj="offre_emploi">
+  <div class="filters" style="margin-top:0">{jobStatusEnum.enumValues.map((s) => <a class="chip" href={`?statut=${s}`} aria-pressed={s === st ? 'true' : 'false'}>{L[s]}</a>)}</div>
+  {rows.length === 0 && <div class="empty">Aucune offre.</div>}
+  {rows.map(({ j, employer }) => (
+    <div class="panel" style="margin-bottom:10px">
+      <div class="row between"><b>{j.featured ? '★ ' : ''}{j.title} — {j.company}</b><span class="xs muted">{country(j.country)} · {j.type}{j.remote ? ' · télétravail' : ''}</span></div>
+      <div class="xs muted">{employer ?? 'Saisie CEA'} · {j.salary ?? 'Salaire non précisé'} · {j.skills.join(', ')}</div>
+      {j.description && <details><summary class="small">Description</summary><p class="small" style="white-space:pre-wrap">{j.description}</p></details>}
+      <div class="row" style="gap:6px;margin-top:8px">
+        {j.status !== 'publiee' && <button class="btn btn-primary btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'job.moderate', id: j.id, status: 'publiee' })} data-reload>Publier</button>}
+        {j.status === 'en_moderation' && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'job.moderate', id: j.id, status: 'refusee' })} data-confirm="Refuser cette offre ?" data-reload>Refuser</button>}
+        {j.status === 'publiee' && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'job.moderate', id: j.id, status: 'fermee' })} data-reload>Fermer</button>}
+        {j.status === 'publiee' && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'job.moderate', id: j.id, status: 'publiee', featured: !j.featured })} data-reload>{j.featured ? 'Retirer la mise en avant' : 'Mettre en avant'}</button>}
+      </div>
+    </div>
+  ))}
+  {hires.length > 0 && (
+    <>
+      <h2 style="font-size:1.2rem;margin-top:26px">Embauches déclarées (observatoire d'impact)</h2>
+      <div class="panel scroll-x"><table class="t"><thead><tr><th>Personne</th><th>Contrat</th><th>Embauche</th><th>6 mois</th><th>12 mois</th></tr></thead><tbody>
+        {hires.map((h) => { const t = new Date(h.hiredOn).getTime(); return (
+          <tr><td>{h.personName}</td><td>{h.contract}</td><td>{h.hiredOn}</td>
+            <td>{h.verified6mAt ? '✓' : t < sixMonths ? <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'hire.verify', id: h.id, months: 6 })} data-reload>Vérifier</button> : '—'}</td>
+            <td>{h.verified12mAt ? '✓' : t < year ? <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'hire.verify', id: h.id, months: 12 })} data-reload>Vérifier</button> : '—'}</td></tr>
+        ); })}
+      </tbody></table></div>
+    </>
+  )}
+</AdminLayout>

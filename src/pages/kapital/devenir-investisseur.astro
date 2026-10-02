@@ -1,30 +1,69 @@
 ---
+/* Devenir investisseur vérifié (CDC §8.10) : questionnaire d'adéquation, origine des fonds, pièce d'identité, selfie. */
 import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
-import { COUNTRIES } from '../../data/site';
+import { eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { investorProfile } from '../../db/schema/kapital';
+
+export const prerender = false;
+const me = Astro.locals.user;
+const [ip] = me ? await db.select().from(investorProfile).where(eq(investorProfile.userId, me.id)) : [];
+const Q: [string, string, string[]][] = [
+  ['q1', 'Avez-vous déjà investi dans une entreprise non cotée ?', ['Jamais', '1 à 3 fois', 'Plus de 3 fois']],
+  ['q2', 'Quelle part de votre épargne envisagez-vous d’investir ?', ['Moins de 10 %', '10 à 25 %', 'Plus de 25 %']],
+  ['q3', 'Si vous perdiez tout ce montant, votre niveau de vie serait-il affecté ?', ['Non', 'Un peu', 'Fortement']],
+];
+const ST: Record<string, [string, string]> = { en_cours: ['gold', 'Vérification en cours'], verifie: ['ok', 'Vérifié'], refuse: ['bad', 'Refusé'], expire: ['bad', 'À renouveler'], non_commence: ['', 'Non commencé'] };
 ---
-<KapitalLayout title="Devenir investisseur">
-  <PageHead title="Devenir investisseur" lead="Vérification d'identité et profil investisseur : environ 10 minutes." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Devenir investisseur']]} />
+<KapitalLayout title="Devenir investisseur" group="investir">
+  <PageHead title="Devenir investisseur vérifié" lead="Vérification d'identité (KYC), profil investisseur et contrôles réglementaires. Environ 5 minutes." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Devenir investisseur']]} />
   <section class="block">
     <div class="wrap split">
-      <form class="panel" data-demo="Demande reçue. Vérification d'identité sous 48 h.">
-        <label class="f" for="iN">Nom complet</label><input class="in" id="iN" required />
-        <label class="f" for="iE">E-mail</label><input class="in" id="iE" type="email" required />
-        <label class="f" for="iC">Pays de résidence</label>
-        <select class="in" id="iC">{Object.entries(COUNTRIES).map(([k, v]) => <option value={k}>{v}</option>)}<option value="XX">Diaspora (hors Afrique)</option></select>
-        <label class="f" for="iT">Profil</label>
-        <select class="in" id="iT"><option>Particulier (business angel)</option><option>Club ou syndicat</option><option>Family office</option><option>Fonds d'investissement</option><option>Institution / DFI</option></select>
-        <label class="f" for="iA">Montant envisagé par an</label>
-        <select class="in" id="iA"><option>Moins de 5 M FCFA</option><option>5 à 50 M FCFA</option><option>50 à 500 M FCFA</option><option>Plus de 500 M FCFA</option></select>
-        <label class="row small"><input type="checkbox" required /> J'ai lu la page <a href="/kapital/risques">Risques de l'investissement</a>.</label>
-        <button class="btn btn-primary" type="submit" style="margin-top:12px">Démarrer la vérification</button>
-      </form>
+      {!me ? (
+        <div class="empty"><a href="/connexion?retour=/kapital/devenir-investisseur">Connectez-vous</a> pour commencer la vérification.</div>
+      ) : ip && ['en_cours', 'verifie'].includes(ip.kycStatus) ? (
+        <div class="panel"><span class={`tag ${ST[ip.kycStatus][0]}`}>{ST[ip.kycStatus][1]}</span><h2 style="margin-top:12px">{ip.kycStatus === 'verifie' ? 'Vous êtes investisseur vérifié' : 'Vos pièces sont en cours de vérification'}</h2><p>Catégorie : <b>{ip.category ?? '—'}</b>. {ip.kycStatus === 'verifie' ? 'Vous pouvez signer des accords de confidentialité et accéder aux data rooms.' : 'La conformité valide votre profil sous 48 heures ; vous serez notifié.'}</p><a class="btn btn-primary" href="/kapital/opportunites">Voir les opportunités</a></div>
+      ) : (
+        <form class="panel" id="kycF">
+          <h3>1. Profil investisseur</h3>
+          {Q.map(([n, q, opts]) => (
+            <fieldset style="border:0;padding:0;margin:0 0 14px"><legend style="font-weight:600">{q}</legend>{opts.map((o, j) => <label class="row small" style="margin:4px 0"><input type="radio" name={n} value={j} required /> {o}</label>)}</fieldset>
+          ))}
+          <label class="f" for="kor">Origine principale des fonds</label>
+          <select class="in" id="kor" name="origine"><option>Revenus professionnels</option><option>Épargne</option><option>Cession d'entreprise</option><option>Héritage</option><option>Autre</option></select>
+          <h3 style="margin-top:12px">2. Pièce d'identité</h3>
+          <label class="f" for="kdoc">Photo ou scan (carte nationale, passeport, carte CEDEAO)</label>
+          <input class="in" id="kdoc" name="document" type="file" accept="image/*,.pdf" required />
+          <h3>3. Selfie</h3>
+          <label class="f" for="ksel">Photo de votre visage (prise avec la caméra du téléphone)</label>
+          <input class="in" id="ksel" name="selfie" type="file" accept="image/*" capture="user" required />
+          <p class="xs muted">Vos pièces sont chiffrées et accessibles uniquement au responsable conformité. Contrôles effectués : authenticité de la pièce, correspondance du visage, listes de sanctions, personnes politiquement exposées.</p>
+          <button class="btn btn-primary" type="submit">Envoyer pour vérification</button>
+        </form>
+      )}
       <aside>
         <div class="panel">
           <h3>Ce que vous obtenez</h3>
-          <ol class="timeline"><li class="done">Accès aux résumés d'opportunités</li><li class="done">Data rooms après accord de confidentialité</li><li class="cur">Invitations au comité et au Demo Day</li><li>Clubs et syndicats de co-investissement</li></ol>
+          <ol class="timeline"><li class="done">Accès aux résumés d'opportunités</li><li class="done">Data rooms après accord de confidentialité</li><li class="cur">Invitations au comité et au Demo Day</li><li>Clubs et syndicats (après agrément)</li></ol>
+          <p class="small"><a href="/kapital/risques">Lire les risques de l’investissement</a></p>
         </div>
       </aside>
     </div>
   </section>
 </KapitalLayout>
+<script>
+  const f = document.getElementById('kycF') as HTMLFormElement | null;
+  const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+  f?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!f.checkValidity()) return f.reportValidity();
+    const btn = f.querySelector('button')!;
+    btn.disabled = true;
+    const res = await fetch('/api/kapital/kyc', { method: 'POST', body: new FormData(f) });
+    const d = await res.json().catch(() => ({}));
+    btn.disabled = false;
+    toast(d.message || d.error || 'Erreur.');
+    if (d.ok) setTimeout(() => (location.href = d.redirect), 1200);
+  });
+</script>

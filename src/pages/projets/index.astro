@@ -1,37 +1,48 @@
 ---
+/* Portefeuille CEA (CDC §7.2) : vitrine des projets accompagnés publiés avec l'accord de leur porteur. Filtres pays, secteur, stade. */
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
-import { OPPS, SUBS, country } from '../../data/site';
+import { and, desc, eq, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { project } from '../../db/schema/app';
+import { SUBS, COUNTRIES, country } from '../../data/site';
+import { maturityScore } from '../../lib/projects';
 
-const stages = ['', 'Pré-amorçage', 'Amorçage', 'Croissance', 'Série A'];
+export const prerender = false;
+const q = Astro.url.searchParams;
+const f = { st: q.get('stade') ?? '', s: q.get('secteur') ?? '', c: q.get('pays') ?? '' };
+const rows = await db.select().from(project).where(and(eq(project.public, true), f.st ? eq(project.stage, f.st) : undefined, f.s ? eq(project.sector, f.s) : undefined, f.c ? eq(project.country, f.c) : undefined)).orderBy(desc(project.updatedAt)).limit(60);
+const [facet] = await db.select({ s: sql<string[]>`array_agg(distinct ${project.sector})`, st: sql<string[]>`array_agg(distinct ${project.stage})` }).from(project).where(eq(project.public, true));
+const clean = (a: string[] | null) => (a ?? []).filter(Boolean).sort();
 ---
 <BaseLayout title="Project Studio">
   <PageHead title="Project Studio" lead="Structurer, piloter et faire financer des projets. Découvrez les projets accompagnés par CEA (publiés avec l'accord de leurs porteurs)." crumbs={[['', 'Project Studio']]} subnav={SUBS.projets} />
   <section class="block" style="padding-top:20px">
     <div class="wrap">
-      <div class="filters" id="pf">{stages.map((s) => <button class="chip" type="button" aria-pressed={s ? 'false' : 'true'} data-st={s}>{s || 'Tous les stades'}</button>)}</div>
-      <div class="grid g3" id="pl">
-        {OPPS.map((o) => (
-          <div class="panel" data-st={o.st}>
-            <div class="row between"><span class="tag">{o.s}</span><span class="small muted">{country(o.c)}</span></div>
-            <h3 style="margin:10px 0 4px">{o.n.replace('Projet ', '')}</h3>
-            <p class="small muted">{o.tr}</p>
-            <div class="row between small"><span>Stade : {o.st}</span><span class={`tag ${o.ver === 'Déclaratif' ? '' : 'ok'}`}>{o.ver === 'Déclaratif' ? 'Déclaratif' : 'Vérifié par CEA'}</span></div>
-            <a class="small" href={`/kapital/opportunites/${o.id}`} style="display:block;margin-top:10px">Voir sur Kapital Invest</a>
+      <form class="filters" method="get">
+        <select class="in" name="pays" aria-label="Pays"><option value="">Tous les pays</option>{Object.entries(COUNTRIES).map(([k, v]) => <option value={k} selected={k === f.c}>{v}</option>)}</select>
+        <select class="in" name="secteur" aria-label="Secteur"><option value="">Tous les secteurs</option>{clean(facet?.s).map((x) => <option selected={x === f.s}>{x}</option>)}</select>
+        <select class="in" name="stade" aria-label="Stade"><option value="">Tous les stades</option>{clean(facet?.st).map((x) => <option selected={x === f.st}>{x}</option>)}</select>
+        <button class="btn btn-primary btn-sm" type="submit">Filtrer</button>
+        <a class="btn btn-gold btn-sm" href="/projets/nouveau">Proposer un projet</a>
+      </form>
+      <div class="grid g3">
+        {rows.map((p) => { const sheet = p.sheet as Record<string, string>; return (
+          <div class="panel">
+            <div class="row between"><span class="tag">{p.sector ?? '—'}</span><span class="small muted">{p.country ? country(p.country) : ''}</span></div>
+            <h3 style="margin:10px 0 4px">{p.name}</h3>
+            <p class="small muted">{(sheet.probleme || sheet.solution || '').slice(0, 160)}</p>
+            <div class="row between small"><span>Stade : {p.stage ?? '—'}</span><span class="tag">Déclaratif</span></div>
+            <div class="small" style="margin-top:8px">Maturité {maturityScore(p.maturity as Record<string, number>)}/100</div>
+            {p.dossierId && <a class="small" href={`/kapital/opportunites/${p.dossierId}`} style="display:block;margin-top:8px">Voir sur Kapital Invest</a>}
           </div>
-        ))}
+        ); })}
       </div>
+      {rows.length === 0 && <div class="empty">Aucun projet publié pour ces critères.</div>}
       <div class="call" style="margin-top:40px">
-        <div><h2>Vous avez un projet à structurer ?</h2><p>Fiche projet normalisée, canvas interactifs, plan d'action, modèle financier guidé et score de maturité.</p></div>
-        <div><a class="btn btn-primary" href="/contact">Proposer un projet</a></div>
+        <div><h2>Vous avez un projet à structurer ?</h2><p>Fiche projet normalisée, canvas interactifs, plan d'action Kanban et Gantt, modèle financier guidé et score de maturité.</p></div>
+        <div><a class="btn btn-primary" href="/projets/nouveau">Proposer un projet</a></div>
       </div>
     </div>
   </section>
 </BaseLayout>
-<script>
-  const chips = [...document.querySelectorAll<HTMLButtonElement>('#pf .chip')];
-  chips.forEach((c) => c.addEventListener('click', () => {
-    chips.forEach((x) => x.setAttribute('aria-pressed', String(x === c)));
-    document.querySelectorAll<HTMLElement>('#pl > [data-st]').forEach((el) => { el.hidden = !!c.dataset.st && el.dataset.st !== c.dataset.st; });
-  }));
-</script>

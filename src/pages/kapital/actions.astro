@@ -4,6 +4,7 @@ import PageHead from '../../components/PageHead.astro';
 import Lock from '../../components/Lock.astro';
 import Money from '../../components/Money.astro';
 import { PRIV_OFFERS, country, dateFr } from '../../data/site';
+export const prerender = false;
 ---
 <KapitalLayout title="Vente d'actions">
   <PageHead title="Vente d'actions" lead="Ouvrir son capital, vendre et acheter des actions de sociétés non cotées, dans un cadre sécurisé." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Actions']]} />

@@ -4,6 +4,7 @@ import PageHead from '../../components/PageHead.astro';
 import Lock from '../../components/Lock.astro';
 
 const clubs: [string, string, number][] = [["Club Agritech Afrique de l'Ouest", 'Chef de file : J.-M. Ekotto', 34], ['Diaspora Capital Club', 'Chef de file : A. Bello', 58], ['Women Invest Africa', 'Chef de file : N. Eze', 41]];
+export const prerender = false;
 ---
 <KapitalLayout title="Clubs et syndicats">
   <PageHead title="Clubs et syndicats d'investisseurs" lead="Un investisseur chef de file présente une opportunité ; les membres du club co-investissent ensemble." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Clubs et syndicats']]} />

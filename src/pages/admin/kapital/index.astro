@@ -1,0 +1,40 @@
+---
+/* Pipeline des dossiers Kapital (CDC §8.3) : colonnes par statut, alerte de dépassement de délai (SLA), analyste assigné. */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Money from '../../../components/Money.astro';
+import { desc, eq, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
+import { db } from '../../../lib/db';
+import { dossier, dossierEvent } from '../../../db/schema/kapital';
+import { user } from '../../../db/schema/auth';
+import { PIPELINE } from '../../../lib/kapital';
+import { country } from '../../../data/site';
+
+export const prerender = false;
+const analyst = alias(user, 'analyst');
+const only = Astro.url.searchParams.get('statut');
+const rows = await db.select({
+  d: dossier, analyst: analyst.name,
+  since: sql<Date>`coalesce((select max(${dossierEvent.at}) from ${dossierEvent} where ${dossierEvent.dossierId} = ${dossier.id}), ${dossier.createdAt})`,
+}).from(dossier).leftJoin(analyst, eq(analyst.id, dossier.analystId)).orderBy(desc(dossier.updatedAt));
+const days = (d: Date) => Math.floor((Date.now() - new Date(d).getTime()) / 864e5);
+const cols = PIPELINE.filter((p) => !only || p.key === only);
+---
+<AdminLayout title="Pipeline Kapital" lead="Délai indicatif par étape (SLA) : un dossier en dépassement est signalé en rouge." obj="dossier_kapital">
+  <div class="kanban" style={`grid-template-columns:repeat(${cols.length},minmax(200px,1fr))`}>
+    {cols.map((c) => { const list = rows.filter((r) => r.d.status === c.key); return (
+      <div class="col"><h4><span>{c.label}</span><span>{list.length}</span></h4>
+        {list.map(({ d, analyst: an, since }) => { const late = c.sla > 0 && days(since) > c.sla; return (
+          <a class="kcard" href={`/admin/kapital/${d.id}`} style={`display:block;text-decoration:none;${late ? 'border-left:3px solid var(--bad)' : ''}`}>
+            <b>{d.companyName}</b>
+            <div class="xs muted">{d.reference} · {country(d.country)}</div>
+            {d.amountXof && <div class="xs"><Money xof={d.amountXof} /></div>}
+            <div class="xs" style={late ? 'color:var(--bad)' : ''}>{days(since)} j dans l'étape{c.sla ? ` / ${c.sla} j` : ''}</div>
+            <div class="xs muted">{an ? `Analyste : ${an}` : 'Non assigné'}</div>
+          </a>
+        ); })}
+      </div>
+    ); })}
+  </div>
+  {only && <p class="small" style="margin-top:12px"><a href="/admin/kapital">Voir tout le pipeline</a></p>}
+</AdminLayout>

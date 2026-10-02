@@ -1,34 +1,83 @@
 ---
+/* Fiche d'opportunité normalisée (CDC §8.3, §8.9) : résumé public → accord de confidentialité → data room.
+   Risques affichés sur chaque opportunité ; intérêt non engageant ; liste de suivi. */
 import KapitalLayout from '../../../layouts/KapitalLayout.astro';
 import PageHead from '../../../components/PageHead.astro';
 import Money from '../../../components/Money.astro';
 import Icon from '../../../components/Icon.astro';
-import { OPPS, country } from '../../../data/site';
+import Lock from '../../../components/Lock.astro';
+import { and, asc, eq } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { dossier, dataRoomDocument, interest, watchlist } from '../../../db/schema/kapital';
+import { accessLevel, isVerifiedInvestor, INSTRUMENT_LABEL, VERIF_LABEL } from '../../../lib/kapital';
+import { country } from '../../../data/site';
 
-export function getStaticPaths() {
-  return OPPS.map((o) => ({ params: { id: o.id }, props: { o } }));
-}
-const { o } = Astro.props;
-const facts = [['Secteur', o.s], ['Pays', country(o.c)], ['Stade', o.st], ['Instrument', o.inst], ['Équipe', o.team], ['Vérification', o.ver]];
+export const prerender = false;
+const id = Astro.params.id ?? '';
+if (!/^[0-9a-f-]{36}$/.test(id)) return Astro.redirect('/kapital/opportunites');
+const [d] = await db.select().from(dossier).where(eq(dossier.id, id));
+const me = Astro.locals.user;
+const level = await accessLevel(me?.id, id);
+if (!d || (!d.published && level !== 'proprietaire' && level !== 'equipe')) return new Response('Opportunité introuvable', { status: 404 });
+const verified = me ? await isVerifiedInvestor(me.id) : false;
+const docs = ['dataroom', 'proprietaire', 'equipe'].includes(level) ? await db.select().from(dataRoomDocument).where(eq(dataRoomDocument.dossierId, id)).orderBy(asc(dataRoomDocument.folder), asc(dataRoomDocument.name)) : [];
+const [mine] = me ? await db.select().from(interest).where(and(eq(interest.dossierId, id), eq(interest.investorId, me.id))) : [];
+const [followed] = me ? await db.select().from(watchlist).where(and(eq(watchlist.userId, me.id), eq(watchlist.item, `dossier:${id}`))) : [];
+const facts: [string, string][] = [['Secteur', d.sector ?? '—'], ['Pays', country(d.country)], ['Stade', d.stage ?? '—'], ['Instrument', d.instrument ? INSTRUMENT_LABEL[d.instrument] : '—'], ['Équipe', d.team ?? '—'], ['Vérification', VERIF_LABEL[d.verification]]];
+const FOLDERS: Record<string, string> = { juridique: 'Juridique', financier: 'Financier', commercial: 'Commercial', technique: 'Technique', rh: 'RH', fiscal: 'Fiscal', esg: 'ESG' };
 ---
-<KapitalLayout title={o.n} group="investir">
-  <PageHead title={o.n} lead={`${o.s} · ${country(o.c)} · ${o.st}`} crumbs={[['/kapital', 'Kapital Invest'], ['/kapital/opportunites', 'Opportunités'], ['', o.n]]} />
+<KapitalLayout title={d.companyName} group="investir">
+  <PageHead title={d.companyName} lead={`${d.sector ?? ''} · ${country(d.country)} · ${d.stage ?? ''} · mis à jour le ${d.updatedAt.toLocaleDateString('fr-FR')}`} crumbs={[['/kapital', 'Kapital Invest'], ['/kapital/opportunites', 'Opportunités'], ['', d.companyName]]} />
   <section class="block">
     <div class="wrap split">
       <div>
         <div class="grid g3">{facts.map(([k, v]) => <div class="panel"><div class="small muted">{k}</div><b>{v}</b></div>)}</div>
-        <div class="panel" style="margin-top:18px"><h3>Traction</h3><p style="margin:0">{o.tr}</p></div>
-        <div class="panel" style="margin-top:18px"><h3>Utilisation des fonds</h3><p style="margin:0">{o.use}</p></div>
-        <div class="lock" style="margin-top:18px"><Icon name="lock" size={20} /><div><b>Dossier complet protégé</b><br />Pitch deck, modèle financier, data room : accessibles aux investisseurs vérifiés après signature d'un accord de confidentialité. <a href="/kapital/devenir-investisseur">Devenir investisseur</a></div></div>
+        <div class="panel" style="margin-top:18px"><h3>Traction</h3><p style="margin:0">{d.traction ?? 'Information communiquée dans la data room.'}</p></div>
+        <div class="panel" style="margin-top:18px"><h3>Utilisation des fonds</h3><p style="margin:0">{d.useOfFunds ?? '—'}</p></div>
+        <div class="panel" style="margin-top:18px">
+          <h3>Risques propres à cette opportunité</h3>
+          <ul class="small">
+            <li>Perte totale ou partielle du capital investi ; entreprise non cotée.</li>
+            <li>Illiquidité : revente des titres difficile avant plusieurs années.</li>
+            <li>Dilution possible lors de levées ultérieures.</li>
+            {d.verification === 'declaratif' && <li><b>Informations déclaratives</b> : non vérifiées par CEA.</li>}
+            {d.country !== 'TG' && !['CI', 'SN', 'BJ', 'ML', 'BF'].includes(d.country) && <li>Risque de change : montants hors zone franc CFA.</li>}
+          </ul>
+        </div>
+
+        <h2 style="margin-top:28px">Data room</h2>
+        {['dataroom', 'proprietaire', 'equipe'].includes(level) ? (
+          docs.length ? (
+            <div class="panel">{docs.map((doc) => <div class="list-row"><span class="row"><Icon name="doc" size={16} /> <span class="tag">{FOLDERS[doc.folder]}</span> {doc.name} <span class="xs muted">v{doc.version}</span></span><a class="small" href={`/kapital/dataroom/${doc.id}`}>Consulter</a></div>)}</div>
+          ) : <div class="empty">La data room est en cours de constitution.</div>
+        ) : verified ? (
+          <form class="panel" data-api="/api/kapital/nda" data-reload>
+            <input type="hidden" name="dossierId" value={d.id} />
+            <h3>Accord de confidentialité</h3>
+            <p class="small">En signant, vous vous engagez à ne pas divulguer ni utiliser les informations de la data room à d’autres fins que l’analyse de cet investissement. Les consultations sont tracées et filigranées à votre nom ; l’entreprise peut révoquer l’accès à tout moment.</p>
+            <label class="row small"><input type="checkbox" name="accept" required /> J’accepte les termes de l’accord de confidentialité.</label>
+            <button class="btn btn-primary btn-sm" type="submit" style="margin-top:10px">Signer et ouvrir la data room</button>
+          </form>
+        ) : (
+          <div class="lock"><Icon name="lock" size={20} /><div><b>Réservé aux investisseurs vérifiés</b><br />Faites vérifier votre profil, puis signez l'accord de confidentialité pour accéder au dossier complet. <a href="/kapital/devenir-investisseur">Devenir investisseur vérifié</a></div></div>
+        )}
+        <div style="margin-top:16px"><Lock feature="kap_sub" country={d.country} text="Avant agrément, Kapital Invest ne propose que des manifestations d’intérêt : aucun paiement, aucune souscription." /></div>
       </div>
       <aside>
         <div class="panel">
           <div class="small muted">Montant recherché</div>
-          <b style="font-family:var(--display);font-size:1.8rem;color:#E7BD62"><Money xof={o.need} /></b>
-          <div class="progress" style="margin-top:10px"><span style={`width:${o.prog}%`}></span></div>
-          <p class="xs muted" style="margin-top:4px">{o.prog} % d'intérêt manifesté</p>
-          <button class="btn btn-primary" style="width:100%" data-toast="Manifestation d'intérêt enregistrée. Un analyste vous contacte.">Manifester mon intérêt</button>
-          <button class="btn btn-ghost" style="width:100%;margin-top:8px" data-toast="Ajoutée à votre liste de suivi.">Suivre</button>
+          <b style="font-family:var(--display);font-size:1.8rem;color:#E7BD62"><Money xof={d.amountXof ?? 0} /></b>
+          <p class="xs muted">Référence {d.reference}</p>
+          {me ? (
+            <form data-api="/api/kapital/interet">
+              <input type="hidden" name="dossierId" value={d.id} />
+              <label class="f" for="amt">Montant envisagé (FCFA, facultatif)</label>
+              <input class="in" id="amt" name="amountXof" type="number" min="0" step="100000" value={mine?.amountXof ?? ''} />
+              <button class="btn btn-primary" type="submit" style="width:100%">{mine ? 'Mettre à jour mon intérêt' : 'Manifester mon intérêt'}</button>
+            </form>
+          ) : <a class="btn btn-primary" style="width:100%" href={`/connexion?retour=/kapital/opportunites/${d.id}`}>Se connecter</a>}
+          {me && <button class="btn btn-ghost" type="button" style="width:100%;margin-top:8px" data-post="/api/kapital/suivi" data-body={JSON.stringify({ item: `dossier:${d.id}`, follow: !followed })} data-reload>{followed ? 'Ne plus suivre' : 'Suivre'}</button>}
+          <p class="xs muted" style="margin-top:10px">Intérêt non engageant. Aucune promesse de rendement.</p>
         </div>
       </aside>
     </div>

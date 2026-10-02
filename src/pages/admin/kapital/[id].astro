@@ -1,0 +1,102 @@
+---
+/* Fiche d'un dossier Kapital côté équipe (CDC §8.3) : statut, analyste, niveau de vérification, publication, historique, data room, intérêts, décision du comité. */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Money from '../../../components/Money.astro';
+import { asc, desc, eq, sql } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { dossier, dossierEvent, dataRoomDocument, dataRoomView, interest, nda, committeeDecision, diagnostic, kycCheck, verificationLevelEnum } from '../../../db/schema/kapital';
+import { userRole } from '../../../db/schema/app';
+import { user } from '../../../db/schema/auth';
+import { PIPELINE, statusLabel, INSTRUMENT_LABEL, VERIF_LABEL } from '../../../lib/kapital';
+import { can } from '../../../lib/rbac';
+import { country } from '../../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const id = Astro.params.id ?? '';
+if (!/^[0-9a-f-]{36}$/.test(id)) return new Response('Dossier introuvable', { status: 404 });
+const [d] = await db.select({ d: dossier, owner: user.name, email: user.email }).from(dossier).innerJoin(user, eq(user.id, dossier.ownerId)).where(eq(dossier.id, id));
+if (!d) return new Response('Dossier introuvable', { status: 404 });
+const edit = can(me.roles, 'dossier_kapital', 'M');
+const decide = can(me.roles, 'decision_comite', 'C');
+const events = await db.select({ e: dossierEvent, who: user.name }).from(dossierEvent).leftJoin(user, eq(user.id, dossierEvent.actorId)).where(eq(dossierEvent.dossierId, id)).orderBy(desc(dossierEvent.at));
+const docs = await db.select({ doc: dataRoomDocument, views: sql<number>`(select count(*)::int from ${dataRoomView} where ${dataRoomView.documentId} = ${dataRoomDocument.id})`, secs: sql<number>`(select coalesce(sum(${dataRoomView.seconds}),0)::int from ${dataRoomView} where ${dataRoomView.documentId} = ${dataRoomDocument.id})` }).from(dataRoomDocument).where(eq(dataRoomDocument.dossierId, id)).orderBy(asc(dataRoomDocument.folder));
+const ints = await db.select({ i: interest, name: user.name }).from(interest).innerJoin(user, eq(user.id, interest.investorId)).where(eq(interest.dossierId, id));
+const ndas = await db.select({ n: nda, name: user.name }).from(nda).innerJoin(user, eq(user.id, nda.investorId)).where(eq(nda.dossierId, id));
+const decisions = await db.select().from(committeeDecision).where(eq(committeeDecision.dossierId, id)).orderBy(desc(committeeDecision.meetingOn));
+const [diag] = await db.select().from(diagnostic).where(eq(diagnostic.dossierId, id)).orderBy(desc(diagnostic.createdAt)).limit(1);
+const kyb = await db.select().from(kycCheck).where(eq(kycCheck.dossierId, id));
+const analysts = await db.select({ id: user.id, name: user.name }).from(userRole).innerJoin(user, eq(user.id, userRole.userId)).where(eq(userRole.role, 'analyste'));
+const x = d.d;
+const raised = ints.reduce((a, r) => a + (r.i.amountXof ?? 0), 0);
+---
+<AdminLayout title={`${x.companyName} — ${x.reference}`} lead={`${country(x.country)} · ${x.sector ?? '—'} · ${x.stage ?? '—'} · porteur : ${d.owner} (${d.email})`} obj="dossier_kapital">
+  <div class="split">
+    <div>
+      <div class="panel">
+        <h3>Synthèse</h3>
+        <dl class="small" style="display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;margin:0">
+          <dt class="muted">Montant recherché</dt><dd style="margin:0">{x.amountXof ? <Money xof={x.amountXof} /> : '—'}</dd>
+          <dt class="muted">Instrument</dt><dd style="margin:0">{x.instrument ? INSTRUMENT_LABEL[x.instrument] : '—'}</dd>
+          <dt class="muted">Score investor-ready</dt><dd style="margin:0">{x.investorReadyScore ?? '—'}{diag ? ` (diagnostic : ${diag.score}/100)` : ''}</dd>
+          <dt class="muted">Accord de partage</dt><dd style="margin:0">{x.shareConsent ? 'Oui' : 'Non'}</dd>
+          <dt class="muted">Intérêts manifestés</dt><dd style="margin:0">{ints.length} · <Money xof={raised} /></dd>
+        </dl>
+        {x.useOfFunds && <p class="small"><b>Utilisation des fonds :</b> {x.useOfFunds}</p>}
+        {x.traction && <p class="small"><b>Traction :</b> {x.traction}</p>}
+        {x.team && <p class="small"><b>Équipe :</b> {x.team}</p>}
+      </div>
+
+      <h2 style="font-size:1.1rem;margin-top:20px">Data room</h2>
+      <div class="panel">{docs.length ? docs.map(({ doc, views, secs }) => <div class="list-row"><span class="small">[{doc.folder}] {doc.name} <span class="xs muted">v{doc.version}</span></span><span class="xs muted">{views} consultation{views > 1 ? 's' : ''} · {Math.round(secs / 60)} min</span></div>) : <p class="small muted" style="margin:0">Aucun document.</p>}</div>
+
+      <h2 style="font-size:1.1rem;margin-top:20px">Investisseurs</h2>
+      <div class="panel">
+        {ndas.map(({ n, name }) => <div class="list-row"><span class="small">{name}</span><span class="xs muted">NDA {n.revokedAt ? 'révoqué' : `signé le ${n.signedAt.toLocaleDateString('fr-FR')}`}</span></div>)}
+        {ints.map(({ i, name }) => <div class="list-row"><span class="small">{name}</span><span class="xs">Intérêt : {i.amountXof ? <Money xof={i.amountXof} /> : 'montant non précisé'}</span></div>)}
+        {!ndas.length && !ints.length && <p class="small muted" style="margin:0">Aucun investisseur pour l'instant.</p>}
+      </div>
+
+      <h2 style="font-size:1.1rem;margin-top:20px">Historique</h2>
+      <ol class="timeline">{events.map(({ e, who }) => <li><b>{e.at.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</b> — {e.fromStatus ? `${statusLabel(e.fromStatus)} → ` : ''}{statusLabel(e.toStatus)}{who ? ` · ${who}` : ''}{e.note ? <div class="xs muted">{e.note}</div> : null}</li>)}</ol>
+    </div>
+
+    <aside>
+      {edit && (
+        <>
+          <form class="panel" data-api="/api/admin" data-reload>
+            <h3>Faire avancer le dossier</h3>
+            <input type="hidden" name="action" value="dossier.status" /><input type="hidden" name="id" value={x.id} />
+            <select class="in" name="status" aria-label="Statut">{PIPELINE.map((p) => <option value={p.key} selected={p.key === x.status}>{p.label}</option>)}</select>
+            <textarea class="in" name="note" placeholder="Note transmise à l'entreprise (facultatif)" aria-label="Note"></textarea>
+            <button class="btn btn-primary btn-sm" type="submit">Mettre à jour</button>
+          </form>
+          <form class="panel" data-api="/api/admin" data-reload style="margin-top:14px">
+            <h3>Suivi</h3>
+            <input type="hidden" name="action" value="dossier.update" /><input type="hidden" name="id" value={x.id} />
+            <label class="f" for="an">Analyste</label><select class="in" id="an" name="analystId"><option value="">Non assigné</option>{analysts.map((a) => <option value={a.id} selected={a.id === x.analystId}>{a.name}</option>)}</select>
+            <label class="f" for="vf">Niveau de vérification</label><select class="in" id="vf" name="verification">{verificationLevelEnum.enumValues.map((v) => <option value={v} selected={v === x.verification}>{VERIF_LABEL[v]}</option>)}</select>
+            <label class="row small"><input type="checkbox" name="published" checked={x.published} disabled={!x.shareConsent} /> Publier le résumé aux investisseurs vérifiés</label>
+            <button class="btn btn-ghost btn-sm" type="submit">Enregistrer</button>
+          </form>
+        </>
+      )}
+      {kyb.length > 0 && <div class="panel" style="margin-top:14px"><h3>KYB</h3>{kyb.map((k) => <div class="list-row"><span class="small">{k.kind}</span><span class="tag">{k.status}</span></div>)}</div>}
+      <div class="panel" style="margin-top:14px">
+        <h3>Comité d'investissement</h3>
+        {decisions.map((c) => <div style="border-top:1px solid var(--line);padding:6px 0"><b class="small">{c.meetingOn.toLocaleDateString('fr-FR')} — {c.decision}</b>{c.minutes && <p class="xs" style="margin:4px 0 0;white-space:pre-wrap">{c.minutes}</p>}</div>)}
+        {decide && (
+          <form data-api="/api/admin" data-reload style="margin-top:8px">
+            <input type="hidden" name="action" value="committee.decide" /><input type="hidden" name="id" value={x.id} />
+            <label class="f" for="cm">Date de séance</label><input class="in" id="cm" name="meetingOn" type="date" required />
+            <label class="f" for="cd">Décision</label><select class="in" id="cd" name="decision"><option value="favorable">Favorable</option><option value="ajourne">Ajourné</option><option value="defavorable">Défavorable</option></select>
+            <label class="f" for="cmn">Procès-verbal</label><textarea class="in" id="cmn" name="minutes"></textarea>
+            <label class="f" for="cc">Conflit d'intérêts déclaré (facultatif)</label><input class="in" id="cc" name="conflicts" />
+            <button class="btn btn-primary btn-sm" type="submit">Enregistrer la décision</button>
+          </form>
+        )}
+        {!decisions.length && !decide && <p class="small muted" style="margin:0">Aucune décision.</p>}
+      </div>
+    </aside>
+  </div>
+</AdminLayout>

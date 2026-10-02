@@ -1,9 +1,13 @@
 ---
+/* Tableau des offres (CDC §7.4) : recherche, filtres, alertes ; compétences du profil surlignées. */
 import JobCard from './JobCard.astro';
 import KapitalAd from './KapitalAd.astro';
 import { country } from '../data/site';
-interface Props { jobs: any[] }
+import { mySkills, type JobRow } from '../lib/jobs';
+interface Props { jobs: JobRow[] }
 const { jobs } = Astro.props;
+const me = Astro.locals.user;
+const skills = await mySkills(me?.id);
 const types = [...new Set(jobs.map((j) => j.type))];
 const countries = [...new Set(jobs.map((j) => j.c))];
 ---
@@ -14,17 +18,17 @@ const countries = [...new Set(jobs.map((j) => j.c))];
       <select class="in" data-f="c" aria-label="Pays"><option value="">Tous les pays</option>{countries.map((c) => <option value={c}>{country(c)}</option>)}</select>
       <select class="in" data-f="type" aria-label="Type de contrat"><option value="">Tous les contrats</option>{types.map((t) => <option>{t}</option>)}</select>
       <label class="chip"><input type="checkbox" data-f="remote" /> Télétravail</label>
-      <button class="btn btn-ghost btn-sm" type="button" data-toast="Alerte créée. Vous recevrez les nouvelles offres par WhatsApp.">Créer une alerte</button>
+      {me && <button class="btn btn-ghost btn-sm" type="button" data-alert>Créer une alerte</button>}
     </div>
     <div class="split">
       <div>
-        <p class="small muted" data-count>{jobs.length} offres</p>
-        <div data-list>{jobs.map((j) => <JobCard j={j} />)}</div>
-        <div class="empty" data-empty hidden>Aucune offre ne correspond. Retirez un filtre ou créez une alerte.</div>
+        <p class="small muted" data-count>{jobs.length} offre{jobs.length > 1 ? 's' : ''}</p>
+        <div data-list>{jobs.map((j) => <JobCard j={j} mine={skills} />)}</div>
+        <div class="empty" data-empty hidden={jobs.length > 0}>Aucune offre ne correspond. Retirez un filtre ou créez une alerte.</div>
       </div>
       <aside>
         <KapitalAd variant={0} />
-        <div class="panel" style="margin-top:16px"><h3>Votre profil talent</h3><p class="small muted">Complétez votre profil pour être visible des recruteurs et voir votre correspondance.</p><a class="btn btn-ghost btn-sm" href="/opportunites/profil">Compléter mon profil</a></div>
+        <div class="panel" style="margin-top:16px"><h3>Votre profil talent</h3><p class="small muted">{skills.length ? `${skills.length} compétences renseignées : elles sont surlignées dans les offres.` : 'Renseignez vos compétences pour voir votre correspondance avec chaque offre.'}</p><a class="btn btn-ghost btn-sm" href="/opportunites/profil">Mon profil talent</a></div>
       </aside>
     </div>
   </div>
@@ -33,14 +37,6 @@ const countries = [...new Set(jobs.map((j) => j.c))];
   const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   document.querySelectorAll<HTMLElement>('[data-jobs]').forEach((root) => {
     const f = (k: string) => root.querySelector<HTMLInputElement>(`[data-f="${k}"]`)!;
-    // Compétences du profil talent (enregistrées sur /opportunites/profil) : surlignage et score de correspondance.
-    let skills = '';
-    try { skills = norm(JSON.parse(localStorage.getItem('cea-talent') || '{}').skills || ''); } catch {}
-    if (skills) root.querySelectorAll<HTMLElement>('[data-skills]').forEach((card) => {
-      let n = 0;
-      card.querySelectorAll<HTMLElement>('[data-skill]').forEach((t) => { if (skills.includes(norm(t.dataset.skill!))) { t.classList.add('ok'); n++; } });
-      card.querySelector('.match')!.innerHTML = ` · <b>${n}/${card.dataset.skills!.split('|').length} compétences correspondent</b>`;
-    });
     const apply = () => {
       let n = 0;
       root.querySelectorAll<HTMLElement>('[data-list] > .panel').forEach((el) => {
@@ -52,6 +48,11 @@ const countries = [...new Set(jobs.map((j) => j.c))];
       root.querySelector<HTMLElement>('[data-empty]')!.hidden = n > 0;
     };
     root.querySelectorAll('[data-f]').forEach((x) => x.addEventListener('input', apply));
+    root.querySelector('[data-alert]')?.addEventListener('click', async () => {
+      const res = await fetch('/api/emplois', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'alerte', q: f('q').value || undefined, country: f('c').value || undefined, type: f('type').value || undefined, remote: f('remote').checked || undefined }) });
+      const d = await res.json().catch(() => ({}));
+      (window as unknown as { toast: (t: string) => void }).toast(d.message || d.error || 'Erreur.');
+    });
     const q = new URLSearchParams(location.search).get('q');
     if (q) { f('q').value = q; apply(); }
   });

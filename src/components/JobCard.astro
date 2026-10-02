@@ -1,18 +1,27 @@
 ---
+/* Carte d'offre d'emploi (CDC §7.4) : candidature en un clic, sauvegarde, signalement, correspondance « n compétences sur m ». */
 import { country } from '../data/site';
-interface Props { j: { id: string; t: string; co: string; c: string; type: string; remote: boolean; sal: string; skills: string[] } }
-const { j } = Astro.props;
+interface Props { j: { id: string; t: string; co: string; c: string; type: string; remote: boolean; sal: string; skills: string[]; featured?: boolean; saved?: boolean }; mine?: string[] }
+const { j, mine = [] } = Astro.props;
+const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const have = new Set(mine.map(norm));
+const match = j.skills.filter((s) => have.has(norm(s))).length;
+const logged = !!Astro.locals.user;
 ---
-<div class="panel row between" style="align-items:flex-start;margin-bottom:12px" data-type={j.type} data-c={j.c} data-remote={j.remote ? '1' : '0'} data-q={`${j.t} ${j.co} ${j.skills.join(' ')}`} data-skills={j.skills.join('|')}>
+<div class="panel row between" style="align-items:flex-start;margin-bottom:12px" data-type={j.type} data-c={j.c} data-remote={j.remote ? '1' : '0'} data-q={`${j.t} ${j.co} ${j.skills.join(' ')}`}>
   <div style="flex:1;min-width:240px">
-    <h3 style="margin:0 0 4px">{j.t}</h3>
+    <h3 style="margin:0 0 4px">{j.featured && <span class="tag gold" style="margin-right:6px">À la une</span>}{j.t}</h3>
     <div class="muted small">{j.co} · {country(j.c)} · {j.type}{j.remote ? ' · Télétravail' : ''}</div>
-    <div class="row" style="margin-top:10px">{j.skills.map((s) => <span class="tag" data-skill={s.toLowerCase()}>{s}</span>)}</div>
-    <div class="small" style="margin-top:8px">Rémunération : {j.sal}<span class="match"></span></div>
+    <div class="row" style="margin-top:10px">{j.skills.map((s) => <span class={`tag ${have.has(norm(s)) ? 'ok' : ''}`}>{s}</span>)}</div>
+    <div class="small" style="margin-top:8px">Rémunération : {j.sal}{mine.length > 0 && <> · <b>{match}/{j.skills.length} compétences correspondent</b></>}</div>
   </div>
   <div class="row">
-    <button class="btn btn-ghost btn-sm" type="button" data-toast="Offre sauvegardée.">Sauvegarder</button>
-    <button class="btn btn-primary btn-sm" type="button" data-toast={`Candidature envoyée à ${j.co} avec votre profil CEA.`}>Postuler en un clic</button>
-    <button class="btn btn-ghost btn-sm" type="button" aria-label="Signaler l'annonce" data-toast="Annonce signalée. Merci, la modération vérifie.">⚑</button>
+    {logged ? (
+      <>
+        <button class="btn btn-ghost btn-sm" type="button" data-post="/api/emplois" data-body={JSON.stringify({ action: 'sauvegarder', jobId: j.id, save: !j.saved })} data-reload>{j.saved ? 'Sauvegardée ✓' : 'Sauvegarder'}</button>
+        <button class="btn btn-primary btn-sm" type="button" data-post="/api/emplois" data-body={JSON.stringify({ action: 'candidater', jobId: j.id })}>Postuler en un clic</button>
+      </>
+    ) : <a class="btn btn-primary btn-sm" href={`/connexion?retour=${encodeURIComponent('/opportunites')}`}>Se connecter pour postuler</a>}
+    <a class="btn btn-ghost btn-sm" href="/signalement" aria-label="Signaler l'annonce">⚑</a>
   </div>
 </div>

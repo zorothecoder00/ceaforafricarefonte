@@ -1,0 +1,59 @@
+---
+/* Contenus et voix (CDC §7.7, §11) : propositions des membres (statut et suite donnée), espaces de la communauté, lettre d'information. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { and, desc, isNotNull, isNull, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { proposal, proposalSupport, space, newsletterSubscription, proposalStatusEnum } from '../../db/schema/app';
+import { can } from '../../lib/rbac';
+import { COUNTRIES } from '../../data/site';
+
+export const prerender = false;
+const r = Astro.locals.user!.roles;
+const edit = can(r, 'contenus', 'M');
+const props = await db.select({ p: proposal, n: sql<number>`(select count(*)::int from ${proposalSupport} where ${proposalSupport.proposalId} = ${proposal.id})` }).from(proposal).orderBy(desc(proposal.createdAt)).limit(100);
+const spaces = await db.select().from(space);
+const [nl] = await db.select({ n: sql<number>`count(*)::int` }).from(newsletterSubscription).where(and(isNotNull(newsletterSubscription.confirmedAt), isNull(newsletterSubscription.unsubscribedAt)));
+const L: Record<string, string> = { deposee: 'Déposée', en_discussion: 'En discussion', adoptee: 'Adoptée', rejetee: 'Non retenue' };
+---
+<AdminLayout title="Contenus et voix" lead="Le statut et la suite donnée aux propositions sont publics (page Voix des entrepreneurs)." obj="contenus">
+  <div class="kpis" style="margin-bottom:18px">
+    <div class="kpi"><b>{nl.n}</b><span>abonnés confirmés à la lettre</span></div>
+    {can(r, 'contenus', 'V') && <a class="btn btn-ghost btn-sm" href="/api/admin/export?type=newsletter" style="align-self:center">Exporter les abonnés (CSV)</a>}
+  </div>
+
+  <h2 style="font-size:1.1rem">Propositions des membres</h2>
+  {props.map(({ p, n }) => (
+    <details class="panel" style="margin-bottom:8px">
+      <summary class="row between" style="cursor:pointer"><b class="small">{p.title}</b><span class="xs">{n} soutien{n > 1 ? 's' : ''} · <span class="tag">{L[p.status]}</span></span></summary>
+      <p class="small" style="white-space:pre-wrap">{p.body}</p>
+      {edit && (
+        <form data-api="/api/admin" data-reload>
+          <input type="hidden" name="action" value="proposal.update" /><input type="hidden" name="id" value={p.id} />
+          <select class="in" name="status" aria-label="Statut">{proposalStatusEnum.enumValues.map((s) => <option value={s} selected={s === p.status}>{L[s]}</option>)}</select>
+          <textarea class="in" name="response" placeholder="Suite donnée (publiée)" aria-label="Suite donnée">{p.response ?? ''}</textarea>
+          <button class="btn btn-primary btn-sm" type="submit">Enregistrer</button>
+        </form>
+      )}
+    </details>
+  ))}
+  {props.length === 0 && <p class="small muted">Aucune proposition.</p>}
+
+  <h2 style="font-size:1.1rem;margin-top:24px">Espaces de la communauté</h2>
+  <div class="panel">
+    {spaces.map((s) => <div class="list-row"><span class="small"><b>{s.name}</b> <span class="xs muted">{s.id} · {s.kind}</span></span>{can(r, 'contenus', 'V') && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'space.delete', slug: s.id })} data-confirm={`Supprimer l'espace « ${s.name} » ?`} data-reload>Supprimer</button>}</div>)}
+    {spaces.length === 0 && <p class="small muted">Aucun espace.</p>}
+    {can(r, 'contenus', 'C') && (
+      <form data-api="/api/admin" data-reload data-reset style="margin-top:12px">
+        <input type="hidden" name="action" value="space.create" />
+        <div class="grid g4" style="gap:0 10px;align-items:end">
+          <div><label class="f" for="sn">Nom</label><input class="in" id="sn" name="name" required /></div>
+          <div><label class="f" for="ss">Identifiant</label><input class="in" id="ss" name="slug" required pattern="[a-z0-9-]{2,40}" placeholder="ex. agritech" /></div>
+          <div><label class="f" for="sk">Type</label><select class="in" id="sk" name="kind"><option value="theme">Thème</option><option value="pays">Pays</option><option value="secteur">Secteur</option><option value="profil">Profil</option></select></div>
+          <div><label class="f" for="sc">Pays</label><select class="in" id="sc" name="country"><option value="">—</option>{Object.entries(COUNTRIES).map(([k, v]) => <option value={k}>{v}</option>)}</select></div>
+        </div>
+        <label class="f" for="sd">Description</label><input class="in" id="sd" name="description" />
+        <button class="btn btn-primary btn-sm" type="submit">Créer l'espace</button>
+      </form>
+    )}
+  </div>
+</AdminLayout>

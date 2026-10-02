@@ -1,73 +1,132 @@
 ---
+/* Mon espace entreprise (CDC §8.3, §8.8) : statut du dossier en temps réel, jauge Investor Ready, data room, statistiques de consultation,
+   accords de confidentialité révocables, intérêts reçus, mises à jour aux investisseurs, échanges avec l'analyste. */
 import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
+import Money from '../../components/Money.astro';
 import Icon from '../../components/Icon.astro';
-import { STAGES } from '../../data/site';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import * as s from '../../db/schema';
+import { PIPELINE, statusLabel, INSTRUMENT_LABEL } from '../../lib/kapital';
 
-const files = ['01 Juridique / Statuts.pdf', '02 Financier / États 2025.pdf', '03 Commercial / Pitch deck.pdf'];
-const tasks = ['Compléter les états financiers 2025', 'Mettre à jour le pitch deck', "Prendre rendez-vous avec l'analyste"];
+export const prerender = false;
+const me = Astro.locals.user;
+if (!me) return Astro.redirect('/connexion?retour=/kapital/entreprise');
+const dossiers = await db.select().from(s.dossier).where(eq(s.dossier.ownerId, me.id)).orderBy(desc(s.dossier.createdAt));
+const d = dossiers.find((x) => x.id === Astro.url.searchParams.get('d')) ?? dossiers[0];
+const [diag] = await db.select().from(s.diagnostic).where(eq(s.diagnostic.userId, me.id)).orderBy(desc(s.diagnostic.createdAt)).limit(1);
+let events: (typeof s.dossierEvent.$inferSelect)[] = [], docs: { doc: typeof s.dataRoomDocument.$inferSelect; views: number; secs: number }[] = [];
+let ndas: { investorId: string; name: string; signedAt: Date }[] = [], interests: { name: string; amount: number | null; at: Date }[] = [], viewers: { name: string; docs: number; secs: number }[] = [];
+let analyst: { id: string; name: string } | undefined;
+if (d) {
+  events = await db.select().from(s.dossierEvent).where(eq(s.dossierEvent.dossierId, d.id)).orderBy(desc(s.dossierEvent.at)).limit(20);
+  docs = await db.select({ doc: s.dataRoomDocument, views: sql<number>`(select count(*) from ${s.dataRoomView} where ${s.dataRoomView.documentId} = ${s.dataRoomDocument.id})::int`, secs: sql<number>`(select coalesce(sum(${s.dataRoomView.seconds}),0) from ${s.dataRoomView} where ${s.dataRoomView.documentId} = ${s.dataRoomDocument.id})::int` }).from(s.dataRoomDocument).where(eq(s.dataRoomDocument.dossierId, d.id)).orderBy(s.dataRoomDocument.folder, s.dataRoomDocument.name);
+  ndas = await db.select({ investorId: s.nda.investorId, name: s.user.name, signedAt: s.nda.signedAt }).from(s.nda).innerJoin(s.user, eq(s.user.id, s.nda.investorId)).where(and(eq(s.nda.dossierId, d.id), isNull(s.nda.revokedAt)));
+  interests = await db.select({ name: s.user.name, amount: s.interest.amountXof, at: s.interest.createdAt }).from(s.interest).innerJoin(s.user, eq(s.user.id, s.interest.investorId)).where(eq(s.interest.dossierId, d.id));
+  const docIds = docs.map((x) => x.doc.id);
+  viewers = docIds.length ? await db.select({ name: s.user.name, docs: sql<number>`count(distinct ${s.dataRoomView.documentId})::int`, secs: sql<number>`coalesce(sum(${s.dataRoomView.seconds}),0)::int` }).from(s.dataRoomView).innerJoin(s.user, eq(s.user.id, s.dataRoomView.investorId)).where(and(inArray(s.dataRoomView.documentId, docIds), sql`${s.dataRoomView.investorId} <> ${me.id}`)).groupBy(s.user.name) : [];
+  if (d.analystId) [analyst] = await db.select({ id: s.user.id, name: s.user.name }).from(s.user).where(eq(s.user.id, d.analystId));
+}
+const stepIdx = d ? PIPELINE.findIndex((p) => p.key === d.status) : -1;
+const lastChange = events[0]?.at ?? d?.createdAt;
+const daysIn = lastChange ? Math.floor((Date.now() - lastChange.getTime()) / 864e5) : 0;
+const sla = d ? PIPELINE[stepIdx]?.sla ?? 0 : 0;
+const FOLDERS: [string, string][] = [['juridique', 'Juridique'], ['financier', 'Financier'], ['commercial', 'Commercial'], ['technique', 'Technique'], ['rh', 'RH'], ['fiscal', 'Fiscal'], ['esg', 'ESG']];
+const mins = (sec: number) => (sec < 60 ? `${sec} s` : `${Math.round(sec / 60)} min`);
+const score = d?.investorReadyScore ?? diag?.score ?? null;
 ---
-<KapitalLayout title="Mon espace entreprise">
-  <PageHead title="Mon espace entreprise" lead="Démonstration : dossier Manioc+ · D-2026-0412" crumbs={[['/kapital', 'Kapital Invest'], ['', 'Mon espace entreprise']]} />
+<KapitalLayout title="Mon espace entreprise" group="lever">
+  <PageHead title="Mon espace entreprise" lead={d ? `${d.companyName} · dossier ${d.reference}` : 'Aucun dossier pour le moment.'} crumbs={[['/kapital', 'Kapital Invest'], ['', 'Mon espace entreprise']]} />
   <section class="block">
     <div class="wrap">
-      <div class="grid g3">
-        <div class="panel">
-          <h3>Jauge Investor Ready</h3>
-          <b style="font-family:var(--display);font-size:2.4rem;color:#E7BD62" id="score">78</b><span class="small muted">/100</span>
-          <div class="progress" style="margin-top:8px"><span id="scoreBar" style="width:78%"></span></div>
-          <a class="small" href="/kapital/diagnostic">Refaire le diagnostic</a>
-        </div>
-        <div class="panel"><h3>Statut du dossier</h3><ol class="timeline">{STAGES.map((s, i) => <li class={i < 3 ? 'done' : i === 3 ? 'cur' : ''}>{s}</li>)}</ol></div>
-        <div class="panel">
-          <h3>Tâches</h3>
-          {tasks.map((t) => <label class="row small" style="margin:6px 0"><input type="checkbox" /> {t}</label>)}
-          <button class="btn btn-ghost btn-sm" type="button" data-toast="Rendez-vous proposé : jeudi 10:00.">Prendre rendez-vous</button>
-        </div>
-      </div>
-      <div class="grid g2" style="margin-top:18px">
-        <div class="panel">
-          <div class="row between"><h3 style="margin:0">Data room</h3><label class="btn btn-primary btn-sm">Ajouter<input type="file" id="drUp" class="sr" /></label></div>
-          <div id="dr">{files.map((f, i) => <div class="row between small" style="padding:8px 0;border-bottom:1px solid var(--line)"><span class="row"><Icon name="doc" size={16} /> {f}</span><span class="muted">{[5, 3, 7][i]} vues</span></div>)}</div>
-          <h4 style="margin-top:16px">Qui a consulté</h4>
-          <div class="small muted">Investisseur A — 14 min, 6 documents</div>
-          <div class="small muted">Fonds B — 3 min, 1 document</div>
-          <div class="row between" style="margin-top:12px"><span class="small">Partage avec les investisseurs</span><button class="toggle" type="button" role="switch" aria-checked="true" id="shareT" aria-label="Partage avec les investisseurs"></button></div>
-        </div>
-        <div class="panel">
-          <h3>Page d'opportunité (aperçu)</h3>
-          <div class="panel" style="background:#103152"><b>Manioc+</b><div class="small muted">Actions de préférence · 350 000 000 FCFA</div><p class="small" style="margin:8px 0 0">Résumé anonymisé tel que vu par les investisseurs vérifiés.</p></div>
-          <form data-demo="Mise à jour envoyée à 7 investisseurs." style="margin-top:16px">
-            <h3>Mise à jour aux investisseurs</h3>
-            <textarea class="in" required placeholder="Chiffres du mois, jalons, besoins…" aria-label="Mise à jour"></textarea>
-            <button class="btn btn-primary btn-sm" type="submit">Envoyer aux investisseurs intéressés</button>
-          </form>
-        </div>
-      </div>
+      {!d ? (
+        <div class="empty">Commencez par <a href="/kapital/diagnostic">le diagnostic</a> puis <a href="/kapital/soumettre">soumettez votre dossier</a>.</div>
+      ) : (
+        <>
+          {dossiers.length > 1 && <form class="filters" method="get" style="margin-top:0"><select class="in" name="d" onchange="this.form.submit()" aria-label="Dossier">{dossiers.map((x) => <option value={x.id} selected={x.id === d.id}>{x.companyName} — {x.reference}</option>)}</select></form>}
+          <div class="grid g3">
+            <div class="panel">
+              <h3>Jauge Investor Ready</h3>
+              <b style="font-family:var(--display);font-size:2.4rem;color:#E7BD62">{score ?? '—'}</b><span class="small muted">/100</span>
+              <div class="progress" style="margin-top:8px"><span style={`width:${score ?? 0}%`}></span></div>
+              <a class="small" href="/kapital/diagnostic">{score ? 'Refaire le diagnostic' : 'Faire le diagnostic'}</a>
+            </div>
+            <div class="panel">
+              <h3>Statut du dossier</h3>
+              <ol class="timeline">{PIPELINE.filter((p) => !['incomplet', 'cloture'].includes(p.key) || p.key === d.status).map((p) => {
+                const i = PIPELINE.indexOf(p);
+                return <li class={i < stepIdx ? 'done' : i === stepIdx ? 'cur' : ''}>{p.label}</li>;
+              })}</ol>
+              <p class="xs muted" style="margin:0">Étape actuelle depuis {daysIn} jour{daysIn > 1 ? 's' : ''}{sla ? ` · délai cible ${sla} jours ouvrés` : ''}{sla && daysIn > sla ? ' · en retard, l’analyste est relancé' : ''}.</p>
+            </div>
+            <div class="panel">
+              <h3>Votre analyste</h3>
+              {analyst ? (
+                <>
+                  <p style="margin:0 0 10px"><b>{analyst.name}</b></p>
+                  <form data-api="/api/messages" data-reset>
+                    <input type="hidden" name="to" value={analyst.id} />
+                    <textarea class="in" name="body" required minlength="2" placeholder="Question, demande de rendez-vous…" aria-label="Message à l’analyste"></textarea>
+                    <button class="btn btn-primary btn-sm" type="submit">Envoyer</button>
+                  </form>
+                </>
+              ) : <p class="small muted" style="margin:0">Un analyste vous sera assigné sous 5 jours ouvrés.</p>}
+            </div>
+          </div>
+
+          <div class="grid g2" style="margin-top:18px">
+            <div class="panel">
+              <h3>Data room</h3>
+              {docs.length ? docs.map(({ doc, views, secs }) => <div class="list-row"><span class="row"><Icon name="doc" size={16} /> <span class="tag">{doc.folder}</span> <a href={`/kapital/dataroom/${doc.id}`}>{doc.name}</a> <span class="xs muted">v{doc.version}</span></span><span class="muted small">{views} vue{views > 1 ? 's' : ''} · {mins(secs)}</span></div>) : <p class="small muted">Aucun document. Arborescence standard de due diligence ci-dessous.</p>}
+              <form id="drUp" data-dossier={d.id} style="margin-top:12px">
+                <div class="row" style="gap:8px">
+                  <select class="in" name="folder" aria-label="Dossier" style="width:auto;margin:0">{FOLDERS.map(([k, l]) => <option value={k}>{l}</option>)}</select>
+                  <input class="in" type="file" name="file" required accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.webp" style="flex:1;margin:0" />
+                  <button class="btn btn-primary btn-sm" type="submit">Déposer</button>
+                </div>
+                <p class="xs muted" style="margin:6px 0 0">PDF, DOCX, XLSX, PPTX, images — 15 Mo maximum. Documents chiffrés, privés par défaut.</p>
+              </form>
+              <h4 style="margin-top:16px">Qui a consulté</h4>
+              {viewers.length ? viewers.map((v) => <div class="small">{v.name} — {v.docs} document{v.docs > 1 ? 's' : ''}, {mins(v.secs)}</div>) : <p class="small muted" style="margin:0">Aucune consultation pour le moment.</p>}
+            </div>
+            <div class="panel">
+              <div class="row between"><h3 style="margin:0">Partage avec les investisseurs</h3><button class="toggle" type="button" role="switch" aria-checked={d.shareConsent ? 'true' : 'false'} aria-label="Partage avec les investisseurs" data-post="/api/kapital/partage" data-body={JSON.stringify({ dossierId: d.id, share: !d.shareConsent })} data-reload></button></div>
+              <p class="small muted">{d.published ? 'Votre résumé anonymisé est publié auprès des investisseurs vérifiés.' : 'Le résumé sera publié après validation par le comité.'}</p>
+              <h4>Accords de confidentialité ({ndas.length})</h4>
+              {ndas.length ? ndas.map((n) => <div class="list-row"><span class="small">{n.name} · {n.signedAt.toLocaleDateString('fr-FR')}</span><button class="btn btn-ghost btn-sm" type="button" data-post="/api/kapital/nda" data-method="DELETE" data-body={JSON.stringify({ dossierId: d.id, investorId: n.investorId })} data-confirm="Révoquer l’accès de cet investisseur ?" data-reload>Révoquer</button></div>) : <p class="small muted">Aucun.</p>}
+              <h4 style="margin-top:12px">Intérêts manifestés ({interests.length})</h4>
+              {interests.map((i) => <div class="small">{i.name}{i.amount ? <> — <Money xof={i.amount} /></> : ''}</div>)}
+              <form data-api="/api/kapital/mises-a-jour" data-reset style="margin-top:14px">
+                <input type="hidden" name="dossierId" value={d.id} />
+                <label class="f" for="iu">Mise à jour aux investisseurs</label>
+                <textarea class="in" id="iu" name="body" required minlength="10" placeholder="Chiffres du mois, jalons, besoins…"></textarea>
+                <button class="btn btn-primary btn-sm" type="submit">Envoyer aux investisseurs intéressés</button>
+              </form>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-top:18px">
+            <h3>Historique</h3>
+            {events.map((e) => <div class="list-row"><span class="small">{statusLabel(e.toStatus)}{e.note ? ` — ${e.note}` : ''}</span><span class="muted small">{e.at.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</span></div>)}
+            <p class="xs muted" style="margin:8px 0 0">Montant recherché : <Money xof={d.amountXof ?? 0} /> · {d.instrument ? INSTRUMENT_LABEL[d.instrument] : 'instrument à préciser'}</p>
+          </div>
+        </>
+      )}
     </div>
   </section>
 </KapitalLayout>
 <script>
-  const toast = (t: string) => (window as any).toast(t);
-  try {
-    const s = localStorage.getItem('cea-diag');
-    if (s) { document.getElementById('score')!.textContent = s; document.getElementById('scoreBar')!.style.width = s + '%'; }
-  } catch {}
-  const t = document.getElementById('shareT')!;
-  t.addEventListener('click', () => {
-    const on = t.getAttribute('aria-checked') !== 'true';
-    t.setAttribute('aria-checked', String(on));
-    toast(on ? 'Partage activé.' : 'Partage révoqué : les accès sont fermés immédiatement.');
-  });
-  document.getElementById('drUp')!.addEventListener('change', (e) => {
-    const f = (e.target as HTMLInputElement).files?.[0];
-    if (!f) return;
-    const d = document.createElement('div');
-    d.className = 'row between small';
-    d.style.cssText = 'padding:8px 0;border-bottom:1px solid var(--line)';
-    d.innerHTML = '<span></span><span class="muted">0 vue</span>';
-    d.firstElementChild!.textContent = '04 Ajouts / ' + f.name;
-    document.getElementById('dr')!.appendChild(d);
-    toast('Document ajouté à la data room.');
+  const f = document.getElementById('drUp') as HTMLFormElement | null;
+  const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+  f?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!f.checkValidity()) return f.reportValidity();
+    const fd = new FormData(f);
+    fd.set('dossierId', f.dataset.dossier!);
+    const res = await fetch('/api/kapital/documents', { method: 'POST', body: fd });
+    const d = await res.json().catch(() => ({}));
+    toast(d.message || d.error || 'Erreur.');
+    if (d.ok) setTimeout(() => location.reload(), 700);
   });
 </script>

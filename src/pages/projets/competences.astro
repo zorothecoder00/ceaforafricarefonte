@@ -1,20 +1,36 @@
 ---
+/* Appels à compétences publiés par les projets (CDC §7.2) : associés, experts, prestataires. */
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
-import { SKILLCALLS, SUBS, country } from '../../data/site';
+import { desc, eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { skillCall, project } from '../../db/schema/app';
+import { SUBS, country } from '../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user;
+const calls = await db.select({ c: skillCall, name: project.name, cc: project.country, owner: project.ownerId }).from(skillCall).innerJoin(project, eq(project.id, skillCall.projectId)).where(eq(skillCall.open, true)).orderBy(desc(skillCall.createdAt)).limit(60);
+const KIND: Record<string, string> = { associe: 'Associé', expert: 'Expert', prestataire: 'Prestataire' };
 ---
 <BaseLayout title="Appels à compétences">
   <PageHead title="Appels à compétences" lead="Des projets accompagnés par CEA cherchent des talents pour les rejoindre." crumbs={[['/projets', 'Project Studio'], ['', 'Appels à compétences']]} subnav={SUBS.projets} />
   <section class="block">
     <div class="wrap grid g3">
-      {SKILLCALLS.map((s) => (
+      {calls.map(({ c, name, cc, owner }) => (
         <div class="panel">
-          <span class="tag gold">{s.p}</span>
-          <h3 style="margin:10px 0">{s.need}</h3>
-          <p class="small muted">{country(s.c)}</p>
-          <button class="btn btn-primary btn-sm" data-toast={`Candidature envoyée au projet ${s.p}.`}>Je suis intéressé·e</button>
+          <span class="tag gold">{name}</span>
+          <h3 style="margin:10px 0">{c.need}</h3>
+          <p class="small muted">{KIND[c.kind] ?? c.kind}{cc ? ` · ${country(cc)}` : ''}</p>
+          {me ? (me.id !== owner && (
+            <form data-api="/api/competences" data-reset>
+              <input type="hidden" name="callId" value={c.id} />
+              <textarea class="in" name="message" required minlength="10" placeholder="Présentez-vous et votre expérience" aria-label="Votre réponse"></textarea>
+              <button class="btn btn-primary btn-sm" type="submit">Je suis intéressé·e</button>
+            </form>
+          )) : <a class="btn btn-primary btn-sm" href="/connexion?retour=/projets/competences">Se connecter pour répondre</a>}
         </div>
       ))}
+      {calls.length === 0 && <div class="empty">Aucun appel ouvert pour le moment.</div>}
     </div>
   </section>
 </BaseLayout>

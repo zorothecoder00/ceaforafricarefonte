@@ -1,55 +1,20 @@
 ---
+/* Présentation de l'offre recruteur ; l'outil lui-même est dans l'espace connecté (/espace/recruteur). */
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import Money from '../../components/Money.astro';
-import { COUNTRIES, SUBS } from '../../data/site';
+import { SUBS } from '../../data/site';
 
-const cands: [string, string][] = [['Kodjo Amouzou', 'Nouveau'], ['Efua Mensah', 'Entretien'], ['Ibrahim Kane', 'Présélection'], ['Rose Atieno', 'Offre']];
-const kpis: [string, number][] = [['Offres publiées', 2], ['Candidatures reçues', 37], ['Entretiens', 6], ['Embauches déclarées', 3]];
+export const prerender = false;
+if (Astro.locals.user) return Astro.redirect('/espace/recruteur');
+const steps: [string, string][] = [['Publiez', 'Votre offre est vérifiée par notre équipe sous 24 heures (pas de critère discriminatoire).'], ['Recevez', 'Les candidats postulent en un clic avec leur profil CEA ; triez-les dans un tableau Kanban.'], ['Recrutez', 'Déclarez vos embauches : elles alimentent l’observatoire des emplois créés.']];
 ---
-<BaseLayout title="Espace recruteur">
-  <PageHead title="Espace recruteur" lead="Publiez vos offres, suivez les candidatures, déclarez vos embauches." crumbs={[['/opportunites', 'Opportunités'], ['', 'Espace recruteur']]} subnav={SUBS.opps} />
+<BaseLayout title="Recruter avec CEA Talents">
+  <PageHead title="Recruter avec CEA Talents" lead="Publiez vos offres auprès d'une communauté panafricaine d'entrepreneurs et de talents vérifiés." crumbs={[['/opportunites', 'Opportunités'], ['', 'Espace recruteur']]} subnav={SUBS.opps} />
   <section class="block">
     <div class="wrap">
-      <div class="grid g4">{kpis.map(([k, v]) => <div class="panel kpi"><span class="small muted">{k}</span><b>{v}</b></div>)}</div>
-      <div class="split" style="margin-top:22px">
-        <div>
-          <h2>Candidatures — Développeur·se mobile Flutter</h2>
-          <div class="kanban k4">
-            {['Nouveau', 'Présélection', 'Entretien', 'Offre'].map((col) => (
-              <div class="col">
-                <h4><span>{col}</span></h4>
-                {cands.filter((x) => x[1] === col).map(([n]) => (
-                  <div class="kcard"><b>{n}</b><div class="xs muted">Correspondance : {70 + n.length} %</div><button class="btn btn-ghost btn-sm" style="margin-top:6px" type="button" data-toast="Entretien planifié, invitation envoyée.">Planifier</button></div>
-                ))}
-              </div>
-            ))}
-          </div>
-          <h2 style="margin-top:24px">Déclarer une embauche</h2>
-          <form class="panel" data-demo="Embauche déclarée. Merci, elle compte dans l'observatoire d'impact.">
-            <p class="small muted">Utilisé pour mesurer les emplois créés (vérification par échantillonnage à 6 et 12 mois).</p>
-            <div class="grid g3">
-              <div><label class="f" for="hn">Nom de la personne</label><input class="in" id="hn" required /></div>
-              <div><label class="f" for="hc">Type de contrat</label><select class="in" id="hc"><option>CDI</option><option>CDD</option><option>Stage</option></select></div>
-              <div><label class="f" for="hd">Date d'embauche</label><input class="in" id="hd" type="date" required /></div>
-            </div>
-            <button class="btn btn-primary" type="submit">Déclarer</button>
-          </form>
-        </div>
-        <aside>
-          <form class="panel" data-demo="Offre soumise à la modération. Publication sous 24 h.">
-            <h3>Publier une offre</h3>
-            <label class="f" for="jt1">Intitulé</label><input class="in" id="jt1" required />
-            <label class="f" for="jc1">Pays</label><select class="in" id="jc1">{Object.entries(COUNTRIES).map(([k, v]) => <option value={k}>{v}</option>)}</select>
-            <label class="f" for="jty">Contrat</label><select class="in" id="jty"><option>CDI</option><option>CDD</option><option>Stage</option><option>Mission</option></select>
-            <label class="f" for="js1">Compétences</label><input class="in" id="js1" placeholder="Séparées par des virgules" />
-            <label class="f" for="jsal">Rémunération</label><input class="in" id="jsal" placeholder="Fourchette ou « Selon profil »" />
-            <label class="row small"><input type="checkbox" /> Mettre en avant (<Money xof={15000} />)</label>
-            <button class="btn btn-primary" type="submit" style="width:100%;margin-top:10px">Soumettre à la modération</button>
-            <p class="xs muted" style="margin-top:8px">Pas de critère d'âge, de religion ou d'origine dans les offres.</p>
-          </form>
-        </aside>
-      </div>
+      <div class="grid g3">{steps.map(([t, d], i) => <div class="panel"><span class="tag gold">{i + 1}</span><h3 style="margin:10px 0 6px">{t}</h3><p class="small" style="margin:0">{d}</p></div>)}</div>
+      <div class="call" style="margin-top:30px"><div><h2>Publication gratuite</h2><p>Mise en avant de 30 jours en tête de liste : <Money xof={15000} />.</p></div><div><a class="btn btn-primary" href="/connexion?retour=/espace/recruteur">Se connecter pour publier</a></div></div>
     </div>
   </section>
 </BaseLayout>

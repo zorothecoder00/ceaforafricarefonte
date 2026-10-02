@@ -1,0 +1,30 @@
+---
+/* Fonds et véhicules (CDC §8.4) : information réservée aux investisseurs dont l'éligibilité a été vérifiée. */
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import Lock from '../../components/Lock.astro';
+import { isVerifiedInvestor } from '../../lib/kapital';
+
+export const prerender = false;
+const me = Astro.locals.user;
+const eligible = me ? await isVerifiedInvestor(me.id) : false;
+const vehicles: [string, string, string][] = [
+  ['CEA Kapital Ventures I', 'Fonds d’amorçage panafricain', 'Tickets de 50 000 à 1 000 000 USD · agro-industrie, fintech, énergie, santé, éducation · 16 pays CEA'],
+  ['Véhicules de co-investissement', 'Par opportunité', 'Un véhicule dédié par dossier, ouvert aux investisseurs qualifiés aux côtés du fonds'],
+  ['Syndicats d’investisseurs', 'Clubs avec chef de file', 'Co-investissement à plusieurs, sur le modèle des syndicats (voir Clubs et syndicats)'],
+];
+---
+<KapitalLayout title="Fonds et véhicules" group="vc">
+  <PageHead title="Fonds et véhicules" lead="Présentation des fonds et des véhicules de co-investissement de CEA Kapital Ventures." crumbs={[['/kapital', 'Kapital Invest'], ['/kapital/capital-risque', 'Capital-risque'], ['', 'Fonds et véhicules']]} />
+  <section class="block">
+    <div class="wrap">
+      <Lock feature="kap_lp" text="La gestion de fonds pour compte de tiers et la commercialisation de parts exigent les agréments applicables dans chaque juridiction." />
+      {eligible ? (
+        <div class="grid g3" style="margin-top:18px">{vehicles.map(([n, t, d]) => <div class="panel"><span class="tag gold">{t}</span><h3 style="margin:10px 0 6px">{n}</h3><p class="small" style="margin:0">{d}</p></div>)}</div>
+      ) : (
+        <div class="empty" style="margin-top:18px">Les informations sur les fonds sont réservées aux investisseurs dont l’éligibilité a été vérifiée. <a href="/kapital/devenir-investisseur">Faire vérifier mon profil</a></div>
+      )}
+      <div class="row" style="margin-top:18px"><a class="btn btn-ghost btn-sm" style="color:#fff" href="/kapital/lp">Portail des souscripteurs</a><a class="btn btn-ghost btn-sm" style="color:#fff" href="/kapital/proposer-deal">Proposer un deal</a></div>
+    </div>
+  </section>
+</KapitalLayout>

@@ -20,6 +20,7 @@
     "@astrojs/vercel": "^11.0.11",
     "@better-auth/passkey": "^1.7.7",
     "astro": "^7.3.5",
+    "aws4fetch": "^1.0.20",
     "better-auth": "^1.7.7",
     "drizzle-orm": "^0.45.3",
     "pg": "^8.23.1",

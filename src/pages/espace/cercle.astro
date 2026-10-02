@@ -1,0 +1,108 @@
+---
+/* Mon cercle Mastermind (CDC §7.5) : membres, séances, ordre du jour, visioconférence, engagements, compte rendu privé, évaluation. */
+import EspaceLayout from '../../layouts/EspaceLayout.astro';
+import Icon from '../../components/Icon.astro';
+import { and, asc, desc, eq, gte, lt } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { circle, circleMember, circleSession, circleCommitment, profile } from '../../db/schema/app';
+import { user } from '../../db/schema/auth';
+import { initials } from '../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const [mine] = await db.select({ id: circleMember.circleId }).from(circleMember).where(eq(circleMember.userId, me.id));
+const [c] = mine ? await db.select().from(circle).where(eq(circle.id, mine.id)) : [];
+const members = c ? await db.select({ id: user.id, name: user.name, sector: profile.sector }).from(circleMember).innerJoin(user, eq(user.id, circleMember.userId)).leftJoin(profile, eq(profile.userId, user.id)).where(eq(circleMember.circleId, c.id)) : [];
+const [fac] = c?.facilitatorId ? await db.select({ name: user.name }).from(user).where(eq(user.id, c.facilitatorId)) : [];
+const now = new Date();
+const [next] = c ? await db.select().from(circleSession).where(and(eq(circleSession.circleId, c.id), gte(circleSession.startsAt, now))).orderBy(asc(circleSession.startsAt)).limit(1) : [];
+const past = c ? await db.select().from(circleSession).where(and(eq(circleSession.circleId, c.id), lt(circleSession.startsAt, now))).orderBy(desc(circleSession.startsAt)).limit(5) : [];
+const comms = c ? await db.select({ cm: circleCommitment, name: user.name }).from(circleCommitment).innerJoin(user, eq(user.id, circleCommitment.userId)).where(eq(circleCommitment.circleId, c.id)) : [];
+const q = `${now.getFullYear()}-T${Math.floor(now.getMonth() / 3) + 1}`;
+const COLS: [string, string][] = [['en_cours', 'En cours'], ['atteint', 'Atteint'], ['reporte', 'Reporté']];
+---
+<EspaceLayout title={c ? `Cercle « ${c.name} »` : 'Mon cercle Mastermind'} lead={c ? `${members.length} membres${fac ? ` · facilitateur : ${fac.name}` : ''}${next ? ` · prochaine séance le ${next.startsAt.toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'short' })}` : ''}` : undefined}>
+  {!c ? (
+    <div class="empty">Vous n’êtes pas encore membre d’un cercle. <a href="/communaute/mastermind">Demander à rejoindre un cercle Mastermind</a></div>
+  ) : (
+    <>
+      <div class="lock" style="border-style:solid;margin-bottom:18px"><Icon name="lock" size={20} /><div><b>Charte de confidentialité</b> — Ce qui se dit dans le cercle reste dans le cercle. Les comptes rendus ne sont visibles que par les membres, jamais par les équipes CEA sans accord. Aucun enregistrement sans accord unanime.</div></div>
+      <div class="split">
+        <div>
+          <h2 style="font-size:1.2rem">Engagements du trimestre ({q})</h2>
+          <div class="kanban" style="grid-template-columns:repeat(3,minmax(170px,1fr))">
+            {COLS.map(([k, l]) => (
+              <div class="col"><h4><span>{l}</span></h4>
+                {comms.filter((x) => x.cm.status === k && x.cm.quarter === q).map(({ cm, name }) => (
+                  <div class="kcard"><span class="xs muted">{name}</span><br />{cm.text}
+                    {cm.userId === me.id && <select class="in" aria-label="Statut" style="margin:6px 0 0;padding:3px;font-size:.8rem" data-commit={cm.id}>{COLS.map(([v, t]) => <option value={v} selected={v === k}>{t}</option>)}</select>}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+          <form data-api="/api/cercle" data-reload data-reset class="row" style="margin-top:10px;gap:6px">
+            <input type="hidden" name="action" value="engagement" /><input type="hidden" name="quarter" value={q} />
+            <input class="in" name="text" required minlength="3" placeholder="Mon engagement pour ce trimestre" aria-label="Engagement" style="flex:1;margin:0" />
+            <button class="btn btn-primary btn-sm" type="submit">Ajouter</button>
+          </form>
+
+          {next && (
+            <>
+              <h2 style="font-size:1.2rem;margin-top:26px">Prochaine séance — protocole guidé</h2>
+              <div class="panel" id="mmTimer">
+                <div class="row between"><b data-phase>1. Tour de table et nouvelles</b><b class="num" data-clock style="font-family:var(--display);font-size:1.6rem">20:00</b></div>
+                <div class="row" style="margin-top:10px">
+                  <button class="btn btn-primary btn-sm" type="button" data-start>Démarrer le minuteur</button>
+                  <button class="btn btn-ghost btn-sm" type="button" data-nextp>Étape suivante</button>
+                  <a class="btn btn-ghost btn-sm" href={`https://meet.jit.si/CEA-cercle-${c.id.slice(0, 8)}`} target="_blank" rel="noopener">Rejoindre la visio</a>
+                </div>
+                <form data-api="/api/cercle" data-method="PUT" style="margin-top:12px">
+                  <input type="hidden" name="sessionId" value={next.id} />
+                  <label class="f" for="ag">Ordre du jour</label><textarea class="in" id="ag" name="agenda">{next.agenda ?? ''}</textarea>
+                  <label class="f" for="mn">Compte rendu privé (visible des seuls membres)</label><textarea class="in" id="mn" name="minutes">{next.minutes ?? ''}</textarea>
+                  <button class="btn btn-ghost btn-sm" type="submit">Enregistrer</button>
+                </form>
+              </div>
+            </>
+          )}
+          <h2 style="font-size:1.2rem;margin-top:26px">Séances passées</h2>
+          {past.length ? past.map((s) => {
+            const mineR = (s.ratings as Record<string, number>)[me.id];
+            return (
+              <details class="panel" style="margin-bottom:10px"><summary><b>{s.startsAt.toLocaleDateString('fr-FR', { dateStyle: 'long' })}</b></summary>
+                <p class="small" style="white-space:pre-wrap">{s.minutes || 'Pas de compte rendu.'}</p>
+                {mineR ? <p class="small">Votre évaluation : {mineR} ★</p> : <div class="row">{[1, 2, 3, 4, 5].map((n) => <button class="slot" type="button" data-post="/api/cercle" data-method="PUT" data-body={JSON.stringify({ sessionId: s.id, rating: n })} data-reload>{n} ★</button>)}</div>}
+              </details>
+            );
+          }) : <p class="small muted">Aucune séance passée.</p>}
+        </div>
+        <aside>
+          <div class="panel">
+            <h3>Membres</h3>
+            {members.map((m) => <div class="row" style="padding:5px 0"><span class="avatar" style="width:32px;height:32px;font-size:.7rem">{initials(m.name)}</span><span class="small">{m.name}<br /><span class="xs muted">{m.sector ?? ''}</span></span></div>)}
+          </div>
+        </aside>
+      </div>
+    </>
+  )}
+</EspaceLayout>
+<script>
+  document.querySelectorAll<HTMLSelectElement>('[data-commit]').forEach((s) => s.addEventListener('change', async () => {
+    await fetch('/api/cercle', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ commitmentId: s.dataset.commit, status: s.value }) });
+    location.reload();
+  }));
+  const box = document.getElementById('mmTimer');
+  if (box) {
+    const phases: [string, number][] = [['1. Tour de table et nouvelles', 1200], ['2. Sujet approfondi (« hot seat »)', 2700], ['3. Engagements pour le mois suivant', 900]];
+    let ph = 0, left = phases[0][1], iv: number | undefined;
+    const start = box.querySelector<HTMLButtonElement>('[data-start]')!;
+    const draw = () => { box.querySelector('[data-clock]')!.textContent = String(Math.floor(left / 60)).padStart(2, '0') + ':' + String(left % 60).padStart(2, '0'); box.querySelector('[data-phase]')!.textContent = phases[ph][0]; };
+    start.addEventListener('click', () => {
+      if (iv) { clearInterval(iv); iv = undefined; start.textContent = 'Reprendre'; return; }
+      start.textContent = 'Pause';
+      iv = window.setInterval(() => { left = Math.max(0, left - 1); draw(); }, 1000);
+    });
+    box.querySelector('[data-nextp]')!.addEventListener('click', () => { ph = (ph + 1) % 3; left = phases[ph][1]; draw(); });
+  }
+</script>

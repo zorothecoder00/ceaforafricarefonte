@@ -1,0 +1,53 @@
+---
+/* Baromètre trimestriel du climat des affaires (CDC §7.7) : questionnaire des membres, résultats agrégés publiés seulement à partir de 10 réponses par pays. */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { and, eq, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { barometerResponse } from '../../db/schema/app';
+import { SUBS, country } from '../../data/site';
+
+export const prerender = false;
+const MIN = 10; // seuil d'anonymat
+const now = new Date();
+const quarter = `${now.getFullYear()}-T${Math.floor(now.getMonth() / 3) + 1}`;
+const Q: [string, string][] = [['activite', "Niveau d'activité par rapport au trimestre précédent"], ['tresorerie', 'Situation de trésorerie'], ['credit', 'Facilité d’accès au crédit'], ['emploi', "Intentions d'embauche"], ['administration', 'Relations avec l’administration']];
+const avg = (k: string) => sql<number>`round(avg((${barometerResponse.answers}->>${k})::numeric), 1)::float`;
+const rows = await db.select({ c: barometerResponse.country, n: sql<number>`count(*)::int`, ...Object.fromEntries(Q.map(([k]) => [k, avg(k)])) }).from(barometerResponse).where(eq(barometerResponse.quarter, quarter)).groupBy(barometerResponse.country) as ({ c: string | null; n: number } & Record<string, number>)[];
+const shown = rows.filter((r) => r.n >= MIN);
+const total = rows.reduce((a, r) => a + r.n, 0);
+const me = Astro.locals.user;
+const [answered] = me ? await db.select({ q: barometerResponse.quarter }).from(barometerResponse).where(and(eq(barometerResponse.quarter, quarter), eq(barometerResponse.userId, me.id))) : [];
+const label = (v: number) => (v >= 3.5 ? ['Favorable', 'ok'] : v >= 2.5 ? ['Stable', 'info'] : ['Dégradé', 'warn']);
+---
+<BaseLayout title="Baromètre du climat des affaires">
+  <PageHead title="Baromètre du climat des affaires" lead={`Trimestre ${quarter.replace('-T', ' · T')} — ${total} réponse${total > 1 ? 's' : ''}. Les résultats d'un pays sont publiés à partir de ${MIN} réponses pour garantir l'anonymat.`} crumbs={[['/voix', 'Voix des entrepreneurs'], ['', 'Baromètre']]} subnav={SUBS.voix} />
+  <section class="block">
+    <div class="wrap split">
+      <div>
+        <h2 style="font-size:1.2rem">Résultats par pays (note moyenne sur 5)</h2>
+        {shown.length ? (
+          <div class="panel scroll-x"><table class="t"><thead><tr><th>Pays</th><th>Réponses</th>{Q.map(([, l]) => <th>{l.split(' ')[0]}</th>)}</tr></thead>
+            <tbody>{shown.map((r) => <tr><td>{r.c ? country(r.c) : 'Non précisé'}</td><td class="num">{r.n}</td>{Q.map(([k]) => <td class="num"><span class={`tag ${label(r[k])[1]}`}>{r[k]}</span></td>)}</tr>)}</tbody></table></div>
+        ) : <div class="empty">Pas encore assez de réponses ce trimestre pour publier des résultats (seuil : {MIN} par pays).</div>}
+        <p class="xs muted">Lecture : 1 = très dégradé, 3 = stable, 5 = très favorable. Les réponses individuelles ne sont jamais publiées ni transmises.</p>
+      </div>
+      <aside>
+        {!me ? <div class="panel"><h3>Répondre</h3><p class="small">Le questionnaire prend 1 minute et est réservé aux membres.</p><a class="btn btn-primary btn-sm" href="/connexion?retour=/voix/barometre">Se connecter</a></div>
+          : answered ? <div class="panel"><h3>Merci</h3><p class="small">Vous avez répondu pour ce trimestre. Prochain questionnaire au trimestre suivant.</p></div>
+          : (
+            <form class="panel" data-api="/api/voix" data-reload>
+              <h3>Votre avis ce trimestre</h3>
+              <input type="hidden" name="action" value="barometre" />
+              {Q.map(([k, l]) => (
+                <fieldset style="border:0;padding:0;margin:0 0 12px"><legend class="small" style="font-weight:600">{l}</legend>
+                  <div class="row" style="gap:4px">{[1, 2, 3, 4, 5].map((n) => <label class="chip"><input type="radio" name={k} value={n} required /> {n}</label>)}</div>
+                </fieldset>
+              ))}
+              <button class="btn btn-primary" type="submit">Envoyer</button>
+            </form>
+          )}
+      </aside>
+    </div>
+  </section>
+</BaseLayout>

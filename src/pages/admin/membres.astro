@@ -1,0 +1,55 @@
+---
+/* Membres et rôles (CDC §11, §18) : recherche, attribution et retrait de rôles (tracés), export. Responsable pays : ses pays uniquement. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { profile, userRole, membership, roleEnum } from '../../db/schema/app';
+import { user } from '../../db/schema/auth';
+import { can, ROLE_LABEL, type Role } from '../../lib/rbac';
+import { countriesFor } from '../../lib/admin';
+import { COUNTRIES, country } from '../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const edit = can(me.roles, 'membres', 'M');
+const cs = await countriesFor(me, 'membres');
+const q = (Astro.url.searchParams.get('q') ?? '').trim();
+const roleF = Astro.url.searchParams.get('role') ?? '';
+const rows = await db.select({
+  id: user.id, name: user.name, email: user.email, created: user.createdAt, tfa: user.twoFactorEnabled, c: profile.country,
+  roles: sql<{ role: string; country: string | null }[]>`coalesce((select json_agg(json_build_object('role', ${userRole.role}, 'country', ${userRole.country})) from ${userRole} where ${userRole.userId} = ${user.id}), '[]')`,
+  plan: sql<string | null>`(select ${membership.plan}::text from ${membership} where ${membership.userId} = ${user.id} and ${membership.status} = 'active' limit 1)`,
+}).from(user).leftJoin(profile, eq(profile.userId, user.id)).where(and(
+  q ? or(ilike(user.name, `%${q}%`), ilike(user.email, `%${q}%`)) : undefined,
+  roleF && (roleEnum.enumValues as readonly string[]).includes(roleF) ? sql`exists(select 1 from ${userRole} where ${userRole.userId} = ${user.id} and ${userRole.role} = ${roleF})` : undefined,
+  cs ? inArray(profile.country, cs.length ? cs : ['--']) : undefined,
+)).orderBy(desc(user.createdAt)).limit(100);
+---
+<AdminLayout title="Membres et rôles" lead="L'attribution d'un rôle sensible impose la double authentification à la personne concernée." obj="membres">
+  <form class="filters" method="get" style="margin-top:0">
+    <input class="in" name="q" value={q} placeholder="Nom ou e-mail" aria-label="Rechercher" style="flex:1;min-width:200px" />
+    <select class="in" name="role" aria-label="Rôle"><option value="">Tous les rôles</option>{roleEnum.enumValues.map((r) => <option value={r} selected={r === roleF}>{ROLE_LABEL[r as Role]}</option>)}</select>
+    <button class="btn btn-primary btn-sm" type="submit">Rechercher</button>
+    <a class="btn btn-ghost btn-sm" href="/api/admin/export?type=membres">Exporter (CSV)</a>
+  </form>
+  {rows.map((m) => (
+    <details class="panel" style="margin-bottom:8px">
+      <summary class="row between" style="cursor:pointer"><span><b>{m.name}</b> <span class="xs muted">{m.email}</span></span><span class="xs">{m.c ? country(m.c) : ''}{m.plan ? ` · ${m.plan}` : ''}{m.tfa ? ' · 2FA ✓' : ''}</span></summary>
+      <div class="row" style="gap:6px;margin:10px 0">{m.roles.map((r) => (
+        <span class="tag">{ROLE_LABEL[r.role as Role] ?? r.role}{r.country ? ` (${r.country})` : ''}
+          {edit && r.role !== 'membre' && <button type="button" class="btn btn-ghost btn-sm" style="padding:0 4px;margin-left:4px" aria-label={`Retirer le rôle ${r.role}`} data-post="/api/admin" data-body={JSON.stringify({ action: 'role.revoke', userId: m.id, role: r.role })} data-confirm={`Retirer le rôle « ${ROLE_LABEL[r.role as Role]} » ?`} data-reload>✕</button>}
+        </span>
+      ))}</div>
+      {edit && (
+        <form data-api="/api/admin" data-reload class="row" style="gap:6px">
+          <input type="hidden" name="action" value="role.grant" /><input type="hidden" name="userId" value={m.id} />
+          <select class="in" name="role" aria-label="Rôle à attribuer" style="margin:0;width:auto">{roleEnum.enumValues.filter((r) => !m.roles.some((x) => x.role === r)).map((r) => <option value={r}>{ROLE_LABEL[r as Role]}</option>)}</select>
+          <select class="in" name="country" aria-label="Pays (responsable pays)" style="margin:0;width:auto"><option value="">— pays —</option>{Object.entries(COUNTRIES).map(([k, v]) => <option value={k}>{v}</option>)}</select>
+          <button class="btn btn-primary btn-sm" type="submit">Attribuer</button>
+        </form>
+      )}
+      <p class="xs muted" style="margin:8px 0 0">Inscrit le {m.created.toLocaleDateString('fr-FR')}</p>
+    </details>
+  ))}
+  {rows.length === 0 && <div class="empty">Aucun membre trouvé.</div>}
+</AdminLayout>

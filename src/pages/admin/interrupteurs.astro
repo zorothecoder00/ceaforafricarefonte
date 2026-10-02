@@ -1,0 +1,32 @@
+---
+/* Interrupteurs réglementaires par pays (CDC §8.1) : fonctions de Kapital fermées par défaut, ouvertes pays par pays avec base juridique. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { db } from '../../lib/db';
+import { featureFlag } from '../../db/schema/kapital';
+import { FEATURES } from '../../lib/kapital';
+import { can } from '../../lib/rbac';
+import { COUNTRIES } from '../../data/site';
+
+export const prerender = false;
+const edit = can(Astro.locals.user!.roles, 'interrupteurs', 'M');
+const flags = await db.select().from(featureFlag);
+const get = (c: string, f: string) => flags.find((x) => x.country === c && x.feature === f);
+const sel = Astro.url.searchParams.get('pays') ?? 'TG';
+---
+<AdminLayout title="Interrupteurs par pays" lead="Toute ouverture exige une base juridique (agrément, partenaire agréé, avis juridique) et est tracée." obj="interrupteurs">
+  <div class="panel scroll-x">
+    <table class="t"><thead><tr><th>Pays</th>{FEATURES.map(([k]) => <th class="xs">{k}</th>)}</tr></thead>
+      <tbody>{Object.entries(COUNTRIES).map(([c, name]) => <tr><td><a href={`?pays=${c}`}>{name}</a></td>{FEATURES.map(([k]) => <td>{get(c, k)?.enabled ? <span class="tag ok">ouvert</span> : <span class="xs muted">fermé</span>}</td>)}</tr>)}</tbody>
+    </table>
+  </div>
+  <h2 style="font-size:1.1rem;margin-top:22px">{COUNTRIES[sel as keyof typeof COUNTRIES] ?? sel}</h2>
+  {FEATURES.map(([k, label]) => { const f = get(sel, k); return (
+    <form class="panel" data-api="/api/admin" data-reload style="margin-bottom:10px">
+      <input type="hidden" name="action" value="flag.set" /><input type="hidden" name="country" value={sel} /><input type="hidden" name="feature" value={k} />
+      <div class="row between"><b class="small">{label}</b><label class="row small"><input type="checkbox" name="enabled" checked={f?.enabled} disabled={!edit} /> Ouvert</label></div>
+      <input class="in" name="legalNote" value={f?.legalNote ?? ''} placeholder="Base juridique (obligatoire pour ouvrir)" aria-label="Base juridique" readonly={!edit} style="margin:8px 0" />
+      {f?.updatedAt && <p class="xs muted" style="margin:0 0 6px">Modifié le {f.updatedAt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</p>}
+      {edit && <button class="btn btn-ghost btn-sm" type="submit">Enregistrer</button>}
+    </form>
+  ); })}
+</AdminLayout>

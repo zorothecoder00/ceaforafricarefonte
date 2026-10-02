@@ -1,0 +1,56 @@
+---
+/* Visionneuse de data room (CDC §8.9) : lecture en ligne, filigrane dynamique (nom, date, adresse IP), impression désactivée,
+   consultation journalisée avec sa durée. */
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { eq } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { dataRoomDocument, dataRoomView, dossier } from '../../../db/schema/kapital';
+import { accessLevel } from '../../../lib/kapital';
+import { audit, clientIp } from '../../../lib/session';
+
+export const prerender = false;
+const me = Astro.locals.user;
+if (!me) return Astro.redirect(`/connexion?retour=${Astro.url.pathname}`);
+const [doc] = await db.select({ doc: dataRoomDocument, company: dossier.companyName, ref: dossier.reference }).from(dataRoomDocument).innerJoin(dossier, eq(dossier.id, dataRoomDocument.dossierId)).where(eq(dataRoomDocument.id, Astro.params.id ?? ''));
+if (!doc) return new Response('Document introuvable', { status: 404 });
+const level = await accessLevel(me.id, doc.doc.dossierId);
+if (!['dataroom', 'proprietaire', 'equipe'].includes(level)) return new Response('Accès refusé : signez l’accord de confidentialité.', { status: 403 });
+const ip = clientIp(Astro.request) ?? 'IP inconnue';
+const [view] = await db.insert(dataRoomView).values({ documentId: doc.doc.id, investorId: me.id }).returning({ id: dataRoomView.id });
+await audit(me.id, 'kapital.dataroom.consultation', doc.ref, { document: doc.doc.name }, ip);
+const mark = `${me.name} · ${new Date().toLocaleString('fr-FR')} · ${ip}`;
+const isImage = /\.(png|jpe?g|webp)$/i.test(doc.doc.storageKey);
+const isPdf = /\.pdf$/i.test(doc.doc.storageKey);
+---
+<BaseLayout title={`${doc.doc.name} — data room`}>
+  <section class="block" style="padding-top:24px">
+    <div class="wrap">
+      <div class="row between"><div><span class="small muted">{doc.company} · {doc.ref}</span><h1 style="font-size:1.4rem;margin:4px 0">{doc.doc.name} <span class="small muted">v{doc.doc.version}</span></h1></div><a class="btn btn-ghost btn-sm" href={`/kapital/opportunites/${doc.doc.dossierId}`}>Retour au dossier</a></div>
+      <div class="dr-view" id="drv" data-view={view.id} data-mark={mark}>
+        {isImage && <img src={`/api/kapital/documents/${doc.doc.id}`} alt={doc.doc.name} />}
+        {isPdf && <iframe src={`/api/kapital/documents/${doc.doc.id}#toolbar=0&navpanes=0`} title={doc.doc.name}></iframe>}
+        {!isImage && !isPdf && <div class="empty" style="margin:40px">Aperçu en ligne non disponible pour ce format bureautique : demandez une version PDF à l’entreprise. Les téléchargements sont désactivés.</div>}
+        <div class="dr-mark" aria-hidden="true"></div>
+      </div>
+      <p class="xs muted">Document confidentiel couvert par votre accord de confidentialité. Chaque consultation est enregistrée (date, durée, adresse IP).</p>
+    </div>
+  </section>
+</BaseLayout>
+<style is:global>
+  .dr-view{position:relative;border:1px solid var(--line);border-radius:var(--r-m);overflow:hidden;background:#fff;min-height:70vh;user-select:none}
+  .dr-view iframe{width:100%;height:78vh;border:0;display:block}
+  .dr-view img{max-width:100%;display:block;margin:0 auto}
+  .dr-mark{position:absolute;inset:0;pointer-events:none;display:flex;flex-wrap:wrap;align-content:space-around;justify-content:space-around;overflow:hidden}
+  .dr-mark span{transform:rotate(-24deg);color:rgba(8,43,76,.16);font:700 15px/1 var(--display);white-space:nowrap;padding:30px}
+  @media print{body *{visibility:hidden!important}body::after{content:"Impression désactivée pour les documents de data room.";visibility:visible;position:fixed;top:40%;left:0;right:0;text-align:center}}
+</style>
+<script>
+  const box = document.getElementById('drv')!;
+  const mark = box.querySelector('.dr-mark')!;
+  mark.innerHTML = Array.from({ length: 24 }, () => `<span>${box.dataset.mark!.replace(/[<>&]/g, '')}</span>`).join('');
+  box.addEventListener('contextmenu', (e) => e.preventDefault());
+  const t0 = Date.now();
+  const send = () => navigator.sendBeacon('/api/kapital/consultation', new Blob([JSON.stringify({ viewId: box.dataset.view, seconds: (Date.now() - t0) / 1000 })], { type: 'application/json' }));
+  addEventListener('pagehide', send);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') send(); });
+</script>

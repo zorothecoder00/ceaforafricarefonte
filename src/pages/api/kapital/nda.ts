@@ -22,7 +22,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   await db.insert(nda).values({ dossierId: d.id, investorId: u.id, signatureRef: `NDA-${Date.now()}-${clientIp(request) ?? ''}` }).onConflictDoUpdate({ target: [nda.dossierId, nda.investorId], set: { revokedAt: null, signedAt: new Date() } });
   await audit(u.id, 'kapital.nda.signature', d.reference, {}, clientIp(request));
   await notify(d.ownerId, `Un investisseur vérifié a signé l'accord de confidentialité pour ${d.companyName}.`, '/kapital/entreprise');
-  return json({ ok: true, message: 'Accord signé : la data room est ouverte.', redirect: `/kapital/opportunites/dossier/${d.id}` });
+  return json({ ok: true, message: 'Accord signé : la data room est ouverte.', redirect: `/kapital/opportunites/${d.id}` });
 };
 
 /* Révocation par l'entreprise (DELETE { dossierId, investorId }) */

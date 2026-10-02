@@ -1,0 +1,30 @@
+---
+/* Journal d'audit (CDC §13) : en ajout seul (protégé par déclencheur en base), filtrable et exportable. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { and, desc, eq, ilike, lt } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { auditLog } from '../../db/schema/app';
+import { user } from '../../db/schema/auth';
+
+export const prerender = false;
+const q = Astro.url.searchParams;
+const act = (q.get('action') ?? '').trim();
+const before = Number(q.get('avant') ?? 0);
+const PAGE = 100;
+const rows = await db.select({ a: auditLog, who: user.email }).from(auditLog).leftJoin(user, eq(user.id, auditLog.actorId))
+  .where(and(act ? ilike(auditLog.action, `${act}%`) : undefined, before > 0 ? lt(auditLog.id, before) : undefined)).orderBy(desc(auditLog.id)).limit(PAGE);
+const last = rows.at(-1)?.a.id;
+---
+<AdminLayout title="Journal d'audit" lead="Chaque action sensible est enregistrée : connexions, droits, dossiers, exports. Le journal ne peut être ni modifié ni effacé." obj="journal_audit">
+  <form class="filters" method="get" style="margin-top:0">
+    <input class="in" name="action" value={act} placeholder="Préfixe d'action (ex. kapital., admin.role)" aria-label="Action" style="flex:1;min-width:220px" />
+    <button class="btn btn-primary btn-sm" type="submit">Filtrer</button>
+    <a class="btn btn-ghost btn-sm" href="/api/admin/export?type=audit">Exporter (CSV)</a>
+  </form>
+  <div class="panel scroll-x">
+    <table class="t"><thead><tr><th>#</th><th>Date</th><th>Acteur</th><th>Action</th><th>Cible</th><th>IP</th><th>Détails</th></tr></thead>
+      <tbody>{rows.map(({ a, who }) => <tr><td class="xs">{a.id}</td><td class="xs">{a.at.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'medium' })}</td><td class="xs">{who ?? a.actorId ?? 'système'}</td><td class="small">{a.action}</td><td class="xs">{a.target}</td><td class="xs">{a.ip}</td><td class="xs" style="max-width:280px;overflow-wrap:anywhere">{Object.keys(a.meta as object).length ? JSON.stringify(a.meta) : ''}</td></tr>)}</tbody>
+    </table>
+  </div>
+  {rows.length === PAGE && last && <a class="btn btn-ghost btn-sm" style="margin-top:10px" href={`?action=${encodeURIComponent(act)}&avant=${last}`}>Entrées plus anciennes</a>}
+</AdminLayout>

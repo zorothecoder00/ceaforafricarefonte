@@ -2,7 +2,12 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import JobCard from '../../components/JobCard.astro';
-import { JOBS, SUBS } from '../../data/site';
+import { SUBS } from '../../data/site';
+import { listJobs } from '../../lib/jobs';
+
+export const prerender = false;
+const uid = Astro.locals.user?.id;
+const jobs = await listJobs({ userId: uid, company: 'CEA' });
 
 const why = [['Impact', "Votre travail aide des milliers d'entrepreneurs."], ['Panafricain', 'Des équipes dans 16 pays, en français et en anglais.'], ['Apprendre', 'Formation continue via CEA Academy.']];
 ---
@@ -12,7 +17,8 @@ const why = [['Impact', "Votre travail aide des milliers d'entrepreneurs."], ['P
     <div class="wrap">
       <div class="grid g3">{why.map(([t, d]) => <div class="panel"><h3>{t}</h3><p class="small" style="margin:0">{d}</p></div>)}</div>
       <h2 style="margin-top:30px">Postes ouverts</h2>
-      {JOBS.filter((j) => j.co.startsWith('CEA')).map((j) => <JobCard j={j} />)}
+      {jobs.map((j) => <JobCard j={j} />)}
+      {jobs.length === 0 && <p class="small muted">Aucun poste ouvert actuellement.</p>}
       <p class="small muted">Candidature spontanée ? <a href="/contact">Écrivez-nous</a>.</p>
     </div>
   </section>

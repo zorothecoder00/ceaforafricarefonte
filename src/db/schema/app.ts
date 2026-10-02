@@ -35,6 +35,8 @@ export const profile = pgTable('profile', {
   needs: text('needs'),
   offers: text('offers'),
   visibility: visibilityEnum('visibility').notNull().default('membres'),
+  cvKey: text('cv_key'), // CV déposé (stockage privé)
+  recruiterVisible: boolean('recruiter_visible').notNull().default(false), // visible des recruteurs vérifiés (CDC §7.4)
   updatedAt: ts('updated_at').notNull().defaultNow(),
 });
 
@@ -210,13 +212,32 @@ export const proposal = pgTable('proposal', {
   country: text('country'),
   theme: text('theme'),
   status: proposalStatusEnum('status').notNull().default('deposee'),
+  response: text('response'), // suite donnée, publiée (suivi public)
   createdAt: ts('created_at').notNull().defaultNow(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
 });
 export const proposalSupport = pgTable('proposal_support', {
   proposalId: uuid('proposal_id').notNull().references(() => proposal.id, { onDelete: 'cascade' }),
   userId: userRef('user_id').notNull(),
   at: ts('at').notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.proposalId, t.userId] })]);
+
+/* Groupes de travail (commissions thématiques) */
+export const workingGroupMember = pgTable('working_group_member', {
+  group: text('group').notNull(),
+  userId: userRef('user_id').notNull(),
+  at: ts('at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.group, t.userId] })]);
+
+/* Baromètre trimestriel du climat des affaires : réponses individuelles jamais publiées, seuls les agrégats (n ≥ 10) le sont */
+export const barometerResponse = pgTable('barometer_response', {
+  quarter: text('quarter').notNull(), // 2026-T4
+  userId: userRef('user_id').notNull(),
+  country: text('country'),
+  sector: text('sector'),
+  answers: jsonb('answers').notNull(), // { activite, tresorerie, credit, emploi, administration } de 1 à 5
+  at: ts('at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.quarter, t.userId] })]);
 
 /* ===== Contact, signalements, lettre d'information, notifications ===== */
 export const ticketFlowEnum = pgEnum('request_status', ['nouveau', 'en_cours', 'traite', 'clos']);
@@ -363,6 +384,7 @@ export const circleSession = pgTable('circle_session', {
   startsAt: ts('starts_at').notNull(),
   agenda: text('agenda'),
   minutes: text('minutes'), // compte rendu visible des seuls membres du cercle
+  ratings: jsonb('ratings').notNull().default({}), // évaluation de la séance par chaque membre (1 à 5)
 });
 export const commitmentStatusEnum = pgEnum('commitment_status', ['en_cours', 'atteint', 'reporte']);
 export const circleCommitment = pgTable('circle_commitment', {
@@ -373,6 +395,93 @@ export const circleCommitment = pgTable('circle_commitment', {
   quarter: text('quarter').notNull(), // ex. 2026-T4
   status: commitmentStatusEnum('status').notNull().default('en_cours'),
 });
+
+/* ===== Project Studio (CDC §7.2) ===== */
+export const projectStatusEnum = pgEnum('project_status', ['brouillon', 'soumis', 'en_structuration', 'pret_investissement', 'transmis_kapital', 'finance', 'archive']);
+export const project = pgTable('project', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  ownerId: userRef('owner_id').notNull(),
+  name: text('name').notNull(),
+  sector: text('sector'),
+  country: text('country'),
+  stage: text('stage'),
+  sheet: jsonb('sheet').notNull().default({}), // fiche normalisée : problème, solution, marché, équipe, modèle, besoins, impact
+  maturity: jsonb('maturity').notNull().default({}), // score sur 8 dimensions (0 à 5)
+  finance: jsonb('finance').notNull().default({}), // hypothèses du modèle financier
+  status: projectStatusEnum('status').notNull().default('brouillon'),
+  public: boolean('public').notNull().default(false), // publication au portefeuille : accord explicite du porteur
+  dossierId: uuid('dossier_id'), // passerelle vers Kapital Invest
+  createdAt: ts('created_at').notNull().defaultNow(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+}, (t) => [index('project_owner_idx').on(t.ownerId)]);
+
+export const canvasKindEnum = pgEnum('canvas_kind', ['bmc', 'lean', 'swot', 'arbre_problemes', 'cadre_logique', 'theorie_changement']);
+export const projectCanvas = pgTable('project_canvas', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').notNull().references(() => project.id, { onDelete: 'cascade' }),
+  kind: canvasKindEnum('kind').notNull(),
+  data: jsonb('data').notNull().default({}),
+  version: integer('version').notNull().default(1), // chaque enregistrement crée une version (comparaison possible)
+  savedBy: text('saved_by').references(() => user.id, { onDelete: 'set null' }),
+  savedAt: ts('saved_at').notNull().defaultNow(),
+}, (t) => [index('project_canvas_idx').on(t.projectId, t.kind, t.version)]);
+
+export const taskStatusEnum = pgEnum('task_status', ['a_faire', 'en_cours', 'termine']);
+export const projectTask = pgTable('project_task', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').notNull().references(() => project.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  status: taskStatusEnum('status').notNull().default('a_faire'),
+  owner: text('owner'),
+  startOn: date('start_on'),
+  dueOn: date('due_on'),
+  milestone: boolean('milestone').notNull().default(false),
+  dependsOn: uuid('depends_on'),
+  budgetXof: bigint('budget_xof', { mode: 'number' }),
+  spentXof: bigint('spent_xof', { mode: 'number' }),
+  position: integer('position').notNull().default(0),
+});
+
+export const projectComment = pgTable('project_comment', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').notNull().references(() => project.id, { onDelete: 'cascade' }),
+  authorId: userRef('author_id').notNull(),
+  section: text('section'), // rubrique commentée de la fiche
+  body: text('body').notNull(),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+
+export const projectMember = pgTable('project_member', {
+  projectId: uuid('project_id').notNull().references(() => project.id, { onDelete: 'cascade' }),
+  userId: userRef('user_id').notNull(),
+  role: text('role').notNull().default('membre'), // membre, expert (revue), partenaire (lecture)
+}, (t) => [primaryKey({ columns: [t.projectId, t.userId] })]);
+
+export const projectDoc = pgTable('project_doc', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').notNull().references(() => project.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  storageKey: text('storage_key').notNull(),
+  version: integer('version').notNull().default(1),
+  uploadedBy: text('uploaded_by').references(() => user.id, { onDelete: 'set null' }),
+  uploadedAt: ts('uploaded_at').notNull().defaultNow(),
+});
+
+/* Appels à compétences publiés par les projets */
+export const skillCall = pgTable('skill_call', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: uuid('project_id').notNull().references(() => project.id, { onDelete: 'cascade' }),
+  need: text('need').notNull(),
+  kind: text('kind').notNull().default('expert'), // associe, expert, prestataire
+  open: boolean('open').notNull().default(true),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+export const skillCallResponse = pgTable('skill_call_response', {
+  callId: uuid('call_id').notNull().references(() => skillCall.id, { onDelete: 'cascade' }),
+  userId: userRef('user_id').notNull(),
+  message: text('message'),
+  at: ts('at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.callId, t.userId] })]);
 
 /* ===== Favoris, alertes, billetterie avancée ===== */
 export const savedItem = pgTable('saved_item', {

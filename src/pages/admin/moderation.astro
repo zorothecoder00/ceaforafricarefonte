@@ -1,0 +1,30 @@
+---
+/* Modération de la communauté (CDC §7.3, §11) : publications retenues par le filtre ou signalées, publications masquées. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { and, desc, eq, inArray } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { post, profile, space } from '../../db/schema/app';
+import { user } from '../../db/schema/auth';
+import { countriesFor } from '../../lib/admin';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const cs = await countriesFor(me, 'moderation');
+const view = Astro.url.searchParams.get('vue') === 'masque' ? 'masque' : 'en_moderation';
+const rows = await db.select({ p: post, name: user.name, c: profile.country, space: space.name }).from(post).innerJoin(user, eq(user.id, post.authorId)).leftJoin(profile, eq(profile.userId, post.authorId)).leftJoin(space, eq(space.id, post.spaceId))
+  .where(and(eq(post.status, view), cs ? inArray(profile.country, cs.length ? cs : ['--']) : undefined)).orderBy(desc(post.createdAt)).limit(200);
+---
+<AdminLayout title="Modération" lead="Délai cible : 24 heures. Les décisions sont notifiées à l'auteur et tracées." obj="moderation">
+  <nav class="subnav" style="margin:0 0 12px"><a href="?vue=en_moderation" aria-current={view === 'en_moderation' ? 'page' : undefined}>À examiner</a><a href="?vue=masque" aria-current={view === 'masque' ? 'page' : undefined}>Masquées</a><a href="/admin/messages?onglet=signalements">Signalements</a></nav>
+  {rows.length === 0 && <div class="empty">Aucune publication dans cette file.</div>}
+  {rows.map(({ p, name, space: sp }) => (
+    <div class="panel" style="margin-bottom:10px">
+      <div class="xs muted">{name}{sp ? ` · ${sp}` : ''} · {p.createdAt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</div>
+      <p class="small" style="white-space:pre-wrap;margin:6px 0">{p.body}</p>
+      <div class="row" style="gap:6px">
+        {view !== 'masque' && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'post.status', id: p.id, status: 'masque' })} data-confirm="Masquer cette publication ?" data-reload>Masquer</button>}
+        <button class="btn btn-primary btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'post.status', id: p.id, status: 'publie' })} data-reload>{view === 'masque' ? 'Rétablir' : 'Valider'}</button>
+      </div>
+    </div>
+  ))}
+</AdminLayout>

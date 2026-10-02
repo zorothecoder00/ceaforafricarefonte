@@ -1,29 +1,37 @@
 ---
+/* Conformité et réglementation (CDC §8.10, §8.11) : ouverture des fonctions réglementées par pays, lue en base. */
 import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
-import { REG_FEATURES, FLAG0, country } from '../../data/site';
+import { db } from '../../lib/db';
+import { featureFlag } from '../../db/schema/kapital';
+import { FEATURES } from '../../lib/kapital';
+import { HUBS, country } from '../../data/site';
 
+export const prerender = false;
+const flags = await db.select().from(featureFlag);
+const cs = [...new Set(['TG', 'CI', 'SN', 'NG', 'KE', 'GH', ...flags.map((f) => f.country)])].filter((c) => HUBS.some((h) => h.c === c));
+const on = (c: string, k: string) => flags.some((f) => f.country === c && f.feature === k && f.enabled);
 const reg = [['UEMOA (8 pays)', 'AMF-UMOA', 'BRVM (Abidjan)'], ['CEMAC (6 pays)', 'COSUMAF', 'BVMAC (Douala)'], ['Nigeria', 'SEC Nigeria', 'NGX'], ['Kenya', 'CMA', 'NSE'], ['Afrique du Sud', 'FSCA', 'JSE'], ['Maroc', 'AMMC', 'Bourse de Casablanca'], ['Égypte', 'FRA', 'EGX'], ['Ghana', 'SEC Ghana', 'GSE']];
-const controls = [['KYC et KYB', 'Vérification des personnes et des entreprises.'], ['Sanctions et PEP', 'Filtrage des listes internationales et des personnes politiquement exposées.'], ['Origine des fonds', 'Justificatifs selon les seuils applicables.']];
-const cs = Object.keys(FLAG0);
+const levels = [['Niveau 1 — Information et préparation', 'Éducation, diagnostic, préparation des dossiers, données de marché, recherche, événements', 'Ouvert partout (sous réserve d’avis juridique)'], ['Niveau 2 — Mise en relation privée', 'Présentation de dossiers à des investisseurs qualifiés identifiés, NDA, data rooms', 'Avis juridique par pays'], ['Niveau 3 — Opérations en partenariat', 'Souscriptions, syndicats, marché secondaire, ordres de bourse via intermédiaires agréés', 'Convention avec un partenaire agréé'], ['Niveau 4 — Opérations en propre', 'Financement participatif, gestion de fonds, intermédiation', 'Agréments obtenus par une entité du groupe']];
+const controls = [['KYC et KYB', 'Vérification des personnes et des entreprises.'], ['Sanctions et PEP', 'Filtrage des listes internationales et des personnes politiquement exposées.'], ['Origine des fonds', 'Justificatifs selon les seuils applicables.'], ['Suivi continu', 'Revue périodique, alertes, déclaration aux autorités lorsque la loi l’exige.']];
 ---
-<KapitalLayout title="Conformité et réglementation">
+<KapitalLayout title="Conformité et réglementation" group="confiance">
   <PageHead title="Conformité et réglementation" lead="Les fonctions réglementées sont ouvertes pays par pays, selon le statut obtenu ou le partenaire agréé." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Conformité']]} />
   <section class="block">
     <div class="wrap">
-      <h2>Ouverture des fonctions par pays (paramétrage actuel)</h2>
+      <h2>Ouverture des fonctions par pays</h2>
       <div class="panel scroll-x">
         <table class="t">
           <thead><tr><th>Fonction</th>{cs.map((c) => <th>{country(c)}</th>)}</tr></thead>
-          <tbody>{REG_FEATURES.map(([k, l]) => <tr><td>{l}</td>{cs.map((c) => <td>{FLAG0[c][k] ? <span class="tag ok">Ouvert</span> : <span class="tag">Fermé</span>}</td>)}</tr>)}</tbody>
+          <tbody>{FEATURES.map(([k, l]) => <tr><td>{l}</td>{cs.map((c) => <td>{on(c, k) ? <span class="tag ok">Ouvert</span> : <span class="tag">Fermé</span>}</td>)}</tr>)}</tbody>
         </table>
       </div>
-      <p class="xs muted">Paramétrable par l'administration après avis juridique.</p>
+      <p class="xs muted">Paramétrage géré par l’administration dans le back-office, après avis juridique. Toute fonction est fermée par défaut.</p>
+      <h2 style="margin-top:30px">Ouverture progressive</h2>
+      <div class="grid g2">{levels.map(([t, d, c]) => <div class="panel"><h3>{t}</h3><p class="small">{d}</p><p class="xs muted" style="margin:0">Condition : {c}</p></div>)}</div>
       <h2 style="margin-top:30px">Régulateurs des marchés financiers</h2>
-      <div class="panel scroll-x">
-        <table class="t"><thead><tr><th>Zone</th><th>Régulateur</th><th>Bourse</th></tr></thead><tbody>{reg.map(([z, r, b]) => <tr><td>{z}</td><td>{r}</td><td>{b}</td></tr>)}</tbody></table>
-      </div>
-      <div class="grid g3" style="margin-top:20px">{controls.map(([t, d]) => <div class="panel"><h3>{t}</h3><p class="small" style="margin:0">{d}</p></div>)}</div>
+      <div class="panel scroll-x"><table class="t"><thead><tr><th>Zone</th><th>Régulateur</th><th>Bourse</th></tr></thead><tbody>{reg.map(([z, r, b]) => <tr><td>{z}</td><td>{r}</td><td>{b}</td></tr>)}</tbody></table></div>
+      <div class="grid g4" style="margin-top:20px">{controls.map(([t, d]) => <div class="panel"><h3>{t}</h3><p class="small" style="margin:0">{d}</p></div>)}</div>
     </div>
   </section>
 </KapitalLayout>

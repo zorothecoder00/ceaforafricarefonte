@@ -1,0 +1,56 @@
+---
+/* Tableau de bord CEA OS (CDC §11) : files de travail selon les droits, indicateurs clés. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Money from '../../components/Money.astro';
+import { and, eq, gte, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { contactMessage, report, post, job, programmeApplication, payment, membership, project } from '../../db/schema/app';
+import { user } from '../../db/schema/auth';
+import { dossier, kycCheck, investorProfile } from '../../db/schema/kapital';
+import { can } from '../../lib/rbac';
+import { PIPELINE } from '../../lib/kapital';
+
+export const prerender = false;
+const r = Astro.locals.user!.roles;
+const n = async (q: Promise<{ n: number }[]>) => (await q)[0]?.n ?? 0;
+const cnt = sql<number>`count(*)::int`;
+const since = new Date(Date.now() - 30 * 864e5);
+
+const queues: [string, string, number][] = [];
+if (can(r, 'messages_contact', 'L')) queues.push(['Messages de contact à traiter', '/admin/messages', await n(db.select({ n: cnt }).from(contactMessage).where(eq(contactMessage.status, 'nouveau')))]);
+if (can(r, 'moderation', 'L')) {
+  queues.push(['Signalements ouverts', '/admin/messages?onglet=signalements', await n(db.select({ n: cnt }).from(report).where(eq(report.status, 'nouveau')))]);
+  queues.push(['Publications en modération', '/admin/moderation', await n(db.select({ n: cnt }).from(post).where(eq(post.status, 'en_moderation')))]);
+}
+if (can(r, 'offre_emploi', 'V')) queues.push(["Offres d'emploi à valider", '/admin/emplois', await n(db.select({ n: cnt }).from(job).where(eq(job.status, 'en_moderation')))]);
+if (can(r, 'candidature', 'L')) queues.push(['Candidatures reçues', '/admin/candidatures', await n(db.select({ n: cnt }).from(programmeApplication).where(eq(programmeApplication.status, 'recue')))]);
+if (can(r, 'fiche_projet', 'L')) queues.push(['Projets soumis', '/admin/projets', await n(db.select({ n: cnt }).from(project).where(eq(project.status, 'soumis')))]);
+if (can(r, 'pieces_kyc', 'L')) {
+  queues.push(['Contrôles KYC en cours', '/admin/conformite', await n(db.select({ n: cnt }).from(kycCheck).where(eq(kycCheck.status, 'en_cours')))]);
+  queues.push(['Investisseurs à vérifier', '/admin/conformite', await n(db.select({ n: cnt }).from(investorProfile).where(eq(investorProfile.kycStatus, 'en_cours')))]);
+}
+const pipe = can(r, 'dossier_kapital', 'L') ? await db.select({ s: dossier.status, n: cnt }).from(dossier).groupBy(dossier.status) : [];
+const members = can(r, 'membres', 'L') ? await n(db.select({ n: cnt }).from(user)) : null;
+const newMembers = can(r, 'membres', 'L') ? await n(db.select({ n: cnt }).from(user).where(gte(user.createdAt, since))) : null;
+const active = can(r, 'membres', 'L') ? await n(db.select({ n: cnt }).from(membership).where(eq(membership.status, 'active'))) : null;
+const revenue = can(r, 'paiements', 'L') ? (await db.select({ s: sql<number>`coalesce(sum(${payment.amountXof}),0)::float` }).from(payment).where(and(eq(payment.status, 'reussi'), gte(payment.paidAt, since))))[0].s : null;
+---
+<AdminLayout title="Tableau de bord" lead="Vos files de travail selon vos droits. Toutes les actions sont tracées dans le journal d'audit." obj="contenus">
+  {members !== null && (
+    <div class="kpis" style="margin-bottom:20px">
+      <div class="kpi"><b>{members.toLocaleString('fr-FR')}</b><span>comptes</span></div>
+      <div class="kpi"><b>+{newMembers}</b><span>inscrits sur 30 jours</span></div>
+      <div class="kpi"><b>{active}</b><span>adhésions actives</span></div>
+      {revenue !== null && <div class="kpi"><b><Money xof={revenue} /></b><span>encaissés sur 30 jours</span></div>}
+    </div>
+  )}
+  <div class="grid g3">
+    {queues.map(([l, h, v]) => <a class="panel" href={h} style="text-decoration:none"><b style="font-family:var(--display);font-size:2rem;color:var(--navy)">{v}</b><div class="small">{l}</div></a>)}
+  </div>
+  {pipe.length > 0 && (
+    <>
+      <h2 style="font-size:1.2rem;margin-top:26px">Pipeline Kapital</h2>
+      <div class="panel">{PIPELINE.map((s) => { const v = pipe.find((x) => x.s === s.key)?.n ?? 0; return <div class="list-row"><a class="small" href={`/admin/kapital?statut=${s.key}`}>{s.label}</a><b>{v}</b></div>; })}</div>
+    </>
+  )}
+</AdminLayout>

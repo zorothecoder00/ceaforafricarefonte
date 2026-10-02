@@ -1,0 +1,50 @@
+---
+/* Ma liste de suivi (CDC §8.6) : dossiers, indices et sociétés suivis, alertes de variation (notification, e-mail ou WhatsApp). */
+import KapitalLayout from '../../layouts/KapitalLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { desc, eq, inArray } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { watchlist, dossier } from '../../db/schema/kapital';
+import { MARKETS, STOCKS, fmt } from '../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user;
+if (!me) return Astro.redirect('/connexion?retour=/kapital/suivi');
+const items = await db.select().from(watchlist).where(eq(watchlist.userId, me.id)).orderBy(desc(watchlist.createdAt));
+const dIds = items.filter((i) => i.item.startsWith('dossier:')).map((i) => i.item.slice(8));
+const ds = dIds.length ? await db.select({ id: dossier.id, name: dossier.companyName }).from(dossier).where(inArray(dossier.id, dIds)) : [];
+const label = (item: string) => {
+  const [kind, id] = [item.split(':')[0], item.split(':').slice(1).join(':')];
+  if (kind === 'dossier') return { kind: 'Opportunité', name: ds.find((d) => d.id === id)?.name ?? 'Dossier', href: `/kapital/opportunites/${id}`, value: '' };
+  if (kind === 'indice') { const m = MARKETS.find((x) => x.id === id); return { kind: 'Indice', name: m?.n ?? id, href: '/kapital/marches', value: m ? `${fmt(m.last)} (${m.ch >= 0 ? '+' : ''}${m.ch.toFixed(2)} %)` : '' }; }
+  const s = STOCKS.find((x) => x.n === id); return { kind: 'Société', name: id, href: '/kapital/societes', value: s ? `${fmt(s.p)} (${s.ch >= 0 ? '+' : ''}${s.ch} %)` : '' };
+};
+---
+<KapitalLayout title="Ma liste de suivi" group="bourses">
+  <PageHead title="Ma liste de suivi" lead="Suivez des opportunités, des indices et des sociétés cotées. Les alertes de variation sont envoyées en notification (et par WhatsApp si activé)." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Ma liste de suivi']]} />
+  <section class="block">
+    <div class="wrap split">
+      <div class="panel scroll-x">
+        {items.length ? (
+          <table class="t"><thead><tr><th>Type</th><th>Élément</th><th>Valeur (temps différé)</th><th>Alerte</th><th></th></tr></thead>
+            <tbody>{items.map((i) => { const l = label(i.item); return (
+              <tr><td>{l.kind}</td><td><a href={l.href}>{l.name}</a></td><td class="num">{l.value}</td><td>{i.alertPct ? `±${i.alertPct} %` : '—'}</td><td><button class="btn btn-ghost btn-sm" type="button" data-post="/api/kapital/suivi" data-body={JSON.stringify({ item: i.item, follow: false })} data-reload>Retirer</button></td></tr>
+            ); })}</tbody></table>
+        ) : <p class="muted" style="margin:0">Votre liste est vide.</p>}
+      </div>
+      <aside>
+        <form class="panel" data-api="/api/kapital/suivi" data-reload>
+          <h3>Suivre un indice ou une société</h3>
+          <label class="f" for="wi">Élément</label>
+          <select class="in" id="wi" name="item">
+            <optgroup label="Indices">{MARKETS.map((m) => <option value={`indice:${m.id}`}>{m.n}</option>)}</optgroup>
+            <optgroup label="Sociétés (fictives)">{STOCKS.map((s) => <option value={`societe:${s.n}`}>{s.n}</option>)}</optgroup>
+          </select>
+          <label class="f" for="wa">Alerte de variation (%)</label>
+          <input class="in" id="wa" name="alertPct" type="number" min="1" max="50" value="3" />
+          <button class="btn btn-primary btn-sm" type="submit">Ajouter</button>
+        </form>
+      </aside>
+    </div>
+  </section>
+</KapitalLayout>

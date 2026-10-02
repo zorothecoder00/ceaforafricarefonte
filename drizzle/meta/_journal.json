@@ -22,6 +22,20 @@
       "when": 1790942031937,
       "tag": "0002_auth_2fa_communaute",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790945917192,
+      "tag": "0003_project_studio",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790946519292,
+      "tag": "0004_voix_talents",
+      "breakpoints": true
     }
   ]
 }
