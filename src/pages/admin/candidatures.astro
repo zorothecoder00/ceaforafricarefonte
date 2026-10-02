@@ -30,7 +30,8 @@ const L: Record<string, string> = { brouillon: 'Brouillon', recue: 'Reçue', en_
       <summary class="row between" style="cursor:pointer"><span><b>{a.reference}</b> · {name} <span class="xs muted">· {a.programme}</span></span><span><span class="tag info">{L[a.status]}</span>{a.score != null && <span class="tag gold" style="margin-left:4px">{a.score}/100</span>}</span></summary>
       <div class="xs muted" style="margin-top:6px">{email} · déposée le {a.submittedAt.toLocaleDateString('fr-FR')}</div>
       <dl class="small" style="display:grid;grid-template-columns:minmax(120px,max-content) 1fr;gap:4px 12px;margin:10px 0">
-        {Object.entries(a.data as Record<string, unknown>).map(([k, v]) => <><dt class="muted">{k}</dt><dd style="margin:0;white-space:pre-wrap">{Array.isArray(v) ? v.join(', ') : String(v ?? '')}</dd></>)}
+        {Object.entries(a.data as Record<string, unknown>).filter(([k]) => k !== 'documents').map(([k, v]) => <><dt class="muted">{k}</dt><dd style="margin:0;white-space:pre-wrap">{Array.isArray(v) ? v.join(', ') : String(v ?? '')}</dd></>)}
+        {((a.data as { documents?: { label: string; name: string }[] }).documents ?? []).length > 0 && <><dt class="muted">Pièces jointes</dt><dd style="margin:0">{(a.data as { documents: { label: string; name: string }[] }).documents.map((doc, i) => <a class="small" style="display:block" href={`/api/pieces-jointes?ref=${encodeURIComponent(a.reference)}&i=${i}`}>⬇ {doc.label} — {doc.name}</a>)}</dd></>}
       </dl>
       {canDecide ? (
         <form data-api="/api/admin" data-reload class="row" style="gap:6px;align-items:end">

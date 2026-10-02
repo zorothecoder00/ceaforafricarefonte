@@ -11,7 +11,7 @@ const recap: [string, string][] = [['Nom', 'nom'], ['Téléphone', 'tel'], ['Ent
   <PageHead title="Candidater à l'Accélérateur — Cohorte 4" lead="Environ 10 minutes. Vous pouvez interrompre et reprendre plus tard." crumbs={[['/programmes', 'Programmes'], ['', 'Candidature']]} subnav={SUBS.programmes} />
   <section class="block">
     <div class="wrap" style="max-width:740px">
-      <Wizard id="accel" prefix="CAND" api="/api/candidatures" programme="accelerateur-c4" submitLabel="Envoyer ma candidature" success="Vous recevrez un message WhatsApp à chaque étape. Prochaine étape : le diagnostic de maturité.">
+      <Wizard id="accel" prefix="CAND" api="/api/candidatures" attach="candidature" programme="accelerateur-c4" submitLabel="Envoyer ma candidature" success="Vous recevrez un message WhatsApp à chaque étape. Prochaine étape : le diagnostic de maturité.">
         <fieldset data-step="Vous" style="border:0;padding:0;margin:0">
           <label class="f" for="a1">Nom complet</label><input class="in" id="a1" name="nom" required />
           <label class="f" for="a2">Téléphone (WhatsApp)</label><input class="in" id="a2" name="tel" required placeholder="+228 90 00 00 00" inputmode="tel" />
@@ -30,8 +30,8 @@ const recap: [string, string][] = [['Nom', 'nom'], ['Téléphone', 'tel'], ['Ent
           <label class="f" for="c2">Qu'attendez-vous de l'accélérateur ?</label><textarea class="in" id="c2" name="attentes"></textarea>
         </fieldset>
         <fieldset data-step="Pièces jointes" style="border:0;padding:0;margin:0">
-          <p class="small muted">Formats acceptés : PDF, DOCX, XLSX. Analyse antivirus automatique. Documents privés par défaut.</p>
-          {['Pitch deck', 'Statuts ou RCCM', 'Derniers états financiers (si disponibles)'].map((x, i) => <><label class="f" for={`f${i}`}>{x}</label><input class="in" type="file" id={`f${i}`} accept=".pdf,.docx,.xlsx" /></>)}
+          <p class="small muted">Formats acceptés : PDF, DOCX, XLSX (15 Mo maximum par fichier). Documents privés, visibles seulement par vous et l'équipe programmes.</p>
+          {['Pitch deck', 'Statuts ou RCCM', 'Derniers états financiers (si disponibles)'].map((x, i) => <><label class="f" for={`f${i}`}>{x}</label><input class="in" type="file" id={`f${i}`} accept=".pdf,.docx,.xlsx" data-label={x} /></>)}
           <div class="small" data-uploads></div>
         </fieldset>
         <fieldset data-step="Confirmation" style="border:0;padding:0;margin:0">

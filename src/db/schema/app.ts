@@ -342,6 +342,14 @@ export const agBallot = pgTable('ag_ballot', {
   createdAt: ts('created_at').notNull().defaultNow(),
 }, (t) => [uniqueIndex('ag_ballot_unique').on(t.assembly, t.userId)]);
 
+/* Brouillons des formulaires en étapes (CDC §10 « formulaires intelligents » : reprise sur un autre appareil). */
+export const formDraft = pgTable('form_draft', {
+  userId: userRef('user_id').notNull(),
+  formId: text('form_id').notNull(),
+  data: jsonb('data').notNull().default({}),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.userId, t.formId] })]);
+
 export const report = pgTable('report', {
   id: uuid('id').primaryKey().defaultRandom(),
   category: text('category').notNull(),

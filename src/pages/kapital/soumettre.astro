@@ -11,7 +11,7 @@ const fs = 'border:0;padding:0;margin:0';
   <PageHead title="Soumettre mon dossier" lead="Environ 15 minutes. Brouillon enregistré automatiquement." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Soumettre mon dossier']]} />
   <section class="block">
     <div class="wrap" style="max-width:740px">
-      <Wizard id="kapital" prefix="D" api="/api/kapital/dossiers" submitLabel="Soumettre le dossier" success="Un analyste vous contacte sous 5 jours ouvrés. Suivez l'avancement dans votre espace entreprise.">
+      <Wizard id="kapital" prefix="D" api="/api/kapital/dossiers" attach="dossier" submitLabel="Soumettre le dossier" success="Un analyste vous contacte sous 5 jours ouvrés. Suivez l'avancement dans votre espace entreprise.">
         <fieldset data-step="Entreprise" style={fs}>
           <label class="f" for="k1">Nom de l'entreprise</label><input class="in" id="k1" name="entreprise" required />
           <label class="f" for="k2">Pays du siège</label><select class="in" id="k2" name="pays">{Object.entries(COUNTRIES).map(([k, v]) => <option value={k}>{v}</option>)}</select>
@@ -24,7 +24,8 @@ const fs = 'border:0;padding:0;margin:0';
           <label class="f" for="l3">Utilisation des fonds</label><textarea class="in" id="l3" name="usage"></textarea>
         </fieldset>
         <fieldset data-step="Documents" style={fs}>
-          {['Pitch deck', 'Modèle financier', 'États financiers', 'Statuts et pacte'].map((x, i) => <><label class="f" for={`kd${i}`}>{x}</label><input class="in" type="file" id={`kd${i}`} /></>)}
+          <p class="small muted">PDF, DOCX, XLSX ou PPTX (15 Mo maximum par fichier). Ils rejoignent la data room privée de votre dossier.</p>
+          {([['Pitch deck', 'commercial'], ['Modèle financier', 'financier'], ['États financiers', 'financier'], ['Statuts et pacte', 'juridique']] as const).map(([x, folder], i) => <><label class="f" for={`kd${i}`}>{x}</label><input class="in" type="file" id={`kd${i}`} accept=".pdf,.docx,.xlsx,.pptx" data-label={x} data-folder={folder} /></>)}
           <div class="small" data-uploads></div>
         </fieldset>
         <fieldset data-step="Partage et consentements" style={fs}>

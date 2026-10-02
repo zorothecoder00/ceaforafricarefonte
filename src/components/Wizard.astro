@@ -1,11 +1,13 @@
 ---
-/* Formulaire multi-étapes (CDC §10 « formulaires intelligents ») : étapes, brouillon enregistré, envoi à l'API avec accusé numéroté.
+/* Formulaire multi-étapes (CDC §10 « formulaires intelligents ») : étapes, brouillon enregistré (sur l'appareil, et sur le compte
+   pour reprendre sur un autre appareil), envoi à l'API avec accusé numéroté, puis dépôt des pièces jointes.
    Chaque étape est un enfant <fieldset data-step="Titre"> du slot ; les champs [required] de l'étape sont vérifiés avant de continuer.
-   api : point d'envoi ; programme : si défini, le corps envoyé est { programme, data } (sinon les champs eux-mêmes). */
-interface Props { id: string; submitLabel: string; success: string; prefix: string; api: string; programme?: string }
-const { id, submitLabel, success, prefix, api, programme } = Astro.props;
+   api : point d'envoi ; programme : si défini, le corps envoyé est { programme, data } (sinon les champs eux-mêmes).
+   attach : type de rattachement des fichiers (<input type="file" data-label="…" data-folder="…">) déposés via /api/pieces-jointes. */
+interface Props { id: string; submitLabel: string; success: string; prefix: string; api: string; programme?: string; attach?: 'candidature' | 'dossier' }
+const { id, submitLabel, success, prefix, api, programme, attach } = Astro.props;
 ---
-<form class="panel" data-wizard={id} data-success={success} data-prefix={prefix} data-endpoint={api} data-programme={programme} novalidate>
+<form class="panel" data-wizard={id} data-success={success} data-prefix={prefix} data-endpoint={api} data-programme={programme} data-attach={attach} novalidate>
   <div class="steps" data-steps></div>
   <h3 data-title></h3>
   <slot />
@@ -13,23 +15,41 @@ const { id, submitLabel, success, prefix, api, programme } = Astro.props;
     <button class="btn btn-ghost" type="button" data-prev>Précédent</button>
     <button class="btn btn-primary" type="button" data-next data-submit-label={submitLabel}>Continuer</button>
   </div>
-  <p class="demo-note" style="margin-top:12px">Brouillon enregistré automatiquement sur cet appareil. Connexion requise pour l’envoi.</p>
+  <p class="demo-note" style="margin-top:12px" data-draft-note>Brouillon enregistré automatiquement sur cet appareil. Connexion requise pour l’envoi.</p>
 </form>
 <div class="panel" data-done={id} hidden style="text-align:center;padding:30px"></div>
 <script>
-  document.querySelectorAll<HTMLFormElement>('[data-wizard]').forEach((form) => {
+  const MAX = 15 * 1024 * 1024;
+  const esc = (s: string) => s.replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c]!);
+  document.querySelectorAll<HTMLFormElement>('[data-wizard]').forEach(async (form) => {
     const id = form.dataset.wizard!;
     const key = 'cea-draft-' + id;
     const steps = [...form.querySelectorAll<HTMLFieldSetElement>('fieldset[data-step]')];
-    const fields = [...form.querySelectorAll<HTMLInputElement>('[name]')];
+    const fields = [...form.querySelectorAll<HTMLInputElement>('[name]')].filter((f) => f.type !== 'file' && f.type !== 'checkbox');
+    const files = [...form.querySelectorAll<HTMLInputElement>('input[type=file]')];
+    const note = form.querySelector<HTMLElement>('[data-draft-note]')!;
+    const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
     let d: Record<string, string> = {};
     try { d = JSON.parse(localStorage.getItem(key) || '{}'); } catch {}
-    const save = () => { try { localStorage.setItem(key, JSON.stringify(d)); } catch {} };
-    fields.forEach((f) => {
-      if (f.type === 'file' || f.type === 'checkbox') return;
-      if (d[f.name] != null) f.value = d[f.name];
-      f.addEventListener('input', () => { d[f.name] = f.value; save(); });
-    });
+
+    // Reprise sur un autre appareil : le brouillon du compte l'emporte s'il est plus récent
+    const remote = await fetch(`/api/brouillons?form=${encodeURIComponent(id)}`, { credentials: 'same-origin' }).then((r) => r.json()).catch(() => null);
+    if (remote?.data && Number(remote.data._at || 0) > Number(d._at || 0)) d = remote.data;
+    let logged = !!remote?.logged;
+    fields.forEach((f) => { if (d[f.name] != null) f.value = d[f.name]; });
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const pushRemote = () => {
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        const r = await fetch('/api/brouillons', { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ form: id, data: d }) }).catch(() => null);
+        if (r?.ok) { logged = true; note.textContent = 'Brouillon enregistré sur votre compte : reprenez-le depuis n’importe quel appareil.'; }
+      }, 1500);
+    };
+    const save = () => { d._at = String(Date.now()); try { localStorage.setItem(key, JSON.stringify(d)); } catch {} pushRemote(); };
+    fields.forEach((f) => f.addEventListener('input', () => { d[f.name] = f.value; save(); }));
+    if (logged) note.textContent = 'Brouillon enregistré sur votre compte : reprenez-le depuis n’importe quel appareil.';
+
     let step = Math.min(Number(d._step || 0), steps.length - 1);
     const bar = form.querySelector('[data-steps]')!;
     bar.innerHTML = steps.map(() => '<span></span>').join('');
@@ -46,31 +66,49 @@ const { id, submitLabel, success, prefix, api, programme } = Astro.props;
     }
     form.addEventListener('submit', (e) => { e.preventDefault(); next.click(); });
     prev.addEventListener('click', () => { step--; render(); });
-    const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
     next.addEventListener('click', async () => {
       const bad = [...steps[step].querySelectorAll<HTMLInputElement>('[required]')].find((f) => !f.checkValidity());
       if (bad) { bad.reportValidity(); return; }
+      const big = files.find((f) => (f.files?.[0]?.size ?? 0) > MAX);
+      if (big && steps[step].contains(big)) { toast('Fichier trop volumineux (15 Mo maximum).'); return; }
       if (step < steps.length - 1) { step++; render(); return; }
       // Cases à cocher de la dernière étape (consentements, partage)
       form.querySelectorAll<HTMLInputElement>('input[type=checkbox][name]').forEach((c) => { (d as Record<string, unknown>)[c.name] = c.checked; });
-      const payload = form.dataset.programme ? { programme: form.dataset.programme, data: d } : d;
+      const { _at, _step, ...data } = d;
+      const payload = form.dataset.programme ? { programme: form.dataset.programme, data } : data;
       next.disabled = true;
-      const res = await fetch(form.dataset.endpoint!, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => null);
-      next.disabled = false;
-      if (!res) return toast('Erreur réseau : votre brouillon est conservé, réessayez.');
+      const res = await fetch(form.dataset.endpoint!, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => null);
+      if (!res) { next.disabled = false; return toast('Erreur réseau : votre brouillon est conservé, réessayez.'); }
       if (res.status === 401) { location.href = (location.pathname.startsWith('/en/') ? '/en' : '') + '/connexion?retour=' + encodeURIComponent(location.pathname); return; }
       const r = await res.json().catch(() => ({}));
-      if (!res.ok || r.ok === false) return toast(r.error || 'Envoi impossible. Votre brouillon est conservé.');
+      if (!res.ok || r.ok === false) { next.disabled = false; return toast(r.error || 'Envoi impossible. Votre brouillon est conservé.'); }
+      // Pièces jointes : déposées une à une, rattachées au dossier qui vient d'être créé
+      const results: string[] = [];
+      if (form.dataset.attach && r.reference) {
+        for (const f of files) {
+          const file = f.files?.[0];
+          if (!file) continue;
+          next.textContent = `Envoi de ${file.name}…`;
+          const fd = new FormData();
+          fd.set('kind', form.dataset.attach); fd.set('reference', r.reference); fd.set('label', f.dataset.label ?? 'Document'); fd.set('folder', f.dataset.folder ?? 'juridique'); fd.set('file', file);
+          const up = await fetch('/api/pieces-jointes', { method: 'POST', credentials: 'same-origin', body: fd }).then((x) => x.json()).catch(() => ({ error: 'erreur réseau' }));
+          results.push(up.ok ? `✓ ${esc(file.name)}` : `✗ ${esc(file.name)} : ${esc(up.error ?? 'refusé')}`);
+        }
+      }
       try { localStorage.removeItem(key); } catch {}
+      fetch(`/api/brouillons?form=${encodeURIComponent(id)}`, { method: 'DELETE', credentials: 'same-origin' }).catch(() => {});
       const done = document.querySelector<HTMLElement>(`[data-done="${id}"]`)!;
-      const first = (d.nom || d.entreprise || '').split(' ')[0].replace(/[<>&"]/g, '');
-      done.innerHTML = `<span class="tag ok">Envoyé</span><h2 style="margin-top:12px">Merci${first ? ', ' + first : ''} !</h2><p>Numéro de dossier : <b class="num">${String(r.reference ?? '').replace(/[<>&"]/g, '')}</b>. ${form.dataset.success}</p><a class="btn btn-primary" href="${r.redirect || '/espace/candidatures'}">Suivre mon dossier</a>`;
+      const first = esc((d.nom || d.entreprise || '').split(' ')[0]);
+      const failed = results.some((x) => x.startsWith('✗'));
+      done.innerHTML = `<span class="tag ok">Envoyé</span><h2 style="margin-top:12px">Merci${first ? ', ' + first : ''} !</h2><p>Numéro de dossier : <b class="num">${esc(String(r.reference ?? ''))}</b>. ${form.dataset.success}</p>${results.length ? `<div class="small" style="text-align:left;margin:0 auto 14px;max-width:420px">${results.join('<br>')}${failed ? '<br>Vous pourrez ajouter les pièces refusées depuis votre espace.' : ''}</div>` : ''}<a class="btn btn-primary" href="${esc(r.redirect || '/espace/candidatures')}">Suivre mon dossier</a>`;
       form.hidden = true;
       done.hidden = false;
     });
-    form.querySelectorAll<HTMLInputElement>('input[type=file]').forEach((f) => f.addEventListener('change', () => {
-      const out = form.querySelector('[data-uploads]');
-      if (f.files?.[0] && out) out.insertAdjacentHTML('beforeend', `<div>✓ ${f.files[0].name.replace(/[<>&"]/g, '')} — analysé, aucun virus</div>`);
+    files.forEach((f) => f.addEventListener('change', () => {
+      const out = f.closest('fieldset')?.querySelector('[data-uploads]');
+      const file = f.files?.[0];
+      if (!file || !out) return;
+      out.insertAdjacentHTML('beforeend', file.size > MAX ? `<div>✗ ${esc(file.name)} — trop volumineux (15 Mo maximum)</div>` : `<div>✓ ${esc(file.name)} — sera déposé à l’envoi du formulaire</div>`);
     }));
     render();
   });
