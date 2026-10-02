@@ -1,9 +1,12 @@
 ---
-/* Messages de contact (routés par équipe) et signalements (CDC §11). Responsable pays : limité à ses pays. */
+/* Messages de contact et tickets (routés par équipe) et signalements (CDC §11, §12 « Support » : priorités, assignation, SLA, satisfaction).
+   Responsable pays : limité à ses pays. */
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import { desc, eq, inArray } from 'drizzle-orm';
+import { asc, desc, inArray } from 'drizzle-orm';
 import { db } from '../../lib/db';
-import { contactMessage, report, ticketFlowEnum } from '../../db/schema/app';
+import { contactMessage, report, ticketFlowEnum, ticketPriorityEnum, ticketReply } from '../../db/schema/app';
+import { user } from '../../db/schema/auth';
+import { PRIORITY_LABEL } from '../../lib/support';
 import { can } from '../../lib/rbac';
 import { countriesFor } from '../../lib/admin';
 import { country } from '../../data/site';
@@ -17,22 +20,65 @@ const cs = await countriesFor(me, 'messages_contact');
 const msgs = tab === 'messages' && can(me.roles, 'messages_contact', 'L') ? await db.select().from(contactMessage).where(cs ? inArray(contactMessage.country, cs.length ? cs : ['--']) : undefined).orderBy(desc(contactMessage.createdAt)).limit(200) : [];
 const reps = tab === 'signalements' ? await db.select().from(report).orderBy(desc(report.createdAt)).limit(200) : [];
 const L: Record<string, string> = { nouveau: 'Nouveau', en_cours: 'En cours', traite: 'Traité', clos: 'Clos' };
-const list = (tab === 'messages' ? msgs : reps).filter((x) => x.status === status);
+const mine = Astro.url.searchParams.get('mes') === '1';
+const PRIO = { urgente: 0, haute: 1, normale: 2, basse: 3 } as const;
+const list = (tab === 'messages' ? msgs : reps).filter((x) => x.status === status && (!mine || tab !== 'messages' || (x as (typeof msgs)[number]).assigneeId === me.id));
+// File de tickets : priorité, puis échéance la plus proche
+if (tab === 'messages') (list as typeof msgs).sort((a, b) => PRIO[a.priority] - PRIO[b.priority] || (a.dueAt?.getTime() ?? Infinity) - (b.dueAt?.getTime() ?? Infinity));
+const ids = (list as typeof msgs).map((m) => m.id);
+const replies = tab === 'messages' && ids.length ? await db.select().from(ticketReply).where(inArray(ticketReply.messageId, ids)).orderBy(asc(ticketReply.createdAt)) : [];
+const staffIds = [...new Set(msgs.map((m) => m.assigneeId).filter(Boolean))] as string[];
+const names = new Map((staffIds.length ? await db.select({ id: user.id, name: user.name }).from(user).where(inArray(user.id, staffIds)) : []).map((u) => [u.id, u.name]));
+const now = new Date();
+const late = (m: (typeof msgs)[number]) => !!m.dueAt && m.dueAt < now && (m.status === 'nouveau' || m.status === 'en_cours');
+// Indicateurs de qualité de service (CDC §17) sur les 200 derniers messages visibles
+const rated = msgs.filter((m) => m.csat);
+const csat = rated.length ? (rated.reduce((s, m) => s + m.csat!, 0) / rated.length).toFixed(1) : '—';
+const firstHours = msgs.filter((m) => m.answeredAt).map((m) => (m.answeredAt!.getTime() - m.createdAt.getTime()) / 3600_000).sort((a, b) => a - b);
+const median = firstHours.length ? Math.round(firstHours[Math.floor(firstHours.length / 2)]) : null;
+const fmt = (d: Date) => d.toLocaleString('fr-FR', { timeZone: 'Africa/Lome', dateStyle: 'short', timeStyle: 'short' });
 ---
 <AdminLayout title="Messages et signalements" lead={cs ? `Limité à : ${cs.map(country).join(', ') || 'aucun pays'}` : 'Tous pays.'} obj="messages_contact">
   <nav class="subnav" style="margin:0 0 12px">
     <a href="?onglet=messages" aria-current={tab === 'messages' ? 'page' : undefined}>Messages de contact</a>
     {can(me.roles, 'moderation', 'L') && <a href="?onglet=signalements" aria-current={tab === 'signalements' ? 'page' : undefined}>Signalements</a>}
   </nav>
+  {tab === 'messages' && (
+    <div class="row small" style="gap:18px;margin-bottom:10px">
+      <span><b>{msgs.filter(late).length}</b> en retard sur l'échéance</span>
+      <span>Première réponse (médiane) : <b>{median === null ? '—' : `${median} h`}</b></span>
+      <span>Satisfaction : <b>{csat}</b>/5 ({rated.length} avis)</span>
+      <a href={`?onglet=messages&statut=${status}${mine ? '' : '&mes=1'}`} class="chip" aria-pressed={mine ? 'true' : 'false'}>Assignés à moi</a>
+    </div>
+  )}
   <div class="filters" style="margin-top:0">{ticketFlowEnum.enumValues.map((s) => <a class="chip" href={`?onglet=${tab}&statut=${s}`} aria-pressed={s === status ? 'true' : 'false'}>{L[s]} ({(tab === 'messages' ? msgs : reps).filter((x) => x.status === s).length})</a>)}</div>
   {list.length === 0 && <div class="empty">Rien dans cette file.</div>}
   {tab === 'messages' && (list as typeof msgs).map((m) => (
     <div class="panel" style="margin-bottom:10px">
-      <div class="row between"><b>{m.reference} · {m.motif}</b><span class="tag info">{m.routedTeam}</span></div>
-      <div class="xs muted">{m.name} · {m.contact}{m.country ? ` · ${country(m.country)}` : ''} · {m.createdAt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</div>
+      <div class="row between"><b>{m.reference} · {m.motif}</b>
+        <span class="row" style="gap:6px">{late(m) && <span class="tag bad">En retard</span>}{m.priority !== 'normale' && <span class={`tag ${m.priority === 'basse' ? '' : 'gold'}`}>{PRIORITY_LABEL[m.priority]}</span>}<span class="tag info">{m.routedTeam}</span></span></div>
+      <div class="xs muted">{m.name} · {m.contact}{m.country ? ` · ${country(m.country)}` : ''} · {fmt(m.createdAt)}{m.dueAt ? ` · échéance ${fmt(m.dueAt)}` : ''} · {m.assigneeId ? `suivi par ${m.assigneeId === me.id ? 'vous' : names.get(m.assigneeId) ?? '—'}` : 'non assigné'}{m.csat ? ` · satisfaction ${m.csat}/5` : ''}</div>
       <p class="small" style="white-space:pre-wrap">{m.message}</p>
-      <div class="row" style="gap:6px">{ticketFlowEnum.enumValues.filter((s) => s !== m.status).map((s) => <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'contact.status', id: m.id, status: s })} data-reload>{L[s]}</button>)}
-        {m.contact.includes('@') && <a class="btn btn-primary btn-sm" href={`mailto:${m.contact}?subject=${encodeURIComponent('Votre message ' + m.reference)}`}>Répondre</a>}</div>
+      {m.csatComment && <p class="xs muted">Avis du demandeur : « {m.csatComment} »</p>}
+      {replies.filter((r) => r.messageId === m.id).map((r) => (
+        <div class="small" style={`white-space:pre-wrap;padding:8px 10px;margin:6px 0;border-radius:8px;background:var(--surface-2);${r.fromStaff ? 'border-left:3px solid var(--navy)' : ''}`}><span class="xs muted">{r.fromStaff ? 'Équipe' : 'Demandeur'} · {fmt(r.createdAt)}</span><br />{r.body}</div>
+      ))}
+      <details style="margin:8px 0">
+        <summary class="small"><b>Répondre</b></summary>
+        <form data-api="/api/admin" data-reload style="margin-top:6px">
+          <input type="hidden" name="action" value="contact.reply" /><input type="hidden" name="id" value={m.id} />
+          <label class="f" for={`r-${m.id}`}>Réponse (envoyée au demandeur par e-mail, avec un lien pour répondre et noter)</label>
+          <textarea class="in" id={`r-${m.id}`} name="body" required minlength="2" maxlength="5000"></textarea>
+          <label class="row small"><input type="checkbox" name="close" /> Marquer comme traitée</label>
+          <button class="btn btn-primary btn-sm" type="submit">Envoyer la réponse</button>
+        </form>
+      </details>
+      <div class="row" style="gap:6px">
+        {ticketFlowEnum.enumValues.filter((s) => s !== m.status).map((s) => <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'contact.status', id: m.id, status: s })} data-reload>{L[s]}</button>)}
+        {m.assigneeId !== me.id && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'contact.update', id: m.id, assignee: 'moi' })} data-reload>M'assigner</button>}
+        {m.assigneeId && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'contact.update', id: m.id, assignee: 'personne' })} data-reload>Désassigner</button>}
+        {ticketPriorityEnum.enumValues.filter((p) => p !== m.priority).map((p) => <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'contact.update', id: m.id, priority: p })} data-reload>Priorité {PRIORITY_LABEL[p].toLowerCase()}</button>)}
+      </div>
     </div>
   ))}
   {tab === 'signalements' && (list as typeof reps).map((x) => (

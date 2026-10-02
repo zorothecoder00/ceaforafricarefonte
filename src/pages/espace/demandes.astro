@@ -1,0 +1,26 @@
+---
+/* Mes demandes (CDC §10 centre d'aide) : tickets, messages de contact et demandes envoyées depuis le site, avec leur état. */
+import EspaceLayout from '../../layouts/EspaceLayout.astro';
+import { desc, eq, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { contactMessage, ticketReply } from '../../db/schema/app';
+import { STATUS_LABEL } from '../../lib/support';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const rows = await db.select({
+  t: contactMessage,
+  replies: sql<number>`(select count(*)::int from ${ticketReply} where ${ticketReply.messageId} = ${contactMessage.id} and ${ticketReply.fromStaff})`,
+}).from(contactMessage).where(eq(contactMessage.userId, me.id)).orderBy(desc(contactMessage.createdAt)).limit(100);
+const ST: Record<string, string> = { nouveau: 'gold', en_cours: 'info', traite: 'ok', clos: '' };
+const open = rows.filter((r) => r.t.status === 'nouveau' || r.t.status === 'en_cours').length;
+---
+<EspaceLayout title="Mes demandes" lead={`${open} demande${open > 1 ? 's' : ''} en cours. Les demandes envoyées sans être connecté se suivent par le lien reçu par e-mail.`}>
+  <div class="row" style="margin-bottom:14px"><a class="btn btn-primary btn-sm" href="/aide#ticket">Nouvelle demande</a><a class="btn btn-ghost btn-sm" href="/aide">Centre d'aide</a></div>
+  {rows.length ? rows.map(({ t, replies }) => (
+    <a class="panel" href={`/aide/suivi?ref=${encodeURIComponent(t.reference)}`} style="display:block;margin-bottom:10px;text-decoration:none;color:inherit">
+      <div class="row between"><b>{t.reference} · {t.motif}</b><span class={`tag ${ST[t.status]}`}>{STATUS_LABEL[t.status]}</span></div>
+      <div class="xs muted">{t.routedTeam} · {t.createdAt.toLocaleDateString('fr-FR')}{replies ? ` · ${replies} réponse${replies > 1 ? 's' : ''} de l'équipe` : ''}</div>
+    </a>
+  )) : <div class="empty">Aucune demande pour le moment.</div>}
+</EspaceLayout>

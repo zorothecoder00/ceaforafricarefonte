@@ -1,9 +1,8 @@
 /* Ajout des rendez-vous à l'agenda personnel (CDC §10 « Agenda et rendez-vous ») :
    fichier iCalendar avec rappels intégrés (veille et 15 min avant), liens « Ajouter à Google Agenda / Outlook ».
    Les heures sont en UTC : chaque agenda les affiche dans le fuseau de l'utilisateur. */
-import { createHmac } from 'node:crypto';
 import { esc, fold, stamp } from './ics';
-import { requireEnv } from './env';
+import { signRef, siteUrl } from './sign';
 
 export type Meeting = { uid: string; start: Date; minutes: number; title: string; description: string; location: string };
 
@@ -29,12 +28,12 @@ export const outlookUrl = (m: Meeting) => 'https://outlook.live.com/calendar/0/d
 });
 
 /** Clé du lien de téléchargement d'un rendez-vous pris sans compte (envoyé par e-mail). */
-export const agendaKey = (ref: string) => createHmac('sha256', requireEnv('BETTER_AUTH_SECRET')).update('agenda:' + ref).digest('base64url').slice(0, 22);
+export const agendaKey = (ref: string) => signRef('agenda', ref);
 
 /** Les trois liens à proposer à l'utilisateur. */
 export const agendaLinks = (m: Meeting, icsPath: string, site: string) => ({ google: googleUrl(m), outlook: outlookUrl(m), ics: new URL(icsPath, site).href });
 
-export const siteUrl = () => process.env.BETTER_AUTH_URL ?? 'http://localhost:4321';
+export { siteUrl };
 
 /* Rendez-vous avec une équipe CEA (table appointment) et séances de mentorat : mêmes durées et liens de visio que l'interface. */
 export const appointmentMeeting = (a: { reference: string; team: string; at: Date; topic: string | null; visio: string }): Meeting => ({

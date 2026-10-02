@@ -1,0 +1,65 @@
+---
+/* Suivi d'une demande (CDC §10) : état, échéance, fil d'échanges avec l'équipe, réponse, note de satisfaction.
+   Accès par le lien signé reçu par e-mail (?ref=…&k=…) ou, connecté, pour ses propres demandes (?ref=…). */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { asc, eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { ticketReply } from '../../db/schema/app';
+import { ticketFor, STATUS_LABEL } from '../../lib/support';
+
+export const prerender = false;
+const ref = Astro.url.searchParams.get('ref') ?? '';
+const k = Astro.url.searchParams.get('k');
+const t = ref ? await ticketFor(ref, k, Astro.locals.user?.id) : null;
+const replies = t ? await db.select().from(ticketReply).where(eq(ticketReply.messageId, t.id)).orderBy(asc(ticketReply.createdAt)) : [];
+const fmt = (d: Date) => d.toLocaleString('fr-FR', { timeZone: 'Africa/Lome', dateStyle: 'medium', timeStyle: 'short' });
+const ST: Record<string, string> = { nouveau: 'gold', en_cours: 'info', traite: 'ok', clos: '' };
+const done = t && (t.status === 'traite' || t.status === 'clos');
+if (!t) Astro.response.status = 404;
+---
+<BaseLayout title={t ? `Demande ${t.reference}` : 'Suivi de demande'}>
+  <PageHead title={t ? `Demande ${t.reference}` : 'Suivi de demande'} crumbs={[['/aide', "Centre d'aide"], ['', 'Suivi']]} />
+  <section class="block">
+    <div class="wrap" style="max-width:760px">
+      {!t ? (
+        <div class="empty">Demande introuvable. Ouvrez le lien reçu par e-mail, ou <a href="/connexion">connectez-vous</a> pour retrouver vos demandes dans <a href="/espace/demandes">Mes demandes</a>.</div>
+      ) : (
+        <>
+          <div class="panel">
+            <div class="row between"><b>{t.motif}</b><span class={`tag ${ST[t.status]}`}>{STATUS_LABEL[t.status]}</span></div>
+            <div class="xs muted">Transmise à : {t.routedTeam} · envoyée le {fmt(t.createdAt)}{t.dueAt && !done ? ` · réponse attendue avant le ${fmt(t.dueAt)}` : ''}</div>
+            <p class="small" style="white-space:pre-wrap">{t.message}</p>
+          </div>
+          {replies.map((r) => (
+            <div class="panel" style={`margin-top:10px;${r.fromStaff ? 'border-left:3px solid var(--navy)' : 'margin-left:24px'}`}>
+              <div class="xs muted">{r.fromStaff ? `Équipe CEA (${t.routedTeam})` : 'Vous'} · {fmt(r.createdAt)}</div>
+              <p class="small" style="white-space:pre-wrap;margin-bottom:0">{r.body}</p>
+            </div>
+          ))}
+
+          {done && (
+            <form class="panel" data-api="/api/support" data-method="PATCH" data-reload style="margin-top:16px">
+              <input type="hidden" name="ref" value={t.reference} /><input type="hidden" name="k" value={k ?? ''} />
+              <h2 style="font-size:1.05rem;margin-top:0">{t.csat ? `Votre note : ${t.csat}/5 — vous pouvez la modifier` : 'Êtes-vous satisfait de la réponse ?'}</h2>
+              <label class="f" for="cs">Note</label>
+              <select class="in" id="cs" name="csat" data-type="number" required style="width:auto">
+                {[5, 4, 3, 2, 1].map((n) => <option value={n} selected={t.csat === n}>{'★'.repeat(n)} ({n}/5)</option>)}
+              </select>
+              <label class="f" for="cc">Commentaire (facultatif)</label>
+              <textarea class="in" id="cc" name="comment" maxlength="1000">{t.csatComment ?? ''}</textarea>
+              <button class="btn btn-primary btn-sm" type="submit">Envoyer mon avis</button>
+            </form>
+          )}
+
+          <form class="panel" data-api="/api/support" data-reload style="margin-top:16px">
+            <input type="hidden" name="ref" value={t.reference} /><input type="hidden" name="k" value={k ?? ''} />
+            <label class="f" for="rb">{done ? 'Le problème persiste ? Répondez pour rouvrir la demande' : 'Ajouter un message'}</label>
+            <textarea class="in" id="rb" name="body" required minlength="2" maxlength="5000"></textarea>
+            <button class="btn btn-ghost btn-sm" type="submit">Envoyer</button>
+          </form>
+        </>
+      )}
+    </div>
+  </section>
+</BaseLayout>

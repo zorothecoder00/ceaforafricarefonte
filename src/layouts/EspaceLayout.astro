@@ -11,7 +11,7 @@ const roles = user.roles as Role[];
 const has = (...r: Role[]) => r.some((x) => roles.includes(x));
 
 const groups: [string, [string, string, boolean?][]][] = [
-  ['Mon compte', [['/espace', 'Tableau de bord'], ['/espace/profil', 'Profil 360°'], ['/espace/carte', 'Carte de membre'], ['/espace/notifications', 'Notifications'], ['/espace/securite', 'Sécurité'], ['/espace/confidentialite', 'Confidentialité']]],
+  ['Mon compte', [['/espace', 'Tableau de bord'], ['/espace/profil', 'Profil 360°'], ['/espace/carte', 'Carte de membre'], ['/espace/notifications', 'Notifications'], ['/espace/demandes', 'Mes demandes'], ['/espace/securite', 'Sécurité'], ['/espace/confidentialite', 'Confidentialité']]],
   ['Mes activités', [
     ['/espace/apprentissage', 'Apprentissage'], ['/espace/candidatures', 'Candidatures'], ['/espace/billets', 'Billets'], ['/espace/messages', 'Messagerie'],
     ['/espace/projets', 'Mes projets', has('entrepreneur', 'membre')], ['/espace/mentorat', 'Mentorat'], ['/espace/cercle', 'Mon cercle Mastermind'],

@@ -1,0 +1,58 @@
+---
+/* Article de la base de connaissances (CDC §10) : réponse, liens utiles, tutoriel vidéo s'il existe, « Cet article vous a-t-il aidé ? ». */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { HELP, HELP_CATS, type HelpArticle } from '../../data/aide';
+
+export const getStaticPaths = () => HELP.map((h) => ({ params: { slug: h.slug }, props: { h } }));
+const { h } = Astro.props as { h: HelpArticle };
+const related = HELP.filter((x) => x.cat === h.cat && x.slug !== h.slug).slice(0, 4);
+const embed = h.video && /youtube\.com|youtu\.be|vimeo\.com/.test(h.video);
+---
+<BaseLayout title={h.q} description={h.a[0]}>
+  <PageHead title={h.q} crumbs={[['/aide', "Centre d'aide"], ['', HELP_CATS[h.cat]]]} />
+  <section class="block">
+    <div class="wrap split">
+      <article class="panel">
+        {h.a.map((p) => <p>{p}</p>)}
+        {h.video && (embed
+          ? <a class="btn btn-ghost btn-sm" href={h.video} target="_blank" rel="noopener">Voir le tutoriel vidéo</a>
+          : <video src={h.video} controls preload="none" style="width:100%;border-radius:8px;margin:8px 0"></video>)}
+        {h.links && <div class="row" style="margin-top:12px">{h.links.map(([href, label]) => <a class="btn btn-primary btn-sm" href={href}>{label}</a>)}</div>}
+        <hr style="margin:20px 0;border:0;border-top:1px solid var(--line)" />
+        <div id="fb" class="row small" data-article={h.slug}>
+          <span>Cet article vous a-t-il aidé ?</span>
+          <button class="btn btn-ghost btn-sm" type="button" data-helpful="true">Oui</button>
+          <button class="btn btn-ghost btn-sm" type="button" data-helpful="false">Non</button>
+        </div>
+      </article>
+      <aside>
+        {related.length > 0 && (
+          <div class="panel">
+            <h2 style="font-size:1rem;margin-top:0">Dans le même thème</h2>
+            <ul class="small" style="margin:0;padding-left:18px">{related.map((r) => <li style="margin:4px 0"><a href={`/aide/${r.slug}`}>{r.q}</a></li>)}</ul>
+          </div>
+        )}
+        <div class="panel" style="margin-top:16px">
+          <h2 style="font-size:1rem;margin-top:0">Toujours bloqué ?</h2>
+          <a class="btn btn-primary btn-sm" href="/aide#ticket">Ouvrir un ticket</a>
+        </div>
+      </aside>
+    </div>
+  </section>
+</BaseLayout>
+<script>
+  const fb = document.getElementById('fb')!;
+  fb.addEventListener('click', async (e) => {
+    const b = (e.target as Element).closest<HTMLButtonElement>('[data-helpful]');
+    if (!b) return;
+    const helpful = b.dataset.helpful === 'true';
+    const r = await fetch('/api/support', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ article: fb.dataset.article, helpful }) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    fb.innerHTML = '';
+    const s = document.createElement('span');
+    s.textContent = d.message ?? d.error ?? 'Merci.';
+    fb.appendChild(s);
+    if (d.ok && !helpful) { const a = document.createElement('a'); a.href = '/aide#ticket'; a.textContent = 'Ouvrir un ticket'; a.className = 'btn btn-ghost btn-sm'; fb.appendChild(a); }
+  });
+</script>

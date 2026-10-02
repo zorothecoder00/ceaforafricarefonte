@@ -3,19 +3,23 @@ import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../../lib/db';
-import { contactMessage, report, post, courseReview, job, jobAlert, programmeApplication, userRole, proposal, space, hireDeclaration, roleEnum, ticketFlowEnum, applicationStatusEnum, proposalStatusEnum, profile } from '../../db/schema/app';
+import { contactMessage, ticketReply, ticketPriorityEnum, report, post, courseReview, job, jobAlert, programmeApplication, userRole, proposal, space, hireDeclaration, roleEnum, ticketFlowEnum, applicationStatusEnum, proposalStatusEnum, profile } from '../../db/schema/app';
 import { dossier, dossierEvent, committeeDecision, kycCheck, investorProfile, featureFlag, dossierStatusEnum, verificationLevelEnum, committeeDecisionEnum, kycStatusEnum } from '../../db/schema/kapital';
 import { json, fail, audit, clientIp } from '../../lib/session';
 import { staffApi, countriesFor } from '../../lib/admin';
 import { hasRole, type Obj, type Action } from '../../lib/rbac';
 import { statusLabel, FEATURES } from '../../lib/kapital';
 import { notify } from '../../lib/notify';
+import { sendEmail } from '../../lib/messaging';
+import { siteUrl, trackPath } from '../../lib/support';
 
 export const prerender = false;
 
 const id = z.uuid();
 const Body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('contact.status'), id, status: z.enum(ticketFlowEnum.enumValues) }),
+  z.object({ action: z.literal('contact.reply'), id, body: z.string().trim().min(2).max(5000), close: z.boolean().optional() }),
+  z.object({ action: z.literal('contact.update'), id, priority: z.enum(ticketPriorityEnum.enumValues).optional(), assignee: z.enum(['moi', 'personne']).optional() }),
   z.object({ action: z.literal('report.status'), id, status: z.enum(ticketFlowEnum.enumValues) }),
   z.object({ action: z.literal('post.status'), id, status: z.enum(['publie', 'masque']) }),
   z.object({ action: z.literal('review.hidden'), userId: z.string().min(1).max(64), courseId: z.string().max(20), hidden: z.boolean() }),
@@ -52,6 +56,36 @@ export const POST: APIRoute = async ({ locals, request }) => {
       if (!m || (cs && !cs.includes(m.c ?? ''))) return fail('Accès refusé.', 403);
       await db.update(contactMessage).set({ status: b.status }).where(eq(contactMessage.id, b.id));
       await audit(u.id, 'admin.contact.statut', b.id, { status: b.status }, ip);
+      return ok();
+    }
+    case 'contact.reply': {
+      // Réponse de l'équipe dans le fil du ticket : e-mail au demandeur avec le lien de suivi, notification s'il a un compte
+      const u = guard('messages_contact', 'M'); if (u instanceof Response) return u;
+      const cs = await countriesFor(u, 'messages_contact', 'M');
+      const [m] = await db.select().from(contactMessage).where(eq(contactMessage.id, b.id));
+      if (!m || (cs && !cs.includes(m.country ?? ''))) return fail('Accès refusé.', 403);
+      await db.insert(ticketReply).values({ messageId: m.id, authorId: u.id, fromStaff: true, body: b.body });
+      await db.update(contactMessage).set({ status: b.close ? 'traite' : 'en_cours', answeredAt: m.answeredAt ?? new Date(), assigneeId: m.assigneeId ?? u.id }).where(eq(contactMessage.id, m.id));
+      const url = new URL(trackPath(m.reference), siteUrl()).href;
+      if (m.userId) await notify(m.userId, `Réponse de l'équipe sur votre demande ${m.reference}`, '/espace/demandes');
+      let mailed = false;
+      if (m.contact.includes('@') && !m.contact.endsWith('@telephone.cea4africa.com')) {
+        mailed = await sendEmail(m.contact, `Réponse à votre demande ${m.reference}`, `Bonjour ${m.name},\n\n${b.body}\n\n—\n${m.routedTeam}, CEA FOR AFRICA\n\nRépondre ou noter cette réponse : ${url}`).then(() => true, () => false);
+      }
+      await audit(u.id, 'admin.contact.reponse', m.id, { close: !!b.close }, ip);
+      return ok(mailed || m.userId ? 'Réponse envoyée.' : 'Réponse enregistrée. Le demandeur n’a pas d’e-mail : contactez-le par téléphone.');
+    }
+    case 'contact.update': {
+      const u = guard('messages_contact', 'M'); if (u instanceof Response) return u;
+      const cs = await countriesFor(u, 'messages_contact', 'M');
+      const [m] = await db.select({ c: contactMessage.country }).from(contactMessage).where(eq(contactMessage.id, b.id));
+      if (!m || (cs && !cs.includes(m.c ?? ''))) return fail('Accès refusé.', 403);
+      const set: Partial<typeof contactMessage.$inferInsert> = {};
+      if (b.priority) set.priority = b.priority;
+      if (b.assignee) set.assigneeId = b.assignee === 'moi' ? u.id : null;
+      if (!Object.keys(set).length) return fail('Rien à modifier.');
+      await db.update(contactMessage).set(set).where(eq(contactMessage.id, b.id));
+      await audit(u.id, 'admin.contact.maj', b.id, { ...set }, ip);
       return ok();
     }
     case 'report.status': {

@@ -1,27 +1,70 @@
 ---
+/* Centre d'aide (CDC §10) : base de connaissances avec recherche tolérante aux fautes, tickets suivis, WhatsApp, CEA Copilot. */
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHead from '../components/PageHead.astro';
+import { HELP, HELP_CATS } from '../data/aide';
 
-const faq = [
-  ['Comment payer avec Mobile Money ?', 'Choisissez Orange Money, MTN MoMo, Wave, Moov ou M-Pesa, saisissez votre numéro puis confirmez sur votre téléphone.'],
-  ["Je n'ai pas reçu mon billet", 'Retrouvez-le dans Mon espace > Mes billets. Il fonctionne aussi hors connexion.'],
-  ['Comment vérifier un certificat ?', 'Scannez le QR code du certificat : il ouvre la page de vérification.'],
-  ['Comment soumettre un dossier à Kapital Invest ?', "Faites d'abord le diagnostic « Suis-je prêt ? », puis soumettez votre dossier depuis le résultat."],
-];
+const wa = (import.meta.env.PUBLIC_WHATSAPP_NUMBER ?? '').replace(/\D/g, '');
+const index = HELP.map((h) => ({ s: h.slug, q: h.q, a: h.a.join(' '), c: HELP_CATS[h.cat] }));
 ---
 <BaseLayout title="Centre d'aide">
-  <PageHead title="Centre d'aide" lead="Réponses rapides, tutoriels et contact du support." crumbs={[['', "Centre d'aide"]]} />
+  <PageHead title="Centre d'aide" lead="Trouvez une réponse en quelques secondes, ou écrivez à l'équipe : chaque demande reçoit un numéro de suivi." crumbs={[['', "Centre d'aide"]]} />
   <section class="block">
+    <div class="wrap">
+      <label class="f" for="hq">Rechercher dans l'aide</label>
+      <input class="in" id="hq" type="search" placeholder="Ex. : billet, mot de passe, Mobile Money…" autocomplete="off" />
+      <div id="hres" class="search-res" aria-live="polite" style="margin-top:8px"></div>
+      <script type="application/json" id="helpIndex" set:html={JSON.stringify(index)} />
+
+      <div class="grid g2" style="margin-top:20px">
+        {Object.entries(HELP_CATS).map(([k, label]) => (
+          <section class="panel">
+            <h2 style="font-size:1.1rem;margin-top:0">{label}</h2>
+            <ul class="small" style="margin:0;padding-left:18px">
+              {HELP.filter((h) => h.cat === k).map((h) => <li style="margin:4px 0"><a href={`/aide/${h.slug}`}>{h.q}</a></li>)}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="block" style="padding-top:0">
     <div class="wrap grid g2">
-      {faq.map(([q, a]) => <details class="panel"><summary><b>{q}</b></summary><p class="small" style="margin:10px 0 0">{a}</p></details>)}
-      <form class="panel" data-api="/api/demande" data-reset>
-          <input type="hidden" name="type" value="support" /><input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px" />
-        <h3>Ouvrir un ticket</h3>
+      <form class="panel" id="ticket" data-api="/api/demande" data-reset>
+        <input type="hidden" name="type" value="support" /><input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px" />
+        <h2 style="font-size:1.1rem;margin-top:0">Ouvrir un ticket</h2>
+        <p class="small muted">Réponse sous 1 jour ouvré. Vous recevez un numéro et un lien pour suivre la demande et échanger avec l'équipe.</p>
         <label class="f" for="ain">Nom</label><input class="in" id="ain" name="name" required minlength="2" autocomplete="name" />
-          <label class="f" for="aic">E-mail ou téléphone</label><input class="in" id="aic" name="contact" required minlength="5" autocomplete="email" />
-          <label class="f" for="am">Votre problème</label><textarea class="in" id="am" name="message" required minlength="10"></textarea>
+        <label class="f" for="aic">E-mail (pour recevoir le lien de suivi)</label><input class="in" id="aic" name="contact" required minlength="5" autocomplete="email" />
+        <label class="f" for="am">Votre problème</label><textarea class="in" id="am" name="message" required minlength="10" placeholder="Ce que vous avez fait, ce qui s'est passé, et le message d'erreur s'il y en a un."></textarea>
         <button class="btn btn-primary btn-sm" type="submit">Envoyer</button>
       </form>
+      <div class="panel">
+        <h2 style="font-size:1.1rem;margin-top:0">Autres moyens de nous joindre</h2>
+        <div class="row" style="flex-direction:column;align-items:flex-start;gap:8px">
+          <button class="btn btn-ghost btn-sm" type="button" onclick="openChat()">Demander à CEA Copilot (réponse immédiate)</button>
+          {wa && <a class="btn btn-ghost btn-sm" href={`https://wa.me/${wa}?text=${encodeURIComponent("Bonjour CEA FOR AFRICA, j'ai besoin d'aide : ")}`} target="_blank" rel="noopener">Écrire sur WhatsApp</a>}
+          <a class="btn btn-ghost btn-sm" href="/espace/demandes">Suivre mes demandes</a>
+          <a class="btn btn-ghost btn-sm" href="/contact">Prendre rendez-vous en visio</a>
+          <a class="btn btn-ghost btn-sm" href="/statut">État des services</a>
+        </div>
+      </div>
     </div>
   </section>
 </BaseLayout>
+<script>
+  import { search } from '../lib/fuzzy';
+  type H = { s: string; q: string; a: string; c: string };
+  const idx: H[] = JSON.parse(document.getElementById('helpIndex')!.textContent || '[]');
+  const inp = document.getElementById('hq') as HTMLInputElement, out = document.getElementById('hres')!;
+  const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  inp.addEventListener('input', () => {
+    const q = inp.value.trim();
+    if (!q) { out.innerHTML = ''; return; }
+    const res = search(idx, q, (h) => [h.q, h.a], 8);
+    out.innerHTML = res.length
+      ? res.map((h) => `<a href="/aide/${h.s}"><span class="tag info">${esc(h.c)}</span><span><b>${esc(h.q)}</b><br><span class="small muted">${esc(h.a.slice(0, 140))}…</span></span></a>`).join('')
+      : '<div class="empty">Aucun article ne correspond. Demandez à CEA Copilot ou ouvrez un ticket ci-dessous.</div>';
+  });
+</script>

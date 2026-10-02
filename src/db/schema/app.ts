@@ -303,6 +303,7 @@ export const barometerResponse = pgTable('barometer_response', {
 
 /* ===== Contact, signalements, lettre d'information, notifications ===== */
 export const ticketFlowEnum = pgEnum('request_status', ['nouveau', 'en_cours', 'traite', 'clos']);
+export const ticketPriorityEnum = pgEnum('ticket_priority', ['basse', 'normale', 'haute', 'urgente']);
 export const contactMessage = pgTable('contact_message', {
   id: uuid('id').primaryKey().defaultRandom(),
   reference: text('reference').notNull().unique(),
@@ -314,8 +315,33 @@ export const contactMessage = pgTable('contact_message', {
   message: text('message').notNull(),
   userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
   status: ticketFlowEnum('status').notNull().default('nouveau'),
+  // Suivi des tickets (CDC §10 centre d'aide, §12 support) : priorité, assignation, échéance (SLA), satisfaction
+  priority: ticketPriorityEnum('priority').notNull().default('normale'),
+  assigneeId: text('assignee_id').references(() => user.id, { onDelete: 'set null' }),
+  dueAt: ts('due_at'),
+  answeredAt: ts('answered_at'), // première réponse de l'équipe
+  csat: integer('csat'), // satisfaction 1 à 5, donnée par le demandeur une fois la demande traitée
+  csatComment: text('csat_comment'),
   createdAt: ts('created_at').notNull().defaultNow(),
-});
+}, (t) => [index('contact_message_user_idx').on(t.userId)]);
+
+/* Fil d'échanges d'un ticket : réponses de l'équipe et du demandeur. */
+export const ticketReply = pgTable('ticket_reply', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  messageId: uuid('message_id').notNull().references(() => contactMessage.id, { onDelete: 'cascade' }),
+  authorId: text('author_id').references(() => user.id, { onDelete: 'set null' }),
+  fromStaff: boolean('from_staff').notNull(),
+  body: text('body').notNull(),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('ticket_reply_message_idx').on(t.messageId)]);
+
+/* « Cet article vous a-t-il aidé ? » (base de connaissances du centre d'aide) : votes anonymes. */
+export const helpFeedback = pgTable('help_feedback', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  article: text('article').notNull(),
+  helpful: boolean('helpful').notNull(),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('help_feedback_article_idx').on(t.article)]);
 
 /* Rendez-vous en visio avec une équipe CEA (CDC §6.2, page Contact) : un créneau ne peut être réservé qu'une fois par équipe. */
 export const appointment = pgTable('appointment', {

@@ -7,10 +7,10 @@ import { db } from '../../lib/db';
 import { contactMessage, profile } from '../../db/schema/app';
 import { json, fail, reference, audit, clientIp } from '../../lib/session';
 import { rateLimit, isBot, readJson } from '../../lib/guard';
-import { notify } from '../../lib/notify';
 import { sendEmail } from '../../lib/messaging';
 import { env } from '../../lib/env';
 import { eq } from 'drizzle-orm';
+import { acknowledge, dueFrom } from '../../lib/support';
 
 export const prerender = false;
 
@@ -53,9 +53,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const message = details ? `${p.data.message}\n\n${details}` : p.data.message;
   const [pr] = u ? await db.select({ c: profile.country }).from(profile).where(eq(profile.userId, u.id)) : [];
   const ref = reference('DEM');
-  await db.insert(contactMessage).values({ reference: ref, motif: k.motif, routedTeam: k.team, country: pr?.c ?? null, name, contact, message, userId: u?.id ?? null });
+  await db.insert(contactMessage).values({ reference: ref, motif: k.motif, routedTeam: k.team, country: pr?.c ?? null, name, contact, message, userId: u?.id ?? null, priority: p.data.type === 'reclamation' ? 'haute' : 'normale', dueAt: /^(avant|dès)/.test(k.delay) ? null : dueFrom(k.delay) });
   await audit(u?.id, 'demande.' + p.data.type, ref, { team: k.team }, clientIp(request));
-  if (u) await notify(u.id, `Demande ${ref} reçue (${k.team}) : réponse ${when(k)}.`);
+  await acknowledge({ reference: ref, name, contact, team: k.team, delay: when(k), userId: u?.id });
   const inbox = env('CONTACT_EMAIL');
   if (inbox) await sendEmail(inbox, `[${k.team}] ${k.motif} — ${ref}`, `${name} (${contact})\n\n${message}`).catch(() => {});
   return json({ ok: true, reference: ref, message: `Demande ${ref} transmise à : ${k.team}. Réponse ${when(k)}.` });
