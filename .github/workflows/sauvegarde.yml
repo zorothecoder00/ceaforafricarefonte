@@ -1,6 +1,6 @@
 # Sauvegarde de la base de production (CDC §13.1 : sauvegardes quotidiennes et chiffrées, conservées hors site ;
 # RPO ≤ 4 h et RTO ≤ 4 h ; restauration testée chaque trimestre).
-# - RPO ≤ 4 h : assuré par la restauration à un instant donné de Neon (historique de l'offre Neon, à régler à 24 h au moins).
+# - RPO ≤ 4 h : assuré par la restauration à un instant donné de Neon (fenêtre de 6 h, maximum de l offre Neon actuelle).
 # - Copie quotidienne hors site : ce flux exporte la base chaque nuit, la chiffre (AES-256) et la conserve 90 jours sur GitHub,
 #   hors de l'infrastructure Neon.
 # - Restauration testée : chaque sauvegarde est restaurée dans une base vierge et contrôlée (tables et lignes), donc testée chaque
