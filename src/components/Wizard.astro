@@ -4,8 +4,8 @@
    Chaque étape est un enfant <fieldset data-step="Titre"> du slot ; les champs [required] de l'étape sont vérifiés avant de continuer.
    api : point d'envoi ; programme : si défini, le corps envoyé est { programme, data } (sinon les champs eux-mêmes).
    attach : type de rattachement des fichiers (<input type="file" data-label="…" data-folder="…">) déposés via /api/pieces-jointes. */
-interface Props { id: string; submitLabel: string; success: string; prefix: string; api: string; programme?: string; attach?: 'candidature' | 'dossier' }
-const { id, submitLabel, success, prefix, api, programme, attach } = Astro.props;
+interface Props { id: string; submitLabel: string; success: string; prefix: string; api: string; programme?: string; attach?: 'candidature' | 'dossier'; note?: string }
+const { id, submitLabel, success, prefix, api, programme, attach, note = 'Brouillon enregistré automatiquement sur cet appareil. Connexion requise pour l’envoi.' } = Astro.props;
 ---
 <form class="panel" data-wizard={id} data-success={success} data-prefix={prefix} data-endpoint={api} data-programme={programme} data-attach={attach} novalidate>
   <div class="steps" data-steps></div>
@@ -15,7 +15,7 @@ const { id, submitLabel, success, prefix, api, programme, attach } = Astro.props
     <button class="btn btn-ghost" type="button" data-prev>Précédent</button>
     <button class="btn btn-primary" type="button" data-next data-submit-label={submitLabel}>Continuer</button>
   </div>
-  <p class="demo-note" style="margin-top:12px" data-draft-note>Brouillon enregistré automatiquement sur cet appareil. Connexion requise pour l’envoi.</p>
+  <p class="demo-note" style="margin-top:12px" data-draft-note>{note}</p>
 </form>
 <div class="panel" data-done={id} hidden style="text-align:center;padding:30px"></div>
 <script>

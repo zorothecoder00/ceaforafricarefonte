@@ -39,7 +39,7 @@ const chev = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke
           <a href={L(href)} aria-haspopup="true" aria-current={isCur(base) ? 'page' : 'false'}>{label} <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></a>
           <span class="ddmenu" role="menu">
             <b class="xs muted" style="display:block;padding:4px 10px 6px">{en ? 'OUR AREAS OF WORK' : "NOS DOMAINES D'INTERVENTION"}</b>
-            {DOMAINS.map((d) => <a role="menuitem" href={L(`/domaines/${d.id}`)}><span class="mi"><Icon name={d.ic} size={16} /></span><span><b>{d.n}</b><span class="d">{d.k}</span></span></a>)}
+            {DOMAINS.map((d) => <a role="menuitem" href={L(`/domaines/${d.id}`)}><span class="mi"><Icon name={d.ic} size={16} /></span><span><b>{d.dom}</b><span class="d">{d.n}</span></span></a>)}
             <a role="menuitem" href={L('/domaines')} style="justify-content:center;font-weight:700;color:var(--gold-ink)">{en ? 'See all areas' : 'Voir tous les domaines'}</a>
           </span>
         </span>

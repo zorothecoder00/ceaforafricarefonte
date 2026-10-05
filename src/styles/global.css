@@ -500,3 +500,14 @@ footer.foot .in{background:#0B2540;border-color:#2A4A6B;color:#fff}
 @media (max-width:520px){#searchBtn{display:none}#loginBtn{padding:6px 10px;font-size:.8rem}}
 .tagline{font-family:var(--display);font-weight:700;letter-spacing:.14em;font-size:.8rem;color:var(--gold);text-transform:uppercase}
 .hero .tagline{letter-spacing:.14em;font-size:.8rem}
+/* Pied de page du prototype : bandeau Kapital sur fond or */
+.footk{background:linear-gradient(120deg,#C9962B,#E7BD62);border:0;color:#1B1305;box-shadow:0 18px 40px -18px rgba(201,150,43,.7)}
+.footk b{color:#1B1305;font-size:1.35rem}
+.footk .xs{color:#3A2A06 !important}
+.footk .row{flex-wrap:wrap}
+footer.foot .footk .kbtn{display:inline-flex;background:#082B4C;color:#fff;box-shadow:none;padding:12px 20px}
+footer.foot .footk .btn-ghost{display:inline-flex;color:#1B1305 !important;border:2px solid #1B1305 !important;white-space:normal;padding:10px 20px;justify-content:center}
+@media (max-width:640px){.footk{flex-direction:column;align-items:stretch}.footk .row a{flex:1 1 100%;justify-content:center}}
+.world{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:18px}
+.world .panel h3{display:flex;justify-content:space-between;align-items:center}
+.relais{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}

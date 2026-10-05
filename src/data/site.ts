@@ -20,13 +20,13 @@ export const NAV: [key: string, href: string, label: string][] = [
 
 /** Sous-navigation de chaque rubrique. */
 export const SUBS: Record<string, Link[]> = {
-  apropos: [['/a-propos', 'Qui sommes-nous'], ['/a-propos/gouvernance', 'Gouvernance'], ['/pays', 'Présence en Afrique'], ['/a-propos/transparence', 'Transparence'], ['/a-propos/presse', 'Presse'], ['/a-propos/carrieres', 'Carrières'], ['/contact', 'Contact']],
+  apropos: [['/a-propos', 'Qui sommes-nous'], ['/a-propos/gouvernance', 'Gouvernance'], ['/pays', 'Présence en Afrique'], ['/monde', 'Vue sur le monde'], ['/representants', 'Représentants pays'], ['/a-propos/transparence', 'Transparence'], ['/a-propos/presse', 'Presse'], ['/a-propos/carrieres', 'Carrières'], ['/contact', 'Contact']],
   domaines: [['/domaines', 'Tous les domaines'], ['/actionnariat', 'Actionnariat']],
   actionnariat: [['/actionnariat', 'Comprendre'], ['/actionnariat/modeles', 'Modèles'], ['/actionnariat/studio', 'Studio de capital'], ['/actionnariat/salaries', 'Actionnariat salarié'], ['/actionnariat/club', 'Club des actionnaires'], ['/actionnariat/gouvernance', 'Gouvernance'], ['/actionnariat/quiz', 'Quiz et certificat']],
   programmes: [['/programmes', 'Tous les programmes'], ['/programmes/accelerateur', 'Accélérateur'], ['/programmes/calendrier', 'Calendrier'], ['/programmes/alumni', 'Alumni'], ['/programmes/candidature', 'Postuler'], ['/kapital/investor-ready', 'Investor Ready']],
   academie: [['/academie', 'Catalogue'], ['/academie/parcours', 'Parcours certifiants'], ['/academie/masterclass', 'Masterclass'], ['/academie/experts', 'Experts à la demande'], ['/communaute/mentorat', 'Mentorat']],
   projets: [['/projets', 'Portefeuille'], ['/projets/nouveau', 'Proposer un projet'], ['/espace/projets', 'Mes projets'], ['/projets/competences', 'Appels à compétences']],
-  communaute: [['/communaute', 'Annuaire'], ['/communaute/fil', "Fil d'actualité"], ['/communaute/espaces', 'Espaces'], ['/communaute/mentorat', 'Mentorat'], ['/communaute/mastermind', 'Mastermind'], ['/communaute/messages', 'Messagerie'], ['/adherer', 'Adhérer']],
+  communaute: [['/inscription', 'Inscription'], ['/communaute', 'Annuaire'], ['/communaute/fil', "Fil d'actualité"], ['/communaute/espaces', 'Espaces'], ['/communaute/mentorat', 'Mentorat'], ['/communaute/mastermind', 'Mastermind'], ['/communaute/messages', 'Messagerie'], ['/adherer', 'Adhérer']],
   evenements: [['/evenements', 'Agenda'], ['/evenements/e1', 'Forum 2026'], ['/evenements/live', 'En direct'], ['/evenements/replays', 'Replays'], ['/evenements/organiser', 'Organiser avec nous'], ['/evenements/scanner', "Contrôle d'accès"]],
   opps: [['/opportunites', 'Emplois'], ['/opportunites/stages', 'Stages et alternance'], ['/opportunites/missions', 'Missions'], ['/opportunites/appels-offres', "Appels d'offres"], ['/projets/competences', 'Projets à rejoindre'], ['/opportunites/entreprises', 'Entreprises'], ['/opportunites/diaspora', 'Diaspora'], ['/opportunites/profil', 'Mon profil talent'], ['/opportunites/recruteur', 'Espace recruteur']],
   voix: [['/voix', 'Consultations'], ['/voix/barometre', 'Baromètre'], ['/voix/positions', 'Nos positions'], ['/adherer', 'Adhérer']],
@@ -105,3 +105,17 @@ export const PARTNERS: Record<'fr' | 'en', string>[] = [
   { fr: 'Incubateur', en: 'Incubator' },
   { fr: 'Opérateur mobile', en: 'Mobile operator' },
 ];
+
+/** Bureaux régionaux de représentation (prototype « Représentants pays »). */
+export const REGIONS = [
+  { id: 'ao', n: "Afrique de l'Ouest", city: 'Lomé', c: 'TG', lead: 'Komlan Adzoh', cs: ['TG', 'CI', 'SN', 'BJ', 'NG', 'GH', 'ML', 'BF'] },
+  { id: 'ac', n: 'Afrique centrale', city: 'Douala', c: 'CM', lead: 'Brice Ngono', cs: ['CM', 'GA', 'CD'] },
+  { id: 'ae', n: "Afrique de l'Est", city: 'Nairobi', c: 'KE', lead: 'Wanjiku Mwangi', cs: ['KE', 'RW', 'ET'] },
+  { id: 'aa', n: 'Afrique australe', city: 'Johannesburg', c: 'ZA', lead: 'Sipho Ndlovu', cs: ['ZA'] },
+  { id: 'an', n: 'Afrique du Nord', city: 'Casablanca', c: 'MA', lead: 'Nadia Benjelloun', cs: ['MA', 'EG'] },
+];
+export const regionOf = (c: string) => REGIONS.find((r) => r.cs.includes(c));
+export const REP_LANG: Record<string, string> = { TG: 'Français, éwé', CI: 'Français, baoulé', SN: 'Français, wolof', BJ: 'Français, fon', NG: 'Anglais, yoruba', GH: 'Anglais, twi', CM: 'Français, anglais', KE: 'Anglais, kiswahili', ZA: 'Anglais, zoulou', MA: 'Arabe, français', EG: 'Arabe, anglais', CD: 'Français, lingala', RW: 'Kinyarwanda, anglais', ET: 'Amharique, anglais', ML: 'Français, bambara', BF: 'Français, mooré' };
+
+/** Besoins proposés à l'inscription des entrepreneurs membres. */
+export const NEEDS = ['Formation', 'Accompagnement', 'Financement', 'Réseau et mentorat', 'Accès aux marchés', 'Recrutement', 'Représentation auprès des autorités'];

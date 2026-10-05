@@ -3,15 +3,16 @@
 import { DOMAINS, ARTICLES, EVENTS, COURSES, JOBS, CONSULTS, POSITIONS, OPPS, PATHS } from '../data/site';
 import type { Lang } from './ui';
 
-const DOM: Record<string, { n: string; d: string; k: string }> = {
-  actionnariat: { n: 'Shareholding', d: 'Understand, open up and share the capital of your company.', k: 'Equity studio and Shareholders’ Club' },
-  levee: { n: 'Fundraising', d: 'Prepare your raise and meet qualified investors.', k: 'Through CEA Kapital Invest' },
-  projets: { n: 'Project development', d: 'Turn a project into something fundable, from canvas to action plan.', k: 'Project Studio' },
-  evenements: { n: 'Events', d: 'Forums, masterclasses and business meetings across the continent.', k: 'Pan-African Forum on 26 November' },
-  emploi: { n: 'Job creation', d: 'Hire African talent and measure the jobs created.', k: '10 open offers' },
-  mastermind: { n: 'Mastermind', d: 'Confidential circles of 8 to 12 leaders who help each other.', k: '14 active circles' },
-  formation: { n: 'Support and training', d: 'Certified courses, mentoring and acceleration programmes.', k: '8 online courses' },
-  syndicat: { n: 'Advocacy', d: 'Carry entrepreneurs’ voices to decision-makers.', k: '3 open consultations' },
+const DOM: Record<string, { n?: string; dom: string; d: string; k: string }> = {
+  actionnariat: { n: 'CEA Shareholding', dom: 'Shareholding', d: 'Understand, open up and share the capital of your company.', k: 'Equity studio and Shareholders’ Club' },
+  levee: { dom: 'Fundraising', d: 'Prepare your raise and meet qualified investors.', k: 'Through CEA Kapital Invest' },
+  projets: { dom: 'Project development', d: 'Turn a project into something fundable, from canvas to action plan.', k: 'Project Studio' },
+  evenements: { dom: 'Events', d: 'Forums, masterclasses and business meetings across the continent.', k: 'Pan-African Forum on 26 November' },
+  emploi: { dom: 'Job creation', d: 'Hire African talent and measure the jobs created.', k: '10 open offers' },
+  mastermind: { dom: 'Mastermind group', d: 'Confidential circles of 8 to 12 leaders who help each other.', k: '14 active circles' },
+  formation: { dom: 'Support and training', d: 'Certified courses, mentoring and acceleration programmes.', k: '8 online courses' },
+  syndicat: { n: 'CEA Entrepreneurs’ Voice', dom: 'Advocacy', d: 'Carry entrepreneurs’ voices to decision-makers.', k: '3 open consultations' },
+  btp: { n: 'CEA Construction & Infrastructure', dom: 'Construction and infrastructure', d: 'Construction, public works, housing and infrastructure: projects, tenders and partners.', k: 'Projects, tenders, partners' },
 };
 const ART: Record<string, { t: string; x: string; cat: string; c?: string }> = {
   a1: { t: 'Venture capital in Africa: what changes in 2026', x: 'African funds are turning to profitable companies and blended finance. What this means for founders preparing a raise.', cat: 'Analysis', c: 'Pan-African' },

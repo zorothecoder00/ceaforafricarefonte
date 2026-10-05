@@ -14,23 +14,27 @@ const { d } = Astro.props;
   <section class="block">
     <div class="wrap split">
       <div>
-        <div class="panel"><h3>Pour qui ?</h3><p style="margin:0">{d.pub}</p></div>
-        <div class="grid g2" style="margin-top:18px">
-          <div class="panel"><h3>Ce que nous faisons</h3><ul>{d.met.map((m) => <li>{m}</li>)}</ul></div>
+        <div class="grid g2">
+          <div class="panel"><h3>Pour qui</h3><p>{d.pub}</p></div>
           <div class="panel"><h3>Ce que vous obtenez</h3><ul>{d.liv.map((m) => <li>{m}</li>)}</ul></div>
         </div>
-        <a class="btn btn-primary" style="margin-top:20px" href={d.to}>{d.k}</a>
+        <h2 style="margin-top:28px">Notre méthode</h2>
+        <ol class="timeline">{d.met.map((m) => <li><b>{m}</b></li>)}</ol>
+        <h2 style="margin-top:20px">Critères</h2>
+        <p>Être membre de CEA FOR AFRICA, exercer dans l'un des 16 pays de présence, et s'engager à partager ses indicateurs de suivi à 3, 6 et 12 mois.</p>
+        <a class="btn btn-primary" href={d.to === `/domaines/${d.id}` ? '/inscription' : d.to}>Accéder au parcours</a>
       </div>
       <aside>
         <form class="panel" data-api="/api/demande" data-reset>
           <input type="hidden" name="type" value="conseil" /><input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px" />
-          <input type="hidden" name="message" value={`Être contacté : ${d.n}`} />
+          <input type="hidden" name="domaine" value={d.n} />
           <h3>Être contacté</h3>
           <label class="f" for="dn">Nom</label><input class="in" id="dn" name="name" required minlength="2" autocomplete="name" />
           <label class="f" for="dt">Téléphone ou e-mail</label><input class="in" id="dt" name="contact" required minlength="5" />
-          <button class="btn btn-primary" type="submit">Envoyer</button>
+          <label class="f" for="dm">Votre besoin</label><textarea class="in" id="dm" name="message" required minlength="3"></textarea>
+          <button class="btn btn-primary" type="submit" style="width:100%">Envoyer</button>
         </form>
-        <div style="margin-top:16px"><KapitalAd variant={0} /></div>
+        <div style="margin-top:16px"><KapitalAd variant={1} /></div>
       </aside>
     </div>
   </section>

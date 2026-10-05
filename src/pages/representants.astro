@@ -1,0 +1,69 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHead from '../components/PageHead.astro';
+import { HUBS, REGIONS, REP_LANG, SUBS, country, fmt, regionOf } from '../data/site';
+
+// Directeurs régionaux d'abord, puis un représentant par pays (données de démonstration)
+const regs = REGIONS.map((r) => ({ key: 'R-' + r.id, n: r.lead, c: r.c, city: r.city, type: 'Bureau régional', fn: 'Directeur·rice régional·e — ' + r.n, r, m: r.cs.reduce((a, c) => a + (HUBS.find((h) => h.c === c)?.m ?? 0), 0) }));
+const reps = HUBS.map((h) => ({ key: h.c, n: h.lead, c: h.c, city: h.city, type: h.hq ? 'Siège et bureau de représentation' : 'Bureau de représentation', fn: 'Représentant·e pays', r: regionOf(h.c), m: h.m }));
+const list = [...regs, ...reps];
+---
+<BaseLayout title="Représentants pays" description="Les directeurs régionaux et les représentants pays de CEA FOR AFRICA : vos interlocuteurs de proximité.">
+  <PageHead title="Nos représentants en Afrique" lead="Les directeurs régionaux et les représentants pays de CEA FOR AFRICA : vos interlocuteurs de proximité." crumbs={[['/a-propos', 'À propos'], ['', 'Représentants pays']]} subnav={SUBS.apropos} />
+  <section class="block" style="padding-top:20px">
+    <div class="wrap">
+      <div class="filters" id="repF">
+        <button class="chip" type="button" aria-pressed="true" data-r="">Toutes les régions</button>
+        {REGIONS.map((r) => <button class="chip" type="button" aria-pressed="false" data-r={r.id}>{r.n}</button>)}
+      </div>
+      <div class="grid g3" id="repL">
+        {list.map((x) => (
+          <article class="panel" style={`text-align:center;${x.type === 'Bureau régional' ? 'border:2px solid var(--gold)' : ''}`} data-r={x.r?.id ?? ''} data-regional={x.type === 'Bureau régional' ? '1' : ''}>
+            <div role="img" aria-label={`Emplacement photo de ${x.n}`} style="width:150px;height:180px;border-radius:14px;border:3px solid var(--gold);margin:0 auto;display:block;box-shadow:0 10px 24px -12px rgba(8,43,76,.45);background:linear-gradient(160deg,#E8EEF5,#CBD7E4);position:relative;overflow:hidden">
+              <svg viewBox="0 0 100 120" width="100%" height="100%" aria-hidden="true" style="position:absolute;inset:0"><circle cx="50" cy="44" r="20" fill="#9FB2C7" /><path d="M12 120c0-24 17-40 38-40s38 16 38 40z" fill="#9FB2C7" /></svg>
+              <span style="position:absolute;left:0;right:0;bottom:8px;font-size:.72rem;font-weight:700;color:#3C5470">PHOTO</span>
+            </div>
+            <h3 style="margin:12px 0 2px">{x.n}</h3>
+            <p class="small" style="margin:0;color:var(--gold-ink);font-weight:700">{x.fn}</p>
+            <p class="small muted" style="margin:4px 0 10px">{x.type} · {x.city}, {country(x.c)}</p>
+            <table class="t small" style="text-align:left"><tbody>
+              <tr><td class="muted">Région</td><td>{x.r ? x.r.n : '—'}</td></tr>
+              <tr><td class="muted">Langues</td><td>{REP_LANG[x.c] ?? 'Français, anglais'}</td></tr>
+              <tr><td class="muted">Membres suivis</td><td class="num">{fmt(x.m)}</td></tr>
+              <tr><td class="muted">Téléphone</td><td>+000 00 00 00 00 <span class="xs muted">(fictif)</span></td></tr>
+              <tr><td class="muted">E-mail</td><td>{x.key.toLowerCase()}@cea4africa.com</td></tr>
+              <tr><td class="muted">Adresse</td><td>Bureau CEA, {x.city}</td></tr>
+            </tbody></table>
+            <div class="row" style="justify-content:center;margin-top:10px">
+              <a class="btn btn-primary btn-sm" href={`/contact?c=${x.c}`}>Contacter</a>
+              <details style="display:contents">
+                <summary class="btn btn-ghost btn-sm" style="list-style:none">Prendre rendez-vous</summary>
+                <form data-api="/api/demande" data-reset style="flex-basis:100%;text-align:left;position:relative">
+                  <input type="hidden" name="type" value="rendezvous" /><input type="hidden" name="representant" value={`${x.n} (${x.city})`} />
+                  <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px" />
+                  <label class="f">Nom<input class="in" name="name" required minlength="2" autocomplete="name" /></label>
+                  <label class="f">Téléphone ou e-mail<input class="in" name="contact" required minlength="5" /></label>
+                  <label class="f">Objet et créneau souhaité<input class="in" name="message" required minlength="3" placeholder="Ex. présentation de mon projet, mardi après-midi" /></label>
+                  <button class="btn btn-primary btn-sm" type="submit">Confirmer</button>
+                </form>
+              </details>
+            </div>
+          </article>
+        ))}
+      </div>
+      <p class="demo-note" style="margin-top:14px">Noms et coordonnées de démonstration. Les photos sont ajoutées par l'administration.</p>
+    </div>
+  </section>
+</BaseLayout>
+<script>
+  const chips = [...document.querySelectorAll<HTMLButtonElement>('#repF [data-r]')];
+  const cards = [...document.querySelectorAll<HTMLElement>('#repL > article')];
+  const apply = (r: string) => {
+    chips.forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.r === r)));
+    // Une région choisie : seuls ses représentants pays (comme le prototype)
+    cards.forEach((el) => { el.hidden = !!r && (el.dataset.r !== r || el.dataset.regional === '1'); });
+    const u = new URL(location.href); if (r) u.searchParams.set('r', r); else u.searchParams.delete('r'); history.replaceState(null, '', u);
+  };
+  chips.forEach((c) => c.addEventListener('click', () => apply(c.dataset.r!)));
+  const r0 = new URLSearchParams(location.search).get('r'); if (r0) apply(r0);
+</script>

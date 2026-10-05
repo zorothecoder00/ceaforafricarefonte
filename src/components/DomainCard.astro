@@ -1,6 +1,6 @@
 ---
 import Icon from './Icon.astro';
-interface Props { d: { ic: string; n: string; d: string; k: string; to: string }; href?: string }
+interface Props { d: { ic: string; n: string; dom: string; d: string; k: string; to: string }; href?: string }
 const { d, href } = Astro.props;
 ---
-<a class="domain" href={href ?? d.to}><span class="ic"><Icon name={d.ic} size={22} /></span><h3>{d.n}</h3><p>{d.d}</p><span class="kp">{d.k}</span></a>
+<a class="domain" href={href ?? d.to}><span class="ic"><Icon name={d.ic} size={22} /></span><span class="tag gold" style="align-self:flex-start">{d.n}</span><h3 style="margin-top:4px">{d.dom}</h3><p>{d.d}</p><span class="kp">{d.k}</span></a>

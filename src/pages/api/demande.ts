@@ -24,6 +24,8 @@ export const DEMANDES: Record<string, Kind> = {
   deal: { motif: 'Kapital Invest — deal proposé', team: "Équipe d'investissement", delay: '10 jours ouvrés' },
   reclamation: { motif: 'Kapital Invest — réclamation', team: 'Conformité', delay: '10 jours ouvrés (accusé de réception sous 48 heures)' },
   question_ag: { motif: 'Club des actionnaires — question écrite', team: 'Vie associative', delay: "avant l'assemblée", login: true },
+  relais: { motif: 'International — candidature de relais', team: 'Équipe internationale', delay: '5 jours ouvrés' },
+  rendezvous: { motif: 'Représentation pays — demande de rendez-vous', team: 'Bureaux de représentation', delay: '2 jours ouvrés' },
   alerte_programme: { motif: "Programmes — alerte d'ouverture", team: 'Équipe programmes', delay: "dès l'ouverture des candidatures", login: true },
 };
 

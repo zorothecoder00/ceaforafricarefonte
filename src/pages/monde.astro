@@ -1,0 +1,61 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHead from '../components/PageHead.astro';
+import Icon from '../components/Icon.astro';
+import { SUBS } from '../data/site';
+
+// Relais de CEA FOR AFRICA hors d'Afrique : [région, rôle, villes, actions, prochain rendez-vous]
+const C: [string, string, string[], string[], string][] = [
+  ['Europe', 'Diaspora, investisseurs, universités et bailleurs', ['Paris', 'Bruxelles', 'Londres', 'Genève', 'Lisbonne'], ["Clubs d'investisseurs de la diaspora", 'Partenariats avec écoles de commerce', 'Bailleurs et fondations européens', "Accès aux marchés de l'Union européenne"], 'Diaspora Invest Day — Paris, 23 octobre 2026'],
+  ['Amériques', "Diaspora, fonds d'impact et Afro-descendants", ['Montréal', 'Washington', 'New York', 'São Paulo', 'Salvador de Bahia'], ["Fonds d'impact nord-américains", 'Diaspora francophone au Canada', 'Liens lusophones avec le Brésil', "Programmes d'échanges universitaires"], 'Mission économique Montréal — mars 2027'],
+  ['Asie', 'Commerce, technologie et industrie', ['Pékin', 'Shanghai', 'Mumbai', 'Tokyo', 'Séoul'], ["Sourcing d'équipements industriels", 'Partenariats technologiques', 'Salons professionnels', 'Formation technique'], 'Délégation au salon de Canton — avril 2027'],
+  ['Moyen-Orient et Golfe', 'Finance islamique, logistique, investissement', ['Dubaï', 'Riyad', 'Doha', 'Istanbul'], ['Sukuk et finance islamique', 'Corridors logistiques', 'Fonds souverains', 'Commerce de réexportation'], 'Forum Afrique–Golfe — Dubaï, février 2027'],
+  ['Caraïbes et Océan Indien', 'Liens historiques et économies insulaires', ['Port-au-Prince', 'Fort-de-France', 'Port-Louis', 'Saint-Denis'], ['Échanges culturels et touristiques', 'Plateformes financières (Maurice)', 'Réseaux afro-caribéens'], 'Webinaire Afrique–Caraïbes — janvier 2027'],
+];
+const kpis = [['Continents partenaires', '5'], ['Relais de la diaspora', '22 villes'], ['Partenaires internationaux', '38'], ["Membres hors d'Afrique", '4 120']];
+const corridors = [
+  ["Afrique de l'Ouest ↔ Europe", 'Agro-transformation, cosmétique, numérique', "Accès aux distributeurs, normes d'export, investisseurs de la diaspora"],
+  ['Afrique ↔ Amérique du Nord', 'Fintech, santé, éducation', "Fonds d'impact, programmes d'accélération partenaires"],
+  ['Afrique ↔ Asie', 'Industrie, équipements, énergie', 'Sourcing, partenariats technologiques, missions économiques'],
+  ['Afrique ↔ Golfe', 'Infrastructures, logistique, finance islamique', 'Sukuk, fonds souverains, corridors logistiques'],
+];
+---
+<BaseLayout title="Vue sur le monde" description="CEA FOR AFRICA est panafricaine et ouverte sur le monde : diaspora, investisseurs, partenaires et marchés sur tous les continents.">
+  <PageHead title="Vue sur le monde" lead="CEA FOR AFRICA est panafricaine et ouverte sur le monde : diaspora, investisseurs, partenaires et marchés sur tous les continents." crumbs={[['/a-propos', 'À propos'], ['', 'Vue sur le monde']]} subnav={SUBS.apropos} />
+  <section class="block">
+    <div class="wrap">
+      <div class="grid g4" style="margin-bottom:26px">{kpis.map(([k, v]) => <div class="panel kpi"><span class="small muted">{k}</span><b>{v}</b></div>)}</div>
+      <div class="world">
+        {C.map(([n, role, villes, actions, rdv]) => (
+          <div class="panel">
+            <h3>{n} <span class="tag gold">{villes.length} relais</span></h3>
+            <p class="small muted" style="margin:0 0 6px">{role}</p>
+            <div class="relais">{villes.map((v) => <span class="tag info"><Icon name="pin" size={12} /> {v}</span>)}</div>
+            <ul class="small" style="padding-left:18px">{actions.map((x) => <li>{x}</li>)}</ul>
+            <div class="small" style="border-top:1px solid var(--line);padding-top:8px"><b>Prochain rendez-vous :</b> {rdv}</div>
+            <a class="btn btn-ghost btn-sm" style="margin-top:10px" href="/evenements">Suivre cette région</a>
+          </div>
+        ))}
+      </div>
+      <h2 style="margin-top:40px">Corridors d'affaires prioritaires</h2>
+      <div class="panel scroll-x">
+        <table class="t"><thead><tr><th>Corridor</th><th>Secteurs</th><th>Ce que CEA propose</th></tr></thead>
+          <tbody>{corridors.map(([a, b, c]) => <tr><td><b>{a}</b></td><td>{b}</td><td>{c}</td></tr>)}</tbody></table>
+      </div>
+      <div class="grid g3" style="margin-top:26px">
+        <div class="panel"><h3>Diaspora Invest</h3><p class="small">Investir dans les entreprises de son pays d'origine, depuis l'étranger, avec CEA Kapital Invest.</p><a class="btn btn-gold btn-sm" href="/kapital/diaspora">Découvrir</a></div>
+        <div class="panel"><h3>Talents de la diaspora</h3><p class="small">Missions, télétravail et retours sur le continent avec CEA Talents.</p><a class="btn btn-ghost btn-sm" href="/opportunites/diaspora">Voir les offres</a></div>
+        <form class="panel" data-api="/api/demande" data-reset style="position:relative">
+          <input type="hidden" name="type" value="relais" /><input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px" />
+          <h3>Devenir relais international</h3>
+          <p class="small">Vous vivez hors d'Afrique et voulez représenter CEA dans votre ville ?</p>
+          <label class="f" for="rn">Nom</label><input class="in" id="rn" name="name" required minlength="2" autocomplete="name" />
+          <label class="f" for="rc">E-mail ou téléphone</label><input class="in" id="rc" name="contact" required minlength="5" />
+          <label class="f" for="rv">Votre ville et votre motivation</label><textarea class="in" id="rv" name="message" required minlength="3"></textarea>
+          <button class="btn btn-primary btn-sm" type="submit">Proposer ma candidature</button>
+        </form>
+      </div>
+      <p class="demo-note" style="margin-top:16px">Villes, chiffres et événements de démonstration.</p>
+    </div>
+  </section>
+</BaseLayout>

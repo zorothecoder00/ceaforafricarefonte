@@ -1,0 +1,65 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHead from '../components/PageHead.astro';
+import Wizard from '../components/Wizard.astro';
+import { COUNTRIES, DOMAINS, HUBS, NEEDS, SUBS, fmt } from '../data/site';
+
+const pays = HUBS.map((h) => [h.c, COUNTRIES[h.c]] as const).sort((a, b) => a[1].localeCompare(b[1]));
+const formes = ['Entreprise individuelle', 'SARL', 'SA', 'SAS', 'Coopérative', 'Pas encore immatriculée'];
+// Effectifs de démonstration par domaine (même calcul que le prototype)
+const perDomain = DOMAINS.map((d, i) => [d.dom, HUBS.reduce((a, h) => a + Math.round((h.m / 40) * (1 + (i % 4) / 3)), 0)] as const);
+const recap: [string, string][] = [['Prénom', 'prenom'], ['Nom', 'nom'], ['Téléphone', 'tel'], ['Ville', 'ville'], ['Entreprise', 'ent'], ['Secteur', 'secteur']];
+---
+<BaseLayout title="Inscription des entrepreneurs" description="Inscrivez votre entreprise dans votre pays et indiquez vos domaines d'intervention. Gratuit, environ 5 minutes.">
+  <PageHead title="Inscription des entrepreneurs membres" lead="Inscrivez votre entreprise dans votre pays et indiquez vos domaines d'intervention. Gratuit, environ 5 minutes." crumbs={[['/communaute', 'CEA Network'], ['', 'Inscription']]} subnav={SUBS.communaute} />
+  <section class="block">
+    <div class="wrap split">
+      <div>
+        <Wizard id="inscription" prefix="MEM" api="/api/inscription" submitLabel="Valider mon inscription" note="Brouillon enregistré automatiquement. Aucun compte n’est nécessaire." success="Le bureau de représentation de votre pays validera votre inscription sous 48 heures. Choisissez ensuite votre formule d'adhésion.">
+          <fieldset data-step="Identité" style="border:0;padding:0;margin:0">
+            <div class="grid g2"><div><label class="f" for="ri1">Prénom</label><input class="in" id="ri1" name="prenom" required autocomplete="given-name" /></div><div><label class="f" for="ri2">Nom</label><input class="in" id="ri2" name="nom" required autocomplete="family-name" /></div></div>
+            <div class="grid g2"><div><label class="f" for="ri3">Téléphone (WhatsApp)</label><input class="in" id="ri3" name="tel" required inputmode="tel" autocomplete="tel" /></div><div><label class="f" for="ri4">E-mail</label><input class="in" id="ri4" name="email" type="email" autocomplete="email" /></div></div>
+            <div class="grid g2"><div><label class="f" for="ri5">Pays</label><select class="in" id="ri5" name="pays">{pays.map(([k, v]) => <option value={k} selected={k === 'TG'}>{v}</option>)}</select></div><div><label class="f" for="ri6">Ville</label><input class="in" id="ri6" name="ville" /></div></div>
+            <label class="f" for="ri7">Genre (statistiques d'impact, facultatif)</label><select class="in" id="ri7" name="genre"><option value="">Je préfère ne pas répondre</option><option>Femme</option><option>Homme</option></select>
+          </fieldset>
+          <fieldset data-step="Entreprise" style="border:0;padding:0;margin:0">
+            <label class="f" for="re1">Nom de l'entreprise</label><input class="in" id="re1" name="ent" required />
+            <div class="grid g2"><div><label class="f" for="re2">Forme juridique</label><select class="in" id="re2" name="forme">{formes.map((x) => <option>{x}</option>)}</select></div><div><label class="f" for="re3">N° RCCM (facultatif)</label><input class="in" id="re3" name="rccm" /></div></div>
+            <div class="grid g2"><div><label class="f" for="re4">Année de création</label><input class="in" id="re4" name="annee" type="number" min="1950" max="2026" /></div><div><label class="f" for="re5">Nombre de salariés</label><input class="in" id="re5" name="sal" type="number" min="0" /></div></div>
+          </fieldset>
+          <fieldset data-step="Domaines d'intervention" style="border:0;padding:0;margin:0">
+            <p class="small muted">Choisissez un ou plusieurs domaines. Le premier de la liste coché sera votre domaine principal.</p>
+            <div class="grid g2">{DOMAINS.map((x) => <label class="panel row dom-opt" style="padding:12px;cursor:pointer"><input type="checkbox" name={`dom_${x.id}`} /><span><b>{x.dom}</b><br /><span class="xs muted">{x.n}</span></span></label>)}</div>
+            <label class="f" for="rs1" style="margin-top:14px">Secteur précis</label><input class="in" id="rs1" name="secteur" placeholder="Ex. transformation du manioc, menuiserie aluminium…" />
+          </fieldset>
+          <fieldset data-step="Besoins" style="border:0;padding:0;margin:0">
+            <p class="small muted">Qu'attendez-vous de CEA FOR AFRICA ?</p>
+            <div class="row">{NEEDS.map((x, i) => <label class="chip"><input type="checkbox" name={`need_${i}`} /> {x}</label>)}</div>
+            <label class="f" for="rb1" style="margin-top:14px">Précisez (facultatif)</label><textarea class="in" id="rb1" name="besoin"></textarea>
+          </fieldset>
+          <fieldset data-step="Validation" style="border:0;padding:0;margin:0">
+            <div class="panel small">{recap.map(([l, k]) => <div class="row between" style="padding:3px 0"><span class="muted">{l}</span><b data-recap={k} style="text-align:right"></b></div>)}</div>
+            <p class="small">Votre inscription sera validée par le bureau de représentation de votre pays.</p>
+            <label class="row small"><input type="checkbox" required /> J'accepte que CEA traite ces données pour gérer mon adhésion (<a href="/legal/confidentialite">politique de confidentialité</a>).</label>
+            <label class="row small"><input type="checkbox" name="annuaire" /> J'accepte d'apparaître dans l'annuaire des membres (modifiable à tout moment).</label>
+          </fieldset>
+        </Wizard>
+      </div>
+      <aside>
+        <div class="panel">
+          <h3>Membres inscrits par domaine</h3>
+          {perDomain.map(([d, n]) => <div class="row between small" style="padding:5px 0;border-bottom:1px solid var(--line)"><span>{d}</span><b class="num">{fmt(n)}</b></div>)}
+          <a class="btn btn-ghost btn-sm" href="/pays" style="margin-top:12px">Voir par pays</a>
+          <p class="demo-note" style="margin:8px 0 0">Chiffres de démonstration.</p>
+        </div>
+        <div class="panel" style="margin-top:16px">
+          <h3>Après l'inscription</h3>
+          <ol class="small" style="padding-left:18px;margin:0"><li>Validation par le bureau de votre pays</li><li>Carte de membre numérique avec QR code</li><li>Accès à l'annuaire, aux formations gratuites et aux événements</li><li>Mise en relation selon vos domaines d'intervention</li></ol>
+        </div>
+      </aside>
+    </div>
+  </section>
+</BaseLayout>
+<style>
+  .dom-opt:has(input:checked) { border-color: var(--gold); background: var(--gold-soft); }
+</style>
