@@ -13,7 +13,7 @@ const calls = await db.select({ c: skillCall, name: project.name, cc: project.co
 const KIND: Record<string, string> = { associe: 'Associé', expert: 'Expert', prestataire: 'Prestataire' };
 ---
 <BaseLayout title="Appels à compétences">
-  <PageHead title="Appels à compétences" lead="Des projets accompagnés par CEA cherchent des talents pour les rejoindre." crumbs={[['/projets', 'Project Studio'], ['', 'Appels à compétences']]} subnav={SUBS.projets} />
+  <PageHead title="Appels à compétences" lead="Des projets accompagnés cherchent des associés, des experts et des prestataires." crumbs={[['/projets', 'Project Studio'], ['', 'Appels à compétences']]} subnav={SUBS.projets} />
   <section class="block">
     <div class="wrap grid g3">
       {calls.map(({ c, name, cc, owner }) => (

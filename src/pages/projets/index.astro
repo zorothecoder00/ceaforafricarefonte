@@ -20,17 +20,16 @@ const clean = (a: string[] | null) => (a ?? []).filter(Boolean).sort();
   <section class="block" style="padding-top:20px">
     <div class="wrap">
       <form class="filters" method="get">
-        <select class="in" name="pays" aria-label="Pays"><option value="">Tous les pays</option>{Object.entries(COUNTRIES).map(([k, v]) => <option value={k} selected={k === f.c}>{v}</option>)}</select>
-        <select class="in" name="secteur" aria-label="Secteur"><option value="">Tous les secteurs</option>{clean(facet?.s).map((x) => <option selected={x === f.s}>{x}</option>)}</select>
-        <select class="in" name="stade" aria-label="Stade"><option value="">Tous les stades</option>{clean(facet?.st).map((x) => <option selected={x === f.st}>{x}</option>)}</select>
-        <button class="btn btn-primary btn-sm" type="submit">Filtrer</button>
-        <a class="btn btn-gold btn-sm" href="/projets/nouveau">Proposer un projet</a>
+        {['', 'Pré-amorçage', 'Amorçage', 'Croissance', 'Série A'].map((st) => <a class="chip" aria-pressed={String(st === f.st)} href={`/projets${st ? '?stade=' + encodeURIComponent(st) : ''}`}>{st || 'Tous les stades'}</a>)}
+        <input type="hidden" name="stade" value={f.st} />
+        <select class="in" name="pays" aria-label="Pays" onchange="this.form.submit()"><option value="">Tous les pays</option>{Object.entries(COUNTRIES).map(([k, v]) => <option value={k} selected={k === f.c}>{v}</option>)}</select>
+        <select class="in" name="secteur" aria-label="Secteur" onchange="this.form.submit()"><option value="">Tous les secteurs</option>{clean(facet?.s).map((x) => <option selected={x === f.s}>{x}</option>)}</select>
       </form>
       <div class="grid g3">
         {rows.map((p) => { const sheet = p.sheet as Record<string, string>; return (
           <div class="panel">
             <div class="row between"><span class="tag">{p.sector ?? '—'}</span><span class="small muted">{p.country ? country(p.country) : ''}</span></div>
-            <h3 style="margin:10px 0 4px">{p.name}</h3>
+            <h3 style="margin:10px 0 4px">{p.name.replace(/^Projet /, '')}</h3>
             <p class="small muted">{(sheet.probleme || sheet.solution || '').slice(0, 160)}</p>
             <div class="row between small"><span>Stade : {p.stage ?? '—'}</span><span class="tag">Déclaratif</span></div>
             <div class="small" style="margin-top:8px">Maturité {maturityScore(p.maturity as Record<string, number>)}/100</div>
@@ -39,10 +38,6 @@ const clean = (a: string[] | null) => (a ?? []).filter(Boolean).sort();
         ); })}
       </div>
       {rows.length === 0 && <div class="empty">Aucun projet publié pour ces critères.</div>}
-      <div class="call" style="margin-top:40px">
-        <div><h2>Vous avez un projet à structurer ?</h2><p>Fiche projet normalisée, canvas interactifs, plan d'action Kanban et Gantt, modèle financier guidé et score de maturité.</p></div>
-        <div><a class="btn btn-primary" href="/projets/nouveau">Proposer un projet</a></div>
-      </div>
     </div>
   </section>
 </BaseLayout>

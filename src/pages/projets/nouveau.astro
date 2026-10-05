@@ -11,7 +11,7 @@ const steps: [string, string[]][] = [['Problème et solution', ['probleme', 'sol
 const field = (k: string) => SHEET_FIELDS.find(([f]) => f === k)!;
 ---
 <BaseLayout title="Proposer un projet">
-  <PageHead title="Proposer un projet" lead="Environ 10 minutes. Votre projet reste privé : vous décidez ensuite de le publier dans le portefeuille." crumbs={[['/projets', 'Project Studio'], ['', 'Proposer un projet']]} subnav={SUBS.projets} />
+  <PageHead title="Proposer un projet" lead="Une fiche normalisée, sauvegardée automatiquement. Votre projet reste privé tant que vous ne décidez pas de le publier." crumbs={[['/projets', 'Project Studio'], ['', 'Proposer']]} subnav={SUBS.projets} />
   <section class="block">
     <div class="wrap" style="max-width:760px">
       <Wizard id="projet" prefix="PRJ" api="/api/projets" submitLabel="Créer mon projet" success="Votre espace de travail est prêt : canvas, plan d'action, modèle financier.">
