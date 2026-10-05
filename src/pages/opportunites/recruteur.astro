@@ -10,7 +10,7 @@ if (Astro.locals.user) return Astro.redirect('/espace/recruteur');
 const steps: [string, string][] = [['Publiez', 'Votre offre est vérifiée par notre équipe sous 24 heures (pas de critère discriminatoire).'], ['Recevez', 'Les candidats postulent en un clic avec leur profil CEA ; triez-les dans un tableau Kanban.'], ['Recrutez', 'Déclarez vos embauches : elles alimentent l’observatoire des emplois créés.']];
 ---
 <BaseLayout title="Recruter avec CEA Talents">
-  <PageHead title="Recruter avec CEA Talents" lead="Publiez vos offres auprès d'une communauté panafricaine d'entrepreneurs et de talents vérifiés." crumbs={[['/opportunites', 'Opportunités'], ['', 'Espace recruteur']]} subnav={SUBS.opps} />
+  <PageHead title="Espace recruteur" lead="Publiez vos offres, suivez les candidatures, déclarez vos embauches." crumbs={[['/opportunites', 'Opportunités'], ['', 'Espace recruteur']]} subnav={SUBS.opps} />
   <section class="block">
     <div class="wrap">
       <div class="grid g3">{steps.map(([t, d], i) => <div class="panel"><span class="tag gold">{i + 1}</span><h3 style="margin:10px 0 6px">{t}</h3><p class="small" style="margin:0">{d}</p></div>)}</div>

@@ -10,6 +10,6 @@ const uid = Astro.locals.user?.id;
 const jobs = await listJobs({ userId: uid });
 ---
 <BaseLayout title="Opportunités">
-  <PageHead title="Offres d'emploi et stages" lead="Les offres des entreprises africaines, vérifiées par notre équipe. Les compétences de votre profil sont surlignées." crumbs={[['', 'Opportunités']]} subnav={SUBS.opps} />
+  <PageHead title="CEA Talents — Offres d'emploi et stages" lead="Les offres des entreprises africaines, vérifiées par notre équipe. Les compétences de votre profil sont surlignées." crumbs={[['', 'CEA Talents']]} subnav={SUBS.opps} />
   <JobsBoard jobs={jobs} />
 </BaseLayout>

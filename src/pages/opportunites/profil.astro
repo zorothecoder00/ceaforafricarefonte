@@ -22,7 +22,7 @@ const nApps = (await db.select({ id: jobApplication.id }).from(jobApplication).w
 const nSaved = (await db.select({ id: savedItem.itemId }).from(savedItem).where(eq(savedItem.userId, me.id))).length;
 ---
 <BaseLayout title="Mon profil talent">
-  <PageHead title="Mon profil talent" lead="Votre CV et vos compétences servent à vous proposer les offres qui vous correspondent. Vous choisissez qui peut voir votre profil." crumbs={[['/opportunites', 'Opportunités'], ['', 'Mon profil talent']]} subnav={SUBS.opps} />
+  <PageHead title="Mon profil talent" lead="Importez votre CV : nous en extrayons vos compétences. Vous choisissez qui peut voir votre profil." crumbs={[['/opportunites', 'Opportunités'], ['', 'Mon profil talent']]} subnav={SUBS.opps} />
   <section class="block">
     <div class="wrap split">
       <form class="panel" id="talentF">

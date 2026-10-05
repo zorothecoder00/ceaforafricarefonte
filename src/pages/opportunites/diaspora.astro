@@ -10,7 +10,7 @@ const uid = Astro.locals.user?.id;
 const jobs = await listJobs({ userId: uid, diaspora: true });
 ---
 <BaseLayout title="Diaspora">
-  <PageHead title="Diaspora : contribuer depuis l'étranger" lead="Des postes en télétravail et des missions pour les talents de la diaspora qui veulent contribuer ou revenir sur le continent." crumbs={[['/opportunites', 'Opportunités'], ['', 'Diaspora']]} subnav={SUBS.opps} />
+  <PageHead title="CEA Talents — Diaspora : contribuer depuis l'étranger" lead="Des postes en télétravail et des missions pour les talents de la diaspora qui veulent contribuer ou revenir sur le continent." crumbs={[['', 'CEA Talents']]} subnav={SUBS.opps} />
   <JobsBoard jobs={jobs} />
   <section class="block" style="padding-top:0">
     <div class="wrap"><div class="call"><div><h2>Investir plutôt que travailler ?</h2><p>Diaspora Invest vous permet d'investir dans des entreprises de votre pays d'origine.</p></div><div><a class="btn btn-primary" href="/kapital/diaspora">Découvrir Diaspora Invest</a></div></div></div>

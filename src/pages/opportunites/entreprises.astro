@@ -4,7 +4,7 @@ import PageHead from '../../components/PageHead.astro';
 import { COMPANIES, SUBS, country } from '../../data/site';
 ---
 <BaseLayout title="Entreprises qui recrutent">
-  <PageHead title="Entreprises qui recrutent" lead="Les pages employeurs des entreprises membres." crumbs={[['/opportunites', 'Opportunités'], ['', 'Entreprises']]} subnav={SUBS.opps} />
+  <PageHead title="Entreprises qui recrutent" lead="Découvrez leur culture et leurs offres ouvertes." crumbs={[['/opportunites', 'Opportunités'], ['', 'Entreprises']]} subnav={SUBS.opps} />
   <section class="block">
     <div class="wrap grid g2">
       {COMPANIES.map((c) => (
