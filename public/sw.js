@@ -1,6 +1,7 @@
 /* Service worker CEA FOR AFRICA (CDC §5.4 : application installable, consultation hors ligne des contenus déjà ouverts).
    - Pages : réseau d'abord, copie mise en cache ; hors connexion → copie, sinon page « hors ligne ».
    - Fichiers statiques (/_astro, icônes, polices) : cache d'abord.
+   - Notifications push : affichage et ouverture de la page liée (voir en bas de fichier).
    Changer VERSION à chaque évolution de cette stratégie. */
 const VERSION = 'cea-v1';
 const PAGES = `${VERSION}-pages`;
@@ -56,4 +57,25 @@ self.addEventListener('fetch', (e) => {
       })),
     );
   }
+});
+
+/* Notifications push (CDC §10) : affichage, puis ouverture de la page liée au clic (onglet existant réutilisé). */
+self.addEventListener('push', (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data ? e.data.text() : '' }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'CEA FOR AFRICA', {
+    body: d.body || '', icon: '/icons/icon-192.png', badge: '/icons/icon-192.png', tag: d.tag, lang: 'fr',
+    data: { url: d.url || '/espace/notifications' },
+  }));
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = new URL(e.notification.data?.url || '/espace/notifications', location.origin).href;
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+    const same = list.find((c) => c.url === url);
+    if (same) return same.focus();
+    const any = list.find((c) => new URL(c.url).origin === location.origin);
+    return any ? any.navigate(url).then((c) => c && c.focus()) : self.clients.openWindow(url);
+  }));
 });

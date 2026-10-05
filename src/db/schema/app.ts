@@ -411,6 +411,17 @@ export const notification = pgTable('notification', {
   createdAt: ts('created_at').notNull().defaultNow(),
 }, (t) => [index('notification_user_idx').on(t.userId, t.readAt)]);
 
+/* Abonnements aux notifications push (CDC §10) : un par navigateur ou téléphone autorisé ; supprimé quand le service push l'invalide. */
+export const pushSubscription = pgTable('push_subscription', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: userRef('user_id').notNull(),
+  endpoint: text('endpoint').notNull().unique(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  device: text('device'), // libellé lisible (navigateur, système) pour la liste des appareils
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('push_subscription_user_idx').on(t.userId)]);
+
 /* ===== Journal d'audit horodaté et non modifiable (CDC §12) — protégé par un déclencheur SQL ===== */
 export const auditLog = pgTable('audit_log', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),

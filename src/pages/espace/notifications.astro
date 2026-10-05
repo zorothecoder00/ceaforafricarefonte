@@ -1,10 +1,11 @@
 ---
-/* Centre de notifications et préférences (CDC §10) : canaux par catégorie, heures de silence. */
+/* Centre de notifications et préférences (CDC §10) : notifications push sur l'appareil, canaux par catégorie, heures de silence. */
 import EspaceLayout from '../../layouts/EspaceLayout.astro';
 import { desc, eq } from 'drizzle-orm';
 import { db } from '../../lib/db';
 import { notification, profile } from '../../db/schema/app';
-import { NOTIF_CATEGORIES, type NotifPrefs, type NotifCategory } from '../../lib/notify';
+import { NOTIF_CATEGORIES, type NotifPrefs, type NotifCategory, type NotifChannel } from '../../lib/notify';
+import { pushPublicKey } from '../../lib/push';
 
 export const prerender = false;
 const user = Astro.locals.user!;
@@ -13,8 +14,9 @@ const unread = rows.filter((r) => !r.readAt).length;
 const [p] = await db.select({ prefs: profile.notifPrefs }).from(profile).where(eq(profile.userId, user.id));
 const prefs = (p?.prefs ?? {}) as NotifPrefs;
 const cats = Object.entries(NOTIF_CATEGORIES) as [NotifCategory, string][];
-const on = (c: NotifCategory, ch: 'email' | 'whatsapp') => prefs.cat?.[c]?.[ch] !== false;
+const on = (c: NotifCategory, ch: NotifChannel) => prefs.cat?.[c]?.[ch] !== false;
 const hasPhone = !!user.phoneNumber;
+const vapid = pushPublicKey() ?? '';
 ---
 <EspaceLayout title="Notifications" lead={`${unread} non lue${unread > 1 ? 's' : ''}. Les notifications importantes sont aussi envoyées par e-mail et WhatsApp selon vos préférences.`}>
   {unread > 0 && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/notifications" data-reload style="margin-bottom:12px">Tout marquer comme lu</button>}
@@ -27,21 +29,31 @@ const hasPhone = !!user.phoneNumber;
     )) : <p class="muted" style="margin:0">Aucune notification pour le moment.</p>}
   </div>
 
+  <section class="panel" id="pushBox" data-key={vapid} style="margin-top:20px">
+    <h2 style="font-size:1.2rem;margin-top:0">Sur cet appareil</h2>
+    <p class="small" id="pushState">Vérification…</p>
+    <div class="row">
+      <button class="btn btn-primary btn-sm" type="button" id="pushOn" hidden>Activer les notifications push</button>
+      <button class="btn btn-ghost btn-sm" type="button" id="pushOff" hidden>Désactiver sur cet appareil</button>
+    </div>
+  </section>
+
   <form class="panel" id="prefsF" style="margin-top:20px">
     <h2 style="font-size:1.2rem;margin-top:0">Mes préférences</h2>
     <p class="small muted">Le centre de notifications reçoit toujours tout. Choisissez ce qui vous est aussi envoyé à l'extérieur.{!hasPhone && <> WhatsApp nécessite un numéro vérifié : <a href="/espace/securite">l'ajouter</a>.</>}</p>
     <div class="scroll-x">
       <table class="t">
-        <thead><tr><th>Catégorie</th><th style="text-align:center">E-mail</th><th style="text-align:center">WhatsApp / SMS</th></tr></thead>
+        <thead><tr><th>Catégorie</th><th style="text-align:center">Push</th><th style="text-align:center">E-mail</th><th style="text-align:center">WhatsApp / SMS</th></tr></thead>
         <tbody>{cats.map(([k, label]) => (
           <tr><td class="small">{label}</td>
+            <td style="text-align:center"><input type="checkbox" data-cat={k} data-ch="push" checked={on(k, 'push')} aria-label={`${label} en notification push`} /></td>
             <td style="text-align:center"><input type="checkbox" data-cat={k} data-ch="email" checked={on(k, 'email')} aria-label={`${label} par e-mail`} /></td>
             <td style="text-align:center"><input type="checkbox" data-cat={k} data-ch="whatsapp" checked={on(k, 'whatsapp')} aria-label={`${label} par WhatsApp ou SMS`} /></td></tr>
         ))}</tbody>
       </table>
     </div>
     <h3 style="font-size:1rem;margin-top:16px">Heures de silence</h3>
-    <label class="row small"><input type="checkbox" id="qOn" checked={!!prefs.quiet} /> Ne pas m'envoyer de WhatsApp ni de SMS entre</label>
+    <label class="row small"><input type="checkbox" id="qOn" checked={!!prefs.quiet} /> Ne pas m'envoyer de notification push, de WhatsApp ni de SMS entre</label>
     <div class="row" style="gap:8px;margin-top:6px">
       <input class="in" type="time" id="qFrom" value={prefs.quiet?.from ?? '21:00'} aria-label="Début du silence" style="width:auto" />
       <span class="small">et</span>
@@ -59,11 +71,57 @@ const hasPhone = !!user.phoneNumber;
   if (!tzEl.textContent) tzEl.textContent = `(heure de votre appareil : ${tz})`;
   f.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const cat: Record<string, { email: boolean; whatsapp: boolean }> = {};
-    f.querySelectorAll<HTMLInputElement>('[data-cat]').forEach((i) => { (cat[i.dataset.cat!] ??= { email: true, whatsapp: true })[i.dataset.ch as 'email' | 'whatsapp'] = i.checked; });
+    const cat: Record<string, { push: boolean; email: boolean; whatsapp: boolean }> = {};
+    f.querySelectorAll<HTMLInputElement>('[data-cat]').forEach((i) => { (cat[i.dataset.cat!] ??= { push: true, email: true, whatsapp: true })[i.dataset.ch as 'push' | 'email' | 'whatsapp'] = i.checked; });
     const quiet = (document.getElementById('qOn') as HTMLInputElement).checked ? { from: (document.getElementById('qFrom') as HTMLInputElement).value, to: (document.getElementById('qTo') as HTMLInputElement).value, tz } : null;
     const r = await fetch('/api/notifications', { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cat, quiet }) }).catch(() => null);
     const d = r ? await r.json().catch(() => ({})) : { error: 'Erreur réseau.' };
     (window as unknown as { toast: (t: string) => void }).toast(d.message ?? d.error ?? 'Erreur.');
   });
+
+  /* Notifications push : abonnement de ce navigateur (service worker + clé VAPID du serveur) */
+  const box = document.getElementById('pushBox')!, state = document.getElementById('pushState')!;
+  const onBtn = document.getElementById('pushOn') as HTMLButtonElement, offBtn = document.getElementById('pushOff') as HTMLButtonElement;
+  const say = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+  const key = box.dataset.key ?? '';
+  const b64 = (s: string) => { const p = (s + '='.repeat((4 - (s.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/'); return Uint8Array.from(atob(p), (c) => c.charCodeAt(0)); };
+  const device = () => { const ua = navigator.userAgent; const b = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Navigateur'; const os = /Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iOS' : /Windows/.test(ua) ? 'Windows' : /Mac OS/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : ''; return `${b}${os ? ' · ' + os : ''}`; };
+  async function reg() { return (await navigator.serviceWorker.getRegistration()) ?? (await navigator.serviceWorker.register('/sw.js')); }
+  async function refresh() {
+    onBtn.hidden = offBtn.hidden = true;
+    if (!key) { state.textContent = 'Les notifications push ne sont pas encore disponibles.'; return; }
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      const ios = /iPhone|iPad/.test(navigator.userAgent);
+      state.textContent = ios ? "Sur iPhone et iPad : ajoutez d'abord le site à l'écran d'accueil (Partager > Sur l'écran d'accueil), puis ouvrez-le depuis l'icône pour activer les notifications." : 'Ce navigateur ne permet pas les notifications push.';
+      return;
+    }
+    if (Notification.permission === 'denied') { state.textContent = 'Les notifications sont bloquées pour ce site dans les réglages du navigateur. Autorisez-les pour pouvoir les activer.'; return; }
+    const sub = await (await reg()).pushManager.getSubscription();
+    state.textContent = sub ? 'Activées : vous recevez les notifications sur cet appareil, même site fermé.' : 'Recevez une alerte sur cet appareil (téléphone ou ordinateur) dès qu’une notification arrive, même site fermé.';
+    (sub ? offBtn : onBtn).hidden = false;
+  }
+  onBtn.addEventListener('click', async () => {
+    onBtn.disabled = true;
+    try {
+      if ((await Notification.requestPermission()) !== 'granted') { say('Autorisation refusée.'); return; }
+      const r = await reg();
+      await navigator.serviceWorker.ready;
+      const sub = (await r.pushManager.getSubscription()) ?? (await r.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(key) }));
+      const res = await fetch('/api/push', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...sub.toJSON(), device: device() }) });
+      const d = await res.json().catch(() => ({}));
+      say(d.message ?? d.error ?? 'Erreur.');
+      if (!res.ok) await sub.unsubscribe();
+    } catch { say("Impossible d'activer les notifications sur cet appareil."); }
+    finally { onBtn.disabled = false; refresh(); }
+  });
+  offBtn.addEventListener('click', async () => {
+    const sub = await (await reg()).pushManager.getSubscription();
+    if (sub) {
+      await fetch('/api/push', { method: 'DELETE', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint }) }).catch(() => null);
+      await sub.unsubscribe();
+    }
+    say('Notifications désactivées sur cet appareil.');
+    refresh();
+  });
+  refresh().catch(() => { state.textContent = 'Les notifications push ne sont pas disponibles ici.'; });
 </script>

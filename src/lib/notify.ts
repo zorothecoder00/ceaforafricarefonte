@@ -1,5 +1,6 @@
-/* Notifications omnicanales (CDC §10) : centre de notifications + e-mail + WhatsApp/SMS selon les préférences.
-   Préférences (profil.notifPrefs) : canaux activés par catégorie, heures de silence (pas de WhatsApp/SMS pendant ce créneau).
+/* Notifications omnicanales (CDC §10) : centre de notifications + push + e-mail + WhatsApp/SMS selon les préférences.
+   Le push part pour chaque notification vers les appareils que le membre a autorisés ; e-mail et WhatsApp seulement si l'appelant les demande.
+   Préférences (profil.notifPrefs) : canaux activés par catégorie, heures de silence (ni push, ni WhatsApp/SMS pendant ce créneau).
    La catégorie est déduite du lien de la notification. Le centre de notifications reçoit toujours tout.
    Les envois externes échouent silencieusement (journalisés) pour ne jamais bloquer l'action de l'utilisateur. */
 import { eq } from 'drizzle-orm';
@@ -7,6 +8,7 @@ import { db } from './db';
 import { notification, profile } from '../db/schema/app';
 import { user } from '../db/schema/auth';
 import { sendEmail, sendWhatsApp } from './messaging';
+import { sendPush } from './push';
 
 type Channels = { email?: boolean; whatsapp?: boolean };
 
@@ -19,7 +21,8 @@ export const NOTIF_CATEGORIES = {
   compte: 'Compte, adhésion et paiements',
 } as const;
 export type NotifCategory = keyof typeof NOTIF_CATEGORIES;
-export type NotifPrefs = { cat?: Partial<Record<NotifCategory, { email?: boolean; whatsapp?: boolean }>>; quiet?: { from: string; to: string; tz: string } | null };
+export type NotifChannel = 'push' | 'email' | 'whatsapp';
+export type NotifPrefs = { cat?: Partial<Record<NotifCategory, Partial<Record<NotifChannel, boolean>>>>; quiet?: { from: string; to: string; tz: string } | null };
 
 const RULES: [RegExp, NotifCategory][] = [
   [/^\/(espace\/billets|evenements)/, 'evenements'],
@@ -41,13 +44,15 @@ export function inQuietHours(q: NotifPrefs['quiet'], now = new Date()) {
 
 export async function notify(userId: string, title: string, link?: string, channels: Channels = {}) {
   await db.insert(notification).values({ userId, title, link });
-  if (!channels.email && !channels.whatsapp) return;
   const [u] = await db.select({ email: user.email, phone: user.phoneNumber, name: user.name, prefs: profile.notifPrefs }).from(user).leftJoin(profile, eq(profile.userId, user.id)).where(eq(user.id, userId));
   if (!u) return;
   const prefs = (u.prefs ?? {}) as NotifPrefs;
   const pc = prefs.cat?.[categoryOf(link)] ?? {};
   const wantEmail = channels.email && pc.email !== false;
-  const wantWa = channels.whatsapp && pc.whatsapp !== false && !inQuietHours(prefs.quiet);
+  const quiet = inQuietHours(prefs.quiet);
+  const wantWa = channels.whatsapp && pc.whatsapp !== false && !quiet;
+  if (pc.push !== false && !quiet) await sendPush(userId, { title: 'CEA FOR AFRICA', body: title, url: link }).catch((e) => console.error('[notify] push impossible :', e instanceof Error ? e.message : e));
+  if (!wantEmail && !wantWa) return;
   const url = link ? new URL(link, process.env.BETTER_AUTH_URL ?? 'http://localhost:4321').href : '';
   const text = `${title}${url ? `\n\n${url}` : ''}`;
   try {

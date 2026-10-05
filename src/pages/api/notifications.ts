@@ -21,7 +21,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
 /* Préférences : PUT { cat: { <catégorie>: { email, whatsapp } }, quiet: { from: 'HH:MM', to: 'HH:MM', tz } | null } */
 const HM = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
-const Chan = z.object({ email: z.boolean(), whatsapp: z.boolean() });
+const Chan = z.object({ email: z.boolean(), whatsapp: z.boolean(), push: z.boolean().optional() });
 const Prefs = z.object({
   cat: z.object(Object.fromEntries(Object.keys(NOTIF_CATEGORIES).map((k) => [k, Chan.optional()])) as Record<NotifCategory, z.ZodOptional<typeof Chan>>),
   quiet: z.object({ from: HM, to: HM, tz: z.string().max(60) }).nullable(),
