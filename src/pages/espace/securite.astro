@@ -16,8 +16,20 @@ const motif = Astro.url.searchParams.get('motif');
 const ua = (s: string | null) => (s ? (/(Android|iPhone|iPad|Windows|Mac OS X|Linux)/.exec(s)?.[1] ?? 'Appareil') + ' · ' + (/(Chrome|Firefox|Safari|Edg)/.exec(s)?.[1] ?? 'Navigateur') : 'Appareil inconnu');
 ---
 <EspaceLayout title="Sécurité" lead="Protégez votre compte : mot de passe, double authentification et clés d'accès.">
-  {motif === '2fa' && <div class="lock" style="margin-bottom:16px"><div><b>Double authentification obligatoire</b><br />Votre rôle donne accès à des données sensibles : activez la double authentification pour ouvrir le back-office.</div></div>}
-  <div class="grid g2" id="sec" data-has-password={hasPassword ? '1' : '0'} data-tfa={user.twoFactorEnabled ? '1' : '0'}>
+  {required && !user.twoFactorEnabled && (
+    <div class="lock" style="margin-bottom:16px;border-style:solid" id="tfaGuide">
+      <div><b>Dernière étape pour ouvrir le back-office CEA OS : la double authentification</b>
+        <ol class="small" style="margin:6px 0 0;padding-left:18px">
+          {!hasPassword && <li>Définissez d'abord un mot de passe (bloc « Mot de passe » ci-dessous) : votre compte a été créé par téléphone.</li>}
+          <li>Installez sur votre téléphone une application d'authentification gratuite : Google Authenticator, Microsoft Authenticator ou Aegis.</li>
+          <li>Dans le bloc « Double authentification », saisissez le mot de passe de votre compte puis cliquez sur « Activer ».</li>
+          <li>Scannez le QR code avec l'application et gardez les codes de secours en lieu sûr.</li>
+          <li>Saisissez le code à 6 chiffres affiché par l'application : vous êtes conduit·e directement au back-office.</li>
+        </ol>
+      </div>
+    </div>
+  )}
+  <div class="grid g2" id="sec" data-staff={required ? '1' : '0'} data-has-password={hasPassword ? '1' : '0'} data-tfa={user.twoFactorEnabled ? '1' : '0'}>
     <section class="panel">
       <h3>Mot de passe</h3>
       {hasPassword ? (
@@ -109,6 +121,8 @@ const ua = (s: string | null) => (s ? (/(Android|iPhone|iPad|Windows|Mac OS X|Li
     const code = (document.getElementById('tfaCode') as HTMLInputElement).value.trim();
     const { error } = await authClient.twoFactor.verifyTotp({ code });
     if (error) return toast(error.message || 'Code incorrect.');
+    // Membre de l'équipe : la double authentification ouvre le back-office, on l'y conduit directement
+    if (document.getElementById('sec')!.dataset.staff === '1') { toast('Double authentification activée : ouverture du back-office…'); setTimeout(() => (location.href = '/admin'), 900); return; }
     toast('Double authentification activée.'); reload();
   });
 

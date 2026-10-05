@@ -14,6 +14,7 @@ import { APIError } from 'better-auth/api';
 import { eq, sql } from 'drizzle-orm';
 import { env, requireEnv } from './env';
 import { sendOtp, sendEmail } from './messaging';
+import { notify } from './notify';
 
 const social = (id: 'google' | 'apple' | 'linkedin') => {
   const clientId = env(`${id.toUpperCase()}_CLIENT_ID`), clientSecret = env(`${id.toUpperCase()}_CLIENT_SECRET`);
@@ -69,7 +70,10 @@ export const auth = betterAuth({
             const r = await tx.execute(sql`insert into user_role (user_id, role) select ${u.id}, 'admin' where not exists (select 1 from user_role where role = 'admin')`);
             return (r.rowCount ?? 0) > 0;
           });
-          if (first) await db.insert(auditLog).values({ actorId: u.id, action: 'role.ajout.premier_admin', target: u.id, meta: { role: 'admin' } });
+          if (first) {
+            await db.insert(auditLog).values({ actorId: u.id, action: 'role.ajout.premier_admin', target: u.id, meta: { role: 'admin' } });
+            await notify(u.id, 'Vous êtes le premier administrateur de la plateforme. Activez la double authentification pour ouvrir le back-office CEA OS.', '/espace/securite?motif=2fa').catch(() => {});
+          }
         },
       },
     },

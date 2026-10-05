@@ -518,3 +518,6 @@ footer.foot .footk .btn-ghost{display:inline-flex;color:#1B1305 !important;borde
 .auth-mode button[aria-selected="true"]{background:var(--navy);color:var(--surface)}
 .top-logout{gap:6px}@media (max-width:900px){.top-logout .lo-txt{display:none}.top-logout{padding:6px 9px}}
 .top-logout{flex-shrink:0}@media (max-width:520px){.top-logout{display:none!important}}
+/* Mon espace : guidage des membres de l'équipe vers le back-office */
+.staff-cta{display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap;border:2px solid var(--gold);background:var(--gold-soft);margin-bottom:20px}
+.staff-cta>div{flex:1;min-width:240px}
