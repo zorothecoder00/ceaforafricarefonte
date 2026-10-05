@@ -25,15 +25,17 @@ const alt = (l: 'fr' | 'en') => new URL(lp(l, frPath === '/' ? '/' : frPath + '/
 // Contenu de la page : en anglais, les liens internes sont réécrits vers /en/…
 const body = localizeHtml(await Astro.slots.render('default'), lang);
 
-const searchIndex = [
+// Index de recherche : t titre, d description, h lien, ty type ; facultatifs pour les filtres : c pays, s secteur ou thème, dt date (AAAA-MM-JJ)
+type SearchEntry = { t: string; d: string; h: string; ty: string; c?: string; s?: string; dt?: string };
+const searchIndex = ([
   ...MENU.flatMap((m) => m.cols.flatMap((c) => c.items.map((i) => ({ t: i[2], d: i[3], h: i[0], ty: 'Page' })))),
   ...KMENU.flatMap((m) => m.cols.flatMap((c) => c.items.map((i) => ({ t: i[2], d: 'Kapital Invest — ' + i[3], h: i[0], ty: 'Kapital' })))),
-  ...COURSES.map((c) => ({ t: c.t, d: `${c.th} · ${c.by}`, h: `/academie/${c.id}`, ty: lang === 'en' ? 'Course' : 'Cours' })),
-  ...EVENTS.map((e) => ({ t: e.t, d: `${e.city} · ${e.date}`, h: `/evenements/${e.id}`, ty: lang === 'en' ? 'Event' : 'Événement' })),
-  ...JOBS.map((j) => ({ t: j.t, d: `${j.co} · ${country(j.c)}`, h: '/opportunites', ty: lang === 'en' ? 'Job' : 'Emploi' })),
-  ...OPPS.map((o) => ({ t: o.n, d: `${o.s} · ${country(o.c)}`, h: `/kapital/opportunites/${o.id}`, ty: lang === 'en' ? 'Opportunity' : 'Opportunité' })),
-  ...ARTICLES.map((a) => ({ t: a.t, d: a.cat, h: `/ressources/article/${a.id}`, ty: 'Article' })),
-].map((e) => ({ ...e, h: lp(lang, e.h) }));
+  ...COURSES.map((c) => ({ t: c.t, d: `${c.th} · ${c.by}`, h: `/academie/${c.id}`, ty: lang === 'en' ? 'Course' : 'Cours', s: c.th })),
+  ...EVENTS.map((e) => ({ t: e.t, d: `${e.city} · ${e.date}`, h: `/evenements/${e.id}`, ty: lang === 'en' ? 'Event' : 'Événement', c: country(e.c), dt: e.date })),
+  ...JOBS.map((j) => ({ t: j.t, d: `${j.co} · ${country(j.c)}`, h: '/opportunites', ty: lang === 'en' ? 'Job' : 'Emploi', c: country(j.c) })),
+  ...OPPS.map((o) => ({ t: o.n, d: `${o.s} · ${country(o.c)}`, h: `/kapital/opportunites/${o.id}`, ty: lang === 'en' ? 'Opportunity' : 'Opportunité', c: country(o.c), s: o.s })),
+  ...ARTICLES.map((a) => ({ t: a.t, d: a.cat, h: `/ressources/article/${a.id}`, ty: 'Article', c: a.c === 'Panafricain' ? undefined : a.c, s: a.cat, dt: a.d })),
+] as SearchEntry[]).map((e) => ({ ...e, h: lp(lang, e.h) }));
 ---
 <!doctype html>
 <html lang={lang}>

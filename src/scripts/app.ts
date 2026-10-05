@@ -240,7 +240,7 @@ $$('[data-slots]').forEach((g) => $$('.slot', g).forEach((s) => s.addEventListen
 })));
 
 /* ===== recherche universelle (Ctrl+K ou « / ») ===== */
-type Entry = { t: string; d: string; h: string; ty: string };
+type Entry = { t: string; d: string; h: string; ty: string; c?: string; s?: string; dt?: string };
 const index: Entry[] = JSON.parse($('#searchIndex')?.textContent || '[]');
 const dlg = $<HTMLDialogElement>('#dlg');
 const sq = $<HTMLInputElement>('#sq'), sres = $('#sres');
@@ -258,17 +258,36 @@ if (sfil) {
     runSearch(); sq!.focus();
   });
 }
+// Filtres pays, secteur (ou thème) et date : listes construites à partir des valeurs présentes dans l'index
+const sCountry = $<HTMLSelectElement>('#sCountry'), sSector = $<HTMLSelectElement>('#sSector'), sDate = $<HTMLSelectElement>('#sDate');
+const fillSelect = (sel: HTMLSelectElement | null, all: string, vals: (string | undefined)[]) => {
+  if (sel) sel.innerHTML = `<option value="">${all}</option>` + [...new Set(vals.filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'fr')).map((v) => `<option>${esc(v)}</option>`).join('');
+};
+fillSelect(sCountry, EN ? 'All countries' : 'Tous les pays', index.map((x) => x.c));
+fillSelect(sSector, EN ? 'All sectors and topics' : 'Tous les secteurs et thèmes', index.map((x) => x.s));
+[sCountry, sSector, sDate].forEach((s) => s?.addEventListener('change', runSearch));
+function dateOk(dt: string | undefined, f: string) {
+  if (!f) return true;
+  if (!dt) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  if (f === 'next') return dt >= today;
+  return dt <= today && dt >= new Date(Date.now() - Number(f) * 864e5).toISOString().slice(0, 10);
+}
 function runSearch() {
   const q = norm(sq!.value.trim());
-  if (!q) { sres!.innerHTML = `<p class="small muted">${EN ? 'Type at least one letter. Tip: Ctrl+K or / opens search anywhere.' : 'Tapez au moins une lettre. Astuce : Ctrl+K ou / ouvre la recherche partout.'}</p>`; return; }
-  // Tolérante aux fautes de frappe et classée par pertinence (titre prioritaire)
+  const fc = sCountry?.value ?? '', fs = sSector?.value ?? '', fd = sDate?.value ?? '';
+  const filtered = !!(fc || fs || fd);
+  if (!q && !filtered) { sres!.innerHTML = `<p class="small muted">${EN ? 'Type at least one letter, or choose a filter. Tip: Ctrl+K or / opens search anywhere.' : 'Tapez au moins une lettre ou choisissez un filtre. Astuce : Ctrl+K ou / ouvre la recherche partout.'}</p>`; return; }
   const seen = new Set<string>();
-  const res = fuzzySearch(index.filter((x) => (!sType || x.ty === sType) && !seen.has(x.ty + x.t) && seen.add(x.ty + x.t)), q, (x) => [x.t, x.d], 12);
+  const pool = index.filter((x) => (!sType || x.ty === sType) && (!fc || x.c === fc) && (!fs || x.s === fs) && dateOk(x.dt, fd) && !seen.has(x.ty + x.t) && seen.add(x.ty + x.t));
+  // Avec du texte : tolérante aux fautes et classée par pertinence (titre prioritaire) ; sans texte : tout ce qui passe les filtres, par date
+  const res = q ? fuzzySearch(pool, q, (x) => [x.t, x.d], 12)
+    : pool.sort((a, b) => (fd === 'next' ? (a.dt ?? '').localeCompare(b.dt ?? '') : (b.dt ?? '').localeCompare(a.dt ?? ''))).slice(0, 30);
   sres!.innerHTML = res.length
     ? res.map((x) => `<a href="${x.h}"><span class="tag info">${esc(x.ty)}</span><span><b>${esc(x.t)}</b><br><span class="small muted">${esc(x.d)}</span></span></a>`).join('')
     : `<div class="empty">${EN ? 'No results. Try another word or ask CEA Copilot.' : 'Aucun résultat. Essayez un autre mot ou demandez à CEA Copilot.'}</div>`;
 }
-function openSearch() { closeMegas(); dlg?.showModal(); sq!.value = ''; runSearch(); sq!.focus(); }
+function openSearch() { closeMegas(); dlg?.showModal(); sq!.value = ''; [sCountry, sSector, sDate].forEach((s) => { if (s) s.value = ''; }); runSearch(); sq!.focus(); }
 sq?.addEventListener('input', runSearch);
 $('#searchBtn')?.addEventListener('click', openSearch);
 $('#dlgClose')?.addEventListener('click', () => dlg?.close());

@@ -21,6 +21,16 @@ const t = useT(lang);
   <div class="dlg-b" id="dlgBody">
     <input class="in" id="sq" placeholder={t('searchPh')} aria-label={lang === 'en' ? 'Search' : 'Rechercher'} autocomplete="off" />
     <div class="row" id="sfil" role="group" aria-label={lang === 'en' ? 'Filter by type' : 'Filtrer par type'} style="gap:6px;flex-wrap:wrap;margin:10px 0 4px"></div>
+    <div class="row" id="sfil2" style="gap:6px;flex-wrap:wrap;margin:6px 0 4px">
+      <select class="in" id="sCountry" aria-label={lang === 'en' ? 'Filter by country' : 'Filtrer par pays'} style="width:auto;padding:6px 10px"></select>
+      <select class="in" id="sSector" aria-label={lang === 'en' ? 'Filter by sector or topic' : 'Filtrer par secteur ou thème'} style="width:auto;padding:6px 10px"></select>
+      <select class="in" id="sDate" aria-label={lang === 'en' ? 'Filter by date' : 'Filtrer par date'} style="width:auto;padding:6px 10px">
+        <option value="">{lang === 'en' ? 'Any date' : 'Toutes les dates'}</option>
+        <option value="next">{lang === 'en' ? 'Upcoming' : 'À venir'}</option>
+        <option value="30">{lang === 'en' ? 'Last 30 days' : '30 derniers jours'}</option>
+        <option value="365">{lang === 'en' ? 'Last 12 months' : '12 derniers mois'}</option>
+      </select>
+    </div>
     <div class="search-res" id="sres"></div>
   </div>
 </dialog>
