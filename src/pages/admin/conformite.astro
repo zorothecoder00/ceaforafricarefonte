@@ -18,7 +18,7 @@ const checks = await db.select({ k: kycCheck, name: user.name, company: dossier.
 const KL: Record<string, string> = { non_commence: 'Non commencé', en_cours: 'En cours', verifie: 'Vérifié', refuse: 'Refusé', expire: 'Expiré' };
 const CAT: Record<string, string> = { particulier: 'Particulier', averti: 'Investisseur averti', professionnel: 'Professionnel' };
 ---
-<AdminLayout title="Conformité et KYC" lead="Vérification d'identité, sanctions, personnes politiquement exposées, origine des fonds. Revue annuelle des investisseurs." obj="pieces_kyc">
+<AdminLayout title="Conformité — vérifications KYC / KYB" lead="Vérification d'identité, sanctions, personnes politiquement exposées, origine des fonds. Revue annuelle des investisseurs." obj="pieces_kyc">
   <h2 style="font-size:1.1rem">Investisseurs à traiter</h2>
   {investors.length === 0 && <div class="empty">Aucun investisseur en attente ni revue à venir.</div>}
   {investors.map(({ i, name, email }) => (

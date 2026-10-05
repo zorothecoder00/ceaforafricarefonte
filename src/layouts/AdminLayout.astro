@@ -13,13 +13,14 @@ const allowed = can(me.roles, obj, 'L');
 <BaseLayout title={`${title} — CEA OS`}>
   <div class="wrap dash">
     <nav class="side" aria-label="Back-office">
-      <div class="small" style="padding:0 12px 8px"><b>CEA OS</b><br /><span class="muted xs">{me.roles.filter((r) => r !== 'membre').map((r) => ROLE_LABEL[r as Role] ?? r).join(' · ')}</span></div>
+      <h5 style="margin-top:0">CEA OS</h5>
+      <div class="xs muted" style="padding:0 12px 8px">{me.roles.filter((r) => r !== 'membre').map((r) => ROLE_LABEL[r as Role] ?? r).join(' · ')}</div>
       {ADMIN_NAV.filter(([, , o]) => can(me.roles, o, 'L')).map(([href, label]) => <a href={href} aria-current={path === href || (href !== '/admin' && path.startsWith(href)) ? 'page' : undefined}>{label}</a>)}
       <a href="/espace" style="margin-top:12px">← Mon espace</a>
     </nav>
     <div style="min-width:0">
-      <h1 style="font-size:1.6rem;margin:0 0 4px">{title}</h1>
-      {lead && <p class="muted small" style="margin:0 0 18px">{lead}</p>}
+      <h1 style="font-size:2rem">{title}</h1>
+      {lead && <p class="muted">{lead}</p>}
       {allowed ? <slot /> : <div class="empty">Vous n’avez pas accès à cette rubrique.</div>}
     </div>
   </div>

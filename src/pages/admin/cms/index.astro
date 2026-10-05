@@ -30,7 +30,7 @@ const langs = (key: string) => all.filter((x) => x.key === key).map((x) => x.lan
 const PATH = { article: '/ressources/article/', event: '/evenements/', course: '/academie/', page: '/' } as const;
 const toReview = all.filter((x) => x.s === 'en_relecture').length;
 ---
-<AdminLayout title="CMS éditorial" lead="Rédaction → relecture → validation → publication (immédiate ou programmée). Chaque enregistrement est historisé et restaurable." obj="contenus">
+<AdminLayout title="Contenus — workflow éditorial" lead="Rédaction → relecture → validation → publication (immédiate ou programmée). Chaque enregistrement est historisé et restaurable." obj="contenus">
   <nav class="subnav" style="margin:0 0 12px">{(Object.keys(TYPES) as T[]).map((t) => <a href={`?type=${t}`} aria-current={t === type ? 'page' : undefined}>{TYPES[t][0]} ({all.filter((x) => x.t === t).length})</a>)}<a href="/admin/cms/medias">Médiathèque</a></nav>
   {toReview > 0 && can(me.roles, 'contenus', 'V') && <p class="small"><span class="tag info">{toReview} en relecture</span> Des contenus attendent votre validation.</p>}
   <div class="filters" style="margin:0 0 12px">

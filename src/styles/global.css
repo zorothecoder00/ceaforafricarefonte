@@ -511,3 +511,4 @@ footer.foot .footk .btn-ghost{display:inline-flex;color:#1B1305 !important;borde
 .world{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:18px}
 .world .panel h3{display:flex;justify-content:space-between;align-items:center}
 .relais{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.qrbox.sm{padding:4px}.qrbox.sm svg{width:64px;height:64px}

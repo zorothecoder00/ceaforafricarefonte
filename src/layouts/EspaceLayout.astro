@@ -19,12 +19,12 @@ const [[inCohort], [isJury]] = await Promise.all([
 ]);
 
 const groups: [string, [string, string, boolean?][]][] = [
-  ['Mon compte', [['/espace', 'Tableau de bord'], ['/espace/profil', 'Profil 360°'], ['/espace/carte', 'Carte de membre'], ['/espace/notifications', 'Notifications'], ['/espace/demandes', 'Mes demandes'], ['/espace/securite', 'Sécurité'], ['/espace/confidentialite', 'Confidentialité']]],
-  ['Mes activités', [
+  ['MON ESPACE', [['/espace', 'Tableau de bord'], ['/espace/profil', 'Profil 360°'], ['/espace/carte', 'Carte de membre'], ['/espace/notifications', 'Notifications'], ['/espace/demandes', 'Mes demandes'], ['/espace/securite', 'Sécurité'], ['/espace/confidentialite', 'Confidentialité']]],
+  ['MES ACTIVITÉS', [
     ['/espace/apprentissage', 'Apprentissage'], ['/espace/programme', 'Mon programme', !!inCohort], ['/espace/candidatures', 'Candidatures'], ['/espace/billets', 'Billets'], ['/espace/messages', 'Messagerie'],
     ['/espace/projets', 'Mes projets', has('entrepreneur', 'membre')], ['/espace/mentorat', 'Mentorat'], ['/espace/cercle', 'Mon cercle Mastermind'],
   ]],
-  ['Rôles', [
+  ['MES RÔLES', [
     ['/espace/recruteur', 'Espace recruteur', has('employeur')], ['/espace/mentor', 'Espace mentor', has('mentor')], ['/espace/jury', 'Jury', !!isJury],
     ['/kapital/entreprise', 'Kapital — entreprise', has('entrepreneur')], ['/kapital/investisseur', 'Kapital — investisseur', has('investisseur')],
     ['/admin', 'Back-office CEA OS', isStaff(roles)],
@@ -51,8 +51,10 @@ const tabs: [string, string, string][] = [
       <button class="btn btn-ghost btn-sm" type="button" data-logout style="margin:14px 12px">Se déconnecter</button>
     </nav>
     <div>
-      <h1 style="font-size:clamp(1.6rem,3vw,2.2rem)">{title}</h1>
-      {lead && <p class="muted">{lead}</p>}
+      <div class="row between" style="align-items:flex-start">
+        <div><h1 style="font-size:2rem;margin:0">{title}</h1>{lead && <p class="muted">{lead}</p>}</div>
+        <slot name="head" />
+      </div>
       <slot />
     </div>
   </div>

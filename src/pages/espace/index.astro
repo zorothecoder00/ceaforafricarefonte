@@ -8,6 +8,8 @@ import { CONSULTS, OPPS, country, dateFr } from '../../data/site';
 import { allEvents, allCourses } from '../../lib/catalog';
 import { publicArticles } from '../../lib/cms';
 import { ROLE_LABEL, isStaff, type Role } from '../../lib/rbac';
+import { qrSvg, verifyUrl } from '../../lib/qr';
+import KapitalAd from '../../components/KapitalAd.astro';
 
 export const prerender = false;
 const user = Astro.locals.user!;
@@ -24,6 +26,9 @@ const EVENTS = await allEvents();
 const COURSES = await allCourses({ hidden: true });
 const nextEvents = [...EVENTS].filter((e) => e.date >= new Date().toISOString().slice(0, 10)).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3);
 const myCountry = prof?.country ?? null;
+// Carte de membre affichée en tête du tableau de bord, comme dans le prototype
+const cardNo = member?.cardNumber ?? null;
+const cardQr = cardNo ? await qrSvg(verifyUrl(Astro.url.origin, 'carte', cardNo)) : '';
 const articles = await publicArticles();
 const news = articles.filter((a) => !myCountry || a.c === country(myCountry) || a.c === 'Panafricain').slice(0, 3);
 const openConsults = CONSULTS.filter((c) => !votes.some((v) => v.id === c.id));
@@ -101,13 +106,18 @@ if (isStaff(roles) && (role === 'admin' || role === 'direction' || role === 'ana
   widgets.unshift({ id: 'queue', title: 'File de travail', href: '/admin', cta: 'Back-office', rows: [['Messages de contact', String(msgs.n)], ['Signalements', String(reps.n)], ['Offres à modérer', String(mod.n)], ['Dossiers Kapital hors délai (5 j)', String(late.n)], ['Vérifications KYC en attente', String(kyc.n)]] });
 }
 ---
-<EspaceLayout title={`Bonjour ${user.name.split(' ')[0]}`} lead="Votre tableau de bord. Glissez-déposez les cartes pour les réorganiser.">
+<EspaceLayout title={`Bonjour ${user.name.split(' ')[0]}`} lead={[ROLE_LABEL[role] ?? role, myCountry ? country(myCountry) : ''].filter(Boolean).join(' · ')}>
+  <a slot="head" class="panel row" href="/espace/carte" style="padding:12px 16px;text-decoration:none">
+    {cardQr && <div class="qrbox sm" set:html={cardQr} />}
+    <div class="small"><b>Carte de membre</b><br />{cardNo ?? 'Pas encore de numéro'}<br /><span class={`tag ${member ? 'ok' : 'gold'}`}>{member ? `Adhésion ${member.plan}` : 'Compte gratuit'}</span>{!member && <><br /><span class="xs">Adhérer</span></>}</div>
+  </a>
   {choices.length > 1 && (
     <form class="filters" method="get" style="margin-top:0">
       <label class="f" style="margin:0;align-self:center" for="role">Rôle affiché</label>
       <select class="in" id="role" name="role" onchange="this.form.submit()">{choices.map((r) => <option value={r} selected={r === role}>{ROLE_LABEL[r]}</option>)}</select>
     </form>
   )}
+  <p class="xs muted" style="margin:14px 0 8px">Glissez-déposez les cartes pour les réorganiser.</p>
   <div class="widget-grid" id="widgets" data-key={`cea-widgets-${role}`}>
     {widgets.map((w) => (
       <section class="panel widget" draggable="true" data-id={w.id}>
@@ -118,6 +128,7 @@ if (isStaff(roles) && (role === 'admin' || role === 'direction' || role === 'ana
       </section>
     ))}
   </div>
+  <div style="margin-top:18px"><KapitalAd variant={role === 'investisseur' ? 2 : 0} /></div>
 </EspaceLayout>
 <script>
   // Réorganisation des widgets par glisser-déposer, mémorisée par rôle dans le navigateur
