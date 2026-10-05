@@ -8,6 +8,7 @@ import * as s from '../db/schema';
 import { findCourse, findEvent } from './catalog';
 import { invoiceForPayment } from './invoices';
 import { message } from './templates';
+import { emit } from './automations';
 import { env, isProd } from './env';
 import { reference, audit } from './session';
 import { contactOf, deliverTickets, newTicketCode } from './tickets';
@@ -113,6 +114,7 @@ export async function settle(ref: string, info: { method?: string; providerRef?:
     .where(and(eq(s.payment.reference, ref), eq(s.payment.status, 'en_attente'))).returning();
   // Facture automatique (CDC §12) : son échec n'empêche jamais l'exécution de la commande
   if (upd) await invoiceForPayment(upd.id).catch((e) => console.error('[facture]', e instanceof Error ? e.message : e));
+  if (upd) await emit('paiement.reussi', { reference: upd.reference, objet: upd.purpose, montant: upd.amountXof, moyen: upd.method }, upd.reference);
   if (!upd || !pay.userId) return upd ?? pay; // déjà traité par un autre appel
   const meta = pay.metadata as Record<string, unknown>;
   const uid = pay.userId;

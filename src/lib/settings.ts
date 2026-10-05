@@ -32,6 +32,12 @@ export const SETTINGS = {
       accounts: { adhesion: '706100', billet: '706200', cours: '706300', programme: '706400', mastermind: '706500', expert: '706600', mise_en_avant: '706700', recherche: '706800', sponsoring: '758100', autre: '706000' },
     },
   },
+  escalade: {
+    label: 'Relances et escalades des tickets',
+    schema: z.object({ remindHours: z.number().int().min(1).max(168), escalateHours: z.number().int().min(0).max(720), role: z.string().min(2).max(40), email: z.string().trim().max(160) }),
+    // Relance du responsable N heures avant l'échéance ; escalade N heures après le dépassement, vers un rôle (et une adresse facultative)
+    defaults: { remindHours: 24, escalateHours: 24, role: 'admin', email: '' },
+  },
 } as const;
 export type SettingKey = keyof typeof SETTINGS;
 export type SettingValue<K extends SettingKey> = z.infer<(typeof SETTINGS)[K]['schema']>;

@@ -1,0 +1,128 @@
+---
+/* Éditeur de formulaire (CDC §12) : réglages, champs (types, options, obligation, condition d'affichage), règles de routage, publication,
+   dernières réponses (chaque réponse est un ticket du support). */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { desc, eq, inArray } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { formDef, formSubmission } from '../../../db/schema/workflows';
+import { contactMessage } from '../../../db/schema/app';
+import { can } from '../../../lib/rbac';
+import { FormFields, Rules, TEAMS } from '../../../lib/forms';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const id = Astro.params.id ?? '';
+if (!/^[0-9a-f-]{36}$/.test(id)) return new Response('Formulaire introuvable', { status: 404 });
+const [f] = await db.select().from(formDef).where(eq(formDef.id, id));
+if (!f) return new Response('Formulaire introuvable', { status: 404 });
+const canM = can(me.roles, 'formulaires', 'M'), canV = can(me.roles, 'formulaires', 'V');
+const subs = await db.select().from(formSubmission).where(eq(formSubmission.formId, id)).orderBy(desc(formSubmission.createdAt)).limit(50);
+const tickets = subs.length ? await db.select({ ref: contactMessage.reference, status: contactMessage.status, team: contactMessage.routedTeam }).from(contactMessage).where(inArray(contactMessage.reference, subs.map((s) => s.ticketRef))) : [];
+const state = { id: f.id, fields: FormFields.safeParse(f.fields).success ? f.fields : [], routing: Rules.safeParse(f.routing).success ? f.routing : [], teams: TEAMS };
+const ST: Record<string, string> = { brouillon: 'Brouillon', publie: 'Publié', clos: 'Clos' };
+---
+<AdminLayout title={f.title} lead={`/formulaires/${f.slug} · ${ST[f.status]}`} obj="formulaires">
+  <p class="small" style="margin-top:-8px"><a href="/admin/formulaires">← Formulaires</a> · <a href={`/formulaires/${f.slug}`} target="_blank" rel="noopener">Voir le formulaire ↗</a></p>
+  <div class="split">
+    <form class="panel" id="formF">
+      <fieldset disabled={!canM} style="border:0;padding:0;margin:0">
+        <div class="grid g2" style="gap:0 12px">
+          <div><label class="f" for="t">Titre</label><input class="in" id="t" name="title" required value={f.title} /></div>
+          <div><label class="f" for="s">Adresse</label><input class="in" id="s" name="slug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" value={f.slug} /></div>
+          <div><label class="f" for="dt">Équipe par défaut</label><select class="in" id="dt" name="defaultTeam">{TEAMS.map((t) => <option selected={t === f.defaultTeam}>{t}</option>)}</select></div>
+          <div><label class="f" for="dl">Délai de réponse (SLA)</label><input class="in" id="dl" name="delay" required value={f.delay} placeholder="2 jours ouvrés, 48 heures…" /></div>
+        </div>
+        <label class="f" for="in">Introduction</label><textarea class="in" id="in" name="intro" rows="2">{f.intro}</textarea>
+        <label class="f" for="ak">Accusé de réception (affiché après l'envoi, suivi du numéro)</label><input class="in" id="ak" name="ack" required value={f.ack} />
+        <label class="row small"><input type="checkbox" name="requireLogin" checked={f.requireLogin} /> Réservé aux personnes connectées</label>
+        <h3 style="margin-top:16px">Champs</h3>
+        <div id="fields"></div>
+        <button class="btn btn-ghost btn-sm" type="button" id="addField">+ Champ</button>
+        <h3 style="margin-top:16px">Routage</h3>
+        <p class="xs muted" style="margin-top:-6px">La première règle vérifiée choisit l'équipe et la priorité du ticket ; sinon, l'équipe par défaut.</p>
+        <div id="rules"></div>
+        <button class="btn btn-ghost btn-sm" type="button" id="addRule">+ Règle</button>
+      </fieldset>
+      {canM && <div style="margin-top:14px"><button class="btn btn-primary btn-sm" type="submit">Enregistrer</button></div>}
+    </form>
+    <aside>
+      <div class="panel">
+        <h3>Publication</h3>
+        <p class="small" style="margin:0 0 8px">{ST[f.status]}</p>
+        {canV && <div class="row" style="gap:6px;flex-wrap:wrap">
+          {f.status !== 'publie' && <button class="btn btn-primary btn-sm" type="button" data-post="/api/admin/formulaires" data-body={JSON.stringify({ action: 'status', id: f.id, status: 'publie' })} data-reload>Publier</button>}
+          {f.status === 'publie' && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/formulaires" data-body={JSON.stringify({ action: 'status', id: f.id, status: 'clos' })} data-confirm="Clore le formulaire ? Il n'acceptera plus de réponses." data-reload>Clore</button>}
+          {!subs.length && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/formulaires" data-body={JSON.stringify({ action: 'delete', id: f.id })} data-confirm="Supprimer ce formulaire ?">Supprimer</button>}
+        </div>}
+      </div>
+      <div class="panel" style="margin-top:14px">
+        <h3>Dernières réponses</h3>
+        {subs.length === 0 && <p class="small muted" style="margin:0">Aucune réponse.</p>}
+        {subs.map((s) => { const t = tickets.find((x) => x.ref === s.ticketRef); return <div class="list-row"><a class="small" href={`/admin/messages?q=${s.ticketRef}`}>{s.ticketRef}</a><span class="xs muted">{t?.team} · {t?.status} · {s.createdAt.toLocaleDateString('fr-FR')}</span></div>; })}
+        <p class="xs muted" style="margin:8px 0 0">Les réponses se traitent comme des tickets dans <a href="/admin/messages">Messages et signalements</a> (responsable, délai, réponse au demandeur).</p>
+      </div>
+    </aside>
+  </div>
+  <script type="application/json" id="formState" set:html={JSON.stringify(state)} />
+</AdminLayout>
+<script>
+  type F = { key: string; label: string; kind: string; options: string[]; required: boolean; help: string; showIf: { field: string; equals: string } | null };
+  type R = { field: string; equals: string; team: string; priority: string };
+  const S = JSON.parse(document.getElementById('formState')!.textContent!) as { id: string; fields: F[]; routing: R[]; teams: string[] };
+  const form = document.getElementById('formF') as HTMLFormElement;
+  const ro = form.querySelector('fieldset')!.disabled;
+  const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  const keyOf = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 30) || 'champ';
+  const KINDS = [['text', 'Texte court'], ['textarea', 'Texte long'], ['email', 'E-mail'], ['tel', 'Téléphone'], ['number', 'Nombre'], ['date', 'Date'], ['select', 'Liste'], ['radio', 'Choix unique'], ['checkbox', 'Case à cocher']];
+  const fEl = document.getElementById('fields')!, rEl = document.getElementById('rules')!;
+  const opts = (list: string[], cur: string, empty = '') => (empty ? `<option value="">${empty}</option>` : '') + list.map((v) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(v)}</option>`).join('');
+  function render() {
+    fEl.innerHTML = S.fields.map((f, i) => {
+      const before = S.fields.slice(0, i).filter((x) => x.key);
+      return `<div class="cms-block"><div class="row" style="gap:6px;flex-wrap:wrap"><input class="in" data-i="${i}" data-k="label" value="${esc(f.label)}" placeholder="Libellé" aria-label="Libellé" style="flex:3;min-width:160px" /><select class="in" data-i="${i}" data-k="kind" style="width:auto" aria-label="Type">${KINDS.map(([v, l]) => `<option value="${v}"${f.kind === v ? ' selected' : ''}>${l}</option>`).join('')}</select><label class="row xs"><input type="checkbox" data-i="${i}" data-k="required"${f.required ? ' checked' : ''} /> requis</label>${ro ? '' : `<button class="btn btn-ghost btn-sm" type="button" data-up="${i}" aria-label="Monter"${i === 0 ? ' disabled' : ''}>↑</button><button class="btn btn-ghost btn-sm" type="button" data-del="${i}" aria-label="Supprimer">✕</button>`}</div>`
+        + (f.kind === 'select' || f.kind === 'radio' ? `<textarea class="in" rows="2" data-i="${i}" data-k="options" placeholder="Une option par ligne" aria-label="Options">${esc(f.options.join('\n'))}</textarea>` : '')
+        + `<div class="row xs" style="gap:6px;margin-top:4px;flex-wrap:wrap">Afficher seulement si <select class="in" data-i="${i}" data-k="showIfField" style="width:auto;padding:3px 6px" aria-label="Condition">${opts(before.map((x) => x.key), f.showIf?.field ?? '', 'toujours affiché')}</select>${f.showIf ? ` vaut <input class="in" data-i="${i}" data-k="showIfEquals" value="${esc(f.showIf.equals)}" style="width:160px;padding:3px 6px" aria-label="Valeur" placeholder="valeur (oui / non pour une case)" />` : ''}<span class="muted">· identifiant : ${esc(f.key || '(auto)')}</span></div></div>`;
+    }).join('');
+    rEl.innerHTML = S.routing.map((r, i) => `<div class="row" style="gap:6px;margin-bottom:6px;flex-wrap:wrap">Si <select class="in" data-r="${i}" data-k="field" style="width:auto" aria-label="Champ">${opts(S.fields.filter((x) => x.key).map((x) => x.key), r.field)}</select> vaut <input class="in" data-r="${i}" data-k="equals" value="${esc(r.equals)}" style="width:160px" aria-label="Valeur" /> → <select class="in" data-r="${i}" data-k="team" style="width:auto" aria-label="Équipe">${opts(S.teams, r.team)}</select><select class="in" data-r="${i}" data-k="priority" style="width:auto" aria-label="Priorité">${opts(['basse', 'normale', 'haute', 'urgente'], r.priority)}</select>${ro ? '' : `<button class="btn btn-ghost btn-sm" type="button" data-rdel="${i}" aria-label="Supprimer">✕</button>`}</div>`).join('');
+    if (ro) form.querySelectorAll('#fields input, #fields select, #fields textarea, #rules input, #rules select').forEach((x) => ((x as HTMLInputElement).disabled = true));
+  }
+  render();
+  form.addEventListener('input', (e) => {
+    const el = e.target as HTMLInputElement;
+    if (el.dataset.i !== undefined) {
+      const f = S.fields[Number(el.dataset.i)], k = el.dataset.k!;
+      if (k === 'required') f.required = el.checked;
+      else if (k === 'options') f.options = el.value.split('\n').map((x) => x.trim()).filter(Boolean);
+      else if (k === 'showIfField') { f.showIf = el.value ? { field: el.value, equals: f.showIf?.equals ?? 'oui' } : null; render(); }
+      else if (k === 'showIfEquals' && f.showIf) f.showIf.equals = el.value;
+      else (f as Record<string, unknown>)[k] = el.value;
+      if (k === 'kind') render();
+    }
+    if (el.dataset.r !== undefined) (S.routing[Number(el.dataset.r)] as Record<string, string>)[el.dataset.k!] = el.value;
+  });
+  form.addEventListener('click', (e) => {
+    const b = (e.target as Element).closest<HTMLButtonElement>('button');
+    if (!b) return;
+    if (b.id === 'addField') S.fields.push({ key: '', label: '', kind: 'text', options: [], required: false, help: '', showIf: null });
+    else if (b.id === 'addRule') { if (!S.fields.length) return; S.routing.push({ field: S.fields[0].key || keyOf(S.fields[0].label), equals: '', team: S.teams[0], priority: 'normale' }); }
+    else if (b.dataset.del) S.fields.splice(Number(b.dataset.del), 1);
+    else if (b.dataset.up) { const i = Number(b.dataset.up); [S.fields[i - 1], S.fields[i]] = [S.fields[i], S.fields[i - 1]]; }
+    else if (b.dataset.rdel) S.routing.splice(Number(b.dataset.rdel), 1);
+    else return;
+    render();
+  });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    // Identifiants stables : dérivés du libellé à la création, conservés ensuite (réponses et règles y sont rattachées)
+    const seen = new Set<string>();
+    for (const f of S.fields) { let k = f.key || keyOf(f.label); while (seen.has(k)) k = `${k}_2`.slice(0, 30); f.key = k; seen.add(k); }
+    const fd = new FormData(form);
+    const r = await fetch('/api/admin/formulaires', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      action: 'save', id: S.id, title: fd.get('title'), slug: fd.get('slug'), intro: fd.get('intro'), defaultTeam: fd.get('defaultTeam'), delay: fd.get('delay'), ack: fd.get('ack'),
+      requireLogin: fd.get('requireLogin') === 'on', fields: S.fields, routing: S.routing,
+    }) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : { error: 'Erreur réseau.' };
+    (window as unknown as { toast: (t: string) => void }).toast(d.message ?? d.error ?? 'Erreur.');
+    render();
+  });
+</script>

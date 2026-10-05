@@ -1,0 +1,145 @@
+---
+/* Gestion documentaire (CDC §12) : dossiers (droits par rôle), documents versionnés, classement, liens de partage expirables,
+   filigrane, journal. Chacun ne voit que les dossiers ouverts à ses rôles ; l'administrateur voit tout et règle les droits. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { and, desc, eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { user } from '../../db/schema/auth';
+import { docFolder, docFile, docVersion, docShare, docLog } from '../../db/schema/workflows';
+import { ROLES, ROLE_LABEL, STAFF } from '../../lib/rbac';
+import { canRead, canWrite, isDocAdmin } from '../../lib/documents';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const admin = isDocAdmin(me.roles);
+const folders = (await db.select().from(docFolder).orderBy(docFolder.name)).filter((f) => canRead(f, me.roles));
+const q = Astro.url.searchParams;
+const folder = folders.find((f) => f.id === q.get('dossier')) ?? folders[0];
+const showArchived = q.get('archives') === '1';
+const files = folder ? await db.select({ f: docFile, who: user.name }).from(docFile).leftJoin(user, eq(user.id, docFile.createdBy)).where(and(eq(docFile.folderId, folder.id), eq(docFile.archived, showArchived))).orderBy(desc(docFile.updatedAt)) : [];
+const file = files.find((x) => x.f.id === q.get('fichier'))?.f;
+const versions = file ? await db.select({ v: docVersion, who: user.name }).from(docVersion).leftJoin(user, eq(user.id, docVersion.uploadedBy)).where(eq(docVersion.fileId, file.id)).orderBy(desc(docVersion.version)) : [];
+const shares = file ? await db.select().from(docShare).where(eq(docShare.fileId, file.id)).orderBy(desc(docShare.createdAt)) : [];
+const logs = file ? await db.select({ l: docLog, who: user.name }).from(docLog).leftJoin(user, eq(user.id, docLog.userId)).where(eq(docLog.fileId, file.id)).orderBy(desc(docLog.at)).limit(40) : [];
+const write = folder ? canWrite(folder, me.roles) : false;
+const kb = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} Mo` : `${Math.max(1, Math.round(n / 1024))} Ko`);
+const fmt = (d: Date) => d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+const staffRoles = ROLES.filter((r) => (STAFF as readonly string[]).includes(r));
+const now = new Date();
+const ACT: Record<string, string> = { depot: 'Dépôt', version: 'Nouvelle version', telechargement: 'Téléchargement', partage: 'Partage', revocation: 'Révocation', deplacement: 'Déplacement', classement: 'Classement', archivage: 'Archivage', restauration: 'Restauration' };
+---
+<AdminLayout title="Documents" lead="Classement par dossiers avec droits par rôle, versions, liens de partage expirables et filigrane nominatif sur les PDF. Tout est journalisé." obj="documents">
+  <div class="split" style="grid-template-columns:260px 1fr">
+    <aside>
+      <div class="panel">
+        <h3>Dossiers</h3>
+        {folders.length === 0 && <p class="small muted" style="margin:0">Aucun dossier ne vous est ouvert.</p>}
+        {folders.map((f) => <a class="list-row small" href={`?dossier=${f.id}`} aria-current={f.id === folder?.id ? 'page' : undefined} style={f.id === folder?.id ? 'font-weight:700' : ''}>{f.parentId ? '↳ ' : ''}{f.name}</a>)}
+      </div>
+      {admin && (
+        <details class="panel" style="margin-top:12px" open={!folders.length}><summary><b>{folder ? 'Droits du dossier / nouveau dossier' : 'Nouveau dossier'}</b></summary>
+          <form id="folderF" data-id={folder?.id ?? ''} style="margin-top:8px">
+            <label class="f" for="fn">Nom</label><input class="in" id="fn" name="name" required minlength="2" value={folder?.name ?? ''} />
+            <label class="f" for="fp">Dans</label><select class="in" id="fp" name="parentId"><option value="">— racine —</option>{folders.filter((f) => f.id !== folder?.id).map((f) => <option value={f.id} selected={f.id === folder?.parentId}>{f.name}</option>)}</select>
+            <label class="f">Consultation</label>
+            <div class="row" style="gap:4px;flex-wrap:wrap">{staffRoles.map((r) => <label class="chip xs" style="display:inline-flex;gap:4px"><input type="checkbox" name="readers" value={r} checked={folder?.readers.includes(r)} /> {ROLE_LABEL[r]}</label>)}</div>
+            <label class="f">Dépôt et classement</label>
+            <div class="row" style="gap:4px;flex-wrap:wrap">{staffRoles.map((r) => <label class="chip xs" style="display:inline-flex;gap:4px"><input type="checkbox" name="writers" value={r} checked={folder?.writers.includes(r)} /> {ROLE_LABEL[r]}</label>)}</div>
+            <label class="row small" style="margin-top:8px"><input type="checkbox" name="watermark" checked={folder?.watermark ?? true} /> Filigrane nominatif sur les PDF</label>
+            <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap"><button class="btn btn-primary btn-sm" type="submit" data-mode="update" hidden={!folder}>Enregistrer ce dossier</button><button class="btn btn-ghost btn-sm" type="submit" data-mode="create">Créer comme nouveau dossier</button></div>
+          </form>
+        </details>
+      )}
+    </aside>
+
+    <div>
+      {folder && (
+        <div class="panel">
+          <div class="row between" style="flex-wrap:wrap;gap:6px"><h3 style="margin:0">{folder.name}</h3><span class="xs muted">Consultation : {folder.readers.map((r) => ROLE_LABEL[r as keyof typeof ROLE_LABEL] ?? r).join(', ') || 'administrateurs'} · dépôt : {folder.writers.map((r) => ROLE_LABEL[r as keyof typeof ROLE_LABEL] ?? r).join(', ') || 'administrateurs'}{folder.watermark ? ' · filigrane' : ''}</span></div>
+          <p class="xs" style="margin:6px 0"><a href={`?dossier=${folder.id}${showArchived ? '' : '&archives=1'}`}>{showArchived ? '← Documents actifs' : 'Voir les archives'}</a></p>
+          {files.length === 0 && <p class="small muted">Aucun document.</p>}
+          {files.map(({ f, who }) => <a class="list-row" href={`?dossier=${folder.id}&fichier=${f.id}${showArchived ? '&archives=1' : ''}`} style={f.id === file?.id ? 'background:var(--surface-2)' : ''}><span class="small"><b>{f.name}</b> <span class="xs muted">v{f.version}{f.tags.length ? ` · ${f.tags.join(', ')}` : ''}</span></span><span class="xs muted">{fmt(f.updatedAt)} · {who ?? '—'}</span></a>)}
+          {write && !showArchived && (
+            <form class="upF row" data-folder={folder.id} style="gap:6px;margin-top:12px;flex-wrap:wrap;align-items:flex-end">
+              <div><label class="f" for="nf">Déposer un document</label><input class="in" id="nf" name="file" type="file" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.webp" required /></div>
+              <button class="btn btn-primary btn-sm" type="submit">Déposer</button>
+              <span class="xs muted">PDF, Word, Excel, PowerPoint ou image · 15 Mo au plus · contrôle du format et analyse antivirus.</span>
+            </form>
+          )}
+        </div>
+      )}
+
+      {file && folder && (
+        <div class="grid g2" style="margin-top:14px">
+          <div class="panel">
+            <h3 style="margin-top:0">Versions</h3>
+            {versions.map(({ v, who }) => <div class="list-row"><span class="small"><a href={`/api/documents/${file.id}?v=${v.version}`}>v{v.version}</a>{v.note && <span class="muted"> — {v.note}</span>}</span><span class="xs muted">{kb(v.size)} · {fmt(v.uploadedAt)} · {who ?? '—'}</span></div>)}
+            {write && !file.archived && (
+              <form class="upF" data-folder={folder.id} data-file={file.id} style="margin-top:10px">
+                <label class="f" for="nv">Nouvelle version</label><input class="in" id="nv" name="file" type="file" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.webp" required />
+                <input class="in" name="note" maxlength="300" placeholder="Ce qui change (facultatif)" aria-label="Note de version" />
+                <button class="btn btn-ghost btn-sm" type="submit">Déposer la version</button>
+              </form>
+            )}
+            {write && (
+              <form data-api="/api/admin/documents" data-reload style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
+                <input type="hidden" name="action" value="file.update" /><input type="hidden" name="id" value={file.id} />
+                <label class="f" for="fr">Nom</label><input class="in" id="fr" name="name" required value={file.name} />
+                <label class="f" for="ft">Étiquettes</label><input class="in" id="ft" name="tags" data-type="list" value={file.tags.join(', ')} placeholder="contrat, 2026" />
+                <label class="f" for="fd">Dossier</label><select class="in" id="fd" name="folderId">{folders.filter((f) => canWrite(f, me.roles)).map((f) => <option value={f.id} selected={f.id === file.folderId}>{f.name}</option>)}</select>
+                <div class="row" style="gap:6px;margin-top:8px"><button class="btn btn-ghost btn-sm" type="submit">Enregistrer</button><button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/documents" data-body={JSON.stringify({ action: 'file.archive', id: file.id, archived: !file.archived })} data-confirm={file.archived ? 'Restaurer ce document ?' : 'Archiver ce document ? Ses liens de partage seront révoqués.'} data-reload>{file.archived ? 'Restaurer' : 'Archiver'}</button></div>
+              </form>
+            )}
+          </div>
+          <div class="panel">
+            <h3 style="margin-top:0">Partages</h3>
+            {shares.map((s) => { const live = !s.revokedAt && s.expiresAt > now && (s.maxDownloads == null || s.downloads < s.maxDownloads); return <div class="list-row"><span class="small">{s.recipient} <span class="xs muted">· {s.downloads}{s.maxDownloads != null ? `/${s.maxDownloads}` : ''} téléchargement(s) · {s.revokedAt ? 'révoqué' : s.expiresAt <= now ? 'expiré' : `jusqu'au ${s.expiresAt.toLocaleDateString('fr-FR')}`}</span></span>{live && write && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/documents" data-body={JSON.stringify({ action: 'share.revoke', id: s.id })} data-confirm="Révoquer ce lien ?" data-reload>Révoquer</button>}</div>; })}
+            {!shares.length && <p class="small muted" style="margin:0">Aucun lien de partage.</p>}
+            {write && !file.archived && (
+              <form id="shareF" data-file={file.id} style="margin-top:10px">
+                <label class="f" for="sr">Destinataire (nom ou e-mail, inscrit dans le filigrane)</label><input class="in" id="sr" name="recipient" required minlength="2" />
+                <div class="row" style="gap:6px"><div><label class="f" for="sd">Validité (jours)</label><input class="in" id="sd" name="days" type="number" min="1" max="30" value="7" style="width:100px" /></div><div><label class="f" for="sm">Téléchargements max.</label><input class="in" id="sm" name="maxDownloads" type="number" min="1" max="100" placeholder="illimité" style="width:120px" /></div></div>
+                <button class="btn btn-ghost btn-sm" type="submit" style="margin-top:8px">Créer le lien</button>
+                <p class="small" id="shareOut" style="word-break:break-all"></p>
+              </form>
+            )}
+            <h3>Journal</h3>
+            <ol class="timeline" style="max-height:320px;overflow:auto">{logs.map(({ l, who }) => <li class="xs"><b>{ACT[l.action] ?? l.action}</b> · {fmt(l.at)} · {who ?? (l.shareId ? 'lien de partage' : '—')}{l.detail && <div class="muted">{l.detail}</div>}</li>)}</ol>
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+</AdminLayout>
+<script>
+  const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+  const send = async (url: string, init: RequestInit) => { const r = await fetch(url, { credentials: 'same-origin', ...init }).catch(() => null); return r ? r.json().catch(() => ({})) : { error: 'Erreur réseau.' }; };
+  document.querySelectorAll<HTMLFormElement>('form.upF').forEach((f) => f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(f);
+    fd.set('folderId', f.dataset.folder!);
+    if (f.dataset.file) fd.set('fileId', f.dataset.file);
+    const btn = f.querySelector<HTMLButtonElement>('button[type=submit]')!; btn.disabled = true;
+    const d = await send('/api/admin/documents/depot', { method: 'POST', body: fd });
+    btn.disabled = false;
+    toast(d.message ?? d.error ?? 'Erreur.');
+    if (d.ok) setTimeout(() => location.reload(), 600);
+  }));
+  const folderF = document.getElementById('folderF') as HTMLFormElement | null;
+  folderF?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const mode = ((e as SubmitEvent).submitter as HTMLButtonElement | null)?.dataset.mode;
+    const fd = new FormData(folderF);
+    const d = await send('/api/admin/documents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'folder.save', id: mode === 'update' ? folderF.dataset.id || undefined : undefined, name: fd.get('name'), parentId: fd.get('parentId'), readers: fd.getAll('readers'), writers: fd.getAll('writers'), watermark: fd.get('watermark') === 'on' }) });
+    toast(d.message ?? d.error ?? 'Erreur.');
+    if (d.redirect) setTimeout(() => (location.href = d.redirect), 500);
+  });
+  const shareF = document.getElementById('shareF') as HTMLFormElement | null;
+  shareF?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(shareF);
+    const d = await send('/api/admin/documents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'share.create', fileId: shareF.dataset.file, recipient: fd.get('recipient'), days: fd.get('days'), maxDownloads: fd.get('maxDownloads') }) });
+    toast(d.message ?? d.error ?? 'Erreur.');
+    if (d.ok) { document.getElementById('shareOut')!.innerHTML = `Lien à transmettre : <a href="${d.url}" target="_blank" rel="noopener">${d.url}</a>`; navigator.clipboard?.writeText(d.url).catch(() => {}); }
+  });
+</script>

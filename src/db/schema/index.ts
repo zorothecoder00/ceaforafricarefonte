@@ -4,3 +4,4 @@ export * from './kapital';
 export * from './crm';
 export * from './programmes';
 export * from './finance';
+export * from './workflows';

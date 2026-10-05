@@ -322,6 +322,9 @@ export const contactMessage = pgTable('contact_message', {
   answeredAt: ts('answered_at'), // première réponse de l'équipe
   csat: integer('csat'), // satisfaction 1 à 5, donnée par le demandeur une fois la demande traitée
   csatComment: text('csat_comment'),
+  // Workflows (CDC §12) : relance du responsable avant l'échéance, escalade après dépassement — une seule fois chacune
+  remindedAt: ts('reminded_at'),
+  escalatedAt: ts('escalated_at'),
   createdAt: ts('created_at').notNull().defaultNow(),
 }, (t) => [index('contact_message_user_idx').on(t.userId)]);
 

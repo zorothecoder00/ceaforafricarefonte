@@ -13,6 +13,7 @@ import { sendEmail } from '../../../lib/messaging';
 import { notify } from '../../../lib/notify';
 import { json, fail } from '../../../lib/session';
 import { cronAuthorized } from '../../../lib/cron';
+import { runEscalations } from '../../../lib/escalations';
 import { agendaKey, siteUrl } from '../../../lib/agenda';
 
 export const prerender = false;
@@ -55,5 +56,7 @@ export const GET: APIRoute = async ({ request }) => {
     }
   }
 
-  return json({ ok: true, sent, failed });
+  // Workflows (CDC §12) : relances et escalades des tickets, au même passage quotidien
+  const tickets = await runEscalations(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+  return json({ ok: true, sent, failed, tickets });
 };

@@ -1,0 +1,71 @@
+---
+/* Formulaire public créé sans code (CDC §12) : champs conditionnels (affichés selon une réponse précédente), accusé de réception
+   avec numéro de suivi. Les règles sont revérifiées par le serveur (/api/formulaires). */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { formDef } from '../../db/schema/workflows';
+import { FormFields } from '../../lib/forms';
+
+export const prerender = false;
+const slug = Astro.params.slug ?? '';
+const [f] = /^[a-z0-9-]{1,60}$/.test(slug) ? await db.select().from(formDef).where(eq(formDef.slug, slug)) : [];
+// Aperçu d'un brouillon pour l'équipe (droit « formulaires ») ; sinon seulement publié ou clos
+const staffPreview = !!Astro.locals.user?.roles.some((r) => ['admin', 'editeur', 'charge_programme'].includes(r));
+if (!f || (f.status === 'brouillon' && !staffPreview)) return Astro.rewrite('/404');
+const fields = FormFields.safeParse(f.fields).success ? FormFields.parse(f.fields) : [];
+const me = Astro.locals.user;
+---
+<BaseLayout title={f.title} description={f.intro.slice(0, 160) || undefined}>
+  <PageHead title={f.title} lead={f.intro} crumbs={[['', f.title]]} />
+  <section class="block"><div class="wrap" style="max-width:720px">
+    {f.status === 'brouillon' && <p class="small"><span class="tag gold">Aperçu</span> Ce formulaire n'est pas encore publié.</p>}
+    {f.status === 'clos' ? <div class="panel">Ce formulaire est clos. <a href="/contact">Écrivez-nous</a> si besoin.</div>
+      : f.requireLogin && !me ? <div class="panel"><a class="btn btn-primary" href={`/connexion?retour=${encodeURIComponent(Astro.url.pathname)}`}>Se connecter pour répondre</a></div>
+      : (
+        <form class="panel" id="dynF" data-api="/api/formulaires" data-reset>
+          <input type="hidden" name="formulaire" value={f.slug} />
+          <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px" />
+          {fields.map((x) => (
+            <div data-field={x.key} data-showif={x.showIf ? JSON.stringify(x.showIf) : undefined} style="margin-bottom:6px">
+              {x.kind === 'checkbox' ? <label class="row small" style="margin-top:12px"><input type="checkbox" name={x.key} required={x.required} /> {x.label}{x.required ? ' *' : ''}</label> : <label class="f" for={`q-${x.key}`}>{x.label}{x.required ? ' *' : ''}</label>}
+              {x.help && <p class="xs muted" style="margin:-2px 0 4px">{x.help}</p>}
+              {x.kind === 'textarea' && <textarea class="in" id={`q-${x.key}`} name={x.key} rows="4" maxlength="5000" required={x.required}></textarea>}
+              {x.kind === 'select' && <select class="in" id={`q-${x.key}`} name={x.key} required={x.required}><option value="">—</option>{x.options.map((o) => <option>{o}</option>)}</select>}
+              {x.kind === 'radio' && <div class="row" style="gap:10px;flex-wrap:wrap" id={`q-${x.key}`}>{x.options.map((o, i) => <label class="row small"><input type="radio" name={x.key} value={o} required={x.required && i === 0} /> {o}</label>)}</div>}
+              {['text', 'email', 'tel', 'number', 'date'].includes(x.kind) && <input class="in" id={`q-${x.key}`} name={x.key} type={x.kind as "text"} maxlength="300" required={x.required} value={x.kind === 'email' && me ? me.email : undefined} />}
+            </div>
+          ))}
+          <label class="row small" style="margin-top:12px"><input type="checkbox" required /> J'accepte que CEA FOR AFRICA traite ces informations pour répondre à ma demande.</label>
+          <button class="btn btn-primary" type="submit" style="margin-top:10px">Envoyer</button>
+        </form>
+      )}
+  </div></section>
+</BaseLayout>
+<script>
+  /* Champs conditionnels : un champ masqué est désactivé (non envoyé, non exigé) ; la condition se réévalue à chaque saisie */
+  const form = document.getElementById('dynF') as HTMLFormElement | null;
+  if (form) {
+    const wrappers = [...form.querySelectorAll<HTMLElement>('[data-field]')];
+    const valueOf = (key: string) => {
+      const els = [...form.querySelectorAll<HTMLInputElement>(`[name="${key}"]`)];
+      const w = wrappers.find((x) => x.dataset.field === key);
+      if (!els.length || w?.hidden) return null;
+      if (els[0].type === 'checkbox') return els[0].checked ? 'oui' : 'non';
+      if (els[0].type === 'radio') return els.find((e) => e.checked)?.value ?? '';
+      return els[0].value;
+    };
+    const refresh = () => {
+      for (const w of wrappers) {
+        const cond = w.dataset.showif ? JSON.parse(w.dataset.showif) as { field: string; equals: string } : null;
+        const show = !cond || valueOf(cond.field) === cond.equals;
+        w.hidden = !show;
+        w.querySelectorAll<HTMLInputElement>('input, select, textarea').forEach((i) => (i.disabled = !show));
+      }
+    };
+    form.addEventListener('input', refresh);
+    form.addEventListener('change', refresh);
+    refresh();
+  }
+</script>

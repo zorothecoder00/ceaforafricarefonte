@@ -10,6 +10,7 @@ import { notify } from '../../lib/notify';
 import { resolveProgramme } from '../../lib/calls';
 import { checkAnswers } from '../../lib/programmes';
 import { message } from '../../lib/templates';
+import { emit } from '../../lib/automations';
 
 export const prerender = false;
 
@@ -38,6 +39,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   await db.insert(programmeApplication).values({ reference: ref, userId: u.id, programme: p.data.programme, data });
   if (prog.role) await db.insert(userRole).values({ userId: u.id, role: prog.role }).onConflictDoNothing();
   await audit(u.id, 'candidature', ref, { programme: p.data.programme });
+  await emit('candidature.recue', { reference: ref, programme: p.data.programme, intitule: prog.label }, ref);
   await notify(u.id, await message('candidature.recue', { reference: ref, programme: prog.label }), '/espace/candidatures', { email: true, whatsapp: true });
   return json({ ok: true, reference: ref, message: `Candidature ${ref} reçue.` });
 };

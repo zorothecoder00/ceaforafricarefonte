@@ -1,0 +1,41 @@
+---
+/* Lien de partage d'un document (CDC §12, liens expirables) : page de confirmation (GET), téléchargement (POST) — un aperçu
+   automatique du lien (messagerie, antispam) ne consomme donc pas les téléchargements. Version courante, filigrane au nom du destinataire. */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { and, eq, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { docShare, docFile, docFolder, docVersion } from '../../db/schema/workflows';
+import { serveVersion } from '../../lib/doc-download';
+import { clientIp } from '../../lib/session';
+
+export const prerender = false;
+Astro.response.headers.set('X-Robots-Tag', 'noindex');
+const token = Astro.params.token ?? '';
+const [row] = /^[\w-]{20,64}$/.test(token) ? await db.select({ s: docShare, f: docFile, d: docFolder }).from(docShare).innerJoin(docFile, eq(docFile.id, docShare.fileId)).innerJoin(docFolder, eq(docFolder.id, docFile.folderId)).where(eq(docShare.token, token)) : [];
+const reason = !row ? 'Ce lien n’existe pas.' : row.s.revokedAt ? 'Ce lien a été révoqué.' : row.s.expiresAt < new Date() ? 'Ce lien a expiré.' : row.f.archived ? 'Ce document n’est plus disponible.'
+  : row.s.maxDownloads != null && row.s.downloads >= row.s.maxDownloads ? 'Le nombre de téléchargements autorisés est atteint.' : null;
+if (!reason && Astro.request.method === 'POST') {
+  // Comptage atomique : deux clics simultanés ne dépassent pas la limite
+  const [ok] = await db.update(docShare).set({ downloads: sql`${docShare.downloads} + 1` })
+    .where(and(eq(docShare.id, row!.s.id), row!.s.maxDownloads != null ? sql`${docShare.downloads} < ${row!.s.maxDownloads}` : undefined)).returning({ id: docShare.id });
+  if (ok) {
+    const [v] = await db.select().from(docVersion).where(and(eq(docVersion.fileId, row!.f.id), eq(docVersion.version, row!.f.version)));
+    if (v) return serveVersion(v, row!.f.name, { watermark: row!.d.watermark, who: `${row!.s.recipient} (lien de partage)`, fileId: row!.f.id, shareId: row!.s.id, ip: clientIp(Astro.request) });
+  }
+}
+---
+<BaseLayout title="Document partagé">
+  <PageHead title="Document partagé" lead="Document transmis par CEA FOR AFRICA." crumbs={[['', 'Document partagé']]} />
+  <section class="block"><div class="wrap" style="max-width:620px">
+    <div class="panel">
+      {reason ? <p style="margin:0">{reason} Demandez un nouveau lien à votre contact chez CEA.</p> : (
+        <form method="post">
+          <p style="margin-top:0"><b>{row!.f.name}</b></p>
+          <p class="small muted">Destinataire : {row!.s.recipient} · lien valable jusqu'au {row!.s.expiresAt.toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' })}{row!.s.maxDownloads != null ? ` · ${row!.s.maxDownloads - row!.s.downloads} téléchargement(s) restant(s)` : ''}.{row!.d.watermark && ' Les PDF portent un filigrane à votre nom.'}</p>
+          <button class="btn btn-primary" type="submit">Télécharger</button>
+        </form>
+      )}
+    </div>
+  </div></section>
+</BaseLayout>

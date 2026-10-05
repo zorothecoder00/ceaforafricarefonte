@@ -2,7 +2,7 @@
 /* Messages de contact et tickets (routés par équipe) et signalements (CDC §11, §12 « Support » : priorités, assignation, SLA, satisfaction).
    Responsable pays : limité à ses pays. */
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import { asc, desc, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '../../lib/db';
 import { contactMessage, report, ticketFlowEnum, ticketPriorityEnum, ticketReply } from '../../db/schema/app';
 import { user } from '../../db/schema/auth';
@@ -17,12 +17,14 @@ const tab = Astro.url.searchParams.get('onglet') === 'signalements' && can(me.ro
 const st = Astro.url.searchParams.get('statut') ?? 'nouveau';
 const status = (ticketFlowEnum.enumValues as readonly string[]).includes(st) ? (st as (typeof ticketFlowEnum.enumValues)[number]) : 'nouveau';
 const cs = await countriesFor(me, 'messages_contact');
-const msgs = tab === 'messages' && can(me.roles, 'messages_contact', 'L') ? await db.select().from(contactMessage).where(cs ? inArray(contactMessage.country, cs.length ? cs : ['--']) : undefined).orderBy(desc(contactMessage.createdAt)).limit(200) : [];
+// Recherche par référence (lien depuis un formulaire, un rapport…) : tous statuts confondus, cherchée en base
+const qref = (Astro.url.searchParams.get('q') ?? '').trim().toUpperCase();
+const msgs = tab === 'messages' && can(me.roles, 'messages_contact', 'L') ? await db.select().from(contactMessage).where(and(cs ? inArray(contactMessage.country, cs.length ? cs : ['--']) : undefined, qref ? eq(contactMessage.reference, qref) : undefined)).orderBy(desc(contactMessage.createdAt)).limit(200) : [];
 const reps = tab === 'signalements' ? await db.select().from(report).orderBy(desc(report.createdAt)).limit(200) : [];
 const L: Record<string, string> = { nouveau: 'Nouveau', en_cours: 'En cours', traite: 'Traité', clos: 'Clos' };
 const mine = Astro.url.searchParams.get('mes') === '1';
 const PRIO = { urgente: 0, haute: 1, normale: 2, basse: 3 } as const;
-const list = (tab === 'messages' ? msgs : reps).filter((x) => x.status === status && (!mine || tab !== 'messages' || (x as (typeof msgs)[number]).assigneeId === me.id));
+const list = (tab === 'messages' ? msgs : reps).filter((x) => (qref ? tab === 'messages' && (x as (typeof msgs)[number]).reference === qref : x.status === status) && (!mine || tab !== 'messages' || (x as (typeof msgs)[number]).assigneeId === me.id));
 // File de tickets : priorité, puis échéance la plus proche
 if (tab === 'messages') (list as typeof msgs).sort((a, b) => PRIO[a.priority] - PRIO[b.priority] || (a.dueAt?.getTime() ?? Infinity) - (b.dueAt?.getTime() ?? Infinity));
 const ids = (list as typeof msgs).map((m) => m.id);

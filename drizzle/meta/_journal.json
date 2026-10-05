@@ -162,6 +162,20 @@
       "when": 1791206588762,
       "tag": "0022_finance_parametrage",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791209246730,
+      "tag": "0023_formulaires_workflows_ged",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791209858796,
+      "tag": "0024_tickets_relances",
+      "breakpoints": true
     }
   ]
 }

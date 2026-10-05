@@ -8,6 +8,7 @@ import { rateLimit, isBot, readJson } from '../../lib/guard';
 import { sendEmail } from '../../lib/messaging';
 import { env } from '../../lib/env';
 import { acknowledge, dueFrom } from '../../lib/support';
+import { emit } from '../../lib/automations';
 
 export const prerender = false;
 
@@ -40,6 +41,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const ref = reference('MSG');
   const team = TEAMS[p.data.motif];
   await db.insert(contactMessage).values({ reference: ref, motif: p.data.motif, routedTeam: team, country: p.data.country, name: p.data.name, contact: p.data.contact, message: p.data.message, userId: locals.user?.id ?? null, dueAt: dueFrom('2 jours ouvrés') });
+  await emit('ticket.cree', { reference: ref, motif: p.data.motif, equipe: team, pays: p.data.country ?? null, priorite: 'normale' }, ref);
   await audit(locals.user?.id, 'contact.message', ref, { team, country: p.data.country }, clientIp(request));
   const inbox = env('CONTACT_EMAIL');
   if (inbox) await sendEmail(inbox, `[${team}] ${p.data.motif} — ${ref}`, `${p.data.name} (${p.data.contact}) — pays : ${p.data.country ?? '—'}\n\n${p.data.message}`).catch(() => {});

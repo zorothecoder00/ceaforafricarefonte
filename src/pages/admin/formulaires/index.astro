@@ -1,0 +1,45 @@
+---
+/* Formulaires sans code (CDC §12) : liste, création. Chaque réponse devient un ticket routé vers une équipe (Messages et signalements). */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { desc, sql } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { formDef, formSubmission } from '../../../db/schema/workflows';
+import { can } from '../../../lib/rbac';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const rows = await db.select({ f: formDef, n: sql<number>`(select count(*)::int from ${formSubmission} where ${formSubmission.formId} = ${formDef.id})` }).from(formDef).orderBy(desc(formDef.updatedAt));
+const ST: Record<string, [string, string]> = { brouillon: ['', 'Brouillon'], publie: ['ok', 'Publié'], clos: ['bad', 'Clos'] };
+const starter = [
+  { key: 'nom', label: 'Nom complet', kind: 'text', options: [], required: true, help: '', showIf: null },
+  { key: 'email', label: 'E-mail', kind: 'email', options: [], required: true, help: '', showIf: null },
+  { key: 'message', label: 'Votre demande', kind: 'textarea', options: [], required: true, help: '', showIf: null },
+];
+---
+<AdminLayout title="Formulaires" lead="Formulaires créés sans développeur : champs conditionnels, routage vers la bonne équipe, accusé de réception avec numéro de suivi." obj="formulaires">
+  <div class="panel scroll-x">
+    {rows.length === 0 ? <p class="small muted" style="margin:0">Aucun formulaire.</p> : (
+      <table class="t"><thead><tr><th>Formulaire</th><th>Adresse</th><th>État</th><th>Réponses</th></tr></thead>
+        <tbody>{rows.map(({ f, n }) => <tr><td><a href={`/admin/formulaires/${f.id}`}><b>{f.title}</b></a><div class="xs muted">Équipe par défaut : {f.defaultTeam} · réponse {f.delay}</div></td><td class="small"><a href={`/formulaires/${f.slug}`} target="_blank" rel="noopener">/formulaires/{f.slug}</a></td><td><span class={`tag ${ST[f.status][0]}`}>{ST[f.status][1]}</span></td><td class="small">{n}</td></tr>)}</tbody></table>
+    )}
+  </div>
+  {can(me.roles, 'formulaires', 'C') && (
+    <form class="panel row" id="newF" style="margin-top:14px;gap:8px;flex-wrap:wrap;align-items:flex-end">
+      <div style="flex:2;min-width:200px"><label class="f" for="t">Nouveau formulaire</label><input class="in" id="t" name="title" required minlength="3" placeholder="Demande de partenariat" /></div>
+      <div style="flex:1;min-width:160px"><label class="f" for="s">Adresse</label><input class="in" id="s" name="slug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="partenariat" /></div>
+      <button class="btn btn-primary btn-sm" type="submit">Créer</button>
+    </form>
+  )}
+  <script type="application/json" id="starter" set:html={JSON.stringify(starter)} />
+</AdminLayout>
+<script>
+  document.getElementById('newF')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target as HTMLFormElement);
+    const fields = JSON.parse(document.getElementById('starter')!.textContent!);
+    const r = await fetch('/api/admin/formulaires', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'save', title: fd.get('title'), slug: fd.get('slug'), intro: '', fields, routing: [], defaultTeam: 'Accueil', delay: '2 jours ouvrés', ack: 'Merci, votre demande est bien reçue.', requireLogin: false }) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : { error: 'Erreur réseau.' };
+    (window as unknown as { toast: (t: string) => void }).toast(d.message ?? d.error ?? 'Erreur.');
+    if (d.redirect) setTimeout(() => (location.href = d.redirect), 500);
+  });
+</script>
