@@ -8,7 +8,7 @@ const wa = (import.meta.env.PUBLIC_WHATSAPP_NUMBER ?? '').replace(/\D/g, '');
 const index = HELP.map((h) => ({ s: h.slug, q: h.q, a: h.a.join(' '), c: HELP_CATS[h.cat] }));
 ---
 <BaseLayout title="Centre d'aide">
-  <PageHead title="Centre d'aide" lead="Trouvez une réponse en quelques secondes, ou écrivez à l'équipe : chaque demande reçoit un numéro de suivi." crumbs={[['', "Centre d'aide"]]} />
+  <PageHead title="Centre d'aide" lead="Réponses rapides, tutoriels et contact du support." crumbs={[['', "Centre d'aide"]]} />
   <section class="block">
     <div class="wrap">
       <label class="f" for="hq">Rechercher dans l'aide</label>
