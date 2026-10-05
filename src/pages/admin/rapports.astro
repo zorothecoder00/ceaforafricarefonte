@@ -1,0 +1,85 @@
+---
+/* Rapports (CDC §12, analytique) : constructeur (jeu de données, regroupement, mesure, période, pays), résultat en tableau et en barres,
+   rapports enregistrés, exports CSV et XLSX (journalisés) et PDF (impression de la page). Seuls les jeux autorisés par les droits sont proposés. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { desc } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { savedReport } from '../../db/schema/finance';
+import { can } from '../../lib/rbac';
+import { countriesFor } from '../../lib/admin';
+import { DATASETS, Spec, runReport } from '../../lib/reports';
+import { allEvents, allCourses } from '../../lib/catalog';
+import { COUNTRIES, country } from '../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const allowed = Object.entries(DATASETS).filter(([, d]) => can(me.roles, d.obj, 'L'));
+const q = Astro.url.searchParams;
+const ds = allowed.find(([k]) => k === q.get('dataset'))?.[0] ?? allowed[0]?.[0];
+const d = ds ? DATASETS[ds] : null;
+const year = new Date().getFullYear();
+const spec = d ? Spec.safeParse({ dataset: ds, by: q.get('by') && q.get('by')! in d.dims ? q.get('by') : Object.keys(d.dims)[0], measure: q.get('measure') && q.get('measure')! in d.measures ? q.get('measure') : Object.keys(d.measures)[0], from: q.get('from') || `${year}-01-01`, to: q.get('to') || new Date().toISOString().slice(0, 10), country: q.get('country') || null }) : null;
+const scope = await countriesFor(me, 'rapports', 'L');
+const result = spec?.success ? await runReport(spec.data, scope) : null;
+// Libellés lisibles pour les identifiants (événements, cours, pays)
+const [events, courses] = spec?.success && (spec.data.by === 'evenement' || spec.data.by === 'cours') ? await Promise.all([allEvents({ hidden: true }), allCourses({ hidden: true })]) : [[], []];
+const label = (k: string) => (spec?.success && spec.data.by === 'pays' && k !== '—' ? country(k) : events.find((e) => e.id === k)?.t ?? courses.find((c) => c.id === k)?.t ?? k);
+const max = Math.max(1, ...(result?.rows.map((r) => r.v) ?? [1]));
+const total = result?.rows.reduce((n, r) => n + r.v, 0) ?? 0;
+const saved = await db.select().from(savedReport).orderBy(desc(savedReport.createdAt)).limit(50);
+const qs = spec?.success ? new URLSearchParams(Object.entries(spec.data).filter(([, v]) => v != null) as [string, string][]).toString() : '';
+const additive = spec?.success && /^(nombre|montant|recettes|ttc)$/.test(spec.data.measure);
+---
+<AdminLayout title="Rapports" lead={scope ? `Données limitées à vos pays : ${scope.map(country).join(', ')}.` : 'Construisez un rapport, enregistrez-le, exportez-le. Chaque export est inscrit au journal d’audit.'} obj="rapports">
+  {!d && <div class="empty">Aucun jeu de données n'est accessible avec vos droits.</div>}
+  {d && spec && (
+    <form class="panel row noprint" method="get" style="gap:8px;flex-wrap:wrap;align-items:flex-end">
+      <div><label class="f" for="ds">Données</label><select class="in" id="ds" name="dataset" onchange="this.form.by.value='';this.form.measure.value='';this.form.submit()">{allowed.map(([k, x]) => <option value={k} selected={k === ds}>{x.label}</option>)}</select></div>
+      <div><label class="f" for="by">Regrouper par</label><select class="in" id="by" name="by">{Object.entries(d.dims).map(([k, x]) => <option value={k} selected={spec.success && k === spec.data.by}>{x.label}</option>)}</select></div>
+      <div><label class="f" for="me">Mesure</label><select class="in" id="me" name="measure">{Object.entries(d.measures).map(([k, x]) => <option value={k} selected={spec.success && k === spec.data.measure}>{x.label}</option>)}</select></div>
+      <div><label class="f" for="fr">Du</label><input class="in" id="fr" name="from" type="date" value={spec.success ? spec.data.from : ''} /></div>
+      <div><label class="f" for="to">Au</label><input class="in" id="to" name="to" type="date" value={spec.success ? spec.data.to : ''} /></div>
+      {d.country && <div><label class="f" for="co">Pays</label><select class="in" id="co" name="country"><option value="">Tous</option>{Object.entries(COUNTRIES).filter(([c]) => !scope || scope.includes(c)).map(([c, n]) => <option value={c} selected={spec.success && c === spec.data.country}>{n}</option>)}</select></div>}
+      <button class="btn btn-primary btn-sm" type="submit">Afficher</button>
+    </form>
+  )}
+  {spec && !spec.success && <p class="small">Paramètres invalides.</p>}
+  {result && spec?.success && d && (
+    <div class="panel" style="margin-top:14px">
+      <div class="row between" style="flex-wrap:wrap;gap:8px">
+        <h3 style="margin:0">{d.label} — {d.measures[spec.data.measure].label} par {d.dims[spec.data.by].label.toLowerCase()} <span class="xs muted">({new Date(spec.data.from).toLocaleDateString('fr-FR')} → {new Date(spec.data.to).toLocaleDateString('fr-FR')}{spec.data.country ? ` · ${country(spec.data.country)}` : ''})</span></h3>
+        <span class="row noprint" style="gap:6px"><a class="btn btn-ghost btn-sm" href={`/api/admin/rapports?${qs}&format=xlsx`}>XLSX</a><a class="btn btn-ghost btn-sm" href={`/api/admin/rapports?${qs}&format=csv`}>CSV</a><button class="btn btn-ghost btn-sm" type="button" onclick="print()">PDF</button>{can(me.roles, 'rapports', 'C') && <button class="btn btn-ghost btn-sm" type="button" id="save">Enregistrer</button>}</span>
+      </div>
+      {result.scoped && <p class="small muted">Ces données ne sont pas réparties par pays : elles ne sont pas accessibles dans votre périmètre.</p>}
+      {result.rows.length === 0 && !result.scoped && <p class="small muted">Aucune donnée sur cette période.</p>}
+      {result.rows.length > 0 && (
+        <table class="t" style="margin-top:10px">
+          <thead><tr><th>{d.dims[spec.data.by].label}</th><th style="width:55%"></th><th style="text-align:right">{d.measures[spec.data.measure].label}</th></tr></thead>
+          <tbody>{result.rows.map((r) => <tr><td class="small">{label(r.k)}</td><td><div style={`height:12px;border-radius:6px;background:var(--navy);width:${Math.max(1, Math.round((r.v / max) * 100))}%`} aria-hidden="true"></div></td><td class="small" style="text-align:right">{r.v.toLocaleString('fr-FR')}</td></tr>)}</tbody>
+          {additive && result.rows.length > 1 && <tfoot><tr><th>Total</th><th></th><th style="text-align:right">{total.toLocaleString('fr-FR')}</th></tr></tfoot>}
+        </table>
+      )}
+    </div>
+  )}
+  {saved.length > 0 && (
+    <div class="panel noprint" style="margin-top:14px">
+      <h3 style="margin-top:0">Rapports enregistrés</h3>
+      {saved.filter((s) => { const p = Spec.safeParse(s.spec); return p.success && can(me.roles, DATASETS[p.data.dataset].obj, 'L'); }).map((s) => { const p = Spec.parse(s.spec); const link = new URLSearchParams(Object.entries(p).filter(([, v]) => v != null) as [string, string][]).toString(); return (
+        <div class="list-row"><a class="small" href={`?${link}`}>{s.name}</a><span class="row" style="gap:6px"><span class="xs muted">{DATASETS[p.dataset].label}</span><button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/rapports" data-body={JSON.stringify({ action: 'delete', id: s.id })} data-confirm="Supprimer ce rapport enregistré ?" data-reload aria-label={`Supprimer ${s.name}`}>✕</button></span></div>
+      ); })}
+    </div>
+  )}
+  <style>{`@media print{.noprint,nav.side,header,footer,.fab,.chat{display:none!important}}`}</style>
+  <script type="application/json" id="spec" set:html={JSON.stringify(spec?.success ? spec.data : null)} />
+</AdminLayout>
+<script>
+  document.getElementById('save')?.addEventListener('click', async () => {
+    const spec = JSON.parse(document.getElementById('spec')!.textContent!);
+    const name = prompt('Nom du rapport :');
+    if (!name) return;
+    const r = await fetch('/api/admin/rapports', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'save', name, spec }) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : { error: 'Erreur réseau.' };
+    (window as unknown as { toast: (t: string) => void }).toast(d.message ?? d.error ?? 'Erreur.');
+    if (d.ok) setTimeout(() => location.reload(), 600);
+  });
+</script>

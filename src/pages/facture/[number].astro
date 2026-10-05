@@ -1,0 +1,66 @@
+---
+/* Facture ou avoir (CDC §10, §12) : document imprimable (« Imprimer / enregistrer en PDF »), mentions de l'identité légale et de la fiscalité
+   définies dans le paramétrage. Visible par la personne facturée et par l'équipe finance (droit « paiements »). */
+import { eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { invoice } from '../../db/schema/finance';
+import { can } from '../../lib/rbac';
+import { getSetting } from '../../lib/settings';
+import { money } from '../../data/site';
+import type { Buyer, Line } from '../../lib/invoices';
+
+export const prerender = false;
+const me = Astro.locals.user;
+if (!me) return Astro.redirect(`/connexion?retour=${encodeURIComponent(Astro.url.pathname)}`);
+const num = (Astro.params.number ?? '').toUpperCase();
+const [f] = /^(FAC|AV)-\d{4}-\d{6}$/.test(num) ? await db.select().from(invoice).where(eq(invoice.number, num)) : [];
+if (!f || (f.userId !== me.id && !can(me.roles, 'paiements', 'L'))) return new Response('Document introuvable', { status: 404 });
+const [org, fisc] = await Promise.all([getSetting('organisation'), getSetting('fiscalite')]);
+const [orig] = f.originalId ? await db.select({ number: invoice.number }).from(invoice).where(eq(invoice.id, f.originalId)) : [];
+const buyer = f.buyer as Buyer, lines = f.lines as Line[];
+const fx = (n: number) => money(Math.abs(n), '0 FCFA').replace(/^/, n < 0 ? '−' : '');
+const METHOD: Record<string, string> = { orange_money: 'Orange Money', mtn_momo: 'MTN MoMo', wave: 'Wave', moov: 'Moov Money', mpesa: 'M-Pesa', carte: 'Carte bancaire', virement: 'Virement', cheque: 'Chèque', especes: 'Espèces', mobile_money: 'Mobile Money' };
+const title = f.kind === 'avoir' ? 'Avoir' : 'Facture';
+Astro.response.headers.set('X-Robots-Tag', 'noindex');
+---
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{title} {f.number} — {org.name}</title>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;color:#14202e;background:#eef1f5;margin:0;padding:24px;font-size:14px}
+    .doc{max-width:780px;margin:auto;background:#fff;padding:40px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+    h1{margin:0;font-size:26px;color:#082B4C} .row{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
+    table{width:100%;border-collapse:collapse;margin:24px 0} th,td{padding:8px;border-bottom:1px solid #dfe5ec;text-align:left} th{background:#f4f6f9}
+    td.n,th.n{text-align:right;white-space:nowrap} .muted{color:#5b6b7c} .tot td{border:0;padding:4px 8px} .big{font-size:16px;font-weight:bold}
+    .tag{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:bold} .ok{background:#E3F3EA;color:#1E7A4C} .due{background:#FDF1D8;color:#7a5600} .ko{background:#FBE7E4;color:#B23A2E}
+    .bar{max-width:780px;margin:0 auto 12px;display:flex;gap:8px} button,a.b{font:inherit;padding:8px 14px;border-radius:8px;border:1px solid #c8d2dd;background:#fff;cursor:pointer;color:inherit;text-decoration:none}
+    @media print{body{background:#fff;padding:0}.doc{box-shadow:none;padding:0}.bar{display:none}}
+  </style>
+</head>
+<body>
+  <div class="bar"><button type="button" onclick="print()">Imprimer / enregistrer en PDF</button><a class="b" href={f.userId === me.id ? '/espace/paiements' : '/admin/finance'}>Retour</a></div>
+  <div class="doc">
+    <div class="row">
+      <div><h1>{org.name}</h1><div class="muted">{org.legalForm}<br />{org.address}{org.rccm && <><br />RCCM : {org.rccm}</>}{org.taxId && <><br />NIF : {org.taxId}</>}<br />{org.email}{org.phone && ` · ${org.phone}`}</div></div>
+      <div style="text-align:right"><h1>{title}</h1><div class="big">{f.number}</div><div class="muted">Émis le {f.issuedAt.toLocaleDateString('fr-FR')}</div>
+        {orig && <div class="muted">Sur la facture {orig.number}</div>}
+        <div style="margin-top:6px">{f.kind === 'avoir' ? <span class="tag ok">Avoir</span> : f.status === 'payee' ? <span class="tag ok">Payée</span> : f.status === 'annulee' ? <span class="tag ko">Annulée</span> : <span class="tag due">À payer{f.dueOn ? ` avant le ${new Date(f.dueOn).toLocaleDateString('fr-FR')}` : ''}</span>}</div></div>
+    </div>
+    <div style="margin-top:28px"><b>{f.kind === 'avoir' ? 'Bénéficiaire' : 'Facturé à'}</b><br />{buyer.company && <>{buyer.company}<br /></>}{buyer.name}{buyer.email && <><br />{buyer.email}</>}{buyer.address && <><br />{buyer.address}</>}{buyer.taxId && <><br />NIF : {buyer.taxId}</>}</div>
+    <table>
+      <thead><tr><th>Désignation</th><th class="n">Qté</th><th class="n">Prix unitaire HT</th><th class="n">Total HT</th></tr></thead>
+      <tbody>{lines.map((l) => <tr><td>{l.label}</td><td class="n">{l.qty}</td><td class="n">{fx(l.unitXof)}</td><td class="n">{fx(l.qty * l.unitXof)}</td></tr>)}</tbody>
+    </table>
+    <table class="tot" style="width:auto;margin-left:auto">
+      <tr><td>Total HT</td><td class="n">{fx(f.totalHtXof)}</td></tr>
+      <tr><td>{f.taxRate ? `TVA ${(f.taxRate / 10).toLocaleString('fr-FR')} %` : fisc.mention}</td><td class="n">{fx(f.taxXof)}</td></tr>
+      <tr class="big"><td>Total TTC</td><td class="n">{fx(f.totalXof)}</td></tr>
+    </table>
+    {f.paidAt && f.status === 'payee' && f.kind === 'facture' && <p class="muted">Réglée le {f.paidAt.toLocaleDateString('fr-FR')}{f.paymentMethod ? ` par ${METHOD[f.paymentMethod] ?? f.paymentMethod}` : ''}.</p>}
+    {f.notes && <p class="muted">{f.notes}</p>}
+    <p class="muted" style="margin-top:32px;font-size:12px">Montants en francs CFA (XOF). {org.footer}</p>
+  </div>
+</body>
+</html>

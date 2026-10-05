@@ -1,0 +1,174 @@
+---
+/* Finance (CDC §12) : factures et avoirs (automatiques et manuelles), encaissements, rapprochement avec le relevé de l'agrégateur,
+   exports comptables (journal des ventes SYSCOHADA, factures) en CSV ou XLSX. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Money from '../../components/Money.astro';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { payment } from '../../db/schema/app';
+import { invoice, reconciliation } from '../../db/schema/finance';
+import { crmOrg } from '../../db/schema/crm';
+import { can } from '../../lib/rbac';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const q = Astro.url.searchParams;
+const tab = q.get('onglet') ?? 'factures';
+const year = Number(q.get('annee')) || new Date().getFullYear();
+const kind = q.get('type') === 'avoir' ? 'avoir' : q.get('type') === 'facture' ? 'facture' : '';
+const st = q.get('statut') ?? '';
+const canV = can(me.roles, 'paiements', 'V'), canC = can(me.roles, 'paiements', 'C'), canM = can(me.roles, 'paiements', 'M');
+const invoices = tab === 'factures' ? await db.select().from(invoice).where(and(eq(invoice.year, year), kind ? eq(invoice.kind, kind) : undefined, st ? eq(invoice.status, st as 'payee') : undefined)).orderBy(desc(invoice.issuedAt)).limit(500) : [];
+const [{ missing }] = await db.select({ missing: sql<number>`count(*)::int` }).from(payment).leftJoin(invoice, and(eq(invoice.paymentId, payment.id), eq(invoice.kind, 'facture'))).where(and(eq(payment.status, 'reussi'), isNull(invoice.id)));
+const [sums] = await db.select({
+  billed: sql<number>`coalesce(sum(${invoice.totalXof}) filter (where ${invoice.kind} = 'facture' and ${invoice.status} <> 'annulee'), 0)::float`,
+  credited: sql<number>`coalesce(-sum(${invoice.totalXof}) filter (where ${invoice.kind} = 'avoir'), 0)::float`,
+  due: sql<number>`coalesce(sum(${invoice.totalXof}) filter (where ${invoice.status} = 'a_payer'), 0)::float`,
+}).from(invoice).where(eq(invoice.year, year));
+const orgs = tab === 'factures' && canC ? await db.select({ id: crmOrg.id, name: crmOrg.name }).from(crmOrg).orderBy(crmOrg.name) : [];
+const runs = tab === 'rapprochement' ? await db.select().from(reconciliation).orderBy(desc(reconciliation.createdAt)).limit(30) : [];
+const run = runs.find((r) => r.id === q.get('r')) ?? runs[0];
+type Gap = { kind: string; ref: string; detail: string };
+const GAP: Record<string, string> = { montant: 'Montant différent', statut: 'Payé mais non confirmé chez nous', absent_chez_nous: 'Encaissé, inconnu chez nous', absent_du_releve: 'Payé chez nous, absent du relevé' };
+const ST: Record<string, [string, string]> = { payee: ['ok', 'Payée'], a_payer: ['gold', 'À payer'], annulee: ['bad', 'Annulée'] };
+const today = new Date().toISOString().slice(0, 10), monthStart = today.slice(0, 8) + '01';
+---
+<AdminLayout title="Factures et comptabilité" lead="Une facture pour chaque paiement réussi, numérotation continue par année. Une facture émise ne se modifie pas : on émet un avoir." obj="paiements">
+  <nav class="subnav" style="margin:0 0 14px">{[['factures', 'Factures et avoirs'], ['rapprochement', 'Rapprochement'], ['exports', 'Exports comptables']].map(([k, l]) => <a href={`?onglet=${k}`} aria-current={k === tab ? 'page' : undefined}>{l}</a>)}<a href="/admin/paiements">Transactions →</a></nav>
+
+  {tab === 'factures' && (
+    <>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px">
+        <div class="panel"><b style="font-size:1.2rem"><Money xof={sums.billed} /></b><div class="xs muted">Facturé en {year}</div></div>
+        <div class="panel"><b style="font-size:1.2rem"><Money xof={sums.credited} /></b><div class="xs muted">Avoirs en {year}</div></div>
+        <div class="panel"><b style="font-size:1.2rem"><Money xof={sums.due} /></b><div class="xs muted">Restant à encaisser</div></div>
+      </div>
+      {missing > 0 && <div class="panel" style="margin-bottom:12px"><span class="small"><b>{missing} paiement{missing > 1 ? 's' : ''} réussi{missing > 1 ? 's' : ''}</b> sans facture (antérieurs à la facturation automatique).</span> {canV && <button class="btn btn-primary btn-sm" type="button" data-post="/api/admin/finance" data-body={JSON.stringify({ action: 'backfill' })} data-confirm="Émettre les factures manquantes, dans l'ordre chronologique des paiements ?" data-reload>Émettre les factures</button>}</div>}
+      <form class="filters" method="get" style="margin-top:0">
+        <input type="hidden" name="onglet" value="factures" />
+        <select class="in" name="annee" aria-label="Année">{[0, 1, 2].map((i) => <option selected={year === new Date().getFullYear() - i}>{new Date().getFullYear() - i}</option>)}</select>
+        <select class="in" name="type" aria-label="Type"><option value="">Factures et avoirs</option><option value="facture" selected={kind === 'facture'}>Factures</option><option value="avoir" selected={kind === 'avoir'}>Avoirs</option></select>
+        <select class="in" name="statut" aria-label="Statut"><option value="">Tous les statuts</option>{Object.entries(ST).map(([k, [, l]]) => <option value={k} selected={k === st}>{l}</option>)}</select>
+        <button class="btn btn-ghost btn-sm" type="submit">Filtrer</button>
+      </form>
+      <div class="panel scroll-x">
+        {invoices.length === 0 ? <p class="small muted" style="margin:0">Aucun document.</p> : (
+          <table class="t"><thead><tr><th>Numéro</th><th>Date</th><th>Client</th><th>Objet</th><th>TTC</th><th>Statut</th><th></th></tr></thead>
+            <tbody>{invoices.map((f) => { const b = f.buyer as { name?: string; company?: string }; return (
+              <tr><td><a href={`/facture/${f.number}`} target="_blank" rel="noopener"><b>{f.number}</b></a></td><td class="small">{f.issuedAt.toLocaleDateString('fr-FR')}</td><td class="small">{b.company || b.name}</td><td class="small">{f.purpose}</td>
+                <td class="small"><Money xof={f.totalXof} /></td><td><span class={`tag ${ST[f.status][0]}`}>{f.kind === 'avoir' ? 'Avoir' : ST[f.status][1]}</span></td>
+                <td class="small">{f.kind === 'facture' && f.status !== 'annulee' && (
+                  <span class="row" style="gap:4px">
+                    {f.status === 'a_payer' && canM && <button class="btn btn-ghost btn-sm" type="button" data-paid={f.id}>Encaissée</button>}
+                    {canV && <button class="btn btn-ghost btn-sm" type="button" data-credit={f.id} data-total={f.totalXof} data-num={f.number}>Avoir</button>}
+                  </span>
+                )}</td></tr>
+            ); })}</tbody></table>
+        )}
+      </div>
+      {canC && (
+        <details class="panel" style="margin-top:14px"><summary><b>Facture manuelle</b> <span class="xs muted">(sponsoring, prestation réglée par virement…)</span></summary>
+          <form id="manF" style="margin-top:10px">
+            <div class="grid g2" style="gap:0 12px">
+              <div><label class="f" for="mo">Organisation du CRM</label><select class="in" id="mo" name="orgId"><option value="">—</option>{orgs.map((o) => <option value={o.id}>{o.name}</option>)}</select></div>
+              <div><label class="f" for="mp">Objet comptable</label><select class="in" id="mp" name="purpose">{['sponsoring', 'programme', 'adhesion', 'billet', 'cours', 'autre'].map((p) => <option>{p}</option>)}</select></div>
+              <div><label class="f" for="mc">Société facturée</label><input class="in" id="mc" name="company" maxlength="160" /></div>
+              <div><label class="f" for="mn">Contact (nom)</label><input class="in" id="mn" name="name" required minlength="2" maxlength="160" /></div>
+              <div><label class="f" for="me">E-mail</label><input class="in" id="me" name="email" type="email" /></div>
+              <div><label class="f" for="mt">NIF du client</label><input class="in" id="mt" name="taxId" maxlength="60" /></div>
+              <div style="grid-column:1/-1"><label class="f" for="ma">Adresse</label><input class="in" id="ma" name="address" maxlength="300" /></div>
+            </div>
+            <h4 style="margin:12px 0 6px">Lignes (prix HT)</h4>
+            <div id="lines"></div>
+            <button class="btn btn-ghost btn-sm" type="button" id="addLine">+ Ligne</button>
+            <label class="f" for="mx">Notes</label><input class="in" id="mx" name="notes" maxlength="1000" placeholder="Conditions, référence de bon de commande…" />
+            <button class="btn btn-primary btn-sm" type="submit" style="margin-top:10px">Émettre la facture</button>
+          </form>
+        </details>
+      )}
+    </>
+  )}
+
+  {tab === 'rapprochement' && (
+    <>
+      {canV && (
+        <form class="panel" id="recF">
+          <h3 style="margin-top:0">Nouveau rapprochement</h3>
+          <p class="xs muted" style="margin-top:-6px">Exportez le relevé des transactions depuis l'espace de l'agrégateur (CSV) pour la période, puis déposez-le ici. Rien n'est modifié automatiquement : les écarts sont listés pour traitement.</p>
+          <div class="grid g2" style="gap:0 12px">
+            <div><label class="f" for="rp">Agrégateur</label><select class="in" id="rp" name="provider">{['CinetPay', 'PayDunya', 'FedaPay', 'Flutterwave', 'Paystack', 'Autre'].map((p) => <option>{p}</option>)}</select></div>
+            <div><label class="f" for="rf">Relevé (CSV)</label><input class="in" id="rf" name="file" type="file" accept=".csv,text/csv" required /></div>
+            <div><label class="f" for="rd">Du</label><input class="in" id="rd" name="from" type="date" required value={monthStart} /></div>
+            <div><label class="f" for="ra">Au</label><input class="in" id="ra" name="to" type="date" required value={today} /></div>
+          </div>
+          <button class="btn btn-primary btn-sm" type="submit" style="margin-top:10px">Rapprocher</button>
+        </form>
+      )}
+      {run && (
+        <div class="panel" style="margin-top:14px">
+          <h3 style="margin-top:0">{run.provider} — {run.periodFrom} au {run.periodTo} <span class="xs muted">({run.fileName}, {run.createdAt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })})</span></h3>
+          {(() => { const s = run.summary as Record<string, number>; return <p class="small">{s.lines} lignes au relevé · <b>{s.matched} concordants</b> · {s.montant} montants différents · {s.statut} à confirmer · {s.absentChezNous} inconnus chez nous · {s.absentDuReleve} absents du relevé</p>; })()}
+          <div class="scroll-x"><table class="t small"><thead><tr><th>Écart</th><th>Référence</th><th>Détail</th></tr></thead>
+            <tbody>{(run.items as Gap[]).map((g) => <tr><td><span class={`tag ${g.kind === 'montant' || g.kind === 'absent_chez_nous' ? 'bad' : 'gold'}`}>{GAP[g.kind]}</span></td><td>{g.ref}</td><td>{g.detail}</td></tr>)}</tbody></table></div>
+          {!(run.items as Gap[]).length && <p class="small" style="margin:0">Aucun écart : relevé et paiements concordent.</p>}
+        </div>
+      )}
+      {runs.length > 1 && <details class="panel" style="margin-top:10px"><summary class="small">Rapprochements précédents</summary>{runs.map((r) => <div class="list-row"><a class="small" href={`?onglet=rapprochement&r=${r.id}`}>{r.provider} · {r.periodFrom} → {r.periodTo}</a><span class="xs muted">{r.createdAt.toLocaleDateString('fr-FR')}</span></div>)}</details>}
+    </>
+  )}
+
+  {tab === 'exports' && (
+    <form class="panel" method="get" action="/api/admin/export">
+      <h3 style="margin-top:0">Exports comptables</h3>
+      <div class="grid g2" style="gap:0 12px">
+        <div><label class="f" for="et">Export</label><select class="in" id="et" name="type"><option value="ventes">Journal des ventes (écritures SYSCOHADA)</option><option value="factures">Liste des factures et avoirs</option><option value="paiements">Transactions</option></select></div>
+        <div><label class="f" for="ef">Format</label><select class="in" id="ef" name="format"><option value="xlsx">Excel (XLSX)</option><option value="csv">CSV</option></select></div>
+        <div><label class="f" for="ed">Du</label><input class="in" id="ed" name="du" type="date" value={`${year}-01-01`} /></div>
+        <div><label class="f" for="ea">Au</label><input class="in" id="ea" name="au" type="date" value={today} /></div>
+      </div>
+      <button class="btn btn-primary btn-sm" type="submit" style="margin-top:10px">Télécharger</button>
+      <p class="xs muted" style="margin:8px 0 0">Comptes et journal définis dans <a href="/admin/parametrage">Paramétrage › Comptabilité</a>. Chaque export est inscrit au journal d'audit.</p>
+    </form>
+  )}
+</AdminLayout>
+<script>
+  const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+  const api = async (body: Record<string, unknown>) => {
+    const r = await fetch('/api/admin/finance', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : { error: 'Erreur réseau.' };
+    toast(d.message ?? d.error ?? 'Erreur.');
+    if (d.ok) setTimeout(() => (location.href = d.redirect ?? location.href), 700);
+  };
+  document.querySelectorAll<HTMLButtonElement>('[data-paid]').forEach((b) => b.addEventListener('click', () => {
+    const method = prompt('Moyen de paiement (virement, cheque, especes, mobile_money, carte) :', 'virement');
+    if (!method) return;
+    const paidAt = prompt('Date d’encaissement (AAAA-MM-JJ) :', new Date().toISOString().slice(0, 10));
+    if (paidAt) api({ action: 'paid', id: b.dataset.paid, method: method.trim(), paidAt: paidAt.trim() });
+  }));
+  document.querySelectorAll<HTMLButtonElement>('[data-credit]').forEach((b) => b.addEventListener('click', () => {
+    const amount = prompt(`Montant de l’avoir sur ${b.dataset.num} (FCFA TTC, au plus ${b.dataset.total}) :`, b.dataset.total);
+    if (!amount) return;
+    const reason = prompt('Motif (remboursement, annulation, geste commercial…) :');
+    if (reason) api({ action: 'credit', id: b.dataset.credit, amountXof: Number(amount), reason });
+  }));
+  // Facture manuelle : lignes dynamiques
+  const lines = document.getElementById('lines');
+  const addLine = () => lines?.insertAdjacentHTML('beforeend', '<div class="row" style="gap:6px;margin-bottom:6px"><input class="in" data-l="label" placeholder="Désignation" aria-label="Désignation" style="flex:3" /><input class="in" data-l="qty" type="number" min="1" value="1" aria-label="Quantité" style="width:80px" /><input class="in" data-l="unitXof" type="number" min="1" placeholder="Prix HT (FCFA)" aria-label="Prix unitaire HT" style="width:160px" /></div>');
+  if (lines) { addLine(); document.getElementById('addLine')!.addEventListener('click', addLine); }
+  document.getElementById('manF')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target as HTMLFormElement);
+    const ls = [...lines!.children].map((row) => Object.fromEntries([...row.querySelectorAll<HTMLInputElement>('[data-l]')].map((i) => [i.dataset.l, i.value]))).filter((l) => l.label);
+    if (!ls.length) return toast('Ajoutez au moins une ligne.');
+    if (!confirm('Émettre la facture ? Son numéro est définitif.')) return;
+    api({ action: 'manual', orgId: fd.get('orgId'), purpose: fd.get('purpose'), lines: ls, notes: fd.get('notes') || null, buyer: { name: fd.get('name'), email: fd.get('email') || null, company: fd.get('company') || null, taxId: fd.get('taxId') || null, address: fd.get('address') || null } });
+  });
+  document.getElementById('recF')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target as HTMLFormElement, fd = new FormData(f);
+    const file = fd.get('file') as File;
+    if (!file?.size) return toast('Choisissez le relevé.');
+    if (file.size > 4_000_000) return toast('Relevé trop volumineux (4 Mo au plus) : réduisez la période.');
+    api({ action: 'reconcile', provider: fd.get('provider'), fileName: file.name, csv: await file.text(), from: fd.get('from'), to: fd.get('to') });
+  });
+</script>

@@ -6,6 +6,8 @@ import { and, count, eq, inArray } from 'drizzle-orm';
 import { db } from './db';
 import * as s from '../db/schema';
 import { findCourse, findEvent } from './catalog';
+import { invoiceForPayment } from './invoices';
+import { message } from './templates';
 import { env, isProd } from './env';
 import { reference, audit } from './session';
 import { contactOf, deliverTickets, newTicketCode } from './tickets';
@@ -109,6 +111,8 @@ export async function settle(ref: string, info: { method?: string; providerRef?:
   if (!pay || pay.status === 'reussi') return pay;
   const [upd] = await db.update(s.payment).set({ status: 'reussi', paidAt: new Date(), method: info.method ?? pay.method, providerRef: info.providerRef ?? pay.providerRef })
     .where(and(eq(s.payment.reference, ref), eq(s.payment.status, 'en_attente'))).returning();
+  // Facture automatique (CDC §12) : son échec n'empêche jamais l'exécution de la commande
+  if (upd) await invoiceForPayment(upd.id).catch((e) => console.error('[facture]', e instanceof Error ? e.message : e));
   if (!upd || !pay.userId) return upd ?? pay; // déjà traité par un autre appel
   const meta = pay.metadata as Record<string, unknown>;
   const uid = pay.userId;
@@ -120,7 +124,7 @@ export async function settle(ref: string, info: { method?: string; providerRef?:
       await db.update(s.membership).set({ status: 'expiree' }).where(and(eq(s.membership.userId, uid), eq(s.membership.status, 'active')));
       const number = card(prof?.country ?? 'AF');
       await db.insert(s.membership).values({ userId: uid, plan: meta.ref as 'membre', cardNumber: number, endsAt: end, paymentId: pay.id });
-      await notify(uid, `Adhésion activée — carte n° ${number}`, '/espace/carte', { email: true, whatsapp: true });
+      await notify(uid, await message('adhesion.activee', { carte: number }), '/espace/carte', { email: true, whatsapp: true });
       break;
     }
     case 'cours':

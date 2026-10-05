@@ -9,6 +9,7 @@ import { json, fail, requireUser, reference, audit } from '../../lib/session';
 import { notify } from '../../lib/notify';
 import { resolveProgramme } from '../../lib/calls';
 import { checkAnswers } from '../../lib/programmes';
+import { message } from '../../lib/templates';
 
 export const prerender = false;
 
@@ -37,6 +38,6 @@ export const POST: APIRoute = async ({ locals, request }) => {
   await db.insert(programmeApplication).values({ reference: ref, userId: u.id, programme: p.data.programme, data });
   if (prog.role) await db.insert(userRole).values({ userId: u.id, role: prog.role }).onConflictDoNothing();
   await audit(u.id, 'candidature', ref, { programme: p.data.programme });
-  await notify(u.id, `Candidature ${ref} reçue : ${prog.label}. Prochaine étape : diagnostic de maturité.`, '/espace/candidatures', { email: true, whatsapp: true });
+  await notify(u.id, await message('candidature.recue', { reference: ref, programme: prog.label }), '/espace/candidatures', { email: true, whatsapp: true });
   return json({ ok: true, reference: ref, message: `Candidature ${ref} reçue.` });
 };

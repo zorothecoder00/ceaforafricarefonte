@@ -25,7 +25,7 @@ export const STAFF: Role[] = SENSITIVE;
 export type Obj =
   | 'contenus' | 'profil' | 'fiche_projet' | 'candidature' | 'notes_mentorat' | 'dossier_kapital' | 'data_room'
   | 'decision_comite' | 'pieces_kyc' | 'journal_audit' | 'offre_emploi' | 'moderation' | 'membres' | 'parametres'
-  | 'paiements' | 'messages_contact' | 'interrupteurs' | 'controle_acces' | 'crm' | 'campagnes' | 'programmes';
+  | 'paiements' | 'messages_contact' | 'interrupteurs' | 'controle_acces' | 'crm' | 'campagnes' | 'programmes' | 'rapports';
 
 type Rights = string; // sous-ensemble de 'LCMV', suffixe '*' = limité aux éléments propres / assignés
 type Matrix = Partial<Record<Obj, Rights>>;
@@ -40,14 +40,14 @@ export const MATRIX: Record<Role, Matrix> = {
   investisseur: { contenus: 'L', profil: 'LM*', fiche_projet: 'L*', dossier_kapital: 'L*', data_room: 'L*', pieces_kyc: 'C' },
   souscripteur: { contenus: 'L', profil: 'LM*' },
   partenaire: { contenus: 'L', profil: 'LM*' },
-  charge_programme: { contenus: 'L', profil: 'L*', fiche_projet: 'LMV', candidature: 'LMV', notes_mentorat: 'L*', membres: 'L', controle_acces: 'LV', crm: 'LCM', programmes: 'LCMV' },
+  charge_programme: { contenus: 'L', profil: 'L*', fiche_projet: 'LMV', candidature: 'LMV', notes_mentorat: 'L*', membres: 'L', controle_acces: 'LV', crm: 'LCM', programmes: 'LCMV', rapports: 'LC' },
   analyste: { contenus: 'L', profil: 'L*', fiche_projet: 'L', dossier_kapital: 'LM', data_room: 'L', decision_comite: 'L' },
   comite: { contenus: 'L', fiche_projet: 'L', dossier_kapital: 'L', data_room: 'L', decision_comite: 'CV' },
   conformite: { contenus: 'L', pieces_kyc: 'LMV', dossier_kapital: 'L', membres: 'L', journal_audit: 'L' },
   editeur: { contenus: 'LCMV', moderation: 'LMV', offre_emploi: 'LMV', messages_contact: 'LM', campagnes: 'LCM' },
-  responsable_pays: { contenus: 'LCM*', membres: 'L*', messages_contact: 'LM*', moderation: 'LM*', controle_acces: 'LV', crm: 'LCM*', campagnes: 'L', programmes: 'L' },
-  admin: { contenus: 'LCMV', profil: 'L', fiche_projet: 'L', candidature: 'L', dossier_kapital: 'L', decision_comite: 'L', journal_audit: 'L', membres: 'LCMV', parametres: 'LCMV', paiements: 'L', messages_contact: 'LM', moderation: 'LMV', offre_emploi: 'LMV', interrupteurs: 'LMV', controle_acces: 'LV', crm: 'LCMV', campagnes: 'LCMV', programmes: 'LCMV' },
-  direction: { crm: 'L', campagnes: 'L', programmes: 'L', contenus: 'L', profil: 'L', candidature: 'L', dossier_kapital: 'L', decision_comite: 'LV', journal_audit: 'L', membres: 'L', paiements: 'L', interrupteurs: 'L' },
+  responsable_pays: { contenus: 'LCM*', membres: 'L*', messages_contact: 'LM*', moderation: 'LM*', controle_acces: 'LV', crm: 'LCM*', campagnes: 'L', programmes: 'L', rapports: 'L*' },
+  admin: { contenus: 'LCMV', profil: 'L', fiche_projet: 'L', candidature: 'L', dossier_kapital: 'L', decision_comite: 'L', journal_audit: 'L', membres: 'LCMV', parametres: 'LCMV', paiements: 'LCMV', messages_contact: 'LM', moderation: 'LMV', offre_emploi: 'LMV', interrupteurs: 'LMV', controle_acces: 'LV', crm: 'LCMV', campagnes: 'LCMV', programmes: 'LCMV', rapports: 'LCMV' },
+  direction: { crm: 'L', campagnes: 'L', programmes: 'L', rapports: 'LC', contenus: 'L', profil: 'L', candidature: 'L', dossier_kapital: 'L', decision_comite: 'LV', journal_audit: 'L', membres: 'L', paiements: 'L', interrupteurs: 'L' },
 };
 
 export type Action = 'L' | 'C' | 'M' | 'V';

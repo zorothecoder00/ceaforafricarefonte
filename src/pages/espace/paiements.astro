@@ -4,19 +4,22 @@ import Money from '../../components/Money.astro';
 import { desc, eq } from 'drizzle-orm';
 import { db } from '../../lib/db';
 import { payment } from '../../db/schema/app';
+import { invoice } from '../../db/schema/finance';
 
 export const prerender = false;
 const user = Astro.locals.user!;
 const rows = await db.select().from(payment).where(eq(payment.userId, user.id)).orderBy(desc(payment.createdAt));
+// Factures et avoirs de la personne (factures automatiques des paiements, avoirs de remboursement)
+const docs = await db.select({ number: invoice.number, paymentId: invoice.paymentId, kind: invoice.kind }).from(invoice).where(eq(invoice.userId, user.id));
 const ST: Record<string, [string, string]> = { reussi: ['ok', 'Payé'], en_attente: ['gold', 'En attente'], echoue: ['bad', 'Échoué'], rembourse: ['info', 'Remboursé'] };
 ---
-<EspaceLayout title="Paiements et reçus" lead="Historique de vos paiements. Les reçus sont générés automatiquement.">
+<EspaceLayout title="Paiements et factures" lead="Historique de vos paiements. Les reçus et les factures sont générés automatiquement.">
   <div class="panel scroll-x">
     {rows.length ? (
       <table class="t">
         <thead><tr><th>Date</th><th>Objet</th><th>Montant</th><th>Statut</th><th></th></tr></thead>
         <tbody>{rows.map((r) => (
-          <tr><td>{r.createdAt.toLocaleDateString('fr-FR')}</td><td>{(r.metadata as { label?: string }).label ?? r.purpose}</td><td class="num"><Money xof={r.amountXof} /></td><td><span class={`tag ${ST[r.status][0]}`}>{ST[r.status][1]}</span></td><td>{r.status === 'reussi' && <a class="small" href={`/espace/recu/${r.reference}`}>Reçu</a>}</td></tr>
+          <tr><td>{r.createdAt.toLocaleDateString('fr-FR')}</td><td>{(r.metadata as { label?: string }).label ?? r.purpose}</td><td class="num"><Money xof={r.amountXof} /></td><td><span class={`tag ${ST[r.status][0]}`}>{ST[r.status][1]}</span></td><td>{r.status === 'reussi' && <a class="small" href={`/espace/recu/${r.reference}`}>Reçu</a>}{docs.filter((d) => d.paymentId === r.id).map((d) => <> · <a class="small" href={`/facture/${d.number}`}>{d.kind === 'avoir' ? 'Avoir' : 'Facture'}</a></>)}</td></tr>
         ))}</tbody>
       </table>
     ) : <p class="muted" style="margin:0">Aucun paiement.</p>}

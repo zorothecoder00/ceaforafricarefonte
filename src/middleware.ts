@@ -3,6 +3,7 @@
 import { defineMiddleware } from 'astro:middleware';
 import { getCurrentUser } from './lib/session';
 import { isStaff, needs2fa } from './lib/rbac';
+import { findRedirect } from './lib/redirects';
 
 const SECURITY_HEADERS: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff',
@@ -13,6 +14,12 @@ const SECURITY_HEADERS: Record<string, string> = {
 
 export const onRequest = defineMiddleware(async (ctx, next) => {
   if (ctx.isPrerendered) return next(); // pages statiques : aucune requête base de données à la génération
+
+  // Redirections définies dans le paramétrage (CDC §12)
+  if (ctx.request.method === 'GET') {
+    const r = await findRedirect(ctx.url.pathname);
+    if (r) return ctx.redirect(r.to + (r.to.includes('?') ? '' : ctx.url.search), r.code as 301 | 302);
+  }
 
   const path = ctx.url.pathname.replace(/^\/en(?=\/|$)/, '') || '/';
   ctx.locals.user = await getCurrentUser(ctx.request.headers).catch(() => null);

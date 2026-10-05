@@ -20,6 +20,7 @@ import { staffApi } from '../../../lib/admin';
 import { notify } from '../../../lib/notify';
 import { Grid, Fields, aggregate } from '../../../lib/programmes';
 import { LEGACY } from '../../../lib/calls';
+import { message } from '../../../lib/templates';
 
 export const prerender = false;
 
@@ -51,7 +52,6 @@ const Body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('followup.save'), cohortId: id, userId: z.string().max(64), monthsAfter: z.coerce.number().int().refine((m) => [6, 12, 24, 36].includes(m)), revenueXof: optInt(1e13), employees: optInt(100000), fundsRaisedXof: optInt(1e13), stillActive: z.boolean().nullish(), notes: z.string().trim().max(2000).nullish() }),
 ]);
 
-const DECISION_MSG: Record<string, string> = { entretien: ': vous êtes invité·e à un entretien', admise: 'est acceptée. Félicitations !', liste_attente: 'est sur liste d’attente', refusee: 'n’a pas été retenue cette fois. Merci pour votre candidature.' };
 
 export const POST: APIRoute = async ({ locals, request }) => {
   const p = Body.safeParse(await request.json().catch(() => null));
@@ -102,7 +102,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       if (!j) return fail('Aucun compte avec cette adresse : la personne doit d’abord créer son compte sur la plateforme.');
       await db.insert(callJury).values({ callId: b.callId, userId: j.id, addedBy: u.id }).onConflictDoNothing();
       const [c] = await db.select({ title: programmeCall.title }).from(programmeCall).where(eq(programmeCall.id, b.callId));
-      await notify(j.id, `Vous êtes membre du jury : ${c?.title ?? 'appel à candidatures'}. Les dossiers à évaluer sont dans votre espace.`, '/espace/jury', { email: true });
+      await notify(j.id, await message('jury.ajout', { appel: c?.title ?? 'appel à candidatures' }), '/espace/jury', { email: true });
       await audit(u.id, 'programme.jury.ajout', b.callId, { jury: j.id }, ip);
       return ok(`${j.name} ajouté·e au jury.`);
     }
@@ -126,7 +126,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
         if (d.status === 'admise' && c.role) await db.insert(userRole).values({ userId: a.userId, role: c.role as 'entrepreneur' }).onConflictDoNothing();
         if (d.status !== a.status) {
           changed++;
-          await notify(a.userId, `Votre candidature ${a.reference} ${DECISION_MSG[d.status]}`, '/espace/candidatures', { email: true, whatsapp: d.status === 'admise' || d.status === 'entretien' });
+          await notify(a.userId, await message(`candidature.${d.status}`, { reference: a.reference }), '/espace/candidatures', { email: true, whatsapp: d.status === 'admise' || d.status === 'entretien' });
           await audit(u.id, 'programme.comite.decision', a.reference, { committee: com.id, from: a.status, to: d.status, score: agg.mean }, ip);
         }
       }
@@ -151,7 +151,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       const admitted = c ? await db.select().from(programmeApplication).where(and(eq(programmeApplication.programme, c.slug), eq(programmeApplication.status, 'admise'))) : [];
       if (!admitted.length) return fail('Aucune candidature admise pour cet appel.');
       const res = await db.insert(cohortMember).values(admitted.map((a) => ({ cohortId: co.id, userId: a.userId, applicationId: a.id }))).onConflictDoNothing().returning({ u: cohortMember.userId });
-      for (const r of res) await notify(r.u, `Bienvenue dans la cohorte « ${co.name} ». Votre programme, vos séances et vos jalons sont dans votre espace.`, '/espace/programme', { email: true });
+      for (const r of res) await notify(r.u, await message('cohorte.bienvenue', { cohorte: co.name }), '/espace/programme', { email: true });
       await audit(u.id, 'programme.cohorte.admis', co.id, { added: res.length }, ip);
       return ok(`${res.length} participant${res.length > 1 ? 's' : ''} ajouté${res.length > 1 ? 's' : ''}.`);
     }
@@ -161,7 +161,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       const [co] = await db.select({ name: cohort.name }).from(cohort).where(eq(cohort.id, b.cohortId));
       if (!co) return fail('Cohorte introuvable.', 404);
       await db.insert(cohortMember).values({ cohortId: b.cohortId, userId: m.id }).onConflictDoNothing();
-      await notify(m.id, `Bienvenue dans la cohorte « ${co.name} ».`, '/espace/programme', { email: true });
+      await notify(m.id, await message('cohorte.bienvenue', { cohorte: co.name }), '/espace/programme', { email: true });
       await audit(u.id, 'programme.cohorte.ajout', b.cohortId, { member: m.id }, ip);
       return ok(`${m.name} ajouté·e.`);
     }

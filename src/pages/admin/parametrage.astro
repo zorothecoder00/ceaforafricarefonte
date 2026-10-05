@@ -1,0 +1,129 @@
+---
+/* Paramétrage (CDC §12) : identité légale, fiscalité et comptes comptables ; modèles de messages ; redirections ; consentements.
+   Les interrupteurs par pays, les rôles et la matrice des droits ont leurs propres pages. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { desc, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { consent } from '../../db/schema/app';
+import { messageTemplate, redirect } from '../../db/schema/finance';
+import { can } from '../../lib/rbac';
+import { getSetting } from '../../lib/settings';
+import { TEMPLATES } from '../../lib/templates';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const canM = can(me.roles, 'parametres', 'M');
+const tab = Astro.url.searchParams.get('onglet') ?? 'reglages';
+const [org, fisc, acc] = await Promise.all([getSetting('organisation'), getSetting('fiscalite'), getSetting('comptabilite')]);
+const custom = tab === 'modeles' ? await db.select().from(messageTemplate) : [];
+const redirects = tab === 'redirections' ? await db.select().from(redirect).orderBy(desc(redirect.createdAt)) : [];
+// Consentements : dernier choix connu de chaque membre, par type
+const consents = tab === 'consentements' ? (await db.execute(sql`select kind, granted, count(*)::int as n from (select distinct on (${consent.userId}, ${consent.kind}) ${consent.kind} as kind, ${consent.granted} as granted from ${consent} order by ${consent.userId}, ${consent.kind}, ${consent.at} desc) t group by 1, 2 order by 1, 2`)).rows as { kind: string; granted: boolean; n: number }[] : [];
+const CONSENT: Record<string, string> = { compte: 'Conditions du compte', profil_public: 'Profil visible publiquement', marketing: 'Communications marketing', partage_investisseurs: 'Partage du dossier aux investisseurs', cookies_mesure: "Cookies de mesure d'audience" };
+const PURPOSE: Record<string, string> = { adhesion: 'Adhésions', billet: 'Billetterie', cours: 'Formations', programme: 'Programmes', mastermind: 'Mastermind', expert: 'Consultations d’experts', mise_en_avant: 'Mises en avant d’offres', recherche: 'Abonnements recherche', sponsoring: 'Sponsoring', autre: 'Autres ventes' };
+---
+<AdminLayout title="Paramétrage" lead="Réglages modifiables sans développeur. Chaque modification est inscrite au journal d'audit." obj="parametres">
+  <nav class="subnav" style="margin:0 0 14px">{[['reglages', 'Identité, fiscalité, comptabilité'], ['modeles', 'Modèles de messages'], ['redirections', 'Redirections'], ['consentements', 'Consentements']].map(([k, l]) => <a href={`?onglet=${k}`} aria-current={k === tab ? 'page' : undefined}>{l}</a>)}<a href="/admin/interrupteurs">Interrupteurs par pays</a><a href="/admin/droits">Rôles et droits</a></nav>
+
+  {tab === 'reglages' && (
+    <fieldset disabled={!canM} style="border:0;padding:0;margin:0">
+      <form class="panel set" data-key="organisation">
+        <h3 style="margin-top:0">Identité légale <span class="xs muted">(en-tête des factures et reçus)</span></h3>
+        <div class="grid g2" style="gap:0 12px">
+          {[['name', 'Raison sociale'], ['legalForm', 'Forme juridique'], ['rccm', 'RCCM'], ['taxId', 'NIF'], ['email', 'E-mail'], ['phone', 'Téléphone']].map(([k, l]) => <div><label class="f" for={`o-${k}`}>{l}</label><input class="in" id={`o-${k}`} name={k} value={(org as Record<string, string>)[k]} /></div>)}
+          <div style="grid-column:1/-1"><label class="f" for="o-address">Adresse</label><input class="in" id="o-address" name="address" value={org.address} /></div>
+          <div style="grid-column:1/-1"><label class="f" for="o-footer">Mention de bas de facture</label><input class="in" id="o-footer" name="footer" value={org.footer} /></div>
+        </div>
+        {canM && <button class="btn btn-primary btn-sm" type="submit" style="margin-top:10px">Enregistrer</button>}
+      </form>
+      <form class="panel set" data-key="fiscalite" style="margin-top:14px">
+        <h3 style="margin-top:0">Fiscalité</h3>
+        <div class="grid g2" style="gap:0 12px">
+          <div><label class="f" for="f-rate">Taux de TVA (%)</label><input class="in" id="f-rate" name="rate" type="number" min="0" max="30" step="0.1" value={fisc.rate / 10} data-kind="permille" /></div>
+          <div><label class="f" for="f-due">Échéance des factures manuelles (jours)</label><input class="in" id="f-due" name="dueDays" type="number" min="0" max="120" value={fisc.dueDays} data-kind="int" /></div>
+          <div style="grid-column:1/-1"><label class="f" for="f-mention">Mention si taux nul</label><input class="in" id="f-mention" name="mention" value={fisc.mention} /></div>
+        </div>
+        <p class="xs muted">Le taux s'applique aux factures émises après la modification ; les factures déjà émises ne changent pas. Les prix affichés sur le site sont toutes taxes comprises.</p>
+        {canM && <button class="btn btn-primary btn-sm" type="submit">Enregistrer</button>}
+      </form>
+      <form class="panel set" data-key="comptabilite" style="margin-top:14px">
+        <h3 style="margin-top:0">Comptabilité (plan SYSCOHADA)</h3>
+        <div class="grid g3" style="gap:0 12px">
+          <div><label class="f" for="c-j">Code journal des ventes</label><input class="in" id="c-j" name="journal" value={acc.journal} /></div>
+          <div><label class="f" for="c-c">Compte clients</label><input class="in" id="c-c" name="client" value={acc.client} pattern="\d{3,10}" /></div>
+          <div><label class="f" for="c-t">Compte TVA collectée</label><input class="in" id="c-t" name="tva" value={acc.tva} pattern="\d{3,10}" /></div>
+        </div>
+        <h4 style="margin:12px 0 4px">Comptes de produits par objet</h4>
+        <div class="grid g3" style="gap:0 12px">{Object.entries(PURPOSE).map(([k, l]) => <div><label class="f" for={`a-${k}`}>{l}</label><input class="in" id={`a-${k}`} name={`acc_${k}`} value={acc.accounts[k] ?? ''} pattern="\d{3,10}" /></div>)}</div>
+        {canM && <button class="btn btn-primary btn-sm" type="submit" style="margin-top:10px">Enregistrer</button>}
+      </form>
+    </fieldset>
+  )}
+
+  {tab === 'modeles' && (
+    <>
+      <p class="small muted">Textes des notifications envoyées dans l'espace membre, par e-mail et WhatsApp. Utilisez les variables proposées entre accolades.</p>
+      {Object.entries(TEMPLATES).map(([k, t]) => { const c = custom.find((x) => x.key === k); return (
+        <form class="panel tpl" data-key={k} style="margin-bottom:10px">
+          <div class="row between"><b class="small">{t.label}</b><span class="xs muted">{c ? `personnalisé le ${c.updatedAt.toLocaleDateString('fr-FR')}` : 'texte par défaut'} · variables : {t.vars.map((v) => `{${v}}`).join(', ')}</span></div>
+          <textarea class="in" name="body" rows="2" maxlength="1000" disabled={!canM}>{c?.body ?? t.body}</textarea>
+          {canM && <div class="row" style="gap:6px"><button class="btn btn-ghost btn-sm" type="submit">Enregistrer</button>{c && <button class="btn btn-ghost btn-sm" type="button" data-reset={k}>Rétablir le texte par défaut</button>}</div>}
+        </form>
+      ); })}
+    </>
+  )}
+
+  {tab === 'redirections' && (
+    <>
+      <div class="panel scroll-x">
+        {redirects.length === 0 ? <p class="small muted" style="margin:0">Aucune redirection.</p> : (
+          <table class="t"><thead><tr><th>Depuis</th><th>Vers</th><th>Type</th><th>Passages</th><th></th></tr></thead>
+            <tbody>{redirects.map((r) => <tr><td class="small"><code>{r.fromPath}</code></td><td class="small"><code>{r.toUrl}</code></td><td class="small">{r.code === 301 ? 'Définitive (301)' : 'Temporaire (302)'}</td><td class="small">{r.hits}</td><td>{canM && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/parametrage" data-body={JSON.stringify({ action: 'redirect.delete', id: r.id })} data-confirm="Supprimer cette redirection ?" data-reload aria-label="Supprimer">✕</button>}</td></tr>)}</tbody></table>
+        )}
+      </div>
+      {canM && (
+        <form class="panel row" data-api="/api/admin/parametrage" data-reload data-reset style="margin-top:12px;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <input type="hidden" name="action" value="redirect.save" />
+          <div style="flex:1;min-width:180px"><label class="f" for="rf">Depuis</label><input class="in" id="rf" name="fromPath" required placeholder="/ancienne-page" /></div>
+          <div style="flex:1;min-width:180px"><label class="f" for="rt">Vers</label><input class="in" id="rt" name="toUrl" required placeholder="/nouvelle-page ou https://…" /></div>
+          <div><label class="f" for="rc">Type</label><select class="in" id="rc" name="code" data-type="number"><option value="301">Définitive (301)</option><option value="302">Temporaire (302)</option></select></div>
+          <button class="btn btn-primary btn-sm" type="submit">Ajouter</button>
+        </form>
+      )}
+      <p class="xs muted">S'applique aux adresses qui n'existent plus sur le site. Les adresses de l'espace membre, du back-office et des API ne sont jamais redirigées.</p>
+    </>
+  )}
+
+  {tab === 'consentements' && (
+    <div class="panel scroll-x">
+      <table class="t"><thead><tr><th>Consentement</th><th>Accordé</th><th>Refusé ou retiré</th></tr></thead>
+        <tbody>{[...new Set(consents.map((c) => c.kind))].map((k) => <tr><td class="small">{CONSENT[k] ?? k}</td><td class="small">{consents.find((c) => c.kind === k && c.granted)?.n ?? 0}</td><td class="small">{consents.find((c) => c.kind === k && !c.granted)?.n ?? 0}</td></tr>)}</tbody></table>
+      {consents.length === 0 && <p class="small muted">Aucun consentement enregistré.</p>}
+      <p class="xs muted" style="margin:8px 0 0">Dernier choix connu de chaque membre. L'historique complet de chaque personne est dans sa fiche CRM ; les contacts externes portent la base légale de leur consentement.</p>
+    </div>
+  )}
+</AdminLayout>
+<script>
+  const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+  const api = async (body: Record<string, unknown>, reload = false) => {
+    const r = await fetch('/api/admin/parametrage', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : { error: 'Erreur réseau.' };
+    toast(d.message ?? d.error ?? 'Erreur.');
+    if (d.ok && reload) setTimeout(() => location.reload(), 600);
+  };
+  document.querySelectorAll<HTMLFormElement>('form.set').forEach((f) => f.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const value: Record<string, unknown> = {}, accounts: Record<string, string> = {};
+    f.querySelectorAll<HTMLInputElement>('input[name]').forEach((i) => {
+      if (i.name.startsWith('acc_')) { if (i.value.trim()) accounts[i.name.slice(4)] = i.value.trim(); return; }
+      value[i.name] = i.dataset.kind === 'permille' ? Math.round(Number(i.value || 0) * 10) : i.dataset.kind === 'int' ? Number(i.value || 0) : i.value.trim();
+    });
+    if (f.dataset.key === 'comptabilite') value.accounts = accounts;
+    api({ action: 'setting.save', key: f.dataset.key, value });
+  }));
+  document.querySelectorAll<HTMLFormElement>('form.tpl').forEach((f) => f.addEventListener('submit', (e) => {
+    e.preventDefault();
+    api({ action: 'template.save', key: f.dataset.key, body: (f.querySelector('textarea') as HTMLTextAreaElement).value }, true);
+  }));
+  document.querySelectorAll<HTMLButtonElement>('[data-reset]').forEach((b) => b.addEventListener('click', () => api({ action: 'template.reset', key: b.dataset.reset }, true)));
+</script>
