@@ -1,0 +1,88 @@
+# Sauvegarde de la base de production (CDC §13.1 : sauvegardes quotidiennes et chiffrées, conservées hors site ;
+# RPO ≤ 4 h et RTO ≤ 4 h ; restauration testée chaque trimestre).
+# - RPO ≤ 4 h : assuré par la restauration à un instant donné de Neon (historique de l'offre Neon, à régler à 24 h au moins).
+# - Copie quotidienne hors site : ce flux exporte la base chaque nuit, la chiffre (AES-256) et la conserve 90 jours sur GitHub,
+#   hors de l'infrastructure Neon.
+# - Restauration testée : chaque sauvegarde est restaurée dans une base vierge et contrôlée (tables et lignes), donc testée chaque
+#   jour, bien au-delà de l'exigence trimestrielle. Procédure de restauration manuelle : voir docs/exploitation.md.
+# Secrets GitHub à créer : NEON_DATABASE_URL (chaîne de connexion de production, rôle en lecture seule conseillé) et
+# BACKUP_PASSPHRASE (phrase de chiffrement, conservée aussi hors de GitHub par la direction).
+name: Sauvegarde
+
+on:
+  schedule:
+    - cron: '30 1 * * *' # 01:30 GMT chaque nuit
+  workflow_dispatch:
+
+concurrency:
+  group: sauvegarde
+  cancel-in-progress: false
+
+jobs:
+  sauvegarder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      verif:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: verif
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - name: Secrets présents
+        id: cfg
+        env:
+          URL: ${{ secrets.NEON_DATABASE_URL }}
+          PASS: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$URL" ] || [ -z "$PASS" ]; then
+            echo "::warning::Secrets NEON_DATABASE_URL et BACKUP_PASSPHRASE absents : sauvegarde non effectuée."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Export de la base (format personnalisé, compressé)
+        if: steps.cfg.outputs.ok == 'true'
+        env:
+          URL: ${{ secrets.NEON_DATABASE_URL }}
+        # Le schéma neon_auth appartient à Neon : il n'est pas exporté
+        run: |
+          docker run --rm --network host -v "$PWD:/out" postgres:18 \
+            pg_dump "$URL" --format=custom --compress=9 --no-owner --no-privileges --exclude-schema=neon_auth --file=/out/base.dump
+          ls -lh base.dump
+
+      - name: Restauration de contrôle dans une base vierge
+        if: steps.cfg.outputs.ok == 'true'
+        run: |
+          docker run --rm --network host -v "$PWD:/out" -e PGPASSWORD=verif postgres:18 \
+            pg_restore --no-owner --no-privileges -h localhost -U postgres -d postgres /out/base.dump
+          docker run --rm --network host -e PGPASSWORD=verif postgres:18 psql -h localhost -U postgres -d postgres -At -c \
+            "select count(*) from information_schema.tables where table_schema in ('public','kapital')" | tee tables.txt
+          docker run --rm --network host -e PGPASSWORD=verif postgres:18 psql -h localhost -U postgres -d postgres -At -c \
+            "select count(*) from public.\"user\"" | tee comptes.txt
+          [ "$(cat tables.txt)" -ge 100 ] || { echo "::error::Restauration incomplète : $(cat tables.txt) tables"; exit 1; }
+          echo "Restauration vérifiée : $(cat tables.txt) tables, $(cat comptes.txt) comptes."
+
+      - name: Chiffrement (AES-256)
+        if: steps.cfg.outputs.ok == 'true'
+        env:
+          PASS: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$PASS" --symmetric --cipher-algo AES256 \
+            --output "cea-$(date -u +%Y-%m-%d).dump.gpg" base.dump
+          shred -u base.dump
+          sha256sum cea-*.dump.gpg | tee empreinte.txt
+
+      - name: Conservation hors site (90 jours)
+        if: steps.cfg.outputs.ok == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sauvegarde-${{ github.run_id }}
+          path: |
+            cea-*.dump.gpg
+            empreinte.txt
+          retention-days: 90
+          compression-level: 0

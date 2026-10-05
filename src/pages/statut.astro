@@ -1,14 +1,45 @@
 ---
+/* Statut de la plateforme (CDC §13, supervision) : état réel des services vérifié à chaque affichage, et disponibilité mesurée
+   sur 90 jours (objectif 99,9 % par mois) à partir de l'historique des vérifications (sonde externe sur /api/sante). */
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHead from '../components/PageHead.astro';
+import { runChecks, overall, version, recordSample, uptime } from '../lib/health';
+import { env } from '../lib/env';
 
-const services = [['Portail public', '99,98 %'], ['Espaces connectés', '99,95 %'], ['CEA Kapital Invest', '99,99 %'], ['Paiements Mobile Money', '99,71 %'], ['Notifications WhatsApp et SMS', '99,80 %']];
+export const prerender = false;
+Astro.response.headers.set('Cache-Control', 'no-store');
+const checks = await runChecks();
+await recordSample(checks);
+const status = overall(checks);
+const up = await uptime(90);
+const TAG: Record<string, [string, string]> = { ok: ['ok', 'Opérationnel'], degrade: ['gold', 'Ralenti'], ko: ['bad', 'Indisponible'], non_configure: ['', 'Pas encore activé'] };
+const PUBLIC: Record<string, string> = { base: 'Portail, espaces membres et CEA Kapital Invest', paiements: 'Paiements Mobile Money et cartes', email: 'E-mails', sms: 'SMS', whatsapp: 'WhatsApp', push: 'Notifications push', stockage: 'Documents et pièces jointes', ia: 'CEA Copilot (assistant IA)' };
+const pct = (v: number) => `${v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} %`;
+const history = env('PUBLIC_STATUS_HISTORY_URL');
+const fr = (d: string | Date, o: Intl.DateTimeFormatOptions) => new Date(d).toLocaleString('fr-FR', { ...o, timeZone: 'Africa/Lome' });
 ---
 <BaseLayout title="Statut de la plateforme">
   <PageHead title="Statut de la plateforme" lead="Disponibilité des services sur les 90 derniers jours." crumbs={[['', 'Statut']]} />
   <section class="block">
     <div class="wrap">
-      {services.map(([s, v]) => <div class="panel row between" style="margin-bottom:8px"><span><span class="tag ok">Opérationnel</span> {s}</span><span class="small muted">{v}</span></div>)}
+      {status !== 'ok' && (
+        <div class={`panel`} role="status" style={`margin-bottom:14px;border-color:var(${status === 'ko' ? '--bad' : '--gold'})`}>
+          <b>{status === 'ko' ? 'Incident en cours' : 'Service ralenti'}</b> — {status === 'ko' ? 'un incident est en cours : nos équipes sont prévenues.' : 'la plateforme répond, mais plus lentement que d’habitude.'}
+        </div>
+      )}
+      {checks.filter((c) => c.id in PUBLIC).map((c) => (
+        <div class="panel row between" style="margin-bottom:8px">
+          <span><span class={`tag ${TAG[c.state][0]}`}>{TAG[c.state][1]}</span> {PUBLIC[c.id]}</span>
+          <span class="small muted">{c.state !== 'non_configure' && up?.byService[c.id] !== undefined ? pct(up.byService[c.id]) : '—'}</span>
+        </div>
+      ))}
+      <p class="small muted" style="margin-top:14px">
+        Vérifié le {fr(new Date(), { dateStyle: 'long', timeStyle: 'medium' })} (heure de Lomé) · version {version()}.
+        {up?.samples
+          ? <> Disponibilité calculée sur {up.samples.toLocaleString('fr-FR')} vérification{up.samples > 1 ? 's' : ''} depuis le {fr(up.since!, { dateStyle: 'long' })} : part des vérifications où le service répondait.</>
+          : ' La disponibilité s’affichera dès les premières vérifications de la sonde de surveillance.'}
+        {history && <> Suivi détaillé : <a href={history} rel="noopener">page de la sonde externe</a>.</>}
+      </p>
     </div>
   </section>
 </BaseLayout>

@@ -442,6 +442,37 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
   addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
 }
 
+/* ===== Core Web Vitals de terrain (CDC §13.1) : un visiteur sur quatre, en production, envoi anonyme à la fermeture de la page ===== */
+if (import.meta.env.PROD && 'PerformanceObserver' in window && Math.random() < 0.25) {
+  const vals: Record<string, number> = {};
+  const watch = (type: string, cb: (e: PerformanceEntry) => void, extra: Record<string, unknown> = {}) => {
+    try { new PerformanceObserver((l) => l.getEntries().forEach(cb)).observe({ type, buffered: true, ...extra } as PerformanceObserverInit); } catch {}
+  };
+  // LCP : dernier plus grand élément affiché avant la première interaction
+  watch('largest-contentful-paint', (e) => { vals.LCP = e.startTime; });
+  // CLS : plus grande fenêtre de décalages (1 s entre décalages, 5 s au plus), hors décalages dus à une saisie
+  let win = 0, first = 0, last = 0;
+  watch('layout-shift', (e) => {
+    const s = e as PerformanceEntry & { value: number; hadRecentInput: boolean };
+    if (s.hadRecentInput) return;
+    if (win && s.startTime - last < 1000 && s.startTime - first < 5000) win += s.value; else { win = s.value; first = s.startTime; }
+    last = s.startTime;
+    vals.CLS = Math.max(vals.CLS ?? 0, win);
+  });
+  // INP (approché) : la plus longue interaction observée, de l'événement au rendu suivant
+  watch('event', (e) => { const t = e as PerformanceEntry & { interactionId?: number }; if (t.interactionId) vals.INP = Math.max(vals.INP ?? 0, t.duration); }, { durationThreshold: 16 });
+  let sent = false;
+  const send = () => {
+    const m = Object.entries(vals).filter(([, v]) => Number.isFinite(v)).map(([k, v]) => [k, Math.round(k === 'CLS' ? v * 1000 : v) / (k === 'CLS' ? 1000 : 1)]);
+    if (sent || !m.length) return;
+    sent = true;
+    const mob = matchMedia('(pointer:coarse)').matches || innerWidth < 760;
+    navigator.sendBeacon?.('/api/mesures', new Blob([JSON.stringify({ p: location.pathname, m, mob, lite: document.body.classList.contains('lite') })], { type: 'application/json' }));
+  };
+  addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') send(); });
+  addEventListener('pagehide', send);
+}
+
 /* ===== état de connexion dans l'en-tête (pages statiques) ===== */
 fetch('/api/moi', { credentials: 'same-origin' })
   .then((r) => (r.ok ? r.json() : null))

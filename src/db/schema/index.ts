@@ -5,3 +5,4 @@ export * from './crm';
 export * from './programmes';
 export * from './finance';
 export * from './workflows';
+export * from './ops';

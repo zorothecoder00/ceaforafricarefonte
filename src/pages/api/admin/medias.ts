@@ -9,6 +9,7 @@ import { json, fail, audit, clientIp } from '../../../lib/session';
 import { staffApi } from '../../../lib/admin';
 import { storeFile } from '../../../lib/storage';
 import { mediaUrl } from '../../../lib/cms';
+import { optimizeImage } from '../../../lib/images';
 
 export const prerender = false;
 const IMAGES = new Set(['image/png', 'image/jpeg', 'image/webp']);
@@ -23,8 +24,9 @@ export const POST: APIRoute = async ({ locals, request }) => {
   if (!(file instanceof File) || !file.size) return fail('Choisissez une image.');
   if (!IMAGES.has(file.type)) return fail('Formats acceptés : PNG, JPG, WEBP.');
   if (alt.length < 3 || alt.length > 250) return fail('Décrivez l’image en quelques mots (texte alternatif, pour l’accessibilité).');
+  // Image redimensionnée et convertie en WebP avant stockage (poids des pages, métadonnées retirées)
   let stored;
-  try { stored = await storeFile(file, 'cms'); } catch (e) { return fail(e instanceof Error ? e.message : 'Dépôt impossible.'); }
+  try { stored = await storeFile(await optimizeImage(file).catch(() => { throw new Error('Image illisible ou corrompue.'); }), 'cms'); } catch (e) { return fail(e instanceof Error ? e.message : 'Dépôt impossible.'); }
   const [m] = await db.insert(cmsMedia).values({ storageKey: stored.key, mime: stored.type, size: stored.size, name: file.name.slice(0, 200), alt, credit: credit.slice(0, 200) || null, uploadedBy: u.id }).returning();
   await audit(u.id, 'cms.media.depot', m.id, { name: m.name, size: m.size }, clientIp(request));
   return json({ ok: true, id: m.id, url: mediaUrl(m.id), message: 'Image ajoutée.' });

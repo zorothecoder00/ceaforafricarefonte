@@ -9,6 +9,7 @@ import { user } from '../../db/schema/auth';
 import { dossier, kycCheck, investorProfile } from '../../db/schema/kapital';
 import { can } from '../../lib/rbac';
 import { PIPELINE } from '../../lib/kapital';
+import { webVital } from '../../db/schema/ops';
 
 export const prerender = false;
 const r = Astro.locals.user!.roles;
@@ -55,6 +56,13 @@ const arcs = bySource.filter((x) => x.s > 0).map((x, i) => {
   const d = a1 - a0 >= 2 * Math.PI - 1e-6 ? 'M 60 10 A 50 50 0 1 1 59.99 10 L 59.99 30 A 30 30 0 1 0 60 30 Z' : `M ${P(a0, 50)} A 50 50 0 ${big} 1 ${P(a1, 50)} L ${P(a1, 30)} A 30 30 0 ${big} 0 ${P(a0, 30)} Z`;
   return { d, c: COLORS[i % COLORS.length], l: PURPOSE[x.p] ?? x.p, pc: Math.round((x.s / totalSrc) * 100) };
 });
+// Core Web Vitals de terrain (CDC §13.1) : 75e centile sur mobile, 28 derniers jours, comparé aux cibles
+const VITALS: Record<string, { target: number; unit: string; fmt: (v: number) => string }> = {
+  LCP: { target: 2500, unit: 's', fmt: (v) => `${(v / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} s` },
+  INP: { target: 200, unit: 'ms', fmt: (v) => `${Math.round(v)} ms` },
+  CLS: { target: 0.1, unit: '', fmt: (v) => v.toLocaleString('fr-FR', { maximumFractionDigits: 3 }) },
+};
+const vitals = can(r, 'rapports', 'L') ? await db.select({ m: webVital.metric, p75: sql<number>`percentile_cont(0.75) within group (order by ${webVital.value})::float`, n: cnt }).from(webVital).where(and(eq(webVital.mobile, true), gte(webVital.at, new Date(Date.now() - 28 * 864e5)))).groupBy(webVital.metric).catch(() => []) : null;
 const kpis: [string, string, string?][] = [];
 if (members !== null) kpis.push(['Membres', members.toLocaleString('fr-FR')], ['Inscrits sur 30 jours', `+${newMembers}`], ['Adhésions actives', String(active)]);
 for (const [l, h, v] of queues) kpis.push([l, String(v), h]);
@@ -90,6 +98,17 @@ for (const [l, h, v] of queues) kpis.push([l, String(v), h]);
     </div>
   )}
   <div class="row" style="margin-top:12px"><a class="btn btn-ghost btn-sm" href="/admin/rapports">Exporter (CSV)</a><a class="btn btn-ghost btn-sm" href="/admin/rapports">Exporter (XLSX)</a></div>
+  {vitals !== null && (
+    <>
+      <h2 style="font-size:1.2rem;margin-top:26px">Performances mesurées chez les visiteurs</h2>
+      <p class="small muted" style="margin:0 0 10px">Core Web Vitals, 75e centile sur mobile, 28 derniers jours (un visiteur sur quatre est mesuré, anonymement).</p>
+      <div class="grid g3">
+        {Object.entries(VITALS).map(([k, t]) => { const v = vitals.find((x) => x.m === k); const good = v ? v.p75 <= t.target : null; return (
+          <div class="panel kpi"><span class="small muted">{k} · cible ≤ {t.fmt(t.target)}</span><b style={good === false ? 'color:var(--bad)' : ''}>{v ? t.fmt(v.p75) : '—'}</b><span class="xs muted">{v ? `${v.n.toLocaleString('fr-FR')} mesures${good ? ' · objectif atteint' : ' · objectif non atteint'}` : 'Pas encore de mesure'}</span></div>
+        ); })}
+      </div>
+    </>
+  )}
   {pipe.length > 0 && (
     <>
       <h2 style="font-size:1.2rem;margin-top:26px">Pipeline Kapital</h2>

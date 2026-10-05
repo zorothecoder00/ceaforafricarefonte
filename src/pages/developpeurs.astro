@@ -1,0 +1,40 @@
+---
+/* Documentation de l'API publique (CDC §13.2), générée à partir de la spécification OpenAPI (src/lib/openapi.ts). */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHead from '../components/PageHead.astro';
+import { OPENAPI } from '../lib/openapi';
+
+const base = new URL('/api/v1', Astro.site).href;
+type Param = { name: string; in: string; description?: string; schema: { type: string; enum?: readonly string[]; default?: unknown } };
+const ops = Object.entries(OPENAPI.paths).map(([path, p]) => ({ path, ...(p as unknown as { get: { tags: string[]; summary: string; parameters: Param[] } }).get }));
+const fields = (name: string) => Object.keys((OPENAPI.components.schemas as Record<string, { properties?: Record<string, unknown> }>)[name]?.properties ?? {});
+const SCHEMA: Record<string, string> = { '/programmes': 'Programme', '/evenements': 'Evenement', '/emplois': 'Emploi', '/impact': 'Impact' };
+---
+<BaseLayout title="API publique" description="Documentation de l'API publique de CEA FOR AFRICA : programmes, événements, offres d'emploi et données d'impact ouvertes.">
+  <PageHead title="API publique" lead="Les données publiques de la plateforme, pour les partenaires et les développeurs : lecture seule, sans clé, en JSON." crumbs={[['', 'API publique']]} />
+  <section class="block"><div class="wrap" style="max-width:900px">
+    <div class="panel">
+      <p style="margin-top:0">Adresse de base : <code>{base}</code> · version <b>{OPENAPI.info.version}</b> · spécification <a href="/api/v1/openapi.json">OpenAPI 3.1 (JSON)</a>, utilisable dans Swagger, Postman ou Insomnia.</p>
+      <ul class="small" style="margin:0;padding-left:18px;line-height:1.7">
+        <li>Réponse : <code>{'{ "data": …, "meta": { "version", "generated_at", "total", "page", "limite", "pages" } }'}</code></li>
+        <li>Erreur : <code>{'{ "error": { "code", "message" } }'}</code> avec un code HTTP 400 (paramètre invalide) ou 429 (limite atteinte).</li>
+        <li>Limite : 120 requêtes par minute et par adresse IP. Les réponses sont mises en cache quelques minutes : inutile d'interroger plus souvent.</li>
+        <li>Appelable depuis un navigateur (CORS ouvert). Aucune donnée personnelle n'est exposée.</li>
+        <li>Les données d'impact sont publiées sous licence <a href={OPENAPI.info.license.url}>CC BY 4.0</a> : citez « CEA FOR AFRICA — Observatoire d'impact ».</li>
+        <li>Versionnement : une évolution incompatible ouvrira une version <code>/api/v2</code> ; la v1 restera disponible au moins 12 mois après l'annonce.</li>
+      </ul>
+    </div>
+    {ops.map((o) => (
+      <div class="panel" style="margin-top:14px">
+        <h2 style="font-size:1.1rem;margin:0"><span class="tag info">GET</span> <code>{o.path}</code> — {o.summary}</h2>
+        {o.parameters.length > 0 && (
+          <table class="t small" style="margin-top:10px"><thead><tr><th>Paramètre</th><th>Valeurs</th><th>Description</th></tr></thead>
+            <tbody>{o.parameters.map((p) => <tr><td><code>{p.name}</code></td><td>{p.schema.enum ? p.schema.enum.join(', ') : p.schema.type}{p.schema.default !== undefined ? ` (défaut ${p.schema.default})` : ''}</td><td>{p.description ?? ''}</td></tr>)}</tbody></table>
+        )}
+        <p class="xs muted" style="margin:8px 0 4px">Champs : {fields(SCHEMA[o.path]).join(', ')}</p>
+        <pre class="small" style="background:var(--surface-2);padding:10px;border-radius:8px;overflow:auto;margin:6px 0 0"><code>curl "{base}{o.path}{o.path === '/evenements' ? '?pays=TG&a_venir=1' : o.path === '/emplois' ? '?type=Stage' : ''}"</code></pre>
+      </div>
+    ))}
+    <p class="small muted" style="margin-top:16px">Besoin d'autres données ou d'un volume plus important ? <a href="/contact">Écrivez à l'équipe partenariats</a>.</p>
+  </div></section>
+</BaseLayout>

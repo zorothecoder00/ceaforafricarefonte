@@ -1,0 +1,38 @@
+# Intégration continue (CDC §13 : intégration et déploiement continus).
+# À chaque push et demande de fusion : dépendances verrouillées, contrôle des types, tests, compilation de production.
+# Le déploiement reste assuré par Vercel (aperçu par branche, production sur main) ; ce contrôle doit être vert avant de fusionner.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Valeurs factices : la compilation et les tests n'ouvrent aucune connexion à la base
+      DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+      BETTER_AUTH_SECRET: ci-secret-non-utilise-en-production-0123456789
+      BETTER_AUTH_URL: http://localhost:4321
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Contrôle des types
+        run: npm run check
+      - name: Tests
+        run: npm test
+      - name: Compilation de production
+        run: npm run build
+      - name: Cohérence des migrations
+        run: npx drizzle-kit check
