@@ -371,6 +371,54 @@ $('#chatForm')?.addEventListener('submit', (e) => {
 });
 $$('#sugg button').forEach((b) => b.addEventListener('click', () => answer(b.textContent || '')));
 
+/* ===== rédaction assistée (CDC §11) : <textarea data-ai="projet|pitch|offre|candidature" [data-ai-form="id du formulaire source"]>
+   Le texte proposé s'affiche à part : la personne choisit de remplacer, d'ajouter à la suite ou d'ignorer. ===== */
+$$<HTMLTextAreaElement>('textarea[data-ai]').forEach((ta) => {
+  if (ta.readOnly || ta.disabled) return;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn btn-ghost btn-sm';
+  btn.style.margin = '4px 0 10px';
+  btn.textContent = EN ? '✨ Writing help (AI)' : '✨ Aide à la rédaction (IA)';
+  const box = document.createElement('div');
+  box.className = 'panel ai-draft';
+  box.hidden = true;
+  ta.after(btn, box);
+  const label = () => ta.dataset.aiLabel || (ta.id && $(`label[for="${ta.id}"]`)?.textContent?.trim()) || ta.getAttribute('aria-label') || ta.name;
+  btn.addEventListener('click', async () => {
+    const src = (ta.dataset.aiForm ? document.getElementById(ta.dataset.aiForm) : ta.closest('form')) as HTMLFormElement | null;
+    const fields: Record<string, string> = {};
+    src?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input[name], textarea[name], select[name]').forEach((el) => {
+      if (el instanceof HTMLInputElement && ['password', 'file', 'hidden', 'checkbox', 'radio'].includes(el.type)) return;
+      const v = el instanceof HTMLSelectElement ? el.selectedOptions[0]?.textContent ?? '' : el.value;
+      if (v.trim()) fields[el.name] = v.slice(0, 6000);
+    });
+    btn.disabled = true;
+    btn.textContent = EN ? 'Writing…' : 'Rédaction en cours…';
+    const r = await fetch('/api/redaction', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: ta.dataset.ai, field: ta.name, label: label(), current: ta.value, fields, lang: EN ? 'en' : 'fr' }) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    btn.disabled = false;
+    btn.textContent = EN ? '✨ Writing help (AI)' : '✨ Aide à la rédaction (IA)';
+    if (r?.status === 401) { toast(EN ? 'Sign in to use writing help.' : "Connectez-vous pour utiliser l'aide à la rédaction."); return; }
+    if (!d.ok) { toast(d.error ?? (EN ? 'Network error.' : 'Erreur réseau.')); return; }
+    box.hidden = false;
+    box.innerHTML = `<p class="xs muted" style="margin:0 0 6px">${EN ? 'AI suggestion — read and adapt it. Text in [brackets] is for you to complete.' : 'Proposition générée par IA — relisez-la et adaptez-la. Les passages entre [crochets] sont à compléter.'}</p>
+      <div class="small" style="white-space:pre-wrap"></div>
+      <div class="row" style="gap:6px;margin-top:10px;flex-wrap:wrap">
+        <button type="button" class="btn btn-primary btn-sm" data-act="replace">${ta.value.trim() ? (EN ? 'Replace my text' : 'Remplacer mon texte') : (EN ? 'Use this text' : 'Utiliser ce texte')}</button>
+        ${ta.value.trim() ? `<button type="button" class="btn btn-ghost btn-sm" data-act="append">${EN ? 'Add after my text' : 'Ajouter à la suite'}</button>` : ''}
+        <button type="button" class="btn btn-ghost btn-sm" data-act="close">${EN ? 'Dismiss' : 'Ignorer'}</button>
+      </div>`;
+    box.querySelector('div')!.textContent = d.draft;
+    box.querySelectorAll<HTMLButtonElement>('[data-act]').forEach((b) => b.addEventListener('click', () => {
+      if (b.dataset.act === 'replace') ta.value = d.draft;
+      if (b.dataset.act === 'append') ta.value = `${ta.value.trimEnd()}\n\n${d.draft}`;
+      if (b.dataset.act !== 'close') { ta.dispatchEvent(new Event('input', { bubbles: true })); ta.focus(); }
+      box.hidden = true;
+    }));
+  });
+});
+
 /* ===== application installable (PWA) : service worker en production uniquement ===== */
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));

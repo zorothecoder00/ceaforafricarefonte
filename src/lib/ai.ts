@@ -35,6 +35,8 @@ type Ask = {
   maxTokens?: number;
   effort?: 'low' | 'medium' | 'high';
   timeoutMs?: number;
+  /** Schéma JSON imposé à la réponse (sorties structurées). */
+  schema?: Record<string, unknown>;
 };
 
 /** Appelle le modèle ; null si l'IA est indisponible, en erreur ou si la demande est déclinée. */
@@ -50,7 +52,7 @@ export async function askModel(a: Ask): Promise<Anthropic.Beta.BetaMessage | nul
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
       thinking: { type: 'adaptive' },
-      output_config: { effort: a.effort ?? 'low' },
+      output_config: { effort: a.effort ?? 'low', ...(a.schema ? { format: { type: 'json_schema' as const, schema: a.schema } } : {}) },
       system: [{ type: 'text', text: a.system, cache_control: { type: 'ephemeral' } }],
       messages: a.messages,
     }, { timeout: a.timeoutMs ?? 45_000 });

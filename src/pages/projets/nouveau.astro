@@ -25,7 +25,7 @@ const field = (k: string) => SHEET_FIELDS.find(([f]) => f === k)!;
         </fieldset>
         {steps.map(([title, keys]) => (
           <fieldset data-step={title} style={fs}>
-            {keys.map((k) => { const [, l, help] = field(k); return <><label class="f" for={`s-${k}`}>{l}</label><p class="xs muted" style="margin:-4px 0 6px">{help}</p><textarea class="in" id={`s-${k}`} name={k} maxlength="5000"></textarea></>; })}
+            {keys.map((k) => { const [, l, help] = field(k); return <><label class="f" for={`s-${k}`}>{l}</label><p class="xs muted" style="margin:-4px 0 6px">{help}</p><textarea class="in" id={`s-${k}`} name={k} maxlength="5000" data-ai="projet"></textarea></>; })}
           </fieldset>
         ))}
       </Wizard>

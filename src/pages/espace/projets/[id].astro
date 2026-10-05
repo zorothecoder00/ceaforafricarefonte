@@ -87,11 +87,18 @@ const mio = (v: number) => (Math.round(v / 1e5) / 10).toLocaleString('fr-FR') + 
     <div class="split">
       <form class="panel" id="sheetF" data-id={id}>
         <h3>Fiche projet normalisée</h3>
-        {SHEET_FIELDS.map(([k, l, help]) => <><label class="f" for={`f-${k}`}>{l}</label><p class="xs muted" style="margin:-4px 0 6px">{help}</p><textarea class="in" id={`f-${k}`} name={k} maxlength="5000" readonly={!edit}>{sheet[k] ?? ''}</textarea></>)}
+        {SHEET_FIELDS.map(([k, l, help]) => <><label class="f" for={`f-${k}`}>{l}</label><p class="xs muted" style="margin:-4px 0 6px">{help}</p><textarea class="in" id={`f-${k}`} name={k} maxlength="5000" readonly={!edit} data-ai="projet">{sheet[k] ?? ''}</textarea></>)}
         {edit && <button class="btn btn-primary" type="submit">Enregistrer</button>}
         <p class="xs muted" style="margin-top:8px">Les chiffres publiés portent la mention « déclaratif » tant qu’ils ne sont pas vérifiés par CEA.</p>
       </form>
       <aside>
+        {edit && (
+          <div class="panel" style="margin-bottom:16px">
+            <h3>Mon pitch d'une minute</h3>
+            <p class="xs muted" style="margin:-4px 0 6px">Brouillon de travail préparé à partir de la fiche projet : copiez-le où vous en avez besoin. Il n'est pas enregistré.</p>
+            <textarea class="in" id="pitchTa" name="pitch" rows="8" data-ai="pitch" data-ai-form="sheetF" data-ai-label="Pitch d'une minute" aria-label="Pitch d'une minute"></textarea>
+          </div>
+        )}
         <div class="panel">
           <h3>Revue et commentaires</h3>
           {canComment(role) && (
