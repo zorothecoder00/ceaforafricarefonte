@@ -48,9 +48,10 @@ jobs:
         if: steps.cfg.outputs.ok == 'true'
         env:
           URL: ${{ secrets.NEON_DATABASE_URL }}
-        # Le schéma neon_auth appartient à Neon : il n'est pas exporté
+        # Le schéma neon_auth appartient à Neon : il n'est pas exporté. Le conteneur tourne sous l'utilisateur du runner,
+        # sinon le fichier appartiendrait à root et ne pourrait pas être effacé après chiffrement.
         run: |
-          docker run --rm --network host -v "$PWD:/out" postgres:18 \
+          docker run --rm --network host --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/out" postgres:18 \
             pg_dump "$URL" --format=custom --compress=9 --no-owner --no-privileges --exclude-schema=neon_auth --file=/out/base.dump
           ls -lh base.dump
 
