@@ -5,7 +5,7 @@ import PageHead from '../../components/PageHead.astro';
 import { STUDIES, SUBS } from '../../data/site';
 ---
 <BaseLayout title="Études et rapports">
-  <PageHead title="Études et rapports" lead="Baromètres, rapports d'impact et études de suivi." crumbs={[['/ressources', 'Ressources'], ['', 'Études']]} subnav={SUBS.ressources} />
+  <PageHead title="Études et rapports" lead="Baromètres, rapports d'impact et études sectorielles." crumbs={[['/ressources', 'Ressources'], ['', 'Études']]} subnav={SUBS.ressources} />
   <section class="block">
     <div class="wrap grid g3">
       {STUDIES.map((s) => (

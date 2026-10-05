@@ -31,7 +31,7 @@ export const SUBS: Record<string, Link[]> = {
   opps: [['/opportunites', 'Emplois et stages'], ['/opportunites/missions', 'Missions'], ['/opportunites/appels-offres', "Appels d'offres"], ['/projets/competences', 'Projets à rejoindre'], ['/opportunites/entreprises', 'Entreprises'], ['/opportunites/diaspora', 'Diaspora'], ['/opportunites/profil', 'Mon profil talent'], ['/opportunites/recruteur', 'Espace recruteur']],
   voix: [['/voix', 'Consultations'], ['/voix/positions', 'Nos positions'], ['/voix/barometre', 'Baromètre'], ['/voix/groupes', 'Groupes de travail'], ['/voix/assistance', 'Assistance'], ['/adherer', 'Adhérer']],
   espace: [['/espace/apprentissage', 'Mon apprentissage'], ['/academie', 'Catalogue'], ['/academie/parcours', 'Parcours certifiants']],
-  ressources: [['/ressources', 'Média'], ['/ressources/etudes', 'Études'], ['/ressources/podcasts', 'Podcasts et vidéos'], ['/ressources/outils', 'Boîte à outils'], ['/ressources/glossaire', 'Glossaire'], ['/impact', "Observatoire d'impact"]],
+  ressources: [['/ressources', 'Média'], ['/ressources/etudes', 'Études'], ['/ressources/podcasts', 'Podcasts et vidéos'], ['/ressources/outils', 'Boîte à outils'], ['/ressources/glossaire', 'Glossaire'], ['/impact', 'Observatoire']],
 };
 
 /** Rubrique active d'après le chemin. */

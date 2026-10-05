@@ -15,7 +15,7 @@ const line = pts.map((p) => p.join(',')).join(' ');
 const area = `20,${H - 20} ${line} ${W - 20},${H - 20}`;
 ---
 <BaseLayout title="Observatoire d'impact">
-  <PageHead title="Observatoire d'impact" lead="Des chiffres agrégés, définis, sourcés et datés. Données de démonstration au 30 septembre 2026." crumbs={[['/ressources', 'Ressources'], ['', "Observatoire d'impact"]]} subnav={SUBS.ressources} />
+  <PageHead title="CEA Impact Lab — observatoire d'impact" lead="Des chiffres agrégés, définis, sourcés et datés. Données de démonstration au 30 septembre 2026." crumbs={[['', 'CEA Impact Lab']]} subnav={SUBS.ressources} />
   <section class="block" style="padding-top:28px">
     <div class="wrap">
       <div class="grid g4">
@@ -43,9 +43,9 @@ const area = `20,${H - 20} ${line} ${W - 20},${H - 20}`;
           <div class="panel">
             <h3>Emplois créés par trimestre</h3>
             <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Emplois créés par trimestre, de 120 au T1 2025 à 610 au T3 2026" style="width:100%;height:auto">
-              <polygon points={area} fill="rgba(201,150,43,.18)" />
-              <polyline points={line} fill="none" stroke="var(--gold)" stroke-width="2.5" />
-              {pts.map(([x, y], i) => <><circle cx={x} cy={y} r="3.5" fill="var(--gold)" /><text x={x} y={H - 4} font-size="9" text-anchor="middle" fill="currentColor" opacity=".7">{jobs[i][0]}</text><text x={x} y={y - 8} font-size="9" text-anchor="middle" fill="currentColor">{jobs[i][1]}</text></>)}
+              <polygon points={area} fill="rgba(43,108,176,.15)" />
+              <polyline points={line} fill="none" stroke="#2B6CB0" stroke-width="2.5" />
+              {pts.map(([x, y], i) => <><circle cx={x} cy={y} r="3.5" fill="#2B6CB0" /><text x={x} y={H - 4} font-size="9" text-anchor="middle" fill="currentColor" opacity=".7">{jobs[i][0]}</text><text x={x} y={y - 8} font-size="9" text-anchor="middle" fill="currentColor">{jobs[i][1]}</text></>)}
             </svg>
           </div>
         </div>
