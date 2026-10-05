@@ -1,0 +1,146 @@
+---
+/* Fiche 360° d'une personne (CDC §12) : membre (u-<id>) ou contact externe (c-<id>).
+   Identité, organisation, consentements, rôles, adhésions, paiements, billets, cours, candidatures, demandes, campagnes reçues
+   et historique des interactions. Un responsable pays n'ouvre que les fiches de ses pays. */
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import Money from '../../../../components/Money.astro';
+import { desc, eq, or } from 'drizzle-orm';
+import { db } from '../../../../lib/db';
+import { user } from '../../../../db/schema/auth';
+import { profile, userRole, consent, membership, payment, eventTicket, enrollment, programmeApplication, contactMessage } from '../../../../db/schema/app';
+import { crmContact, crmOrg, crmInteraction, campaign, campaignSend } from '../../../../db/schema/crm';
+import { can, ROLE_LABEL, type Role } from '../../../../lib/rbac';
+import { countriesFor } from '../../../../lib/admin';
+import { INTERACTION_LABEL } from '../../../../lib/crm';
+import { allEvents, allCourses } from '../../../../lib/catalog';
+import { COUNTRIES, country } from '../../../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const key = Astro.params.key ?? '';
+const m = key.match(/^(u|c)-([A-Za-z0-9-]{8,64})$/);
+if (!m) return new Response('Fiche introuvable', { status: 404 });
+const [kind, id] = [m[1], m[2]];
+const scope = await countriesFor(me, 'crm', 'L');
+const canM = can(me.roles, 'crm', 'M');
+const fmt = (d: Date | null | undefined) => (d ? d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—');
+
+// Membre
+const [mem] = kind === 'u' ? await db.select({ u: user, p: profile }).from(user).leftJoin(profile, eq(profile.userId, user.id)).where(eq(user.id, id)) : [];
+// Contact externe
+const [ext] = kind === 'c' && /^[0-9a-f-]{36}$/.test(id) ? await db.select({ c: crmContact, org: crmOrg }).from(crmContact).leftJoin(crmOrg, eq(crmOrg.id, crmContact.orgId)).where(eq(crmContact.id, id)) : [];
+if (!mem && !ext) return new Response('Fiche introuvable', { status: 404 });
+const personCountry = mem ? mem.p?.country : ext!.c.country;
+if (scope && !(personCountry && scope.includes(personCountry))) return new Response('Hors de votre périmètre', { status: 403 });
+
+const name = mem ? mem.u.name : ext!.c.name;
+const email = mem ? (mem.u.email.endsWith('@telephone.cea4africa.com') ? null : mem.u.email) : ext!.c.email;
+const interactions = await db.select({ i: crmInteraction, who: user.name }).from(crmInteraction).leftJoin(user, eq(user.id, crmInteraction.authorId))
+  .where(kind === 'u' ? eq(crmInteraction.userId, id) : eq(crmInteraction.contactId, id)).orderBy(desc(crmInteraction.at)).limit(100);
+const sends = await db.select({ s: campaignSend, c: campaign }).from(campaignSend).innerJoin(campaign, eq(campaign.id, campaignSend.campaignId))
+  .where(eq(campaignSend.recipientKey, `${kind}:${id}`)).orderBy(desc(campaignSend.sentAt)).limit(30);
+
+// Données de membre
+const roles = mem ? await db.select({ role: userRole.role, c: userRole.country }).from(userRole).where(eq(userRole.userId, id)) : [];
+const consents = mem ? await db.select().from(consent).where(eq(consent.userId, id)).orderBy(desc(consent.at)).limit(30) : [];
+const lastConsent = (k: string) => consents.find((c) => c.kind === k);
+const members = mem ? await db.select().from(membership).where(eq(membership.userId, id)).orderBy(desc(membership.startsAt)) : [];
+const pays = mem ? await db.select().from(payment).where(eq(payment.userId, id)).orderBy(desc(payment.createdAt)).limit(15) : [];
+const tickets = mem ? await db.select().from(eventTicket).where(eq(eventTicket.userId, id)).orderBy(desc(eventTicket.createdAt)).limit(20) : [];
+const enrolls = mem ? await db.select().from(enrollment).where(eq(enrollment.userId, id)) : [];
+const apps = mem ? await db.select().from(programmeApplication).where(eq(programmeApplication.userId, id)) : [];
+// Demandes rattachées au compte ou envoyées depuis la même adresse e-mail (jamais de filtre vide : il listerait toutes les demandes)
+const reqFilter = [kind === 'u' ? eq(contactMessage.userId, id) : null, email ? eq(contactMessage.contact, email) : null].filter((x) => x !== null);
+const requests = reqFilter.length ? await db.select().from(contactMessage).where(or(...reqFilter)).orderBy(desc(contactMessage.createdAt)).limit(15).catch(() => []) : [];
+const events = tickets.length ? await allEvents({ hidden: true }) : [];
+const courses = enrolls.length ? await allCourses({ hidden: true }) : [];
+const orgs = ext ? await db.select({ id: crmOrg.id, name: crmOrg.name }).from(crmOrg).orderBy(crmOrg.name) : [];
+const countryList = Object.entries(COUNTRIES).filter(([c]) => !scope || scope.includes(c));
+---
+<AdminLayout title={name} lead={`${mem ? 'Membre' : 'Contact externe'}${personCountry ? ` · ${country(personCountry)}` : ''}${email ? ` · ${email}` : ''}`} obj="crm">
+  <p class="small" style="margin-top:-8px"><a href="/admin/crm">← CRM</a></p>
+  <div class="split">
+    <div>
+      {mem && (
+        <div class="grid g2">
+          <div class="panel"><h3>Profil</h3><dl class="small" style="display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;margin:0">
+            <dt class="muted">Téléphone</dt><dd style="margin:0">{mem.u.phoneNumber ?? '—'}</dd>
+            <dt class="muted">Entreprise</dt><dd style="margin:0">{mem.p?.companyName ?? '—'}</dd>
+            <dt class="muted">Secteur</dt><dd style="margin:0">{mem.p?.sector ?? '—'}</dd>
+            <dt class="muted">Langue</dt><dd style="margin:0">{(mem.p?.lang ?? 'fr').toUpperCase()}</dd>
+            <dt class="muted">Inscription</dt><dd style="margin:0">{fmt(mem.u.createdAt)}</dd>
+            <dt class="muted">Rôles</dt><dd style="margin:0">{roles.map((r) => ROLE_LABEL[r.role as Role] + (r.c ? ` (${r.c})` : '')).join(', ') || 'Membre'}</dd>
+          </dl>{mem.p?.needs && <p class="xs" style="margin:8px 0 0"><b>Besoins :</b> {mem.p.needs}</p>}</div>
+          <div class="panel"><h3>Consentements</h3>
+            {(['marketing', 'profil_public', 'partage_investisseurs'] as const).map((k) => { const c = lastConsent(k); return <div class="row between small"><span>{{ marketing: 'Communications marketing', profil_public: 'Profil public', partage_investisseurs: 'Partage aux investisseurs' }[k]}</span><span class={`tag ${c?.granted ? 'ok' : ''}`}>{c ? (c.granted ? 'accordé' : 'refusé') : 'non exprimé'}</span></div>; })}
+            {consents.length > 0 && <details class="xs" style="margin-top:6px"><summary>Historique ({consents.length})</summary><ul style="margin:4px 0;padding-left:16px">{consents.map((c) => <li>{fmt(c.at)} — {c.kind} : {c.granted ? 'accordé' : 'retiré'}</li>)}</ul></details>}
+          </div>
+          <div class="panel"><h3>Adhésions et paiements</h3>
+            {members.map((x) => <div class="row between small"><span>{x.plan} · n° {x.cardNumber}</span><span class={`tag ${x.status === 'active' ? 'ok' : ''}`}>{x.status}</span></div>)}
+            {pays.map((x) => <div class="row between xs"><span>{fmt(x.createdAt)} · {x.purpose}</span><span><Money xof={x.amountXof} /> · {x.status}</span></div>)}
+            {!members.length && !pays.length && <p class="small muted" style="margin:0">Aucun.</p>}
+          </div>
+          <div class="panel"><h3>Événements et formation</h3>
+            {tickets.map((t) => <div class="xs">🎟 {events.find((e) => e.id === t.eventId)?.t ?? t.eventId} — {t.ticketType} ({t.status})</div>)}
+            {enrolls.map((e) => <div class="xs">📘 {courses.find((c) => c.id === e.courseId)?.t ?? e.courseId}{e.completedAt ? ' — terminé' : ''}</div>)}
+            {apps.map((a) => <div class="xs">📝 Candidature {a.programme} — {a.status}</div>)}
+            {!tickets.length && !enrolls.length && !apps.length && <p class="small muted" style="margin:0">Aucun.</p>}
+          </div>
+        </div>
+      )}
+
+      {ext && (
+        <form class="panel" data-api="/api/admin/crm" data-reload>
+          <h3 style="margin-top:0">Fiche du contact</h3>
+          <fieldset disabled={!canM} style="border:0;padding:0;margin:0">
+            <input type="hidden" name="action" value="contact.save" /><input type="hidden" name="id" value={ext.c.id} />
+            <div class="grid g2" style="gap:0 12px">
+              <div><label class="f" for="n">Nom</label><input class="in" id="n" name="name" required value={ext.c.name} /></div>
+              <div><label class="f" for="e">E-mail</label><input class="in" id="e" name="email" type="email" value={ext.c.email ?? ''} /></div>
+              <div><label class="f" for="p">Téléphone</label><input class="in" id="p" name="phone" value={ext.c.phone ?? ''} /></div>
+              <div><label class="f" for="o">Organisation</label><select class="in" id="o" name="orgId"><option value="">—</option>{orgs.map((o) => <option value={o.id} selected={o.id === ext.c.orgId}>{o.name}</option>)}</select></div>
+              <div><label class="f" for="r">Fonction</label><input class="in" id="r" name="role" value={ext.c.role ?? ''} /></div>
+              <div><label class="f" for="c">Pays</label><select class="in" id="c" name="country"><option value="">—</option>{countryList.map(([c, n]) => <option value={c} selected={c === ext.c.country}>{n}</option>)}</select></div>
+              <div><label class="f" for="s">Secteur</label><input class="in" id="s" name="sector" value={ext.c.sector ?? ''} /></div>
+              <div><label class="f" for="l">Langue</label><select class="in" id="l" name="lang"><option value="fr">Français</option><option value="en" selected={ext.c.lang === 'en'}>Anglais</option></select></div>
+              <div><label class="f" for="t">Étiquettes</label><input class="in" id="t" name="tags" data-type="list" value={ext.c.tags.join(', ')} /></div>
+              <div><label class="f" for="so">Source</label><input class="in" id="so" name="source" value={ext.c.source ?? ''} /></div>
+            </div>
+            <label class="row small"><input type="checkbox" name="marketingConsent" checked={ext.c.marketingConsent} /> A accepté de recevoir nos communications {ext.c.consentAt && <span class="xs muted">(depuis le {fmt(ext.c.consentAt)})</span>}</label>
+            <label class="f" for="cb">Base du consentement</label><input class="in" id="cb" name="consentBasis" value={ext.c.consentBasis ?? ''} />
+            <label class="f" for="no">Notes</label><textarea class="in" id="no" name="notes" rows="3">{ext.c.notes ?? ''}</textarea>
+            {canM && <button class="btn btn-primary btn-sm" type="submit" style="margin-top:10px">Enregistrer</button>}
+          </fieldset>
+          {ext.org && <p class="small" style="margin:10px 0 0">Organisation : <a href={`/admin/crm/organisation/${ext.org.id}`}>{ext.org.name}</a></p>}
+        </form>
+      )}
+
+      <h2 style="font-size:1.1rem;margin-top:20px">Demandes et tickets</h2>
+      <div class="panel">{requests.length ? requests.map((r) => <div class="list-row"><span class="small">{r.reference} · {r.motif}</span><span class="xs muted">{fmt(r.createdAt)} · {r.status}</span></div>) : <p class="small muted" style="margin:0">Aucune.</p>}</div>
+
+      <h2 style="font-size:1.1rem;margin-top:20px">Campagnes reçues</h2>
+      <div class="panel">{sends.length ? sends.map(({ s, c }) => <div class="list-row"><span class="small"><a href={`/admin/campagnes/${c.id}`}>{c.name}</a> <span class="xs muted">({c.channel}, variante {s.variant})</span></span><span class="xs muted">{s.status === 'envoye' ? fmt(s.sentAt) : s.status}{s.openedAt ? ' · ouvert' : ''}{s.clickedAt ? ' · cliqué' : ''}{s.unsubscribedAt ? ' · désabonné' : ''}</span></div>) : <p class="small muted" style="margin:0">Aucune.</p>}</div>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h3>Historique des interactions</h3>
+        {canM && (
+          <form data-api="/api/admin/crm" data-reload data-reset style="margin-bottom:12px">
+            <input type="hidden" name="action" value="interaction.add" />
+            <input type="hidden" name={kind === 'u' ? 'userId' : 'contactId'} value={id} />
+            {ext?.c.orgId && <input type="hidden" name="orgId" value={ext.c.orgId} />}
+            <div class="row" style="gap:6px"><select class="in" name="kind" aria-label="Type" style="width:auto">{Object.entries(INTERACTION_LABEL).map(([k, l]) => <option value={k}>{l}</option>)}</select><input class="in" type="date" name="at" aria-label="Date" style="width:auto" /></div>
+            <textarea class="in" name="summary" required minlength="2" rows="3" placeholder="Ce qui a été dit ou décidé" aria-label="Résumé"></textarea>
+            <button class="btn btn-ghost btn-sm" type="submit">Ajouter</button>
+          </form>
+        )}
+        <ol class="timeline" style="max-height:600px;overflow:auto">
+          {interactions.map(({ i, who }) => <li><b class="small">{INTERACTION_LABEL[i.kind] ?? i.kind}</b> <span class="xs muted">{fmt(i.at)} · {who ?? '—'}</span><div class="small" style="white-space:pre-wrap">{i.summary}</div></li>)}
+          {!interactions.length && <li class="small muted">Aucune interaction.</li>}
+        </ol>
+      </div>
+      {ext && can(me.roles, 'crm', 'V') && <button class="btn btn-ghost btn-sm" type="button" style="margin-top:14px" data-post="/api/admin/crm" data-body={JSON.stringify({ action: 'contact.delete', id: ext.c.id })} data-confirm="Effacer définitivement ce contact et tout son historique (demande d'effacement) ?">Effacer ce contact</button>}
+    </aside>
+  </div>
+</AdminLayout>

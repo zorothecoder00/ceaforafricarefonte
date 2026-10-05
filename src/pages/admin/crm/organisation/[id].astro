@@ -1,0 +1,108 @@
+---
+/* Fiche d'une organisation (CDC §12, CRM) : informations, contacts, opportunités du pipeline, historique des interactions. */
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import Money from '../../../../components/Money.astro';
+import { desc, eq } from 'drizzle-orm';
+import { db } from '../../../../lib/db';
+import { user } from '../../../../db/schema/auth';
+import { crmOrg, crmContact, crmDeal, crmInteraction, crmOrgKindEnum } from '../../../../db/schema/crm';
+import { can } from '../../../../lib/rbac';
+import { countriesFor } from '../../../../lib/admin';
+import { STAGES, STAGE_LABEL, ORG_KIND_LABEL, INTERACTION_LABEL, DEAL_KIND_LABEL } from '../../../../lib/crm';
+import { allEvents } from '../../../../lib/catalog';
+import { COUNTRIES, country } from '../../../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const id = Astro.params.id ?? '';
+if (!/^[0-9a-f-]{36}$/.test(id)) return new Response('Organisation introuvable', { status: 404 });
+const [o] = await db.select().from(crmOrg).where(eq(crmOrg.id, id));
+if (!o) return new Response('Organisation introuvable', { status: 404 });
+const scope = await countriesFor(me, 'crm', 'L');
+if (scope && !(o.country && scope.includes(o.country))) return new Response('Hors de votre périmètre', { status: 403 });
+const canM = can(me.roles, 'crm', 'M');
+const contacts = await db.select().from(crmContact).where(eq(crmContact.orgId, id)).orderBy(crmContact.name);
+const deals = await db.select().from(crmDeal).where(eq(crmDeal.orgId, id)).orderBy(desc(crmDeal.updatedAt));
+const interactions = await db.select({ i: crmInteraction, who: user.name }).from(crmInteraction).leftJoin(user, eq(user.id, crmInteraction.authorId)).where(eq(crmInteraction.orgId, id)).orderBy(desc(crmInteraction.at)).limit(100);
+const events = await allEvents({ hidden: true });
+const countryList = Object.entries(COUNTRIES).filter(([c]) => !scope || scope.includes(c));
+const fmt = (d: Date) => d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+const won = deals.filter((d) => d.stage === 'gagne').reduce((n, d) => n + (d.amountXof ?? 0), 0);
+---
+<AdminLayout title={o.name} lead={`${ORG_KIND_LABEL[o.kind]}${o.country ? ` · ${country(o.country)}` : ''}${o.sector ? ` · ${o.sector}` : ''}`} obj="crm">
+  <p class="small" style="margin-top:-8px"><a href="/admin/crm?vue=organisations">← Organisations</a></p>
+  <div class="split">
+    <div>
+      <form class="panel" data-api="/api/admin/crm" data-reload>
+        <fieldset disabled={!canM} style="border:0;padding:0;margin:0">
+          <input type="hidden" name="action" value="org.save" /><input type="hidden" name="id" value={o.id} />
+          <div class="grid g2" style="gap:0 12px">
+            <div><label class="f" for="n">Nom</label><input class="in" id="n" name="name" required value={o.name} /></div>
+            <div><label class="f" for="k">Type</label><select class="in" id="k" name="kind">{crmOrgKindEnum.enumValues.map((k) => <option value={k} selected={k === o.kind}>{ORG_KIND_LABEL[k]}</option>)}</select></div>
+            <div><label class="f" for="c">Pays</label><select class="in" id="c" name="country"><option value="">—</option>{countryList.map(([c, n]) => <option value={c} selected={c === o.country}>{n}</option>)}</select></div>
+            <div><label class="f" for="s">Secteur</label><input class="in" id="s" name="sector" value={o.sector ?? ''} /></div>
+            <div style="grid-column:1/-1"><label class="f" for="w">Site web</label><input class="in" id="w" name="website" type="url" value={o.website ?? ''} /></div>
+          </div>
+          <label class="f" for="no">Notes</label><textarea class="in" id="no" name="notes" rows="3">{o.notes ?? ''}</textarea>
+          {canM && <button class="btn btn-primary btn-sm" type="submit" style="margin-top:10px">Enregistrer</button>}
+        </fieldset>
+        {o.website && <p class="small" style="margin:8px 0 0"><a href={o.website} target="_blank" rel="noopener">{o.website}</a></p>}
+      </form>
+
+      <h2 style="font-size:1.1rem;margin-top:20px">Contacts ({contacts.length})</h2>
+      <div class="panel">{contacts.length ? contacts.map((c) => <div class="list-row"><span class="small"><a href={`/admin/crm/personne/c-${c.id}`}><b>{c.name}</b></a>{c.role && <span class="muted"> · {c.role}</span>}</span><span class="xs muted">{c.email ?? c.phone ?? ''}{c.marketingConsent ? ' · ✓ marketing' : ''}</span></div>) : <p class="small muted" style="margin:0">Aucun contact. Créez-en un depuis <a href="/admin/crm">l'onglet Contacts</a> en choisissant cette organisation.</p>}</div>
+
+      <h2 style="font-size:1.1rem;margin-top:20px">Opportunités {won > 0 && <span class="small muted">· gagné : <Money xof={won} /></span>}</h2>
+      <div class="panel">
+        {deals.map((d) => (
+          <div class="list-row" style="align-items:flex-start">
+            <span class="small"><b>{d.title}</b><div class="xs muted">{DEAL_KIND_LABEL[d.kind] ?? d.kind}{d.amountXof ? <> · <Money xof={d.amountXof} /></> : ''}{d.eventId ? ` · ${events.find((e) => e.id === d.eventId)?.t ?? d.eventId}` : ''}{d.expectedOn ? ` · échéance ${new Date(d.expectedOn).toLocaleDateString('fr-FR')}` : ''}</div></span>
+            {canM ? <select class="in" style="width:auto;padding:4px 6px;font-size:.85rem" aria-label="Étape" data-deal={d.id}>{STAGES.map((s) => <option value={s} selected={s === d.stage}>{STAGE_LABEL[s]}</option>)}</select> : <span class="tag">{STAGE_LABEL[d.stage]}</span>}
+          </div>
+        ))}
+        {!deals.length && <p class="small muted" style="margin:0">Aucune opportunité.</p>}
+        {can(me.roles, 'crm', 'C') && (
+          <details style="margin-top:10px"><summary class="small"><b>Nouvelle opportunité</b></summary>
+            <form data-api="/api/admin/crm" data-reload style="margin-top:8px">
+              <input type="hidden" name="action" value="deal.save" /><input type="hidden" name="orgId" value={o.id} />
+              <div class="grid g2" style="gap:0 12px">
+                <div><label class="f" for="dt">Intitulé</label><input class="in" id="dt" name="title" required minlength="2" maxlength="160" /></div>
+                <div><label class="f" for="dk">Nature</label><select class="in" id="dk" name="kind">{Object.entries(DEAL_KIND_LABEL).map(([k, l]) => <option value={k}>{l}</option>)}</select></div>
+                <div><label class="f" for="da">Montant (FCFA)</label><input class="in" id="da" name="amountXof" type="number" min="0" /></div>
+                <div><label class="f" for="de">Événement</label><select class="in" id="de" name="eventId"><option value="">—</option>{events.map((e) => <option value={e.id}>{e.t}</option>)}</select></div>
+                <div><label class="f" for="dx">Échéance</label><input class="in" id="dx" name="expectedOn" type="date" /></div>
+              </div>
+              <button class="btn btn-primary btn-sm" type="submit" style="margin-top:8px">Créer</button>
+            </form>
+          </details>
+        )}
+      </div>
+    </div>
+    <aside>
+      <div class="panel">
+        <h3>Historique</h3>
+        {canM && (
+          <form data-api="/api/admin/crm" data-reload data-reset style="margin-bottom:12px">
+            <input type="hidden" name="action" value="interaction.add" /><input type="hidden" name="orgId" value={o.id} />
+            <div class="row" style="gap:6px"><select class="in" name="kind" aria-label="Type" style="width:auto">{Object.entries(INTERACTION_LABEL).map(([k, l]) => <option value={k}>{l}</option>)}</select><input class="in" type="date" name="at" aria-label="Date" style="width:auto" /></div>
+            <textarea class="in" name="summary" required minlength="2" rows="3" placeholder="Réunion, échange, décision…" aria-label="Résumé"></textarea>
+            <button class="btn btn-ghost btn-sm" type="submit">Ajouter</button>
+          </form>
+        )}
+        <ol class="timeline" style="max-height:600px;overflow:auto">
+          {interactions.map(({ i, who }) => <li><b class="small">{INTERACTION_LABEL[i.kind] ?? i.kind}</b> <span class="xs muted">{fmt(i.at)} · {who ?? '—'}</span><div class="small" style="white-space:pre-wrap">{i.summary}</div></li>)}
+          {!interactions.length && <li class="small muted">Aucune interaction.</li>}
+        </ol>
+      </div>
+      {can(me.roles, 'crm', 'V') && <button class="btn btn-ghost btn-sm" type="button" style="margin-top:14px" data-post="/api/admin/crm" data-body={JSON.stringify({ action: 'org.delete', id: o.id })} data-confirm="Supprimer cette organisation, ses opportunités et son historique ? Ses contacts sont conservés.">Supprimer l'organisation</button>}
+    </aside>
+  </div>
+</AdminLayout>
+<script>
+  document.querySelectorAll<HTMLSelectElement>('[data-deal]').forEach((s) => s.addEventListener('change', async () => {
+    const r = await fetch('/api/admin/crm', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'deal.stage', id: s.dataset.deal, stage: s.value }) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    (window as unknown as { toast: (t: string) => void }).toast(d.message ?? d.error ?? 'Erreur.');
+    if (d.ok) setTimeout(() => location.reload(), 500);
+  }));
+</script>

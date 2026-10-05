@@ -1,0 +1,47 @@
+---
+/* Campagnes (CDC §12) : liste, création (vierge ou depuis un modèle), modèles enregistrés. */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { desc, eq, sql } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { campaign, campaignSend, campaignTemplate, crmSegment } from '../../../db/schema/crm';
+import { can } from '../../../lib/rbac';
+import { CHANNEL_LABEL, STATUS_LABEL, STATUS_TONE } from '../../../lib/campaign-labels';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const rows = await db.select({
+  c: campaign, seg: crmSegment.name,
+  sent: sql<number>`(select count(*)::int from ${campaignSend} where ${campaignSend.campaignId} = ${campaign.id} and ${campaignSend.status} = 'envoye')`,
+  opened: sql<number>`(select count(*)::int from ${campaignSend} where ${campaignSend.campaignId} = ${campaign.id} and ${campaignSend.openedAt} is not null)`,
+}).from(campaign).leftJoin(crmSegment, eq(crmSegment.id, campaign.segmentId)).orderBy(desc(campaign.updatedAt)).limit(200);
+const templates = await db.select().from(campaignTemplate).orderBy(desc(campaignTemplate.createdAt));
+const canC = can(me.roles, 'campagnes', 'C');
+---
+<AdminLayout title="Campagnes" lead="E-mail, SMS, WhatsApp et notifications push, envoyés à un segment du CRM. Le marketing ne part qu'aux personnes qui y ont consenti." obj="campagnes">
+  {canC && (
+    <form class="panel row" data-api="/api/admin/campagnes" style="gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px">
+      <input type="hidden" name="action" value="create" />
+      <div style="flex:1;min-width:200px"><label class="f" for="cn">Nouvelle campagne</label><input class="in" id="cn" name="name" required minlength="2" maxlength="120" placeholder="Ex. Relance Forum 2026 — Togo" /></div>
+      <div><label class="f" for="cc">Canal</label><select class="in" id="cc" name="channel">{Object.entries(CHANNEL_LABEL).map(([k, l]) => <option value={k}>{l}</option>)}</select></div>
+      <div><label class="f" for="cp">Nature</label><select class="in" id="cp" name="purpose"><option value="marketing">Information / promotion</option><option value="service">Message de service</option></select></div>
+      {templates.length > 0 && <div><label class="f" for="ct">Modèle</label><select class="in" id="ct" name="templateId"><option value="">Vierge</option>{templates.map((t) => <option value={t.id}>{t.name} ({CHANNEL_LABEL[t.channel]})</option>)}</select></div>}
+      <button class="btn btn-primary btn-sm" type="submit">Créer</button>
+    </form>
+  )}
+  <div class="panel scroll-x">
+    {rows.length === 0 ? <p class="small muted" style="margin:0">Aucune campagne. Préparez d'abord un <a href="/admin/crm?vue=segments">segment</a>.</p> : (
+      <table class="t"><thead><tr><th>Campagne</th><th>Canal</th><th>Segment</th><th>État</th><th>Envoyés</th><th>Ouverture</th></tr></thead>
+        <tbody>{rows.map(({ c, seg, sent, opened }) => (
+          <tr><td><a href={`/admin/campagnes/${c.id}`}><b>{c.name}</b></a><div class="xs muted">{c.purpose === 'service' ? 'Service' : 'Marketing'}{c.splitB > 0 ? ' · test A/B' : ''}</div></td>
+            <td class="small">{CHANNEL_LABEL[c.channel]}</td><td class="small">{seg ?? '—'}</td>
+            <td><span class={`tag ${STATUS_TONE[c.status]}`}>{STATUS_LABEL[c.status]}</span>{c.status === 'programmee' && c.scheduledAt && <div class="xs muted">{c.scheduledAt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</div>}</td>
+            <td class="small">{sent}</td><td class="small">{c.channel === 'email' && sent ? `${Math.round((opened / sent) * 100)} %` : '—'}</td></tr>
+        ))}</tbody></table>
+    )}
+  </div>
+  {templates.length > 0 && (
+    <details class="panel" style="margin-top:16px"><summary><b>Modèles ({templates.length})</b></summary>
+      {templates.map((t) => <div class="list-row"><span class="small">{t.name} <span class="xs muted">· {CHANNEL_LABEL[t.channel]}{t.subject ? ` · ${t.subject}` : ''}</span></span>{can(me.roles, 'campagnes', 'V') && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/campagnes" data-body={JSON.stringify({ action: 'template.delete', id: t.id })} data-confirm="Supprimer ce modèle ?" data-reload>Supprimer</button>}</div>)}
+    </details>
+  )}
+</AdminLayout>

@@ -65,6 +65,10 @@
     {
       "path": "/api/cron/rappels",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/campagnes",
+      "schedule": "30 7 * * *"
     }
   ]
 }

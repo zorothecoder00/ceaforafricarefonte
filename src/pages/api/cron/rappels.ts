@@ -6,28 +6,21 @@
 import type { APIRoute } from 'astro';
 import { and, eq, gt, isNull, lte } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { timingSafeEqual } from 'node:crypto';
 import { db } from '../../../lib/db';
 import { appointment, mentoringSession } from '../../../db/schema/app';
 import { user } from '../../../db/schema/auth';
 import { sendEmail } from '../../../lib/messaging';
 import { notify } from '../../../lib/notify';
-import { env } from '../../../lib/env';
 import { json, fail } from '../../../lib/session';
+import { cronAuthorized } from '../../../lib/cron';
 import { agendaKey, siteUrl } from '../../../lib/agenda';
 
 export const prerender = false;
 
-const authorized = (h: string | null) => {
-  const secret = env('CRON_SECRET');
-  if (!secret || !h) return false;
-  const want = Buffer.from(`Bearer ${secret}`), got = Buffer.from(h);
-  return want.length === got.length && timingSafeEqual(want, got);
-};
 const lome = (d: Date) => d.toLocaleString('fr-FR', { timeZone: 'Africa/Lome', dateStyle: 'full', timeStyle: 'short' });
 
 export const GET: APIRoute = async ({ request }) => {
-  if (!authorized(request.headers.get('authorization'))) return fail('Accès refusé.', 401);
+  if (!cronAuthorized(request.headers.get('authorization'))) return fail('Accès refusé.', 401);
   const now = new Date(), until = new Date(now.getTime() + 36 * 3600_000);
   let sent = 0, failed = 0;
 

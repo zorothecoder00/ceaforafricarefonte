@@ -1,0 +1,33 @@
+---
+/* Désabonnement des communications marketing (CDC §12, §15.1 consentements), depuis le lien de chaque campagne.
+   GET : demande de confirmation (les messageries qui pré-ouvrent les liens ne désabonnent personne) ; POST : désabonnement effectif. */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHead from '../components/PageHead.astro';
+import { eq } from 'drizzle-orm';
+import { db } from '../lib/db';
+import { campaignSend } from '../db/schema/crm';
+import { validToken, unsubscribe } from '../lib/campaigns';
+
+export const prerender = false;
+const s = Astro.url.searchParams.get('s') ?? '', t = Astro.url.searchParams.get('t') ?? '';
+const ok = /^[0-9a-f-]{36}$/.test(s) && validToken(s, t);
+const [send] = ok ? await db.select().from(campaignSend).where(eq(campaignSend.id, s)) : [];
+let done = !!send?.unsubscribedAt;
+if (send && !done && Astro.request.method === 'POST') { await unsubscribe(send); done = true; }
+Astro.response.headers.set('X-Robots-Tag', 'noindex');
+---
+<BaseLayout title="Désabonnement">
+  <PageHead title="Désabonnement" lead="Communications d'information et de promotion de CEA FOR AFRICA." crumbs={[['', 'Désabonnement']]} />
+  <section class="block"><div class="wrap" style="max-width:640px">
+    <div class="panel">
+      {!send ? <p style="margin:0">Ce lien n'est pas valide ou a expiré. Vous pouvez gérer vos préférences depuis <a href="/espace/notifications">Mon espace › Notifications</a> ou nous écrire via <a href="/contact">le formulaire de contact</a>.</p>
+        : done ? <p style="margin:0"><b>C'est fait.</b> Vous ne recevrez plus nos communications d'information et de promotion. Les messages liés à vos inscriptions (billets, cours, sécurité du compte) continuent de vous parvenir.</p>
+        : (
+          <form method="post">
+            <p style="margin-top:0">Vous ne recevrez plus nos communications d'information et de promotion{send.address && send.address.includes('@') ? <> à l'adresse <b>{send.address}</b></> : ''}. Les messages liés à vos inscriptions continueront de vous parvenir.</p>
+            <button class="btn btn-primary" type="submit">Confirmer le désabonnement</button>
+          </form>
+        )}
+    </div>
+  </div></section>
+</BaseLayout>

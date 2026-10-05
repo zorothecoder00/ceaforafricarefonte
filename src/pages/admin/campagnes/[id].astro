@@ -1,0 +1,162 @@
+---
+/* Campagne (CDC §12) : contenu (variantes A/B), segment, aperçu des destinataires, envoi d'essai, programmation ou envoi par lots, statistiques. */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { desc, eq } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { user } from '../../../db/schema/auth';
+import { campaign, crmSegment } from '../../../db/schema/crm';
+import { can } from '../../../lib/rbac';
+import { stats } from '../../../lib/campaigns';
+import { CHANNEL_LABEL, STATUS_LABEL, STATUS_TONE } from '../../../lib/campaign-labels';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const id = Astro.params.id ?? '';
+if (!/^[0-9a-f-]{36}$/.test(id)) return new Response('Campagne introuvable', { status: 404 });
+const [c] = await db.select().from(campaign).where(eq(campaign.id, id));
+if (!c) return new Response('Campagne introuvable', { status: 404 });
+const segments = await db.select({ id: crmSegment.id, name: crmSegment.name }).from(crmSegment).orderBy(desc(crmSegment.updatedAt));
+const [approver] = c.approvedBy ? await db.select({ name: user.name }).from(user).where(eq(user.id, c.approvedBy)) : [];
+const editable = (c.status === 'brouillon' || c.status === 'programmee') && can(me.roles, 'campagnes', 'M');
+const canSend = can(me.roles, 'campagnes', 'V');
+const st = c.status === 'brouillon' || c.status === 'programmee' ? [] : await stats(c.id);
+const hasSubject = c.channel === 'email' || c.channel === 'push';
+const limit = { email: 20000, sms: 480, whatsapp: 1500, push: 180 }[c.channel];
+const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)} %` : '—');
+---
+<AdminLayout title={c.name} lead={`${CHANNEL_LABEL[c.channel]} · ${c.purpose === 'service' ? 'message de service' : 'information / promotion'}`} obj="campagnes">
+  <p class="small" style="margin-top:-8px"><a href="/admin/campagnes">← Campagnes</a></p>
+  <div class="split">
+    <form class="panel" id="campF" data-id={c.id}>
+      {!editable && <p class="small" style="margin-top:0"><span class="tag">Lecture seule</span> {c.status === 'brouillon' || c.status === 'programmee' ? 'Vous pouvez consulter cette campagne.' : 'Campagne partie : dupliquez-la pour en préparer une autre.'}</p>}
+      <fieldset disabled={!editable} style="border:0;padding:0;margin:0">
+        <div class="grid g2" style="gap:0 12px">
+          <div><label class="f" for="n">Nom interne</label><input class="in" id="n" name="name" required value={c.name} /></div>
+          <div><label class="f" for="sg">Segment</label><select class="in" id="sg" name="segmentId"><option value="">— choisir —</option>{segments.map((s) => <option value={s.id} selected={s.id === c.segmentId}>{s.name}</option>)}</select></div>
+          <div><label class="f" for="pu">Nature</label><select class="in" id="pu" name="purpose"><option value="marketing" selected={c.purpose === 'marketing'}>Information / promotion (consentement requis)</option><option value="service" selected={c.purpose === 'service'}>Message de service (billet ou inscription)</option></select></div>
+          {c.channel !== 'email' && <div><label class="f" for="u">Lien {c.channel === 'push' ? 'ouvert au clic' : 'ajouté au message'}</label><input class="in" id="u" name="url" type="url" value={c.url ?? ''} placeholder="https://…" /></div>}
+        </div>
+        <h3 style="margin-top:18px">Variante A{c.splitB > 0 ? '' : ' (message)'}</h3>
+        {hasSubject && <><label class="f" for="sa">{c.channel === 'email' ? 'Objet' : 'Titre de la notification'}</label><input class="in" id="sa" name="subject" maxlength="160" value={c.subject ?? ''} /></>}
+        <label class="f" for="ba">Message <span class="xs muted" data-count="ba">0/{limit}</span></label>
+        <textarea class="in" id="ba" name="body" rows={c.channel === 'email' ? 12 : 5} maxlength={limit}>{c.body}</textarea>
+        <p class="xs muted" style="margin:2px 0 0">Variables : {'{prenom}'}, {'{nom}'}.{c.channel === 'email' ? ' Laissez une ligne vide entre les paragraphes ; les liens https://… sont suivis automatiquement.' : ''}{c.purpose === 'marketing' && c.channel !== 'push' ? ' Le lien de désabonnement est ajouté automatiquement.' : ''}</p>
+
+        <details style="margin-top:16px" open={c.splitB > 0}>
+          <summary><b>Test A/B</b> <span class="xs muted">— une part des destinataires reçoit la variante B</span></summary>
+          <label class="f" for="sp">Part de la variante B</label>
+          <select class="in" id="sp" name="splitB" style="width:auto">{[0, 10, 20, 30, 50].map((v) => <option value={v} selected={v === c.splitB}>{v ? `${v} %` : 'Pas de test'}</option>)}</select>
+          {hasSubject && <><label class="f" for="sb">{c.channel === 'email' ? 'Objet B' : 'Titre B'} <span class="xs muted">(vide = même que A)</span></label><input class="in" id="sb" name="subjectB" maxlength="160" value={c.subjectB ?? ''} /></>}
+          <label class="f" for="bb">Message B <span class="xs muted">(vide = même que A)</span></label><textarea class="in" id="bb" name="bodyB" rows="5" maxlength={limit}>{c.bodyB ?? ''}</textarea>
+        </details>
+      </fieldset>
+      {editable && <div class="row" style="gap:6px;margin-top:14px;flex-wrap:wrap"><button class="btn btn-primary btn-sm" type="submit">Enregistrer</button><span class="xs muted" id="dirty"></span></div>}
+    </form>
+
+    <aside>
+      <div class="panel">
+        <h3>État</h3>
+        <p style="margin:0 0 6px"><span class={`tag ${STATUS_TONE[c.status]}`}>{STATUS_LABEL[c.status]}</span>{c.status === 'programmee' && c.scheduledAt && <span class="small"> le {c.scheduledAt.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}</span>}</p>
+        {approver && <p class="xs muted" style="margin:0 0 6px">Validée par {approver.name}</p>}
+        {(c.status === 'brouillon' || c.status === 'programmee') && (
+          <>
+            <button class="btn btn-ghost btn-sm" type="button" id="prev">Compter les destinataires</button>
+            <p class="small" id="prevOut" aria-live="polite" style="margin:6px 0"></p>
+            {can(me.roles, 'campagnes', 'M') && <div class="row" style="gap:6px;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" type="button" data-act="test" data-v="A">Essai A</button>{c.splitB > 0 && <button class="btn btn-ghost btn-sm" type="button" data-act="test" data-v="B">Essai B</button>}</div>}
+            {canSend ? (
+              <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
+                <button class="btn btn-primary btn-sm" type="button" data-act="send">Envoyer maintenant</button>
+                <label class="f" for="at" style="margin-top:10px">Ou programmer</label>
+                <div class="row" style="gap:6px"><input class="in" type="datetime-local" id="at" style="width:auto" /><button class="btn btn-ghost btn-sm" type="button" data-act="schedule">Programmer</button></div>
+                <p class="xs muted" style="margin:4px 0 0">Les campagnes programmées partent lors du passage quotidien de la tâche planifiée (7 h 30 GMT) qui suit la date choisie.</p>
+                {c.status === 'programmee' && <button class="btn btn-ghost btn-sm" type="button" data-act="unschedule" style="margin-top:6px">Annuler la programmation</button>}
+              </div>
+            ) : <p class="xs muted" style="margin:10px 0 0">L'envoi est validé par un administrateur.</p>}
+          </>
+        )}
+        {c.status === 'envoi' && canSend && <div style="margin-top:8px"><button class="btn btn-primary btn-sm" type="button" data-act="continue">Poursuivre l'envoi</button> <button class="btn btn-ghost btn-sm" type="button" data-act="cancel">Arrêter</button></div>}
+        <p class="small" id="progress" aria-live="polite" style="margin:8px 0 0"></p>
+        <div class="row" style="gap:6px;margin-top:10px;flex-wrap:wrap">
+          {can(me.roles, 'campagnes', 'C') && <button class="btn btn-ghost btn-sm" type="button" data-act="duplicate">Dupliquer</button>}
+          {can(me.roles, 'campagnes', 'M') && <button class="btn btn-ghost btn-sm" type="button" data-act="template">Enregistrer comme modèle</button>}
+        </div>
+      </div>
+
+      {st.length > 0 && (
+        <div class="panel" style="margin-top:14px">
+          <h3>Statistiques</h3>
+          <div class="scroll-x"><table class="t small">
+            <thead><tr><th></th>{st.map((r) => <th>{st.length > 1 ? `Variante ${r.variant}` : 'Total'}</th>)}</tr></thead>
+            <tbody>
+              <tr><td>Destinataires</td>{st.map((r) => <td>{r.total}</td>)}</tr>
+              <tr><td>Envoyés</td>{st.map((r) => <td>{r.sent}{r.pending ? <span class="xs muted"> (+{r.pending} en attente)</span> : ''}</td>)}</tr>
+              <tr><td>Échecs</td>{st.map((r) => <td>{r.failed}</td>)}</tr>
+              {c.channel === 'email' && <tr><td>Ouvertures</td>{st.map((r) => <td>{r.opened} <span class="xs muted">({pct(r.opened, r.sent)})</span></td>)}</tr>}
+              {c.channel === 'email' && <tr><td>Clics</td>{st.map((r) => <td>{r.clicked} <span class="xs muted">({pct(r.clicked, r.sent)})</span></td>)}</tr>}
+              <tr><td>Désabonnements</td>{st.map((r) => <td>{r.unsub} <span class="xs muted">({pct(r.unsub, r.sent)})</span></td>)}</tr>
+            </tbody>
+          </table></div>
+          {c.channel === 'email' && <p class="xs muted" style="margin:6px 0 0">Les ouvertures sont sous-estimées (images bloquées par certaines messageries) ; un clic compte comme une ouverture.</p>}
+        </div>
+      )}
+    </aside>
+  </div>
+</AdminLayout>
+<script>
+  const f = document.getElementById('campF') as HTMLFormElement;
+  const id = f.dataset.id!;
+  const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+  const api = async (body: Record<string, unknown>) => {
+    const r = await fetch('/api/admin/campagnes', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...body }) }).catch(() => null);
+    return r ? r.json().catch(() => ({ ok: false, error: 'Réponse invalide.' })) : { ok: false, error: 'Erreur réseau.' };
+  };
+  let dirty = false;
+  const dirtyEl = document.getElementById('dirty');
+  f.addEventListener('input', () => { dirty = true; if (dirtyEl) dirtyEl.textContent = 'Modifications non enregistrées'; });
+  document.querySelectorAll<HTMLTextAreaElement>('#ba').forEach((t) => { const c = document.querySelector('[data-count="ba"]')!; const up = () => (c.textContent = `${t.value.length}/${t.maxLength}`); t.addEventListener('input', up); up(); });
+  async function save() {
+    const fd = new FormData(f);
+    const v = (k: string) => (fd.get(k) as string | null) ?? '';
+    const d = await api({ action: 'save', name: v('name'), purpose: v('purpose'), segmentId: v('segmentId'), subject: v('subject'), body: v('body'), url: v('url'), subjectB: v('subjectB'), bodyB: v('bodyB'), splitB: v('splitB') || 0 });
+    if (d.ok) { dirty = false; if (dirtyEl) dirtyEl.textContent = ''; }
+    return d;
+  }
+  f.addEventListener('submit', async (e) => { e.preventDefault(); const d = await save(); toast(d.message ?? d.error ?? 'Erreur.'); if (d.ok && /programmation/.test(d.message)) setTimeout(() => location.reload(), 800); });
+  addEventListener('beforeunload', (e) => { if (dirty) e.preventDefault(); });
+
+  document.getElementById('prev')?.addEventListener('click', async () => {
+    if (dirty) { const s = await save(); if (!s.ok) return toast(s.error); }
+    const d = await api({ action: 'preview' });
+    document.getElementById('prevOut')!.textContent = d.ok ? `${d.count} destinataire${d.count > 1 ? 's' : ''} éligible${d.count > 1 ? 's' : ''}${d.abB ? ` (environ ${d.abB} en variante B)` : ''}.` : d.error;
+  });
+  const progress = document.getElementById('progress')!;
+  async function loop(first: { ok?: boolean; total?: number; sent: number; failed: number; left: number; done: boolean }) {
+    let sent = first.sent, failed = first.failed, r = first;
+    while (!r.done && (r.sent || r.failed)) {
+      progress.textContent = `Envoi en cours : ${sent} envoyé${sent > 1 ? 's' : ''}, ${failed} échec${failed > 1 ? 's' : ''}, ${r.left} restant${r.left > 1 ? 's' : ''}… (gardez cette page ouverte)`;
+      r = await api({ action: 'continue' });
+      if (!r.ok) break;
+      sent += r.sent; failed += r.failed;
+    }
+    progress.textContent = r.done ? `Terminé : ${sent} envoyé${sent > 1 ? 's' : ''}, ${failed} échec${failed > 1 ? 's' : ''}.` : 'Envoi interrompu : « Poursuivre l’envoi » le reprendra là où il s’est arrêté (la tâche planifiée le fera aussi).';
+    setTimeout(() => location.reload(), 1500);
+  }
+  document.querySelectorAll<HTMLButtonElement>('[data-act]').forEach((b) => b.addEventListener('click', async () => {
+    const act = b.dataset.act!;
+    if (dirty && ['test', 'send', 'schedule'].includes(act)) { const s = await save(); if (!s.ok) return toast(s.error); }
+    if (act === 'send' && !confirm('Envoyer maintenant ? Les messages partis ne peuvent pas être rappelés.')) return;
+    if (act === 'cancel' && !confirm('Arrêter l’envoi ? Les messages déjà partis le restent.')) return;
+    let body: Record<string, unknown> = { action: act };
+    if (act === 'test') body = { action: 'test', variant: b.dataset.v };
+    if (act === 'template') { const name = prompt('Nom du modèle :'); if (!name) return; body = { action: 'template.save', name }; }
+    if (act === 'schedule') { const at = (document.getElementById('at') as HTMLInputElement).value; if (!at) return toast('Choisissez la date et l’heure.'); body = { action: 'schedule', at: new Date(at).toISOString() }; }
+    b.disabled = true;
+    const d = await api(body);
+    b.disabled = false;
+    if (!d.ok) return toast(d.error ?? 'Erreur.');
+    if (act === 'send' || act === 'continue') return loop(d);
+    toast(d.message ?? 'C’est fait.');
+    if (d.redirect) setTimeout(() => (location.href = d.redirect), 500);
+    else if (['schedule', 'unschedule', 'cancel'].includes(act)) setTimeout(() => location.reload(), 600);
+  }));
+</script>

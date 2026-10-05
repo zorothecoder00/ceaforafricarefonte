@@ -141,6 +141,13 @@
       "when": 1791194612702,
       "tag": "0019_cms_types",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791197573267,
+      "tag": "0020_crm_campagnes",
+      "breakpoints": true
     }
   ]
 }

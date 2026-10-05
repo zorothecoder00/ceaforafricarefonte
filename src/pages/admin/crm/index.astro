@@ -1,0 +1,264 @@
+---
+/* CRM 360° (CDC §12) : contacts (membres et contacts externes), organisations, pipeline partenaires et sponsors, segments dynamiques.
+   Un responsable pays ne voit que ses pays. */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Money from '../../../components/Money.astro';
+import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { user } from '../../../db/schema/auth';
+import { profile } from '../../../db/schema/app';
+import { crmContact, crmOrg, crmDeal, crmSegment, crmOrgKindEnum } from '../../../db/schema/crm';
+import { can, ROLES, ROLE_LABEL } from '../../../lib/rbac';
+import { countriesFor } from '../../../lib/admin';
+import { STAGES, STAGE_LABEL, ORG_KIND_LABEL, DEAL_KIND_LABEL } from '../../../lib/crm';
+import { Rules } from '../../../lib/segments';
+import { COUNTRIES, country } from '../../../data/site';
+import { allEvents, allCourses } from '../../../lib/catalog';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const scope = await countriesFor(me, 'crm', 'L');
+const canC = can(me.roles, 'crm', 'C'), canM = can(me.roles, 'crm', 'M');
+const views = { contacts: 'Contacts', organisations: 'Organisations', pipeline: 'Pipeline partenaires', segments: 'Segments' } as const;
+type V = keyof typeof views;
+const qv = Astro.url.searchParams.get('vue');
+const view: V = qv && qv in views ? (qv as V) : 'contacts';
+const q = (Astro.url.searchParams.get('q') ?? '').trim().slice(0, 80);
+const fc = Astro.url.searchParams.get('pays') ?? '';
+const ft = Astro.url.searchParams.get('type') ?? '';
+const countryList = Object.entries(COUNTRIES).filter(([c]) => !scope || scope.includes(c));
+const inScopeCountry = (col: Parameters<typeof eq>[0]) => (scope ? inArray(col, scope.length ? scope : ['--']) : undefined);
+const like = `%${q}%`;
+
+// Contacts : membres et contacts externes réunis
+type Row = { key: string; name: string; email: string | null; country: string | null; detail: string; kind: 'Membre' | 'Externe'; consent: boolean | null };
+let contacts: Row[] = [];
+if (view === 'contacts') {
+  const members = ft === 'externe' ? [] : await db.select({ id: user.id, name: user.name, email: user.email, country: profile.country, headline: profile.headline, company: profile.companyName })
+    .from(user).leftJoin(profile, eq(profile.userId, user.id))
+    .where(and(q ? or(ilike(user.name, like), ilike(user.email, like), ilike(profile.companyName, like)) : undefined, fc ? eq(profile.country, fc) : undefined, inScopeCountry(profile.country)))
+    .orderBy(desc(user.createdAt)).limit(100);
+  const ext = ft === 'membre' ? [] : await db.select({ c: crmContact, org: crmOrg.name }).from(crmContact).leftJoin(crmOrg, eq(crmOrg.id, crmContact.orgId))
+    .where(and(q ? or(ilike(crmContact.name, like), ilike(crmContact.email, like), ilike(crmOrg.name, like)) : undefined, fc ? eq(crmContact.country, fc) : undefined, inScopeCountry(crmContact.country)))
+    .orderBy(desc(crmContact.updatedAt)).limit(100);
+  contacts = [
+    ...ext.map(({ c, org }): Row => ({ key: `c-${c.id}`, name: c.name, email: c.email, country: c.country, detail: [c.role, org].filter(Boolean).join(' · '), kind: 'Externe', consent: c.marketingConsent })),
+    ...members.map((m): Row => ({ key: `u-${m.id}`, name: m.name, email: m.email?.endsWith('@telephone.cea4africa.com') ? null : m.email, country: m.country, detail: [m.headline, m.company].filter(Boolean).join(' · '), kind: 'Membre', consent: null })),
+  ];
+}
+const orgs = view === 'organisations' || view === 'pipeline' || view === 'contacts'
+  ? await db.select({ o: crmOrg, n: sql<number>`(select count(*)::int from ${crmContact} where ${crmContact.orgId} = ${crmOrg.id})`, deals: sql<number>`(select count(*)::int from ${crmDeal} where ${crmDeal.orgId} = ${crmOrg.id} and ${crmDeal.stage} not in ('gagne','perdu'))` })
+    .from(crmOrg).where(and(view === 'organisations' && q ? ilike(crmOrg.name, like) : undefined, inScopeCountry(crmOrg.country))).orderBy(crmOrg.name).limit(300)
+  : [];
+const deals = view === 'pipeline' ? await db.select({ d: crmDeal, org: crmOrg.name, c: crmOrg.country }).from(crmDeal).innerJoin(crmOrg, eq(crmOrg.id, crmDeal.orgId)).where(inScopeCountry(crmOrg.country)).orderBy(desc(crmDeal.updatedAt)) : [];
+const segments = view === 'segments' ? await db.select().from(crmSegment).orderBy(desc(crmSegment.updatedAt)) : [];
+const segId = Astro.url.searchParams.get('segment');
+const editing = segments.find((s) => s.id === segId);
+const rules = Rules.parse(editing?.rules ?? {});
+const events = view === 'segments' || view === 'pipeline' ? await allEvents({ hidden: true }) : [];
+const courses = view === 'segments' ? await allCourses({ hidden: true }) : [];
+const describe = (r: Rules) => [
+  { membres: 'Membres', contacts: 'Contacts externes', lettre: 'Abonnés à la lettre', tous: 'Tous' }[r.source],
+  r.countries.length ? r.countries.map(country).join(', ') : '', r.sectors.join(', '), r.roles.map((x) => ROLE_LABEL[x]).join(', '), r.plans.join(', '),
+  r.eventId ? `billet : ${events.find((e) => e.id === r.eventId)?.t ?? r.eventId}` : '', r.courseId ? `cours : ${courses.find((c) => c.id === r.courseId)?.t ?? r.courseId}` : '',
+  r.lang ? `langue ${r.lang.toUpperCase()}` : '', r.tags.length ? `étiquettes ${r.tags.join(', ')}` : '', r.orgKinds.length ? r.orgKinds.map((k) => ORG_KIND_LABEL[k as keyof typeof ORG_KIND_LABEL]).join(', ') : '',
+].filter(Boolean).join(' · ');
+const sum = (s: string) => deals.filter((x) => x.d.stage === s).reduce((n, x) => n + (x.d.amountXof ?? 0), 0);
+---
+<AdminLayout title="CRM 360°" lead={scope ? `Vos pays : ${scope.map(country).join(', ') || 'aucun'}.` : 'Contacts, organisations, partenariats et segments. Chaque action est tracée.'} obj="crm">
+  <nav class="subnav" style="margin:0 0 14px">{(Object.keys(views) as V[]).map((v) => <a href={`?vue=${v}`} aria-current={v === view ? 'page' : undefined}>{views[v]}</a>)}<a href="/admin/campagnes">Campagnes →</a></nav>
+
+  {view === 'contacts' && (
+    <>
+      <form class="row" method="get" style="gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <input type="hidden" name="vue" value="contacts" />
+        <input class="in" name="q" value={q} placeholder="Nom, e-mail, organisation" aria-label="Rechercher" style="flex:1;min-width:200px" />
+        <select class="in" name="pays" aria-label="Pays" style="width:auto"><option value="">Tous les pays</option>{countryList.map(([c, n]) => <option value={c} selected={c === fc}>{n}</option>)}</select>
+        <select class="in" name="type" aria-label="Type" style="width:auto"><option value="">Membres et externes</option><option value="membre" selected={ft === 'membre'}>Membres</option><option value="externe" selected={ft === 'externe'}>Contacts externes</option></select>
+        <button class="btn btn-ghost btn-sm" type="submit">Filtrer</button>
+      </form>
+      <div class="panel scroll-x">
+        {contacts.length === 0 ? <p class="small muted" style="margin:0">Aucun contact.</p> : (
+          <table class="t"><thead><tr><th>Nom</th><th>Pays</th><th>Type</th><th>Marketing</th></tr></thead>
+            <tbody>{contacts.map((c) => (
+              <tr><td><a href={`/admin/crm/personne/${c.key}`}><b>{c.name}</b></a><div class="xs muted">{[c.email, c.detail].filter(Boolean).join(' · ')}</div></td>
+                <td class="small">{c.country ? country(c.country) : '—'}</td><td><span class={`tag ${c.kind === 'Membre' ? 'info' : ''}`}>{c.kind}</span></td>
+                <td class="small">{c.consent === null ? <span class="xs muted">voir fiche</span> : c.consent ? '✓' : '—'}</td></tr>
+            ))}</tbody></table>
+        )}
+      </div>
+      <p class="xs muted">Au plus 100 membres et 100 contacts externes par recherche : affinez avec les filtres.</p>
+      {canC && (
+        <details class="panel" style="margin-top:14px">
+          <summary><b>Nouveau contact externe</b> <span class="xs muted">(partenaire, sponsor, presse… sans compte sur la plateforme)</span></summary>
+          <form data-api="/api/admin/crm" style="margin-top:10px">
+            <input type="hidden" name="action" value="contact.save" />
+            <div class="grid g2" style="gap:0 12px">
+              <div><label class="f" for="cn">Nom complet</label><input class="in" id="cn" name="name" required minlength="2" maxlength="120" /></div>
+              <div><label class="f" for="ce">E-mail</label><input class="in" id="ce" name="email" type="email" maxlength="160" /></div>
+              <div><label class="f" for="cp">Téléphone (international)</label><input class="in" id="cp" name="phone" placeholder="+228 90 00 00 00" /></div>
+              <div><label class="f" for="co">Organisation</label><select class="in" id="co" name="orgId"><option value="">—</option>{orgs.map(({ o }) => <option value={o.id}>{o.name}</option>)}</select></div>
+              <div><label class="f" for="cr">Fonction</label><input class="in" id="cr" name="role" maxlength="120" /></div>
+              <div><label class="f" for="cc">Pays</label><select class="in" id="cc" name="country"><option value="">—</option>{countryList.map(([c, n]) => <option value={c}>{n}</option>)}</select></div>
+              <div><label class="f" for="cs">Secteur</label><input class="in" id="cs" name="sector" maxlength="60" /></div>
+              <div><label class="f" for="cg">Étiquettes (séparées par des virgules)</label><input class="in" id="cg" name="tags" data-type="list" placeholder="sponsor, presse" /></div>
+            </div>
+            <label class="row small"><input type="checkbox" name="marketingConsent" /> A accepté de recevoir nos communications</label>
+            <label class="f" for="cb">Comment ce consentement a-t-il été recueilli ? (obligatoire si coché)</label><input class="in" id="cb" name="consentBasis" maxlength="300" placeholder="Formulaire signé au Forum 2026, e-mail du 12/09…" />
+            <button class="btn btn-primary btn-sm" type="submit" style="margin-top:10px">Créer le contact</button>
+          </form>
+        </details>
+      )}
+    </>
+  )}
+
+  {view === 'organisations' && (
+    <>
+      <form class="row" method="get" style="gap:8px;margin-bottom:12px"><input type="hidden" name="vue" value="organisations" /><input class="in" name="q" value={q} placeholder="Nom de l'organisation" aria-label="Rechercher" style="flex:1" /><button class="btn btn-ghost btn-sm" type="submit">Rechercher</button></form>
+      <div class="panel scroll-x">
+        {orgs.length === 0 ? <p class="small muted" style="margin:0">Aucune organisation.</p> : (
+          <table class="t"><thead><tr><th>Organisation</th><th>Type</th><th>Pays</th><th>Contacts</th><th>Opportunités ouvertes</th></tr></thead>
+            <tbody>{orgs.map(({ o, n, deals: d }) => <tr><td><a href={`/admin/crm/organisation/${o.id}`}><b>{o.name}</b></a>{o.sector && <div class="xs muted">{o.sector}</div>}</td><td class="small">{ORG_KIND_LABEL[o.kind]}</td><td class="small">{o.country ? country(o.country) : '—'}</td><td class="small">{n}</td><td class="small">{d}</td></tr>)}</tbody></table>
+        )}
+      </div>
+      {canC && (
+        <details class="panel" style="margin-top:14px"><summary><b>Nouvelle organisation</b></summary>
+          <form data-api="/api/admin/crm" style="margin-top:10px">
+            <input type="hidden" name="action" value="org.save" />
+            <div class="grid g2" style="gap:0 12px">
+              <div><label class="f" for="on">Nom</label><input class="in" id="on" name="name" required minlength="2" maxlength="160" /></div>
+              <div><label class="f" for="ok">Type</label><select class="in" id="ok" name="kind">{crmOrgKindEnum.enumValues.map((k) => <option value={k}>{ORG_KIND_LABEL[k]}</option>)}</select></div>
+              <div><label class="f" for="oc">Pays</label><select class="in" id="oc" name="country"><option value="">—</option>{countryList.map(([c, n]) => <option value={c}>{n}</option>)}</select></div>
+              <div><label class="f" for="os">Secteur</label><input class="in" id="os" name="sector" maxlength="60" /></div>
+              <div style="grid-column:1/-1"><label class="f" for="ow">Site web</label><input class="in" id="ow" name="website" type="url" placeholder="https://" /></div>
+            </div>
+            <button class="btn btn-primary btn-sm" type="submit" style="margin-top:10px">Créer</button>
+          </form>
+        </details>
+      )}
+    </>
+  )}
+
+  {view === 'pipeline' && (
+    <>
+      <div class="scroll-x"><div style="display:grid;grid-template-columns:repeat(6,minmax(200px,1fr));gap:10px">
+        {STAGES.map((s) => (
+          <div class="panel" style="padding:10px;background:var(--surface-2)">
+            <b class="small">{STAGE_LABEL[s]}</b> <span class="xs muted">({deals.filter((x) => x.d.stage === s).length}) · <Money xof={sum(s)} /></span>
+            {deals.filter((x) => x.d.stage === s).map(({ d, org }) => (
+              <div class="panel" style="padding:8px;margin-top:8px">
+                <a href={`/admin/crm/organisation/${d.orgId}`} class="small"><b>{org}</b></a>
+                <div class="xs">{d.title}</div>
+                <div class="xs muted">{DEAL_KIND_LABEL[d.kind] ?? d.kind}{d.amountXof ? <> · <Money xof={d.amountXof} /></> : ''}{d.expectedOn ? ` · ${new Date(d.expectedOn).toLocaleDateString('fr-FR')}` : ''}</div>
+                {canM && <select class="in" style="margin-top:6px;padding:4px 6px;font-size:.8rem" aria-label="Étape" data-deal={d.id}>{STAGES.map((x) => <option value={x} selected={x === d.stage}>{STAGE_LABEL[x]}</option>)}</select>}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div></div>
+      {canC && orgs.length > 0 && (
+        <details class="panel" style="margin-top:14px"><summary><b>Nouvelle opportunité</b></summary>
+          <form data-api="/api/admin/crm" data-reload style="margin-top:10px">
+            <input type="hidden" name="action" value="deal.save" />
+            <div class="grid g2" style="gap:0 12px">
+              <div><label class="f" for="do">Organisation</label><select class="in" id="do" name="orgId" required>{orgs.map(({ o }) => <option value={o.id}>{o.name}</option>)}</select></div>
+              <div><label class="f" for="dt">Intitulé</label><input class="in" id="dt" name="title" required minlength="2" maxlength="160" placeholder="Sponsoring Forum 2026 — niveau Or" /></div>
+              <div><label class="f" for="dk">Nature</label><select class="in" id="dk" name="kind">{Object.entries(DEAL_KIND_LABEL).map(([k, l]) => <option value={k}>{l}</option>)}</select></div>
+              <div><label class="f" for="da">Montant (FCFA)</label><input class="in" id="da" name="amountXof" type="number" min="0" /></div>
+              <div><label class="f" for="de">Événement (sponsoring)</label><select class="in" id="de" name="eventId"><option value="">—</option>{events.map((e) => <option value={e.id}>{e.t}</option>)}</select></div>
+              <div><label class="f" for="dx">Échéance prévue</label><input class="in" id="dx" name="expectedOn" type="date" /></div>
+            </div>
+            <button class="btn btn-primary btn-sm" type="submit" style="margin-top:10px">Créer</button>
+          </form>
+        </details>
+      )}
+      {orgs.length === 0 && <p class="small">Créez d'abord une <a href="?vue=organisations">organisation</a>.</p>}
+    </>
+  )}
+
+  {view === 'segments' && (
+    <div class="split">
+      <div class="panel">
+        <h3 style="margin-top:0">Segments enregistrés</h3>
+        {segments.length === 0 && <p class="small muted">Aucun segment.</p>}
+        {segments.map((s) => <div class="list-row"><span class="small"><a href={`?vue=segments&segment=${s.id}`}><b>{s.name}</b></a><div class="xs muted">{describe(Rules.parse(s.rules))}</div></span></div>)}
+        <p class="xs muted" style="margin-bottom:0">Un segment est une règle : la liste des destinataires est recalculée à chaque envoi.</p>
+      </div>
+      <form class="panel" id="segF" data-id={editing?.id ?? ''}>
+        <h3 style="margin-top:0">{editing ? `Modifier « ${editing.name} »` : 'Nouveau segment'}</h3>
+        <fieldset disabled={!canM} style="border:0;padding:0;margin:0">
+          <label class="f" for="sn">Nom</label><input class="in" id="sn" name="name" required minlength="2" maxlength="120" value={editing?.name ?? ''} />
+          <label class="f" for="sso">Qui ?</label>
+          <select class="in" id="sso" name="source">{[['membres', 'Membres'], ['contacts', 'Contacts externes du CRM'], ['lettre', "Abonnés à la lettre d'information"], ['tous', 'Tous']].map(([v, l]) => <option value={v} selected={v === rules.source}>{l}</option>)}</select>
+          <label class="f">Pays <span class="xs muted">(aucun = tous)</span></label>
+          <div class="row" style="gap:4px;flex-wrap:wrap">{countryList.map(([c, n]) => <label class="chip xs" style="display:inline-flex;gap:4px"><input type="checkbox" name="countries" value={c} checked={rules.countries.includes(c)} /> {n}</label>)}</div>
+          <div class="grid g2" style="gap:0 12px">
+            <div><label class="f" for="ssec">Secteurs (séparés par des virgules)</label><input class="in" id="ssec" name="sectors" value={rules.sectors.join(', ')} /></div>
+            <div><label class="f" for="slang">Langue</label><select class="in" id="slang" name="lang"><option value="">Toutes</option><option value="fr" selected={rules.lang === 'fr'}>Français</option><option value="en" selected={rules.lang === 'en'}>Anglais</option></select></div>
+          </div>
+          <details open={!!(rules.roles.length || rules.plans.length || rules.eventId || rules.courseId)} style="margin-top:10px"><summary class="small"><b>Critères membres</b></summary>
+            <label class="f">Rôles</label>
+            <div class="row" style="gap:4px;flex-wrap:wrap">{ROLES.filter((r) => r !== 'membre').map((r) => <label class="chip xs" style="display:inline-flex;gap:4px"><input type="checkbox" name="roles" value={r} checked={rules.roles.includes(r)} /> {ROLE_LABEL[r]}</label>)}</div>
+            <label class="f">Adhésion active</label>
+            <div class="row" style="gap:4px">{['membre', 'premium', 'entreprise'].map((pl) => <label class="chip xs" style="display:inline-flex;gap:4px"><input type="checkbox" name="plans" value={pl} checked={rules.plans.includes(pl as 'membre')} /> {pl}</label>)}</div>
+            <div class="grid g2" style="gap:0 12px">
+              <div><label class="f" for="sev">Titulaires d'un billet pour</label><select class="in" id="sev" name="eventId"><option value="">—</option>{events.map((e) => <option value={e.id} selected={e.id === rules.eventId}>{e.t}</option>)}</select></div>
+              <div><label class="f" for="sco">Inscrits au cours</label><select class="in" id="sco" name="courseId"><option value="">—</option>{courses.map((c) => <option value={c.id} selected={c.id === rules.courseId}>{c.t}</option>)}</select></div>
+            </div>
+          </details>
+          <details open={!!(rules.tags.length || rules.orgKinds.length)} style="margin-top:10px"><summary class="small"><b>Critères contacts externes</b></summary>
+            <label class="f" for="stag">Étiquettes (au moins une)</label><input class="in" id="stag" name="tags" value={rules.tags.join(', ')} />
+            <label class="f">Type d'organisation</label>
+            <div class="row" style="gap:4px;flex-wrap:wrap">{crmOrgKindEnum.enumValues.map((k) => <label class="chip xs" style="display:inline-flex;gap:4px"><input type="checkbox" name="orgKinds" value={k} checked={rules.orgKinds.includes(k)} /> {ORG_KIND_LABEL[k]}</label>)}</div>
+          </details>
+          <div class="row" style="gap:6px;margin-top:14px;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" type="button" id="segPrev">Aperçu des destinataires</button>
+            {canM && <button class="btn btn-primary btn-sm" type="submit">Enregistrer</button>}
+            {editing && can(me.roles, 'crm', 'V') && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/crm" data-body={JSON.stringify({ action: 'segment.delete', id: editing.id })} data-confirm="Supprimer ce segment ? Les campagnes qui l'utilisent devront en choisir un autre.">Supprimer</button>}
+            {editing && <a class="btn btn-ghost btn-sm" href="?vue=segments">Nouveau</a>}
+          </div>
+        </fieldset>
+        <div id="segOut" class="small" aria-live="polite" style="margin-top:10px"></div>
+      </form>
+    </div>
+  )}
+</AdminLayout>
+<script>
+  const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+  const post = async (body: unknown) => {
+    const r = await fetch('/api/admin/crm', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null);
+    return r ? r.json().catch(() => ({ ok: false })) : { ok: false, error: 'Erreur réseau.' };
+  };
+  // Pipeline : changement d'étape
+  document.querySelectorAll<HTMLSelectElement>('[data-deal]').forEach((s) => s.addEventListener('change', async () => {
+    const d = await post({ action: 'deal.stage', id: s.dataset.deal, stage: s.value });
+    toast(d.message ?? d.error ?? 'Erreur.');
+    if (d.ok) setTimeout(() => location.reload(), 500);
+  }));
+  // Segments : règles depuis le formulaire, aperçu et enregistrement
+  const f = document.getElementById('segF') as HTMLFormElement | null;
+  if (f) {
+    const rules = () => {
+      const fd = new FormData(f);
+      const list = (k: string) => String(fd.get(k) ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+      return { source: fd.get('source'), countries: fd.getAll('countries'), sectors: list('sectors'), roles: fd.getAll('roles'), plans: fd.getAll('plans'), eventId: fd.get('eventId') || null, courseId: fd.get('courseId') || null, lang: fd.get('lang') || null, tags: list('tags'), orgKinds: fd.getAll('orgKinds') };
+    };
+    const out = document.getElementById('segOut')!;
+    document.getElementById('segPrev')!.addEventListener('click', async () => {
+      out.textContent = 'Calcul…';
+      const d = await post({ action: 'segment.preview', rules: rules() });
+      if (!d.ok) { out.textContent = d.error ?? 'Erreur.'; return; }
+      const s = d.summary;
+      out.innerHTML = `<b>${s.total} personne${s.total > 1 ? 's' : ''}</b> dans ce segment.<br>Joignables en marketing (consentement) : e-mail ${s.marketing.email} · SMS ${s.marketing.sms} · WhatsApp ${s.marketing.whatsapp} · push ${s.marketing.push}.`
+        + (s.service.email + s.service.sms + s.service.push ? `<br>En message de service (billet ou inscription) : e-mail ${s.service.email} · SMS ${s.service.sms} · push ${s.service.push}.` : '')
+        + (d.sample.length ? `<br><span class="xs muted">Exemples : ${d.sample.map((x: { name: string }) => x.name).filter(Boolean).slice(0, 6).join(', ')}</span>` : '');
+    });
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(f);
+      const d = await post({ action: 'segment.save', id: f.dataset.id || undefined, name: fd.get('name'), rules: rules() });
+      toast(d.message ?? d.error ?? 'Erreur.');
+      if (d.ok) setTimeout(() => (location.href = d.redirect ?? location.href), 500);
+    });
+  }
+</script>
