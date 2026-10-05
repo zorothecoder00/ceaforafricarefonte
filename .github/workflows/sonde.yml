@@ -1,0 +1,34 @@
+# Sonde de disponibilité (CDC §13 : supervision de disponibilité, alertes).
+# Toutes les 5 minutes, appelle /api/sante de la production : chaque appel alimente l'historique publié sur /statut.
+# Deux échecs consécutifs (à 30 s d'intervalle) font échouer l'exécution : GitHub envoie alors un e-mail d'alerte.
+# Limite : GitHub peut retarder ou sauter des exécutions planifiées aux heures chargées. Pour une mesure contractuelle
+# (99,9 %), compléter par une sonde dédiée (UptimeRobot, Better Stack) sur la même adresse.
+# Adresse surveillée : variable de dépôt SITE_URL (Settings → Secrets and variables → Actions → Variables), sinon l'adresse Vercel.
+name: Sonde
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: sonde
+  cancel-in-progress: true
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Appel de /api/sante
+        env:
+          SITE: ${{ vars.SITE_URL || 'https://ceaforafricarefonte.vercel.app' }}
+        run: |
+          for essai in 1 2; do
+            code=$(curl -s -o sante.json -w '%{http_code}' -m 20 -A 'CEA-Sonde/1.0 (GitHub Actions)' "$SITE/api/sante" || echo 000)
+            if [ "$code" = "200" ]; then echo "OK : $(cat sante.json)"; exit 0; fi
+            echo "Essai $essai : réponse $code"; cat sante.json 2>/dev/null || true
+            [ "$essai" = 1 ] && sleep 30
+          done
+          echo "::error::Plateforme indisponible : /api/sante a répondu $code deux fois de suite."
+          exit 1
