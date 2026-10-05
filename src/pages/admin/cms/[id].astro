@@ -1,9 +1,10 @@
 ---
-/* Éditeur du CMS (CDC §12) : métadonnées et SEO, éditeur par blocs, circuit de validation, versions linguistiques, historique et restauration. */
+/* Éditeur du CMS (CDC §12) : métadonnées et SEO, fiche propre au type (événement, cours, page), éditeur par blocs,
+   circuit de validation, versions linguistiques, historique et restauration. */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
-import { and, desc, eq, ne } from 'drizzle-orm';
+import { and, desc, eq, ne, sql } from 'drizzle-orm';
 import { db } from '../../../lib/db';
-import { cmsContent, cmsRevision, cmsMedia } from '../../../db/schema/app';
+import { cmsContent, cmsRevision, cmsMedia, enrollment, eventTicket } from '../../../db/schema/app';
 import { user } from '../../../db/schema/auth';
 import { can } from '../../../lib/rbac';
 import { STATUS_LABEL, STATUS_TONE, TRANSITIONS, BLOCK_LABELS, isLive, mediaUrl } from '../../../lib/cms';
@@ -25,27 +26,38 @@ const media = await db.select({ id: cmsMedia.id, name: cmsMedia.name, alt: cmsMe
 const steps = TRANSITIONS[c.status].filter((t) => (t.needs === 'validate' ? canValidate : canEdit));
 const other = c.lang === 'fr' ? 'en' : 'fr';
 const cats = ['Analyse', "Histoire d'entrepreneur", 'Guide', 'Communiqué'];
-const publicUrl = `${c.lang === 'en' ? '/en' : ''}/ressources/article/${c.slug}`;
-const state = { id: c.id, version: c.version, locked, blocks: c.blocks, media: media.map((m) => ({ id: m.id, name: m.name, url: mediaUrl(m.id) })), labels: BLOCK_LABELS };
+const type = c.type as 'article' | 'event' | 'course' | 'page';
+const TYPE_LABEL = { article: 'Article', event: 'Événement', course: 'Cours', page: 'Page' } as const;
+const PATH = { article: `/ressources/article/${c.slug}`, event: `/evenements/${c.slug}`, course: `/academie/${c.slug}`, page: `/${c.slug}` } as const;
+const publicUrl = `${c.lang === 'en' ? '/en' : ''}${PATH[type]}`;
+// Impact d'une modification : billets émis ou personnes inscrites rattachés à cet identifiant
+const [impact] = type === 'event' ? await db.select({ n: sql<number>`count(*)::int` }).from(eventTicket).where(eq(eventTicket.eventId, c.slug))
+  : type === 'course' ? await db.select({ n: sql<number>`count(*)::int` }).from(enrollment).where(eq(enrollment.courseId, c.slug)) : [{ n: 0 }];
+const state = { id: c.id, type, version: c.version, locked, blocks: c.blocks, data: c.data, media: media.map((m) => ({ id: m.id, name: m.name, url: mediaUrl(m.id) })), labels: BLOCK_LABELS };
 ---
-<AdminLayout title={c.title} lead={`Article · ${c.lang === 'en' ? 'anglais' : 'français'} · version ${c.version}`} obj="contenus">
+<AdminLayout title={c.title} lead={`${TYPE_LABEL[type]} · ${c.lang === 'en' ? 'anglais' : 'français'} · version ${c.version}`} obj="contenus">
   <p class="small" style="margin-top:-8px"><a href="/admin/cms">← Tous les contenus</a></p>
   <div class="split">
     <form class="panel" id="cmsF" data-id={c.id}>
       {locked && <p class="small" style="margin-top:0"><span class="tag gold">Lecture seule</span> {canEdit ? 'Ce contenu est validé ou en ligne : seule une personne habilitée à publier peut le corriger.' : 'Vous pouvez consulter ce contenu.'}</p>}
       <fieldset disabled={locked} style="border:0;padding:0;margin:0">
         <label class="f" for="ti">Titre</label><input class="in" id="ti" name="title" required maxlength="200" value={c.title} />
+        {impact?.n > 0 && <p class="small"><span class="tag gold">{impact.n} {type === 'event' ? `billet${impact.n > 1 ? 's' : ''} émis` : `inscrit${impact.n > 1 ? 's' : ''}`}</span> {type === 'event' ? 'Les billets déjà émis gardent leur catégorie et leur prix.' : 'Changer le nombre de leçons modifie la progression des personnes inscrites.'}</p>}
         <div class="grid g2" style="gap:0 12px">
-          <div><label class="f" for="sl">Identifiant d'URL</label><input class="in" id="sl" name="slug" required maxlength="80" pattern="[a-z0-9]+(-[a-z0-9]+)*" value={c.slug} /></div>
-          <div><label class="f" for="ca">Rubrique</label><select class="in" id="ca" name="category"><option value="">—</option>{cats.map((x) => <option selected={x === c.category}>{x}</option>)}</select></div>
-          <div><label class="f" for="co">Pays</label><input class="in" id="co" name="country" list="countries" maxlength="60" value={c.country ?? ''} placeholder="Panafricain" /></div>
+          {type === 'article' || type === 'page'
+            ? <div><label class="f" for="sl">{type === 'page' ? 'Adresse de la page (ex. a-propos/equipe)' : "Identifiant d'URL"}</label><input class="in" id="sl" name="slug" required maxlength="120" pattern={type === 'page' ? '[a-z0-9]+(-[a-z0-9]+)*(/[a-z0-9]+(-[a-z0-9]+)*){0,3}' : '[a-z0-9]+(-[a-z0-9]+)*'} value={c.slug} /></div>
+            : <div><label class="f" for="sl">Identifiant (fixe)</label><input class="in" id="sl" name="slug" value={c.slug} readonly aria-describedby="slh" /><p class="xs muted" id="slh" style="margin:2px 0 0">Rattache billets, paiements, inscriptions et certificats : il ne change pas.</p></div>}
+          {type === 'article' && <div><label class="f" for="ca">Rubrique</label><select class="in" id="ca" name="category"><option value="">—</option>{cats.map((x) => <option selected={x === c.category}>{x}</option>)}</select></div>}
+          {type === 'article' && <div><label class="f" for="co">Pays</label><input class="in" id="co" name="country" list="countries" maxlength="60" value={c.country ?? ''} placeholder="Panafricain" /></div>}
           <div><label class="f" for="cv">Image de couverture</label><select class="in" id="cv" name="coverId"><option value="">Aucune</option>{media.map((m) => <option value={m.id} selected={m.id === c.coverId}>{m.name}</option>)}</select></div>
         </div>
         <datalist id="countries"><option>Panafricain</option>{Object.values(COUNTRIES).map((x) => <option>{x}</option>)}</datalist>
-        <label class="f" for="ex">Chapeau (résumé affiché dans les listes)</label><textarea class="in" id="ex" name="excerpt" maxlength="400" rows="3">{c.excerpt}</textarea>
-        <label class="row small"><input type="checkbox" name="featured" checked={c.featured} /> Mettre en avant (étiquette dorée)</label>
+        <label class="f" for="ex">{type === 'event' ? 'Description courte (fiche et listes)' : type === 'course' ? 'Résumé du cours' : 'Chapeau (résumé affiché en tête et dans les listes)'}</label><textarea class="in" id="ex" name="excerpt" maxlength="600" rows="3">{c.excerpt}</textarea>
+        {type === 'article' && <label class="row small"><input type="checkbox" name="featured" checked={c.featured} /> Mettre en avant (étiquette dorée)</label>}
 
-        <h3 style="margin-top:20px">Contenu</h3>
+        {type !== 'article' && <div id="fiche"></div>}
+
+        <h3 style="margin-top:20px">{type === 'event' ? 'Présentation détaillée (facultatif)' : type === 'course' ? 'Présentation du cours (facultatif)' : 'Contenu'}</h3>
         <p class="xs muted" style="margin:-6px 0 10px">Mise en forme dans le texte : **gras**, *italique*, [texte du lien](https://… ou /page).</p>
         <div id="blocks"></div>
         {!locked && <div class="row" id="addBlock" style="gap:6px;flex-wrap:wrap">{Object.entries(BLOCK_LABELS).map(([t, l]) => <button class="btn btn-ghost btn-sm" type="button" data-add={t}>+ {l}</button>)}</div>}
@@ -99,13 +111,15 @@ const state = { id: c.id, version: c.version, locked, blocks: c.blocks, media: m
     </aside>
   </div>
   <script type="application/json" id="cmsState" set:html={JSON.stringify(state)} />
+  <script type="application/json" id="cmsCountries" set:html={JSON.stringify(Object.entries(COUNTRIES))} />
 </AdminLayout>
 
 <script>
+  import { mountFiche } from '../../../scripts/cms-fiche';
   /* Éditeur par blocs : état en mémoire, rendu des cartes de blocs, enregistrement avec contrôle de version */
   type B = { t: 'p'; text: string } | { t: 'h'; text: string; level: 2 | 3 } | { t: 'list'; items: string[]; ordered: boolean } | { t: 'quote'; text: string; cite: string }
     | { t: 'callout'; text: string; tone: 'info' | 'gold' | 'ok' } | { t: 'image'; mediaId: string; caption: string } | { t: 'video'; url: string };
-  const S = JSON.parse(document.getElementById('cmsState')!.textContent!) as { id: string; version: number; locked: boolean; blocks: B[]; media: { id: string; name: string; url: string }[]; labels: Record<string, string> };
+  const S = JSON.parse(document.getElementById('cmsState')!.textContent!) as { id: string; type: string; version: number; locked: boolean; blocks: B[]; data: Record<string, unknown>; media: { id: string; name: string; url: string }[]; labels: Record<string, string> };
   const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
   const form = document.getElementById('cmsF') as HTMLFormElement;
   const wrap = document.getElementById('blocks')!;
@@ -142,6 +156,8 @@ const state = { id: c.id, version: c.version, locked, blocks: c.blocks, media: m
       || '<p class="small muted">Aucun bloc : ajoutez un paragraphe pour commencer.</p>';
   }
   render();
+  const fiche = document.getElementById('fiche');
+  if (fiche) mountFiche(fiche, S.type, S.data, S.locked, () => setDirty(true));
 
   wrap.addEventListener('input', (e) => {
     const el = e.target as HTMLInputElement;
@@ -166,7 +182,7 @@ const state = { id: c.id, version: c.version, locked, blocks: c.blocks, media: m
     blocks.push(NEW[t]()); setDirty(true); render();
     (wrap.lastElementChild?.querySelector('textarea, input') as HTMLElement | null)?.focus();
   });
-  form.addEventListener('input', (e) => { if (!(e.target as Element).closest('#blocks')) setDirty(true); });
+  form.addEventListener('input', (e) => { if (!(e.target as Element).closest('#blocks, #fiche')) setDirty(true); });
 
   // Compteurs et aperçu du résultat de recherche
   const counter = (id: string, max: number, fallback: () => string, out: string) => {
@@ -188,7 +204,7 @@ const state = { id: c.id, version: c.version, locked, blocks: c.blocks, media: m
     const v = (k: string) => String(fd.get(k) ?? '').trim();
     const clean = blocks.map((b) => (b.t === 'list' ? { ...b, items: b.items.filter((x) => x.trim()) } : b)).filter((b) => !(b.t === 'image' && !b.mediaId));
     const d = await post({ action: 'save', id: S.id, version: S.version, title: v('title'), slug: v('slug'), excerpt: v('excerpt'), category: v('category') || null, country: v('country') || null,
-      blocks: clean, coverId: v('coverId') || null, seoTitle: v('seoTitle') || null, seoDescription: v('seoDescription') || null, featured: fd.get('featured') === 'on' });
+      blocks: clean, data: S.data, coverId: v('coverId') || null, seoTitle: v('seoTitle') || null, seoDescription: v('seoDescription') || null, featured: fd.get('featured') === 'on' });
     if (d.ok) { S.version = d.version; setDirty(false); toast(d.message); }
     return !!d.ok;
   }

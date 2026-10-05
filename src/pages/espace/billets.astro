@@ -4,14 +4,15 @@ import EspaceLayout from '../../layouts/EspaceLayout.astro';
 import { desc, eq } from 'drizzle-orm';
 import { db } from '../../lib/db';
 import { eventTicket, payment } from '../../db/schema/app';
-import { EVENTS, dateFr } from '../../data/site';
+import { dateFr } from '../../data/site';
+import { findEvent } from '../../lib/catalog';
 import { qrSvg, verifyUrl } from '../../lib/qr';
 import { rules, REFUND_DAYS } from '../../lib/tickets';
 
 export const prerender = false;
 const user = Astro.locals.user!;
 const rows = await db.select({ t: eventTicket, pay: payment.reference }).from(eventTicket).leftJoin(payment, eq(payment.id, eventTicket.paymentId)).where(eq(eventTicket.userId, user.id)).orderBy(desc(eventTicket.createdAt));
-const tickets = await Promise.all(rows.map(async ({ t, pay }) => ({ t, pay, r: rules(t), e: EVENTS.find((x) => x.id === t.eventId), qr: t.status === 'valide' ? await qrSvg(verifyUrl(Astro.url.origin, 'billet', t.code)) : '' })));
+const tickets = await Promise.all(rows.map(async ({ t, pay }) => ({ t, pay, r: await rules(t), e: await findEvent(t.eventId, { hidden: true }), qr: t.status === 'valide' ? await qrSvg(verifyUrl(Astro.url.origin, 'billet', t.code)) : '' })));
 const ST: Record<string, [string, string]> = { valide: ['ok', 'Valide'], utilise: ['info', 'Utilisé'], rembourse: ['', 'Remboursement en cours'], transfere: ['', 'Transféré'], annule: ['bad', 'Annulé'] };
 ---
 <EspaceLayout title="Mes billets" lead="Présentez le QR code à l'entrée. Il fonctionne aussi hors connexion une fois la page ouverte.">

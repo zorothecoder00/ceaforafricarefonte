@@ -9,7 +9,7 @@ import { db } from '../../../lib/db';
 import { eventTicket } from '../../../db/schema/app';
 import { json, fail, audit, clientIp } from '../../../lib/session';
 import { staffApi } from '../../../lib/admin';
-import { EVENTS } from '../../../data/site';
+import { findEvent } from '../../../lib/catalog';
 
 export const prerender = false;
 
@@ -17,7 +17,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
   const u = staffApi(locals.user, 'controle_acces', 'L');
   if (u instanceof Response) return u;
   const ev = url.searchParams.get('event') ?? '';
-  if (!EVENTS.some((e) => e.id === ev)) return fail('Événement inconnu.', 404);
+  if (!(await findEvent(ev, { hidden: true }))) return fail('Événement inconnu.', 404);
   const live = and(eq(eventTicket.eventId, ev), inArray(eventTicket.status, ['valide', 'utilise']));
   const [{ expected }] = await db.select({ expected: count() }).from(eventTicket).where(live);
   const [{ inside }] = await db.select({ inside: count() }).from(eventTicket).where(and(live, isNotNull(eventTicket.checkedInAt)));
@@ -34,7 +34,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const code = p.data.code.toUpperCase().replace(/^.*\/VERIFIER\/BILLET\//, ''); // QR = adresse de vérification ou code seul
   const [t] = await db.select().from(eventTicket).where(eq(eventTicket.code, code));
   if (!t) return json({ ok: true, result: 'inconnu', message: 'Billet inconnu.' });
-  const ev = EVENTS.find((e) => e.id === t.eventId);
+  const ev = await findEvent(t.eventId, { hidden: true });
   if (p.data.event && p.data.event !== t.eventId) return json({ ok: true, result: 'autre', message: `Billet valable pour un autre événement : ${ev?.t ?? t.eventId}.` });
   if (t.status !== 'valide' && !t.checkedInAt) return json({ ok: true, result: 'invalide', message: `Billet ${t.status}.` });
   // Mise à jour conditionnelle : deux appareils qui scannent en même temps ne valident qu'une fois

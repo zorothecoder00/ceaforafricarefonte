@@ -1,7 +1,11 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
-import { PATHS, COURSES, SUBS } from '../../data/site';
+import { PATHS, SUBS } from '../../data/site';
+import { allCourses } from '../../lib/catalog';
+
+export const prerender = false;
+const COURSES = await allCourses();
 ---
 <BaseLayout title="Parcours certifiants">
   <PageHead title="Parcours certifiants" lead="Des suites de cours cohérentes, validées par un certificat vérifiable par QR code." crumbs={[['/academie', 'Académie'], ['', 'Parcours']]} subnav={SUBS.academie} />
@@ -11,7 +15,7 @@ import { PATHS, COURSES, SUBS } from '../../data/site';
         <div class="panel">
           <h3>{p.t}</h3>
           <p class="small muted">{p.d}</p>
-          <ol class="timeline">{p.c.map((id) => { const c = COURSES.find((x) => x.id === id)!; return <li><a href={`/academie/${c.id}`}>{c.t}</a></li>; })}</ol>
+          <ol class="timeline">{p.c.map((id) => { const c = COURSES.find((x) => x.id === id); if (!c) return null; return <li><a href={`/academie/${c.id}`}>{c.t}</a></li>; })}</ol>
           <button class="btn btn-primary btn-sm" type="button" data-post="/api/academie/parcours" data-body={JSON.stringify({ pathId: p.id })}>Suivre ce parcours</button>
         </div>
       ))}

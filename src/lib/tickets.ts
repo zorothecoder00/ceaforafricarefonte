@@ -4,7 +4,8 @@ import { and, asc, eq, isNull } from 'drizzle-orm';
 import QRCode from 'qrcode';
 import { db } from './db';
 import * as s from '../db/schema';
-import { EVENTS, dateFr } from '../data/site';
+import { dateFr } from '../data/site';
+import { findEvent } from './catalog';
 import { sendEmail, sendWhatsApp } from './messaging';
 import { verifyUrl } from './qr';
 import { notify } from './notify';
@@ -14,7 +15,7 @@ export const REFUND_DAYS = 7;
 
 const site = () => process.env.BETTER_AUTH_URL ?? process.env.PUBLIC_SITE_URL ?? 'http://localhost:4321';
 export const newTicketCode = (eventId: string) => `TKT-${eventId.toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-export const eventOf = (id: string) => EVENTS.find((e) => e.id === id);
+export const eventOf = (id: string) => findEvent(id, { hidden: true });
 const daysBefore = (date: string) => (new Date(`${date}T00:00:00Z`).getTime() - Date.now()) / 86_400_000;
 const escHtml = (t: string) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
@@ -23,7 +24,7 @@ type T = typeof s.eventTicket.$inferSelect;
 /** Envoie les billets (QR en image PNG intégrée) par e-mail, et leurs codes par WhatsApp si un numéro est connu. */
 export async function deliverTickets(tickets: T[], to: { email?: string | null; phone?: string | null; name?: string | null }) {
   if (!tickets.length) return;
-  const e = eventOf(tickets[0].eventId);
+  const e = await eventOf(tickets[0].eventId);
   const title = `Votre billet${tickets.length > 1 ? 's' : ''} : ${e?.t ?? tickets[0].eventId}`;
   const when = e ? `${dateFr(e.date)} · ${e.city}` : '';
   const lines = tickets.map((t) => `• ${t.ticketType} — code ${t.code} — ${verifyUrl(site(), 'billet', t.code)}`).join('\n');
@@ -53,7 +54,7 @@ export async function releaseSeat(eventId: string) {
   const [w] = await db.select().from(s.eventWaitlist).where(and(eq(s.eventWaitlist.eventId, eventId), isNull(s.eventWaitlist.notifiedAt))).orderBy(asc(s.eventWaitlist.createdAt)).limit(1);
   if (!w) return;
   await db.update(s.eventWaitlist).set({ notifiedAt: new Date() }).where(eq(s.eventWaitlist.id, w.id));
-  const e = eventOf(eventId);
+  const e = await eventOf(eventId);
   const url = `${site()}/evenements/${eventId}`;
   try { await sendEmail(w.email, `Une place s'est libérée : ${e?.t ?? eventId}`, `Bonjour,\n\nUne place vient de se libérer pour « ${e?.t ?? eventId} »${e ? ` (${dateFr(e.date)}, ${e.city})` : ''}.\nElle revient à la première personne qui réserve : ${url}\n\n— CEA FOR AFRICA`); }
   catch (err) { console.error('[liste d’attente] envoi impossible :', err instanceof Error ? err.message : err); }
@@ -68,13 +69,13 @@ export async function transferTicket(t: T, to: { name: string; email: string }) 
     .where(and(eq(s.eventTicket.id, t.id), eq(s.eventTicket.status, 'valide'), isNull(s.eventTicket.checkedInAt))).returning();
   if (!n) return null;
   await deliverTickets([n], { email: to.email, phone: rcpt?.phone, name: to.name });
-  if (rcpt) await notify(rcpt.id, `Un billet vous a été transféré : ${eventOf(t.eventId)?.t ?? t.eventId}`, '/espace/billets');
+  if (rcpt) await notify(rcpt.id, `Un billet vous a été transféré : ${(await eventOf(t.eventId))?.t ?? t.eventId}`, '/espace/billets');
   return n;
 }
 
 /** Peut-on encore annuler / transférer ce billet ? */
-export function rules(t: T) {
-  const e = eventOf(t.eventId);
+export async function rules(t: T) {
+  const e = await eventOf(t.eventId);
   const d = e ? daysBefore(e.date) : -1;
   const active = t.status === 'valide' && !t.checkedInAt && d >= 0;
   return { canTransfer: active, canCancel: active && (t.priceXof === 0 || d >= REFUND_DAYS), refund: t.priceXof > 0, days: d };
@@ -90,7 +91,7 @@ export async function cancelTicket(t: T, userId: string) {
     const [u] = await db.select({ name: s.user.name, email: s.user.email }).from(s.user).where(eq(s.user.id, userId));
     await db.insert(s.contactMessage).values({
       reference: `RMB-${t.code}`, motif: 'Billetterie — remboursement', routedTeam: 'Finance', name: u?.name ?? '—', contact: u?.email ?? '—', userId,
-      message: `Remboursement à effectuer : billet ${t.code} (${t.ticketType}, ${eventOf(t.eventId)?.t ?? t.eventId}), ${t.priceXof} FCFA, paiement ${pay?.ref ?? '—'} par ${pay?.method ?? '—'}.`,
+      message: `Remboursement à effectuer : billet ${t.code} (${t.ticketType}, ${(await eventOf(t.eventId))?.t ?? t.eventId}), ${t.priceXof} FCFA, paiement ${pay?.ref ?? '—'} par ${pay?.method ?? '—'}.`,
     });
   }
   await releaseSeat(t.eventId);

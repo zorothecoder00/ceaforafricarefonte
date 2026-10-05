@@ -248,8 +248,9 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 // Filtre par type (Page, Cours, Événement…) : une puce par type présent dans l'index
 let sType = '';
 const sfil = $('#sfil');
+const fillTypes = () => { if (sfil) sfil.innerHTML = ['', ...new Set(index.map((x) => x.ty))].map((ty) => `<button type="button" class="chip" data-ty="${esc(ty)}" aria-pressed="${ty === sType}">${ty ? esc(ty) : EN ? 'All' : 'Tout'}</button>`).join(''); };
 if (sfil) {
-  sfil.innerHTML = ['', ...new Set(index.map((x) => x.ty))].map((ty) => `<button type="button" class="chip" data-ty="${esc(ty)}" aria-pressed="${ty === ''}">${ty ? esc(ty) : EN ? 'All' : 'Tout'}</button>`).join('');
+  fillTypes();
   sfil.addEventListener('click', (e) => {
     const b = (e.target as Element).closest<HTMLElement>('[data-ty]');
     if (!b) return;
@@ -263,9 +264,25 @@ const sCountry = $<HTMLSelectElement>('#sCountry'), sSector = $<HTMLSelectElemen
 const fillSelect = (sel: HTMLSelectElement | null, all: string, vals: (string | undefined)[]) => {
   if (sel) sel.innerHTML = `<option value="">${all}</option>` + [...new Set(vals.filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'fr')).map((v) => `<option>${esc(v)}</option>`).join('');
 };
-fillSelect(sCountry, EN ? 'All countries' : 'Tous les pays', index.map((x) => x.c));
-fillSelect(sSector, EN ? 'All sectors and topics' : 'Tous les secteurs et thèmes', index.map((x) => x.s));
+const fillFilters = () => {
+  fillSelect(sCountry, EN ? 'All countries' : 'Tous les pays', index.map((x) => x.c));
+  fillSelect(sSector, EN ? 'All sectors and topics' : 'Tous les secteurs et thèmes', index.map((x) => x.s));
+};
+fillFilters();
 [sCountry, sSector, sDate].forEach((s) => s?.addEventListener('change', runSearch));
+// Contenus publiés du CMS (articles, événements, cours, pages) : chargés à la première ouverture ; ils remplacent l'entrée de même lien
+let cmsLoaded = false;
+async function loadCmsIndex() {
+  if (cmsLoaded) return;
+  cmsLoaded = true;
+  const d = await fetch(`/api/recherche?lang=${EN ? 'en' : 'fr'}`).then((r) => (r.ok ? r.json() : null)).catch(() => null) as { entries: Entry[] } | null;
+  if (!d?.entries.length) return;
+  const hrefs = new Set(d.entries.map((x) => x.h));
+  const kept = index.filter((x) => !hrefs.has(x.h));
+  index.splice(0, index.length, ...kept, ...d.entries);
+  fillTypes(); fillFilters();
+  if (dlg?.open) runSearch();
+}
 function dateOk(dt: string | undefined, f: string) {
   if (!f) return true;
   if (!dt) return false;
@@ -287,7 +304,7 @@ function runSearch() {
     ? res.map((x) => `<a href="${x.h}"><span class="tag info">${esc(x.ty)}</span><span><b>${esc(x.t)}</b><br><span class="small muted">${esc(x.d)}</span></span></a>`).join('')
     : `<div class="empty">${EN ? 'No results. Try another word or ask CEA Copilot.' : 'Aucun résultat. Essayez un autre mot ou demandez à CEA Copilot.'}</div>`;
 }
-function openSearch() { closeMegas(); dlg?.showModal(); sq!.value = ''; [sCountry, sSector, sDate].forEach((s) => { if (s) s.value = ''; }); runSearch(); sq!.focus(); }
+function openSearch() { closeMegas(); dlg?.showModal(); loadCmsIndex(); sq!.value = ''; [sCountry, sSector, sDate].forEach((s) => { if (s) s.value = ''; }); runSearch(); sq!.focus(); }
 sq?.addEventListener('input', runSearch);
 $('#searchBtn')?.addEventListener('click', openSearch);
 $('#dlgClose')?.addEventListener('click', () => dlg?.close());

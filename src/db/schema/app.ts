@@ -684,7 +684,7 @@ export const aiNote = pgTable('ai_note', {
 export const cmsStatusEnum = pgEnum('cms_status', ['brouillon', 'en_relecture', 'valide', 'programme', 'publie', 'archive']);
 export const cmsContent = pgTable('cms_content', {
   id: uuid('id').primaryKey().defaultRandom(),
-  type: text('type').notNull().default('article'),
+  type: text('type').notNull().default('article'), // article, event, course, page
   key: text('key').notNull(), // regroupe les versions FR/EN
   slug: text('slug').notNull(),
   lang: text('lang').notNull().default('fr'),
@@ -693,6 +693,7 @@ export const cmsContent = pgTable('cms_content', {
   category: text('category'),
   country: text('country'), // « Panafricain » ou nom de pays
   blocks: jsonb('blocks').notNull().default([]),
+  data: jsonb('data').notNull().default({}), // champs propres au type (événement : date, lieu, billets… ; cours : leçons, quiz…)
   coverId: uuid('cover_id'),
   seoTitle: text('seo_title'),
   seoDescription: text('seo_description'),

@@ -4,13 +4,14 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '../../lib/db';
 import { post, profile, space, courseReview } from '../../db/schema/app';
-import { COURSES } from '../../data/site';
+import { allCourses } from '../../lib/catalog';
 import { user } from '../../db/schema/auth';
 import { countriesFor } from '../../lib/admin';
 import AiModNote, { type ModNote } from '../../components/AiModNote.astro';
 import { aiEnabled, latestNotes } from '../../lib/ai';
 
 export const prerender = false;
+const COURSES = await allCourses({ hidden: true });
 const me = Astro.locals.user!;
 const cs = await countriesFor(me, 'moderation');
 const v = Astro.url.searchParams.get('vue');

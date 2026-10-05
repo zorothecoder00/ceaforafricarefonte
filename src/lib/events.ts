@@ -2,10 +2,10 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from './db';
 import { eventTicket } from '../db/schema/app';
-import { EVENTS } from '../data/site';
-import { EXTRA } from '../data/events-extra';
+import { findEvent, type EventFull } from './catalog';
 
-export const eventById = (id: string) => EVENTS.find((e) => e.id === id);
+/** Événement par identifiant (CMS ou code), y compris hors ligne : billets, rencontres et espace participant restent accessibles. */
+export const eventById = (id: string) => findEvent(id, { hidden: true });
 
 /** Le membre détient-il un billet valide (ou déjà scanné) pour cet événement ? */
 export async function hasTicket(userId: string, eventId: string) {
@@ -14,8 +14,8 @@ export async function hasTicket(userId: string, eventId: string) {
 }
 
 /** Créneaux de 20 minutes pendant les sessions de rencontres B2B du programme (2 heures par session). */
-export function b2bSlots(eventId: string): { key: string; label: string }[] {
-  const x = EXTRA[eventId];
+export function b2bSlots(e: EventFull): { key: string; label: string }[] {
+  const x = e.extra;
   if (!x) return [];
   return x.sessions.filter((s) => /B2B/i.test(s.title)).flatMap((s) => {
     const [h, m] = s.time.split(':').map(Number);

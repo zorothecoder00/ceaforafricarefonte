@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { db } from '../../../lib/db';
 import { mentoringSession } from '../../../db/schema/app';
 import { json, fail, requireUser } from '../../../lib/session';
-import { resolveItem, startPayment, ticketsSold, EVENT_CAPACITY } from '../../../lib/payments';
+import { resolveItem, startPayment, ticketsSold, eventCapacity } from '../../../lib/payments';
 
 export const prerender = false;
 
@@ -20,7 +20,7 @@ export const POST: APIRoute = async ({ locals, request, url }) => {
   if (!item) return fail('Article introuvable.', 404);
   if (item.purpose === 'billet') {
     const eventId = String(item.meta?.eventId);
-    if ((await ticketsSold(eventId)) + Number(item.meta?.qty ?? 1) > (EVENT_CAPACITY[eventId] ?? Infinity)) return fail('Complet : inscrivez-vous sur la liste d’attente.', 409);
+    if ((await ticketsSold(eventId)) + Number(item.meta?.qty ?? 1) > (await eventCapacity(eventId))) return fail('Complet : inscrivez-vous sur la liste d’attente.', 409);
   }
   try {
     const pay = await startPayment(u.id, item, url.origin, { name: u.name, email: u.email.endsWith('@telephone.cea4africa.com') ? null : u.email, phone: u.phoneNumber });

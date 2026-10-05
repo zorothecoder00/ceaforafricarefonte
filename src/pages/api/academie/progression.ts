@@ -6,8 +6,8 @@ import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../../../lib/db';
 import { enrollment, certificate } from '../../../db/schema/app';
-import { COURSES } from '../../../data/site';
-import { CONTENT, PASS_MARK } from '../../../data/course-content';
+import { PASS_MARK } from '../../../data/course-content';
+import { findCourse } from '../../../lib/catalog';
 import { json, fail, requireUser, reference, audit } from '../../../lib/session';
 import { notify } from '../../../lib/notify';
 
@@ -29,7 +29,8 @@ export const POST: APIRoute = async ({ locals, request }) => {
   if (u instanceof Response) return u;
   const p = Body.safeParse(await request.json().catch(() => null));
   if (!p.success) return fail('Données invalides.');
-  const course = COURSES.find((c) => c.id === p.data.courseId);
+  // Hors ligne compris : un cours dépublié reste consultable et certifiable par les personnes déjà inscrites
+  const course = await findCourse(p.data.courseId, { hidden: true });
   if (!course) return fail('Cours introuvable.', 404);
   if (course.price) {
     // Cours payant : l'inscription passe par le paiement (voir /api/paiements)
@@ -42,7 +43,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const quizIndex = course.ls.length - 1; // la dernière leçon est le quiz final
   let quizResult: { score: number; total: number; passed: boolean } | null = null;
   if (p.data.quiz) {
-    const qs = CONTENT[course.id]?.quiz ?? [];
+    const qs = course.content.quiz;
     const score = qs.filter((q, i) => p.data.quiz![i] === q.a).length;
     quizResult = { score, total: qs.length, passed: qs.length > 0 && score / qs.length >= PASS_MARK };
     if (quizResult.passed) done = [...new Set([...done, quizIndex])].sort((a, b) => a - b);

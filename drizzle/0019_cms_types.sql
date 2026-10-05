@@ -1,0 +1,1 @@
+ALTER TABLE "cms_content" ADD COLUMN "data" jsonb DEFAULT '{}'::jsonb NOT NULL;

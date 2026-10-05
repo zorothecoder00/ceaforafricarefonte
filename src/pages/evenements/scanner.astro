@@ -3,14 +3,15 @@
    ou saisie du code ; hors connexion, les codes sont mis en file d'attente et validés au retour du réseau. */
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
-import { EVENTS, SUBS, dateFr } from '../../data/site';
+import { SUBS, dateFr } from '../../data/site';
+import { allEvents } from '../../lib/catalog';
 import { can } from '../../lib/rbac';
 
 export const prerender = false;
 const user = Astro.locals.user;
 const allowed = !!user && can(user.roles, 'controle_acces', 'V');
 const today = new Date().toISOString().slice(0, 10);
-const events = [...EVENTS].sort((a, b) => a.date.localeCompare(b.date));
+const events = (await allEvents({ hidden: true })).sort((a, b) => a.date.localeCompare(b.date));
 const current = events.find((e) => e.date >= today) ?? events[events.length - 1];
 ---
 <BaseLayout title="Contrôle d'accès">

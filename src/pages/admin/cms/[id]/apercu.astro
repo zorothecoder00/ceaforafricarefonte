@@ -1,14 +1,18 @@
 ---
-/* Aperçu d'un contenu du CMS (CDC §12) tel qu'il apparaîtra sur le site, quel que soit son état. Réservé à l'équipe (droit « contenus »). */
+/* Aperçu d'un contenu du CMS (CDC §12), quel que soit son état. Réservé à l'équipe (droit « contenus »).
+   Articles et pages : rendu identique au site. Événements et cours : présentation et fiche (la page publique complète
+   — billetterie, lecteur de leçons — s'affiche une fois le contenu publié). */
 import BaseLayout from '../../../../layouts/BaseLayout.astro';
 import PageHead from '../../../../components/PageHead.astro';
 import CmsBody from '../../../../components/CmsBody.astro';
+import Money from '../../../../components/Money.astro';
 import { eq } from 'drizzle-orm';
 import { db } from '../../../../lib/db';
 import { cmsContent } from '../../../../db/schema/app';
 import { can } from '../../../../lib/rbac';
 import { STATUS_LABEL, readingTime, type Block } from '../../../../lib/cms';
-import { dateFr } from '../../../../data/site';
+import type { EventData, CourseData } from '../../../../lib/catalog';
+import { dateFr, country } from '../../../../data/site';
 
 export const prerender = false;
 const me = Astro.locals.user;
@@ -18,10 +22,31 @@ if (!/^[0-9a-f-]{36}$/.test(id)) return new Response('Contenu introuvable', { st
 const [c] = await db.select().from(cmsContent).where(eq(cmsContent.id, id));
 if (!c) return new Response('Contenu introuvable', { status: 404 });
 const blocks = c.blocks as Block[];
+const ev = c.type === 'event' ? (c.data as Partial<EventData>) : null;
+const co = c.type === 'course' ? (c.data as Partial<CourseData>) : null;
+const lead = ev ? `${ev.date ? dateFr(ev.date) : 'Date à définir'} · ${ev.time ?? ''} · ${ev.city ?? ''} (${country(ev.country ?? '')}) · ${ev.format ?? ''}`
+  : co ? `${co.theme ?? ''} · ${co.level ?? ''} · ${co.duration ?? ''} · par ${co.by || '—'}`
+  : c.type === 'page' ? c.excerpt
+  : `${c.category ?? 'Article'} · ${c.country ?? 'Panafricain'} · ${dateFr((c.publishedAt ?? c.updatedAt).toISOString())} · ${readingTime(blocks)} de lecture`;
 Astro.response.headers.set('X-Robots-Tag', 'noindex');
 ---
 <BaseLayout title={`Aperçu — ${c.seoTitle || c.title}`} description={c.seoDescription || c.excerpt}>
   <div class="i18n-note">Aperçu ({STATUS_LABEL[c.status]}, version {c.version}) — cette page n'est pas publique. <a href={`/admin/cms/${c.id}`}>Retour à l'éditeur</a></div>
-  <PageHead title={c.title} lead={`${c.category ?? 'Article'} · ${c.country ?? 'Panafricain'} · ${dateFr((c.publishedAt ?? c.updatedAt).toISOString())} · ${readingTime(blocks)} de lecture`} crumbs={[['/ressources', 'Ressources'], ['', c.category ?? 'Article']]} />
-  <section class="block"><div class="wrap" style="max-width:780px"><CmsBody blocks={blocks} coverId={c.coverId} excerpt={c.excerpt} /></div></section>
+  <PageHead title={c.title} lead={lead} crumbs={[['', 'Aperçu']]} />
+  <section class="block"><div class="wrap" style="max-width:820px">
+    {(ev || co) && c.excerpt && <p style="font-size:1.1rem">{c.excerpt}</p>}
+    <CmsBody blocks={blocks} coverId={c.coverId} excerpt={c.type === 'article' ? c.excerpt : undefined} />
+    {ev && (
+      <div class="grid g2" style="margin-top:20px">
+        <div class="panel"><h3>Billets</h3>{(ev.tickets ?? []).map((t) => <div class="row between small"><span>{t.n}</span><b><Money xof={t.p} /></b></div>)}<p class="xs muted">Jauge : {ev.capacity ?? 'sans limite'}</p></div>
+        <div class="panel"><h3>Lieu</h3>{ev.venue ? <p class="small">{ev.venue.name}<br />{ev.venue.address}</p> : <p class="small muted">En ligne ou à préciser</p>}</div>
+        <div class="panel" style="grid-column:1/-1"><h3>Programme ({ev.sessions?.length ?? 0} sessions)</h3><ul class="small">{(ev.sessions ?? []).map((s) => <li>Jour {s.day} · {s.time} — {s.title}{s.speakers.length ? ` (${s.speakers.join(', ')})` : ''}</li>)}</ul></div>
+      </div>
+    )}
+    {co && (
+      <div class="panel" style="margin-top:20px"><h3>{co.lessons?.length ?? 0} leçons · quiz de {co.quiz?.length ?? 0} questions · <Money xof={co.price ?? 0} /></h3>
+        <ol class="small">{(co.lessons ?? []).map((l) => <li><b>{l.title}</b>{l.k.length > 0 && <span class="muted"> — {l.k.length} point{l.k.length > 1 ? 's' : ''} à retenir</span>}</li>)}</ol>
+      </div>
+    )}
+  </div></section>
 </BaseLayout>

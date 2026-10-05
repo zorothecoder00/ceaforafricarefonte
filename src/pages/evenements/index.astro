@@ -4,8 +4,12 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import EventRow from '../../components/EventRow.astro';
 import KapitalAd from '../../components/KapitalAd.astro';
-import { EVENTS, SUBS, country } from '../../data/site';
-import { EXTRA } from '../../data/events-extra';
+import { SUBS, country } from '../../data/site';
+import { allEvents } from '../../lib/catalog';
+import { getLang } from '../../i18n/ui';
+
+export const prerender = false;
+const EVENTS = await allEvents({ lang: getLang(Astro.currentLocale) === 'en' ? 'en' : 'fr' });
 
 // Type d'événement (filtre ?type= utilisé par le méga-menu)
 const TYPE: Record<string, string> = { e1: 'Forum', e2: 'Masterclass et ateliers', e3: 'Rencontres investisseurs', e4: 'Masterclass et ateliers', e5: 'Réseautage' };
@@ -13,7 +17,7 @@ const list = [...EVENTS].sort((a, b) => a.date.localeCompare(b.date));
 const types = [...new Set(Object.values(TYPE))];
 const countries = [...new Set(EVENTS.map((e) => e.c))];
 // Points de la vue carte : événements avec un lieu physique
-const points = list.filter((e) => EXTRA[e.id]?.venue).map((e) => ({ id: e.id, t: e.t, date: e.date, name: EXTRA[e.id].venue!.name, lat: EXTRA[e.id].venue!.lat, lon: EXTRA[e.id].venue!.lon }));
+const points = list.filter((e) => e.extra?.venue).map((e) => ({ id: e.id, t: e.t, date: e.date, name: e.extra!.venue!.name, lat: e.extra!.venue!.lat, lon: e.extra!.venue!.lon }));
 const gcal = `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(`webcal://${new URL(Astro.site!).host}/evenements.ics`)}`;
 ---
 <BaseLayout title="Événements">

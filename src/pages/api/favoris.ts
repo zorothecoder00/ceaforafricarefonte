@@ -5,13 +5,13 @@ import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../../lib/db';
 import { savedItem } from '../../db/schema/app';
-import { COURSES, EVENTS } from '../../data/site';
+import { allCourses, allEvents } from '../../lib/catalog';
 import { publicArticles } from '../../lib/cms';
 import { json, fail, requireUser } from '../../lib/session';
 
 export const prerender = false;
 
-const KNOWN: Record<string, () => Promise<string[]> | string[]> = { article: async () => (await publicArticles()).map((a) => a.id), course: () => COURSES.map((c) => c.id), event: () => EVENTS.map((e) => e.id) };
+const KNOWN: Record<string, () => Promise<string[]> | string[]> = { article: async () => (await publicArticles()).map((a) => a.id), course: async () => (await allCourses()).map((c) => c.id), event: async () => (await allEvents()).map((e) => e.id) };
 const Body = z.object({ kind: z.enum(['article', 'course', 'event']), itemId: z.string().max(40), save: z.boolean().default(true) });
 
 export const POST: APIRoute = async ({ locals, request }) => {

@@ -7,8 +7,7 @@ import { z } from 'zod';
 import { json, fail, requireUser } from '../../../lib/session';
 import { rateLimit } from '../../../lib/guard';
 import { aiEnabled, askModel, replyText } from '../../../lib/ai';
-import { COURSES } from '../../../data/site';
-import { CONTENT } from '../../../data/course-content';
+import { findCourse } from '../../../lib/catalog';
 
 export const prerender = false;
 
@@ -58,8 +57,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const p = Body.safeParse(await request.json().catch(() => null));
   if (!p.success) return fail('Requête invalide.');
   const { course, lesson, action, question, lang } = p.data;
-  const c = COURSES.find((x) => x.id === course);
-  const l = CONTENT[course]?.lessons[lesson];
+  const c = await findCourse(course, { hidden: true });
+  const l = c?.content.lessons[lesson];
   if (!c || !l) return fail('Leçon introuvable.', 404);
   if (action === 'question' && !question) return fail('Posez votre question.');
 

@@ -8,21 +8,21 @@ import { and, avg, count, desc, eq } from 'drizzle-orm';
 import { db } from '../../../lib/db';
 import { courseReview, enrollment, profile } from '../../../db/schema/app';
 import { user } from '../../../db/schema/auth';
-import { COURSES } from '../../../data/site';
+import { findCourse } from '../../../lib/catalog';
 import { json, fail, requireUser, audit } from '../../../lib/session';
 import { rateLimit } from '../../../lib/guard';
 
 export const prerender = false;
 
 const Body = z.object({
-  courseId: z.string().refine((id) => COURSES.some((c) => c.id === id), 'Cours inconnu'),
+  courseId: z.string().max(10),
   rating: z.coerce.number().int().min(1).max(5),
   comment: z.string().trim().max(1500).optional(),
 });
 
 export const GET: APIRoute = async ({ locals, url }) => {
   const id = url.searchParams.get('course') ?? '';
-  if (!COURSES.some((c) => c.id === id)) return fail('Cours inconnu.', 404);
+  if (!(await findCourse(id, { hidden: true }))) return fail('Cours inconnu.', 404);
   const visible = and(eq(courseReview.courseId, id), eq(courseReview.hidden, false));
   const [stats] = await db.select({ n: count(), avg: avg(courseReview.rating) }).from(courseReview).where(visible);
   const rows = await db.select({ name: user.name, c: profile.country, rating: courseReview.rating, comment: courseReview.comment, at: courseReview.at })
@@ -45,6 +45,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   if (limited) return limited;
   const p = Body.safeParse(await request.json().catch(() => null));
   if (!p.success) return fail('Choisissez une note de 1 à 5.');
+  if (!(await findCourse(p.data.courseId, { hidden: true }))) return fail('Cours inconnu.', 404);
   const { courseId, rating } = p.data;
   const comment = p.data.comment || null;
   const [e] = await db.select({ id: enrollment.courseId }).from(enrollment).where(and(eq(enrollment.userId, u.id), eq(enrollment.courseId, courseId)));

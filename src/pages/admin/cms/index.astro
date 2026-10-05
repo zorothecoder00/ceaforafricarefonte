@@ -1,46 +1,52 @@
 ---
-/* CMS éditorial (CDC §12) : contenus par état du circuit, création, import des articles écrits dans le code. */
+/* CMS éditorial (CDC §12) : articles, événements, cours et pages, par état du circuit ; création et reprise des contenus écrits dans le code. */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../../../lib/db';
 import { cmsContent } from '../../../db/schema/app';
 import { user } from '../../../db/schema/auth';
 import { can } from '../../../lib/rbac';
 import { STATUS_LABEL, STATUS_TONE, isLive, type CmsStatus } from '../../../lib/cms';
-import { ARTICLES, dateFr } from '../../../data/site';
+import { ARTICLES, EVENTS, COURSES, dateFr } from '../../../data/site';
 
 export const prerender = false;
 const me = Astro.locals.user!;
 const canCreate = can(me.roles, 'contenus', 'C');
+const TYPES = { article: ['Articles', 'Nouvel article'], event: ['Événements', 'Nouvel événement'], course: ['Cours', 'Nouveau cours'], page: ['Pages', 'Nouvelle page'] } as const;
+type T = keyof typeof TYPES;
+const qt = Astro.url.searchParams.get('type');
+const type: T = qt && qt in TYPES ? (qt as T) : 'article';
 const st = Astro.url.searchParams.get('etat') as CmsStatus | null;
 const rows = await db.select({ c: cmsContent, who: user.name }).from(cmsContent).leftJoin(user, eq(user.id, cmsContent.updatedBy))
-  .where(st && st in STATUS_LABEL ? eq(cmsContent.status, st) : undefined).orderBy(desc(cmsContent.updatedAt)).limit(300);
-const counts = await db.select({ s: cmsContent.status, key: cmsContent.key, lang: cmsContent.lang, slug: cmsContent.slug }).from(cmsContent);
-const n = (s: CmsStatus) => counts.filter((x) => x.s === s).length;
-const imported = new Set(counts.filter((x) => x.lang === 'fr').map((x) => x.slug));
-const toImport = ARTICLES.filter((a) => !imported.has(a.id));
-// Langues disponibles par contenu (clé commune)
-const langs = (key: string) => counts.filter((x) => x.key === key).map((x) => x.lang.toUpperCase()).sort().join(' · ');
-const toReview = n('en_relecture');
+  .where(and(eq(cmsContent.type, type), st && st in STATUS_LABEL ? eq(cmsContent.status, st) : undefined)).orderBy(desc(cmsContent.updatedAt)).limit(300);
+const all = await db.select({ t: cmsContent.type, s: cmsContent.status, key: cmsContent.key, lang: cmsContent.lang, slug: cmsContent.slug }).from(cmsContent);
+const ofType = all.filter((x) => x.t === type);
+const n = (s: CmsStatus) => ofType.filter((x) => x.s === s).length;
+const inCms = new Set(ofType.filter((x) => x.lang === 'fr').map((x) => x.slug));
+const toImport: { ref: string; t: string; d: string }[] = type === 'article' ? ARTICLES.filter((a) => !inCms.has(a.id)).map((a) => ({ ref: a.id, t: a.t, d: `${a.cat} · ${dateFr(a.d)}` }))
+  : type === 'event' ? EVENTS.filter((e) => !inCms.has(e.id)).map((e) => ({ ref: e.id, t: e.t, d: `${e.city} · ${dateFr(e.date)}` }))
+  : type === 'course' ? COURSES.filter((c) => !inCms.has(c.id)).map((c) => ({ ref: c.id, t: c.t, d: `${c.th} · ${c.lv}` })) : [];
+const langs = (key: string) => all.filter((x) => x.key === key).map((x) => x.lang.toUpperCase()).sort().join(' · ');
+const PATH = { article: '/ressources/article/', event: '/evenements/', course: '/academie/', page: '/' } as const;
+const toReview = all.filter((x) => x.s === 'en_relecture').length;
 ---
 <AdminLayout title="CMS éditorial" lead="Rédaction → relecture → validation → publication (immédiate ou programmée). Chaque enregistrement est historisé et restaurable." obj="contenus">
-  <div class="row between" style="flex-wrap:wrap;gap:10px;margin-bottom:12px">
-    <div class="filters" style="margin:0">
-      <a class="chip" href="/admin/cms" aria-pressed={!st ? 'true' : 'false'}>Tous ({counts.length})</a>
-      {(Object.keys(STATUS_LABEL) as CmsStatus[]).map((s) => <a class="chip" href={`?etat=${s}`} aria-pressed={st === s ? 'true' : 'false'}>{STATUS_LABEL[s]} ({n(s)})</a>)}
-    </div>
-    <a class="btn btn-ghost btn-sm" href="/admin/cms/medias">Médiathèque</a>
-  </div>
+  <nav class="subnav" style="margin:0 0 12px">{(Object.keys(TYPES) as T[]).map((t) => <a href={`?type=${t}`} aria-current={t === type ? 'page' : undefined}>{TYPES[t][0]} ({all.filter((x) => x.t === t).length})</a>)}<a href="/admin/cms/medias">Médiathèque</a></nav>
   {toReview > 0 && can(me.roles, 'contenus', 'V') && <p class="small"><span class="tag info">{toReview} en relecture</span> Des contenus attendent votre validation.</p>}
+  <div class="filters" style="margin:0 0 12px">
+    <a class="chip" href={`?type=${type}`} aria-pressed={!st ? 'true' : 'false'}>Tous ({ofType.length})</a>
+    {(Object.keys(STATUS_LABEL) as CmsStatus[]).map((s) => <a class="chip" href={`?type=${type}&etat=${s}`} aria-pressed={st === s ? 'true' : 'false'}>{STATUS_LABEL[s]} ({n(s)})</a>)}
+  </div>
 
   {canCreate && (
     <form class="panel row" data-api="/api/admin/cms" style="gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px">
-      <input type="hidden" name="action" value="create" />
-      <div style="flex:1;min-width:220px"><label class="f" for="nt">Nouvel article</label><input class="in" id="nt" name="title" required minlength="2" maxlength="200" placeholder="Titre de l'article" /></div>
+      <input type="hidden" name="action" value="create" /><input type="hidden" name="type" value={type} />
+      <div style="flex:1;min-width:220px"><label class="f" for="nt">{TYPES[type][1]}</label><input class="in" id="nt" name="title" required minlength="2" maxlength="200" placeholder="Titre" /></div>
       <div><label class="f" for="nl">Langue</label><select class="in" id="nl" name="lang"><option value="fr">Français</option><option value="en">Anglais</option></select></div>
       <button class="btn btn-primary btn-sm" type="submit">Créer le brouillon</button>
     </form>
   )}
+  {type === 'page' && <p class="xs muted" style="margin:-8px 0 12px">Une page publiée s'affiche à son adresse (ex. /a-propos/equipe), à condition qu'aucune page du site n'existe déjà à cette adresse. Les pages « bientôt disponibles » des menus peuvent ainsi être remplies.</p>}
 
   <div class="panel scroll-x">
     {rows.length === 0 ? <p class="small muted" style="margin:0">Aucun contenu{st ? ' dans cet état' : ''}.</p> : (
@@ -48,7 +54,7 @@ const toReview = n('en_relecture');
         <thead><tr><th>Titre</th><th>Langues</th><th>État</th><th>Dernière modification</th></tr></thead>
         <tbody>{rows.map(({ c, who }) => (
           <tr>
-            <td><a href={`/admin/cms/${c.id}`}><b>{c.title}</b></a><div class="xs muted">/{c.lang === 'en' ? 'en/' : ''}ressources/article/{c.slug}{c.category ? ` · ${c.category}` : ''}</div></td>
+            <td><a href={`/admin/cms/${c.id}`}><b>{c.title}</b></a><div class="xs muted">{c.lang === 'en' ? '/en' : ''}{PATH[type]}{c.slug}{c.category ? ` · ${c.category}` : ''}</div></td>
             <td class="small">{c.lang.toUpperCase()}<span class="xs muted">{langs(c.key).length > 2 ? ` (${langs(c.key)})` : ''}</span></td>
             <td><span class={`tag ${STATUS_TONE[c.status]}`}>{STATUS_LABEL[c.status]}</span>{c.status === 'programme' && c.publishAt && <div class="xs muted">{isLive(c) ? 'en ligne depuis' : 'le'} {c.publishAt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</div>}</td>
             <td class="small">{c.updatedAt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}<div class="xs muted">{who ?? '—'} · v{c.version}</div></td>
@@ -60,11 +66,11 @@ const toReview = n('en_relecture');
 
   {canCreate && toImport.length > 0 && (
     <details class="panel" style="margin-top:16px">
-      <summary><b>Articles du site à reprendre dans le CMS ({toImport.length})</b></summary>
-      <p class="xs muted">Ces articles sont écrits dans le code. Importez-en un pour le modifier ici : la version du CMS le remplacera sur le site dès sa publication.</p>
-      {toImport.map((a) => (
-        <div class="list-row"><span class="small">{a.t} <span class="xs muted">· {a.cat} · {dateFr(a.d)}</span></span>
-          <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/cms" data-body={JSON.stringify({ action: 'import', articleId: a.id })}>Importer</button></div>
+      <summary><b>{TYPES[type][0]} du site à reprendre dans le CMS ({toImport.length})</b></summary>
+      <p class="xs muted">Ces contenus sont écrits dans le code. Reprenez-en un pour le modifier ici : la version du CMS le remplacera sur le site dès sa publication (identifiant conservé : billets, inscriptions et favoris restent rattachés).</p>
+      {toImport.map((x) => (
+        <div class="list-row"><span class="small">{x.t} <span class="xs muted">· {x.d}</span></span>
+          <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/cms" data-body={JSON.stringify({ action: 'import', type, ref: x.ref })}>Reprendre</button></div>
       ))}
     </details>
   )}

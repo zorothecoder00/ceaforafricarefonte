@@ -5,12 +5,13 @@ import EventRow from '../../components/EventRow.astro';
 import MemberCard from '../../components/MemberCard.astro';
 import Money from '../../components/Money.astro';
 import KapitalAd from '../../components/KapitalAd.astro';
-import { HUBS, EVENTS, JOBS, MEMBERS, OPPS, country, fmt } from '../../data/site';
+import { HUBS, JOBS, MEMBERS, OPPS, country, fmt } from '../../data/site';
+import { allEvents } from '../../lib/catalog';
 
-export function getStaticPaths() {
-  return HUBS.map((h) => ({ params: { c: h.c.toLowerCase() }, props: { h } }));
-}
-const { h } = Astro.props;
+export const prerender = false;
+const h = HUBS.find((x) => x.c.toLowerCase() === (Astro.params.c ?? '').toLowerCase());
+if (!h) return Astro.rewrite('/404');
+const EVENTS = await allEvents();
 const name = country(h.c);
 const evs = EVENTS.filter((e) => e.c === h.c);
 const jobs = JOBS.filter((j) => j.c === h.c);

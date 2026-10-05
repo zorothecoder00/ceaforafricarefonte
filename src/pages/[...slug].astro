@@ -1,37 +1,55 @@
 ---
-/* Pages présentes dans les menus mais pas encore développées : on affiche un écran « bientôt disponible »
-   plutôt qu'une 404. Les routes déjà codées sont prioritaires et exclues ci-dessous. */
+/* Pages libres (CDC §12, CMS) : toute adresse non codée peut recevoir une page publiée du CMS (type « page », adresse = identifiant).
+   Sinon, une adresse présente dans les menus affiche « bientôt disponible » plutôt qu'une 404 ; toute autre adresse est une 404.
+   Les routes codées restent prioritaires (Astro les sert avant cette route). */
 import BaseLayout from '../layouts/BaseLayout.astro';
 import KapitalLayout from '../layouts/KapitalLayout.astro';
 import PageHead from '../components/PageHead.astro';
 import KapitalAd from '../components/KapitalAd.astro';
+import CmsBody from '../components/CmsBody.astro';
+import { and, eq, inArray } from 'drizzle-orm';
+import { db } from '../lib/db';
+import { cmsContent } from '../db/schema/app';
+import { isLive, mediaUrl, type Block } from '../lib/cms';
 import { allMenuLinks } from '../data/site';
+import { getLang } from '../i18n/ui';
 
-export function getStaticPaths() {
-  const pages = import.meta.glob('./**/*.astro');
-  const built = new Set(
-    Object.keys(pages)
-      .filter((f) => !f.includes('['))
-      .map((f) => f.replace(/^\.\//, '/').replace(/\.astro$/, '').replace(/\/index$/, '') || '/'),
-  );
-  const dyn = [/^\/domaines\/[^/]+$/, /^\/academie\/c\d+$/, /^\/evenements\/e\d+$/, /^\/ressources\/article\//, /^\/legal\//, /^\/kapital\/opportunites\/o\d+$/];
-  return allMenuLinks()
-    .filter((l) => l.href !== '/' && !built.has(l.href) && !dyn.some((r) => r.test(l.href)))
-    .map((l) => ({ params: { slug: l.href.slice(1) }, props: l }));
-}
-const { title, desc, kapital } = Astro.props;
+export const prerender = false;
+const raw = (Astro.params.slug ?? '').replace(/\/$/, '');
+// Adresses anglaises (/en/…) : cette route attrape tout ; on sert la page du CMS en anglais si elle existe, sinon une 404 brute
+// déclenche le repli « en → fr » d'Astro, qui affiche la page française avec l'interface anglaise (Astro.rewrite ne le ferait pas).
+const isEn = raw === 'en' || raw.startsWith('en/');
+const path = isEn ? raw.slice(3) : raw;
+const lang = isEn || getLang(Astro.currentLocale) === 'en' ? 'en' : 'fr';
+const rows = /^[a-z0-9/-]{1,120}$/.test(path)
+  ? await db.select().from(cmsContent).where(and(eq(cmsContent.type, 'page'), eq(cmsContent.slug, path), inArray(cmsContent.lang, ['fr', lang]))).catch(() => [])
+  : [];
+const live = rows.filter((r) => isLive(r));
+const page = live.find((r) => r.lang === lang) ?? live.find((r) => r.lang === 'fr');
+if (isEn && !page) return new Response(null, { status: 404 });
+const menu = page ? undefined : allMenuLinks().find((l) => l.href === `/${path}`);
+if (!page && !menu) return Astro.rewrite('/404');
+const kapital = page ? (page.data as { layout?: string }).layout === 'kapital' : menu!.kapital;
+const title = page?.title ?? menu!.title;
+const lead = page?.excerpt || menu?.desc || '';
+const crumbs: [string, string][] = kapital ? [['/kapital', 'Kapital Invest'], ['', title]] : [['', title]];
+const seo = { title: page?.seoTitle || title, description: page?.seoDescription || lead || undefined, image: page?.coverId ? mediaUrl(page.coverId) : undefined };
 ---
 {kapital ? (
-  <KapitalLayout title={title} risk={false}>
-    <PageHead title={title} lead={desc} crumbs={[['/kapital', 'Kapital Invest'], ['', title]]} />
-    <section class="block"><div class="wrap"><div class="empty"><b>Bientôt disponible.</b> Cette section de CEA Kapital Invest est en cours de construction. <a href="/kapital">Retour à l'accueil Kapital</a></div></div></section>
+  <KapitalLayout title={seo.title} description={seo.description} risk={false}>
+    <PageHead title={title} lead={lead} crumbs={crumbs} />
+    <section class="block"><div class="wrap">
+      {page ? <div style="max-width:820px"><CmsBody blocks={page.blocks as Block[]} coverId={page.coverId} /></div>
+        : <div class="empty"><b>Bientôt disponible.</b> Cette section de CEA Kapital Invest est en cours de construction. <a href="/kapital">Retour à l'accueil Kapital</a></div>}
+    </div></section>
   </KapitalLayout>
 ) : (
-  <BaseLayout title={title}>
-    <PageHead title={title} lead={desc} crumbs={[['', title]]} />
+  <BaseLayout title={seo.title} description={seo.description} image={seo.image}>
+    <PageHead title={title} lead={lead} crumbs={crumbs} />
     <section class="block">
       <div class="wrap split">
-        <div class="empty"><b>Bientôt disponible.</b> Cette page est en cours de construction. En attendant, utilisez la recherche (Ctrl+K) ou demandez à CEA Copilot.</div>
+        {page ? <article><CmsBody blocks={page.blocks as Block[]} coverId={page.coverId} /></article>
+          : <div class="empty"><b>Bientôt disponible.</b> Cette page est en cours de construction. En attendant, utilisez la recherche (Ctrl+K) ou demandez à CEA Copilot.</div>}
         <aside><KapitalAd variant={1} /></aside>
       </div>
     </section>

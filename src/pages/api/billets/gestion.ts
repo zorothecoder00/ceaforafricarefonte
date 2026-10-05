@@ -26,7 +26,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   if (!p.success) return fail('Indiquez le nom et un e-mail valide.');
   const [t] = await db.select().from(eventTicket).where(and(eq(eventTicket.code, p.data.code), eq(eventTicket.userId, u.id)));
   if (!t) return fail('Billet introuvable.', 404);
-  const r = rules(t);
+  const r = await rules(t);
   switch (p.data.action) {
     case 'renvoyer':
       if (t.status !== 'valide') return fail('Ce billet n’est plus valide.');

@@ -4,9 +4,11 @@ import EspaceLayout from '../../layouts/EspaceLayout.astro';
 import { desc, eq } from 'drizzle-orm';
 import { db } from '../../lib/db';
 import { enrollment, certificate, diagnostic } from '../../db/schema';
-import { COURSES, PATHS } from '../../data/site';
+import { PATHS } from '../../data/site';
+import { allCourses } from '../../lib/catalog';
 
 export const prerender = false;
+const COURSES = await allCourses({ hidden: true });
 const user = Astro.locals.user!;
 const enrolls = await db.select().from(enrollment).where(eq(enrollment.userId, user.id)).orderBy(desc(enrollment.startedAt));
 const certs = await db.select().from(certificate).where(eq(certificate.userId, user.id)).orderBy(desc(certificate.issuedAt));

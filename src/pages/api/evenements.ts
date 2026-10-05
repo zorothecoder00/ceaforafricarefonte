@@ -15,7 +15,7 @@ import { EXTRA } from '../../data/events-extra';
 
 export const prerender = false;
 
-const ev = z.string().refine((id) => !!eventById(id), 'Événement inconnu');
+const ev = z.string().max(10);
 const Body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('agenda'), eventId: ev, session: z.string().regex(/^\d-\d{2}:\d{2}$/), add: z.boolean().default(true) }),
   z.object({ action: z.literal('b2b.profil'), eventId: ev, offer: z.string().trim().min(5).max(300), need: z.string().trim().min(5).max(300) }),
@@ -30,6 +30,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const p = Body.safeParse(await request.json().catch(() => null));
   if (!p.success) return fail('Vérifiez les champs du formulaire.');
   const b = p.data;
+  if ('eventId' in b && !(await eventById(b.eventId))) return fail('Événement inconnu.', 404);
   switch (b.action) {
     case 'agenda': {
       if (!EXTRA[b.eventId]?.sessions.some((s) => `${s.day}-${s.time}` === b.session)) return fail('Session inconnue.');
@@ -43,7 +44,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       return json({ ok: true, message: 'Profil B2B enregistré : les autres participants peuvent vous proposer un rendez-vous.' });
     case 'b2b.demande': {
       if (b.targetId === u.id) return fail('Choisissez un autre participant.');
-      if (!b2bSlots(b.eventId).some((s) => s.key === b.slot)) return fail('Créneau invalide.');
+      if (!b2bSlots((await eventById(b.eventId))!).some((s) => s.key === b.slot)) return fail('Créneau invalide.');
       const [mine] = await db.select().from(b2bProfile).where(and(eq(b2bProfile.eventId, b.eventId), eq(b2bProfile.userId, u.id)));
       const [target] = await db.select().from(b2bProfile).where(and(eq(b2bProfile.eventId, b.eventId), eq(b2bProfile.userId, b.targetId)));
       if (!mine) return fail('Créez d’abord votre profil B2B.');
@@ -64,7 +65,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       return json({ ok: true, message: b.accept ? 'Rendez-vous confirmé.' : 'Demande déclinée.' });
     }
     case 'avis': {
-      const e = eventById(b.eventId)!;
+      const e = (await eventById(b.eventId))!;
       if (!isPast(e.date)) return fail('L’avis s’ouvre après l’événement.');
       if (!(await hasTicket(u.id, b.eventId))) return fail('Réservé aux participants.', 403);
       await db.insert(eventFeedback).values({ eventId: b.eventId, userId: u.id, rating: b.rating, nps: b.nps ?? null, comment: b.comment }).onConflictDoUpdate({ target: [eventFeedback.eventId, eventFeedback.userId], set: { rating: b.rating, nps: b.nps ?? null, comment: b.comment, at: new Date() } });

@@ -5,16 +5,18 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import KapitalAd from '../../components/KapitalAd.astro';
 import Money from '../../components/Money.astro';
-import { COURSES } from '../../data/site';
-import { CONTENT, PASS_MARK, META } from '../../data/course-content';
+import CmsBody from '../../components/CmsBody.astro';
+import { PASS_MARK } from '../../data/course-content';
+import { allCourses } from '../../lib/catalog';
+import { getLang } from '../../i18n/ui';
 import { initials } from '../../data/site';
 
-export function getStaticPaths() {
-  return COURSES.map((c) => ({ params: { id: c.id }, props: { c } }));
-}
-const { c } = Astro.props;
-const content = CONTENT[c.id];
-const meta = META[c.id];
+export const prerender = false;
+const COURSES = await allCourses({ lang: getLang(Astro.currentLocale) === 'en' ? 'en' : 'fr' });
+const c = COURSES.find((x) => x.id === Astro.params.id);
+if (!c) return Astro.rewrite('/404');
+const content = c.content;
+const meta = c.meta;
 const finance = c.th === 'Finance' || c.th === 'Levée de fonds';
 const last = c.ls.length - 1;
 const related = COURSES.filter((x) => x.id !== c.id && (x.th === c.th || x.lv === c.lv)).slice(0, 3);
@@ -33,6 +35,7 @@ const related = COURSES.filter((x) => x.id !== c.id && (x.th === c.th || x.lv ==
           </div>
         </div>
 
+        {c.body.length > 0 && <div class="panel" style="margin-top:18px"><CmsBody blocks={c.body} coverId={c.coverId} /></div>}
         {c.ls.slice(0, last).map((l, i) => (
           <article class="panel lesson" data-lesson={i} hidden={i !== 0} style="margin-top:18px">
             <span class="tag info">Leçon {i + 1} sur {last}</span>

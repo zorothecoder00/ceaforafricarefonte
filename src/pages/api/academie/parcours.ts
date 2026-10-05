@@ -4,7 +4,8 @@ import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { db } from '../../../lib/db';
 import { enrollment } from '../../../db/schema/app';
-import { PATHS, COURSES } from '../../../data/site';
+import { PATHS } from '../../../data/site';
+import { allCourses } from '../../../lib/catalog';
 import { json, fail, requireUser, audit } from '../../../lib/session';
 
 export const prerender = false;
@@ -15,7 +16,8 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const p = z.object({ pathId: z.string().max(20) }).safeParse(await request.json().catch(() => null));
   const path = p.success ? PATHS.find((x) => x.id === p.data.pathId) : undefined;
   if (!path) return fail('Parcours introuvable.', 404);
-  const courses = path.c.map((id) => COURSES.find((c) => c.id === id)!).filter(Boolean);
+  const catalog = await allCourses();
+  const courses = path.c.map((id) => catalog.find((c) => c.id === id)!).filter(Boolean);
   const free = courses.filter((c) => !c.price);
   const paid = courses.filter((c) => c.price);
   if (free.length) await db.insert(enrollment).values(free.map((c) => ({ userId: u.id, courseId: c.id }))).onConflictDoNothing();

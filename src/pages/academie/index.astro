@@ -3,14 +3,18 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import CourseCard from '../../components/CourseCard.astro';
 import KapitalAd from '../../components/KapitalAd.astro';
-import { COURSES, SUBS } from '../../data/site';
-import { META } from '../../data/course-content';
+import { SUBS } from '../../data/site';
+import { allCourses } from '../../lib/catalog';
+import { getLang } from '../../i18n/ui';
+
+export const prerender = false;
+const COURSES = await allCourses({ lang: getLang(Astro.currentLocale) === 'en' ? 'en' : 'fr' });
 
 // Thèmes du CDC §7.6 (création, finance, marketing, vente, numérique, gestion, juridique, export ZLECAf, leadership), puis les thèmes propres à CEA
 const CDC_THEMES = ['Création', 'Finance', 'Marketing', 'Vente', 'Numérique', 'Gestion', 'Juridique', 'Export', 'Leadership'];
 const themes = [...CDC_THEMES, ...new Set(COURSES.map((c) => c.th).filter((t) => !CDC_THEMES.includes(t)))];
 const nTheme = (t: string) => COURSES.filter((c) => c.th === t).length;
-const langs = [...new Set(COURSES.flatMap((c) => META[c.id]?.langs ?? ['Français']))];
+const langs = [...new Set(COURSES.flatMap((c) => c.meta?.langs ?? ['Français']))];
 ---
 <BaseLayout title="Académie">
   <PageHead title="CEA Academy" lead="Des cours courts, pratiques et certifiants, pensés pour le téléphone et les petits forfaits. Téléchargeables hors ligne." crumbs={[['', 'Académie']]} subnav={SUBS.academie} />

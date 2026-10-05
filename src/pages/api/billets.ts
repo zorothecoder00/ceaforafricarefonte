@@ -5,9 +5,9 @@ import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { db } from '../../lib/db';
 import { eventTicket } from '../../db/schema/app';
-import { EVENTS } from '../../data/site';
+import { findEvent } from '../../lib/catalog';
 import { json, fail, requireUser, audit } from '../../lib/session';
-import { EVENT_CAPACITY, ticketsSold } from '../../lib/payments';
+import { eventCapacity, ticketsSold } from '../../lib/payments';
 import { notify } from '../../lib/notify';
 import { deliverTickets, contactOf, newTicketCode } from '../../lib/tickets';
 
@@ -20,10 +20,10 @@ export const POST: APIRoute = async ({ locals, request }) => {
   if (u instanceof Response) return u;
   const p = Body.safeParse(await request.json().catch(() => null));
   if (!p.success) return fail('Sélection invalide.');
-  const e = EVENTS.find((x) => x.id === p.data.eventId);
+  const e = await findEvent(p.data.eventId);
   const tk = e?.tk[p.data.ticket];
   if (!e || !tk) return fail('Billet introuvable.', 404);
-  if ((await ticketsSold(e.id)) + p.data.qty > (EVENT_CAPACITY[e.id] ?? Infinity)) return json({ ok: false, error: 'Complet.', waitlist: true }, 409);
+  if ((await ticketsSold(e.id)) + p.data.qty > (await eventCapacity(e.id))) return json({ ok: false, error: 'Complet.', waitlist: true }, 409);
   if (tk.p > 0) {
     const qs = new URLSearchParams({ objet: 'billet', ref: `${e.id}:${p.data.ticket}`, qty: String(p.data.qty) });
     if (p.data.promo) qs.set('promo', p.data.promo);

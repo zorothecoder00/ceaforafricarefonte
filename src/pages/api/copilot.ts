@@ -10,6 +10,7 @@ import { rateLimit } from '../../lib/guard';
 import { askModel } from '../../lib/ai';
 import { retrieve, type KbDoc } from '../../lib/kb';
 import { cmsKbDocs } from '../../lib/cms';
+import { catalogKbDocs } from '../../lib/catalog';
 
 export const prerender = false;
 
@@ -60,7 +61,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   // Recherche sur la dernière question, complétée par la précédente pour les relances courtes (« et le prix ? »)
   const userTurns = msgs.filter((m) => m.role === 'user').map((m) => m.content);
   const last = userTurns.at(-1)!;
-  const extra = await cmsKbDocs();
+  const extra = [...(await cmsKbDocs()), ...(await catalogKbDocs())];
   let docs = retrieve(last, 6, extra);
   if (docs.length < 3 && userTurns.length > 1) docs = [...new Map([...docs, ...retrieve(userTurns.at(-2)!, 6, extra)].map((d) => [d.id, d])).values()].slice(0, 6);
 

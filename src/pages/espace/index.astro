@@ -4,7 +4,8 @@ import EspaceLayout from '../../layouts/EspaceLayout.astro';
 import { and, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from '../../lib/db';
 import * as s from '../../db/schema';
-import { EVENTS, COURSES, CONSULTS, OPPS, country, dateFr } from '../../data/site';
+import { CONSULTS, OPPS, country, dateFr } from '../../data/site';
+import { allEvents, allCourses } from '../../lib/catalog';
 import { publicArticles } from '../../lib/cms';
 import { ROLE_LABEL, isStaff, type Role } from '../../lib/rbac';
 
@@ -19,6 +20,8 @@ const [prof] = await db.select().from(s.profile).where(eq(s.profile.userId, user
 const [member] = await db.select().from(s.membership).where(and(eq(s.membership.userId, user.id), eq(s.membership.status, 'active'))).orderBy(desc(s.membership.startsAt)).limit(1);
 const enrolls = await db.select().from(s.enrollment).where(eq(s.enrollment.userId, user.id));
 const votes = await db.select({ id: s.consultationVote.consultationId }).from(s.consultationVote).where(eq(s.consultationVote.userId, user.id));
+const EVENTS = await allEvents();
+const COURSES = await allCourses({ hidden: true });
 const nextEvents = [...EVENTS].filter((e) => e.date >= new Date().toISOString().slice(0, 10)).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3);
 const myCountry = prof?.country ?? null;
 const articles = await publicArticles();

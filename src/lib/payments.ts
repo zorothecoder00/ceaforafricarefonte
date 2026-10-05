@@ -5,7 +5,7 @@
 import { and, count, eq, inArray } from 'drizzle-orm';
 import { db } from './db';
 import * as s from '../db/schema';
-import { COURSES, EVENTS } from '../data/site';
+import { findCourse, findEvent } from './catalog';
 import { env, isProd } from './env';
 import { reference, audit } from './session';
 import { contactOf, deliverTickets, newTicketCode } from './tickets';
@@ -19,14 +19,16 @@ export const PLANS: Record<string, { label: string; xof: number }> = {
   premium: { label: 'Adhésion Premium — 1 an', xof: 90000 },
   entreprise: { label: 'Adhésion Entreprise — 1 an', xof: 250000 },
 };
-export const EVENT_CAPACITY: Record<string, number> = { e1: 1250, e2: 120, e3: 500, e4: 40, e5: 80 };
+/** Jauge d'un événement (fiche du CMS ou valeur du code) ; Infinity si non limitée. */
+export const eventCapacity = async (eventId: string) => (await findEvent(eventId, { hidden: true }))?.capacity ?? Infinity;
 const GROUP_DISCOUNT = { min: 5, percent: 10 }; // tarif de groupe
 
 /** Résout un article du catalogue. Les montants ne viennent JAMAIS du navigateur. */
 export async function resolveItem(purpose: string, ref: string, extra: { qty?: number; promo?: string } = {}): Promise<Item | null> {
   if (purpose === 'adhesion' && PLANS[ref]) return { purpose, ref, label: PLANS[ref].label, amountXof: PLANS[ref].xof };
   if (purpose === 'cours') {
-    const c = COURSES.find((x) => x.id === ref);
+    // Seuls les cours et événements en ligne sont en vente
+    const c = await findCourse(ref);
     return c && c.price ? { purpose, ref, label: `Cours : ${c.t}`, amountXof: c.price } : null;
   }
   if (purpose === 'expert') {
@@ -42,7 +44,7 @@ export async function resolveItem(purpose: string, ref: string, extra: { qty?: n
   if (purpose === 'recherche') return { purpose, ref: 'premium', label: 'Abonnement Recherche Premium — 1 an', amountXof: 60000 };
   if (purpose === 'billet') {
     const [eventId, idx] = ref.split(':');
-    const e = EVENTS.find((x) => x.id === eventId);
+    const e = await findEvent(eventId);
     const tk = e?.tk[Number(idx)];
     if (!e || !tk) return null;
     const qty = Math.min(Math.max(1, extra.qty ?? 1), 20);

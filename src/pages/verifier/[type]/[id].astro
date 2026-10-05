@@ -6,7 +6,8 @@ import { eq } from 'drizzle-orm';
 import { db } from '../../../lib/db';
 import { membership, certificate, eventTicket } from '../../../db/schema/app';
 import { user } from '../../../db/schema/auth';
-import { EVENTS, dateFr } from '../../../data/site';
+import { dateFr } from '../../../data/site';
+import { findEvent } from '../../../lib/catalog';
 import { qrSvg, verifyUrl } from '../../../lib/qr';
 import { linkedinCertUrl } from '../../../lib/share';
 
@@ -40,13 +41,13 @@ if (type === 'carte') {
   if (r) {
     ok = r.status === 'valide';
     title = ok ? 'Billet valide' : `Billet ${r.status}`;
-    lines = [['Événement', EVENTS.find((e) => e.id === r.eventId)?.t ?? r.eventId], ['Catégorie', r.ticketType], ['Code', r.code]];
+    lines = [['Événement', (await findEvent(r.eventId, { hidden: true }))?.t ?? r.eventId], ['Catégorie', r.ticketType], ['Code', r.code]];
   }
 } else if (type === 'presence') {
   // Attestation de présence : billet scanné à l'entrée
   const [r] = await db.select({ t: eventTicket, name: user.name }).from(eventTicket).leftJoin(user, eq(user.id, eventTicket.userId)).where(eq(eventTicket.code, id));
   if (r?.t.checkedInAt) {
-    const ev = EVENTS.find((e) => e.id === r.t.eventId);
+    const ev = await findEvent(r.t.eventId, { hidden: true });
     ok = true;
     title = 'Attestation de présence';
     lines = [['Participant·e', r.t.holderName ?? r.name ?? '—'], ['Événement', ev?.t ?? r.t.eventId], ['Lieu', ev?.city ?? '—'], ['Présence enregistrée le', dateFr(r.t.checkedInAt.toISOString())], ['Code', r.t.code]];
