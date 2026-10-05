@@ -20,7 +20,7 @@ const clean = (a: string[] | null) => (a ?? []).filter(Boolean).sort();
   <section class="block" style="padding-top:20px">
     <div class="wrap">
       <form class="filters" method="get">
-        {['', 'Pré-amorçage', 'Amorçage', 'Croissance', 'Série A'].map((st) => <a class="chip" aria-pressed={String(st === f.st)} href={`/projets${st ? '?stade=' + encodeURIComponent(st) : ''}`}>{st || 'Tous les stades'}</a>)}
+        {['', 'Pré-amorçage', 'Amorçage', 'Croissance', 'Série A'].map((st) => <a class="chip" aria-current={st === f.st ? 'page' : undefined} href={`/projets${st ? '?stade=' + encodeURIComponent(st) : ''}`}>{st || 'Tous les stades'}</a>)}
         <input type="hidden" name="stade" value={f.st} />
         <select class="in" name="pays" aria-label="Pays" onchange="this.form.submit()"><option value="">Tous les pays</option>{Object.entries(COUNTRIES).map(([k, v]) => <option value={k} selected={k === f.c}>{v}</option>)}</select>
         <select class="in" name="secteur" aria-label="Secteur" onchange="this.form.submit()"><option value="">Tous les secteurs</option>{clean(facet?.s).map((x) => <option selected={x === f.s}>{x}</option>)}</select>
