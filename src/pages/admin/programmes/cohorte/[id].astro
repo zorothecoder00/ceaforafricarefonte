@@ -1,0 +1,210 @@
+---
+/* Cohorte (CDC §12) : participants, séances et présence, jalons (déclarés par les participants, validés par l'équipe),
+   suivi long terme des anciens et indicateurs (assiduité, jalons atteints, abandons, emplois, fonds levés). */
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import Money from '../../../../components/Money.astro';
+import { asc, desc, eq, inArray } from 'drizzle-orm';
+import { db } from '../../../../lib/db';
+import { user } from '../../../../db/schema/auth';
+import { programmeCall, cohort, cohortMember, cohortSession, attendance, milestone, milestoneProgress, alumniFollowup } from '../../../../db/schema/programmes';
+import { can } from '../../../../lib/rbac';
+import { rate, MEMBER_STATUS_LABEL, MILESTONE_LABEL, SESSION_KIND_LABEL } from '../../../../lib/programmes';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const id = Astro.params.id ?? '';
+if (!/^[0-9a-f-]{36}$/.test(id)) return new Response('Cohorte introuvable', { status: 404 });
+const [co] = await db.select().from(cohort).where(eq(cohort.id, id));
+if (!co) return new Response('Cohorte introuvable', { status: 404 });
+const canM = can(me.roles, 'programmes', 'M');
+const calls = await db.select({ id: programmeCall.id, title: programmeCall.title }).from(programmeCall).orderBy(desc(programmeCall.createdAt));
+const members = await db.select({ m: cohortMember, name: user.name, email: user.email }).from(cohortMember).innerJoin(user, eq(user.id, cohortMember.userId)).where(eq(cohortMember.cohortId, id)).orderBy(user.name);
+const sessions = await db.select().from(cohortSession).where(eq(cohortSession.cohortId, id)).orderBy(asc(cohortSession.at));
+const marks = sessions.length ? await db.select().from(attendance).where(inArray(attendance.sessionId, sessions.map((s) => s.id))) : [];
+const stones = await db.select().from(milestone).where(eq(milestone.cohortId, id)).orderBy(asc(milestone.position), asc(milestone.dueOn));
+const progress = stones.length ? await db.select().from(milestoneProgress).where(inArray(milestoneProgress.milestoneId, stones.map((m) => m.id))) : [];
+const follow = await db.select().from(alumniFollowup).where(eq(alumniFollowup.cohortId, id));
+const now = new Date();
+const past = sessions.filter((s) => s.at <= now);
+const mark = (sid: string, uid: string) => marks.find((x) => x.sessionId === sid && x.userId === uid)?.status;
+const prog = (mid: string, uid: string) => progress.find((x) => x.milestoneId === mid && x.userId === uid);
+// Indicateurs
+const assid = (uid: string) => rate(past.filter((s) => mark(s.id, uid) === 'present').length, past.filter((s) => mark(s.id, uid)).length);
+const reached = (uid: string) => stones.filter((m) => prog(m.id, uid)?.status === 'atteint').length;
+const marked = marks.filter((x) => past.some((s) => s.id === x.sessionId));
+const kpi = {
+  assiduite: rate(marked.filter((x) => x.status === 'present').length, marked.length),
+  jalons: rate(progress.filter((x) => x.status === 'atteint').length, stones.length * members.length),
+  abandons: rate(members.filter((x) => x.m.status === 'abandon').length, members.length),
+  diplomes: members.filter((x) => x.m.status === 'diplome').length,
+};
+// Risque d'abandon : assiduité faible ou jalon en retard non atteint
+const late = (uid: string) => stones.filter((m) => m.dueOn && new Date(m.dueOn) < now && prog(m.id, uid)?.status !== 'atteint').length;
+const atRisk = (uid: string) => { const a = assid(uid); return (a !== null && a < 60) || late(uid) >= 2; };
+const lastFollow = (uid: string) => follow.filter((f) => f.userId === uid).sort((a, b) => b.monthsAfter - a.monthsAfter)[0];
+const sumF = (k: 'employees' | 'fundsRaisedXof') => members.reduce((n, x) => n + (lastFollow(x.m.userId)?.[k] ?? 0), 0);
+const local = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+const fmt = (d: Date) => d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+---
+<AdminLayout title={co.name} lead={`${co.programme} · ${{ a_venir: 'à venir', en_cours: 'en cours', terminee: 'terminée' }[co.status]} · ${members.length} participant${members.length > 1 ? 's' : ''}`} obj="programmes">
+  <p class="small" style="margin-top:-8px"><a href="/admin/programmes">← Programmes</a></p>
+  <div class="kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px">
+    <div class="panel"><b style="font-size:1.4rem">{kpi.assiduite ?? '—'}{kpi.assiduite !== null ? ' %' : ''}</b><div class="xs muted">Assiduité (séances passées)</div></div>
+    <div class="panel"><b style="font-size:1.4rem">{kpi.jalons ?? '—'}{kpi.jalons !== null ? ' %' : ''}</b><div class="xs muted">Jalons atteints</div></div>
+    <div class="panel"><b style="font-size:1.4rem">{kpi.abandons ?? '—'}{kpi.abandons !== null ? ' %' : ''}</b><div class="xs muted">Abandons</div></div>
+    <div class="panel"><b style="font-size:1.4rem">{kpi.diplomes}</b><div class="xs muted">Diplômés</div></div>
+    <div class="panel"><b style="font-size:1.4rem">{sumF('employees')}</b><div class="xs muted">Emplois (dernier suivi)</div></div>
+    <div class="panel"><b style="font-size:1.1rem"><Money xof={sumF('fundsRaisedXof')} /></b><div class="xs muted">Fonds levés (dernier suivi)</div></div>
+  </div>
+
+  <h2 style="font-size:1.1rem">Participants</h2>
+  <div class="panel scroll-x">
+    {members.length === 0 ? <p class="small muted" style="margin:0">Aucun participant.</p> : (
+      <table class="t"><thead><tr><th>Participant</th><th>Statut</th><th>Assiduité</th><th>Jalons</th><th>Dernier suivi</th></tr></thead>
+        <tbody>{members.map(({ m, name, email }) => { const a = assid(m.userId), f = lastFollow(m.userId); return (
+          <tr><td><a href={`/admin/crm/personne/u-${m.userId}`}><b>{name}</b></a><div class="xs muted">{email}</div>{m.status === 'actif' && atRisk(m.userId) && <span class="tag gold">risque d'abandon</span>}</td>
+            <td>{canM ? <select class="in" style="width:auto;padding:4px 6px;font-size:.85rem" data-member={m.userId} aria-label={`Statut de ${name}`}>{Object.entries(MEMBER_STATUS_LABEL).map(([k, l]) => <option value={k} selected={k === m.status}>{l}</option>)}</select> : MEMBER_STATUS_LABEL[m.status]}{m.reason && <div class="xs muted">{m.reason}</div>}</td>
+            <td class="small">{a === null ? '—' : `${a} %`}</td><td class="small">{reached(m.userId)} / {stones.length}{late(m.userId) ? <span class="xs muted"> ({late(m.userId)} en retard)</span> : ''}</td>
+            <td class="small">{f ? <>{f.monthsAfter} mois : {f.employees ?? '—'} emplois{f.fundsRaisedXof ? <>, <Money xof={f.fundsRaisedXof} /></> : ''}</> : '—'}</td></tr>
+        ); })}</tbody></table>
+    )}
+  </div>
+  {canM && (
+    <div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap">
+      {co.callId && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/programmes" data-body={JSON.stringify({ action: 'cohort.admitted', cohortId: co.id })} data-reload>Ajouter les candidats admis</button>}
+      <form data-api="/api/admin/programmes" data-reload data-reset class="row" style="gap:6px"><input type="hidden" name="action" value="member.add" /><input type="hidden" name="cohortId" value={co.id} /><input class="in" name="email" type="email" required placeholder="E-mail d'un participant" aria-label="E-mail du participant" /><button class="btn btn-ghost btn-sm" type="submit">Ajouter</button></form>
+    </div>
+  )}
+
+  <h2 style="font-size:1.1rem;margin-top:22px">Séances et présence</h2>
+  {sessions.map((s) => (
+    <details class="panel" style="margin-bottom:8px" open={s.at <= now && !marks.some((x) => x.sessionId === s.id)}>
+      <summary class="row between"><span><b class="small">{s.title}</b> <span class="xs muted">· {SESSION_KIND_LABEL[s.kind] ?? s.kind} · {fmt(s.at)}{s.place ? ` · ${s.place}` : ''}</span></span><span class="xs muted">{marks.filter((x) => x.sessionId === s.id && x.status === 'present').length} présent(s)</span></summary>
+      {canM && members.length > 0 && (
+        <form class="att" data-session={s.id} style="margin-top:8px">
+          {members.filter((x) => x.m.status !== 'abandon').map(({ m, name }) => (
+            <div class="row between small" style="padding:3px 0;border-bottom:1px solid var(--line)"><span>{name}</span>
+              <span class="row" style="gap:8px">{[['present', 'Présent'], ['absent', 'Absent'], ['excuse', 'Excusé']].map(([v, l]) => <label class="row xs"><input type="radio" name={m.userId} value={v} checked={mark(s.id, m.userId) === v} /> {l}</label>)}</span></div>
+          ))}
+          <div class="row" style="gap:6px;margin-top:8px"><button class="btn btn-primary btn-sm" type="submit">Enregistrer la présence</button><button class="btn btn-ghost btn-sm" type="button" data-allpresent>Tous présents</button><button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/programmes" data-body={JSON.stringify({ action: 'session.delete', id: s.id })} data-confirm="Supprimer cette séance et sa feuille de présence ?" data-reload>Supprimer la séance</button></div>
+        </form>
+      )}
+    </details>
+  ))}
+  {!sessions.length && <p class="small muted">Aucune séance planifiée.</p>}
+  {canM && (
+    <details class="panel" style="margin-top:8px"><summary><b>Nouvelle séance</b></summary>
+      <form id="sessF" style="margin-top:8px">
+        <div class="grid g2" style="gap:0 12px">
+          <div><label class="f" for="st">Intitulé</label><input class="in" id="st" name="title" required minlength="2" /></div>
+          <div><label class="f" for="sk">Type</label><select class="in" id="sk" name="kind">{Object.entries(SESSION_KIND_LABEL).map(([k, l]) => <option value={k}>{l}</option>)}</select></div>
+          <div><label class="f" for="sa">Date et heure</label><input class="in" id="sa" name="at" type="datetime-local" required value={local(new Date(Date.now() + 7 * 864e5))} /></div>
+          <div><label class="f" for="sd">Durée (minutes)</label><input class="in" id="sd" name="durationMin" type="number" min="15" value="120" /></div>
+          <div style="grid-column:1/-1"><label class="f" for="sp">Lieu ou lien de visio</label><input class="in" id="sp" name="place" /></div>
+        </div>
+        <button class="btn btn-primary btn-sm" type="submit" style="margin-top:8px">Ajouter la séance</button>
+      </form>
+    </details>
+  )}
+
+  <h2 style="font-size:1.1rem;margin-top:22px">Jalons</h2>
+  {stones.length > 0 && members.length > 0 && (
+    <div class="panel scroll-x"><table class="t small">
+      <thead><tr><th>Participant</th>{stones.map((s) => <th title={s.description ?? ''}>{s.title}{s.dueOn && <div class="xs muted">{new Date(s.dueOn).toLocaleDateString('fr-FR')}</div>}</th>)}</tr></thead>
+      <tbody>{members.map(({ m, name }) => (
+        <tr><td>{name}</td>{stones.map((s) => { const p = prog(s.id, m.userId); return (
+          <td>{canM ? <select class="in" style="padding:3px 4px;font-size:.8rem" data-ms={s.id} data-user={m.userId} aria-label={`${s.title} — ${name}`}>{Object.entries(MILESTONE_LABEL).map(([k, l]) => <option value={k} selected={k === (p?.status ?? 'a_faire')}>{l}</option>)}</select> : MILESTONE_LABEL[p?.status ?? 'a_faire']}{p?.evidence && <div class="xs muted" title={p.evidence}>« {p.evidence.slice(0, 60)}{p.evidence.length > 60 ? '…' : ''} »</div>}</td>
+        ); })}</tr>
+      ))}</tbody>
+    </table></div>
+  )}
+  {!stones.length && <p class="small muted">Aucun jalon défini.</p>}
+  {canM && (
+    <details class="panel" style="margin-top:8px"><summary><b>Nouveau jalon</b></summary>
+      <form data-api="/api/admin/programmes" data-reload style="margin-top:8px">
+        <input type="hidden" name="action" value="milestone.save" /><input type="hidden" name="cohortId" value={co.id} />
+        <div class="grid g2" style="gap:0 12px">
+          <div><label class="f" for="mt">Intitulé</label><input class="in" id="mt" name="title" required minlength="2" placeholder="Premier client payant" /></div>
+          <div><label class="f" for="md">Échéance</label><input class="in" id="md" name="dueOn" type="date" /></div>
+          <div style="grid-column:1/-1"><label class="f" for="mx">Critère de réussite</label><input class="in" id="mx" name="description" maxlength="1000" /></div>
+        </div>
+        <input type="hidden" name="position" value={stones.length} />
+        <button class="btn btn-primary btn-sm" type="submit" style="margin-top:8px">Ajouter</button>
+      </form>
+    </details>
+  )}
+
+  <h2 style="font-size:1.1rem;margin-top:22px">Suivi long terme</h2>
+  <div class="panel scroll-x">
+    {follow.length === 0 ? <p class="small muted" style="margin:0">Aucun point de suivi. Les anciens peuvent déclarer leurs indicateurs depuis leur espace, ou l'équipe les saisit ci-dessous.</p> : (
+      <table class="t small"><thead><tr><th>Participant</th><th>Après</th><th>Chiffre d'affaires</th><th>Emplois</th><th>Fonds levés</th><th>Toujours active</th><th>Source</th></tr></thead>
+        <tbody>{follow.sort((a, b) => a.monthsAfter - b.monthsAfter).map((f) => <tr><td>{members.find((x) => x.m.userId === f.userId)?.name ?? '—'}</td><td>{f.monthsAfter} mois</td><td>{f.revenueXof != null ? <Money xof={f.revenueXof} /> : '—'}</td><td>{f.employees ?? '—'}</td><td>{f.fundsRaisedXof != null ? <Money xof={f.fundsRaisedXof} /> : '—'}</td><td>{f.stillActive == null ? '—' : f.stillActive ? 'Oui' : 'Non'}</td><td>{f.source === 'declaration' ? 'Déclaration' : 'Équipe'}</td></tr>)}</tbody></table>
+    )}
+  </div>
+  {canM && members.length > 0 && (
+    <details class="panel" style="margin-top:8px"><summary><b>Saisir un point de suivi</b></summary>
+      <form data-api="/api/admin/programmes" data-reload style="margin-top:8px">
+        <input type="hidden" name="action" value="followup.save" /><input type="hidden" name="cohortId" value={co.id} />
+        <div class="grid g2" style="gap:0 12px">
+          <div><label class="f" for="fu">Participant</label><select class="in" id="fu" name="userId">{members.map(({ m, name }) => <option value={m.userId}>{name}</option>)}</select></div>
+          <div><label class="f" for="fm">Après</label><select class="in" id="fm" name="monthsAfter">{[6, 12, 24, 36].map((n) => <option value={n}>{n} mois</option>)}</select></div>
+          <div><label class="f" for="fr">Chiffre d'affaires annuel (FCFA)</label><input class="in" id="fr" name="revenueXof" type="number" min="0" /></div>
+          <div><label class="f" for="fe">Emplois</label><input class="in" id="fe" name="employees" type="number" min="0" /></div>
+          <div><label class="f" for="ff">Fonds levés (FCFA)</label><input class="in" id="ff" name="fundsRaisedXof" type="number" min="0" /></div>
+          <div><label class="row small" style="margin-top:24px"><input type="checkbox" name="stillActive" checked /> Entreprise toujours active</label></div>
+        </div>
+        <label class="f" for="fn">Notes</label><textarea class="in" id="fn" name="notes" rows="2"></textarea>
+        <button class="btn btn-primary btn-sm" type="submit" style="margin-top:8px">Enregistrer</button>
+      </form>
+    </details>
+  )}
+
+  {canM && (
+    <details class="panel" style="margin-top:22px"><summary><b>Réglages de la cohorte</b></summary>
+      <form data-api="/api/admin/programmes" data-reload style="margin-top:8px">
+        <input type="hidden" name="action" value="cohort.save" /><input type="hidden" name="id" value={co.id} />
+        <div class="grid g2" style="gap:0 12px">
+          <div><label class="f" for="cn">Nom</label><input class="in" id="cn" name="name" required value={co.name} /></div>
+          <div><label class="f" for="cp">Programme</label><input class="in" id="cp" name="programme" required value={co.programme} /></div>
+          <div><label class="f" for="cc">Appel d'origine</label><select class="in" id="cc" name="callId"><option value="">—</option>{calls.map((c) => <option value={c.id} selected={c.id === co.callId}>{c.title}</option>)}</select></div>
+          <div><label class="f" for="cst">État</label><select class="in" id="cst" name="status">{[['a_venir', 'À venir'], ['en_cours', 'En cours'], ['terminee', 'Terminée']].map(([v, l]) => <option value={v} selected={v === co.status}>{l}</option>)}</select></div>
+          <div><label class="f" for="cs">Début</label><input class="in" id="cs" name="startsOn" type="date" value={co.startsOn ?? ''} /></div>
+          <div><label class="f" for="ce">Fin</label><input class="in" id="ce" name="endsOn" type="date" value={co.endsOn ?? ''} /></div>
+        </div>
+        <button class="btn btn-primary btn-sm" type="submit" style="margin-top:8px">Enregistrer</button>
+      </form>
+    </details>
+  )}
+  <script type="application/json" id="cohortId" set:html={JSON.stringify(co.id)} />
+</AdminLayout>
+<script>
+  const cohortId = JSON.parse(document.getElementById('cohortId')!.textContent!) as string;
+  const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+  const api = async (body: Record<string, unknown>, reload = true) => {
+    const r = await fetch('/api/admin/programmes', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : { error: 'Erreur réseau.' };
+    toast(d.message ?? d.error ?? 'Erreur.');
+    if (d.ok && reload) setTimeout(() => location.reload(), 600);
+    return d;
+  };
+  document.querySelectorAll<HTMLSelectElement>('[data-member]').forEach((s) => s.addEventListener('change', () => {
+    const reason = s.value === 'abandon' ? prompt('Motif de l’abandon :') : null;
+    if (s.value === 'abandon' && !reason) { location.reload(); return; }
+    api({ action: 'member.status', cohortId, userId: s.dataset.member, status: s.value, reason });
+  }));
+  document.querySelectorAll<HTMLSelectElement>('[data-ms]').forEach((s) => s.addEventListener('change', () => api({ action: 'progress.set', milestoneId: s.dataset.ms, userId: s.dataset.user, status: s.value }, false)));
+  document.querySelectorAll<HTMLFormElement>('form.att').forEach((f) => {
+    f.querySelector('[data-allpresent]')?.addEventListener('click', () => f.querySelectorAll<HTMLInputElement>('input[value="present"]').forEach((i) => (i.checked = true)));
+    f.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const marks = [...new FormData(f).entries()].map(([userId, status]) => ({ userId, status }));
+      if (!marks.length) return toast('Cochez la présence d’au moins un participant.');
+      api({ action: 'attendance.mark', sessionId: f.dataset.session, marks });
+    });
+  });
+  document.getElementById('sessF')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target as HTMLFormElement);
+    api({ action: 'session.save', cohortId, title: fd.get('title'), kind: fd.get('kind'), at: new Date(String(fd.get('at'))).toISOString(), durationMin: fd.get('durationMin'), place: fd.get('place') || null });
+  });
+</script>

@@ -10,6 +10,7 @@ export const ADMIN_NAV: [string, string, Obj][] = [
   ['/admin/messages', 'Messages et signalements', 'messages_contact'],
   ['/admin/moderation', 'Modération', 'moderation'],
   ['/admin/emplois', "Offres d'emploi", 'offre_emploi'],
+  ['/admin/programmes', 'Programmes et cohortes', 'programmes'],
   ['/admin/candidatures', 'Candidatures programmes', 'candidature'],
   ['/admin/projets', 'Projets', 'fiche_projet'],
   ['/admin/kapital', 'Pipeline Kapital', 'dossier_kapital'],

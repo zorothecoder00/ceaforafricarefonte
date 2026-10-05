@@ -1,0 +1,187 @@
+---
+/* Appel à candidatures (CDC §12) : réglages, grille d'évaluation pondérée, formulaire, jury, dossiers avec évaluations agrégées
+   (moyenne, écart entre jurés, conflits d'intérêts), comité de sélection et décisions. */
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import { and, desc, eq, inArray, ne } from 'drizzle-orm';
+import { db } from '../../../../lib/db';
+import { user } from '../../../../db/schema/auth';
+import { programmeApplication } from '../../../../db/schema/app';
+import { programmeCall, callJury, evaluation, selectionCommittee } from '../../../../db/schema/programmes';
+import { can } from '../../../../lib/rbac';
+import { Grid, Fields, DEFAULT_GRID, aggregate, callState, CALL_STATE_LABEL } from '../../../../lib/programmes';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const id = Astro.params.id ?? '';
+if (!/^[0-9a-f-]{36}$/.test(id)) return new Response('Appel introuvable', { status: 404 });
+const [c] = await db.select().from(programmeCall).where(eq(programmeCall.id, id));
+if (!c) return new Response('Appel introuvable', { status: 404 });
+const canM = can(me.roles, 'programmes', 'M'), canV = can(me.roles, 'programmes', 'V');
+const grid = Grid.safeParse(c.grid).success ? (c.grid as Grid) : DEFAULT_GRID;
+const fields = Fields.safeParse(c.fields).success ? (c.fields as Fields) : [];
+const state = callState(c);
+const jury = await db.select({ id: user.id, name: user.name, email: user.email }).from(callJury).innerJoin(user, eq(user.id, callJury.userId)).where(eq(callJury.callId, id));
+const apps = await db.select({ a: programmeApplication, name: user.name }).from(programmeApplication).innerJoin(user, eq(user.id, programmeApplication.userId))
+  .where(and(eq(programmeApplication.programme, c.slug), ne(programmeApplication.status, 'brouillon'))).orderBy(desc(programmeApplication.submittedAt));
+const evals = apps.length ? await db.select({ e: evaluation, who: user.name }).from(evaluation).innerJoin(user, eq(user.id, evaluation.juryId)).where(inArray(evaluation.applicationId, apps.map((x) => x.a.id))) : [];
+const rows = apps.map(({ a, name }) => {
+  const ev = evals.filter((x) => x.e.applicationId === a.id);
+  return { a, name, ev, agg: aggregate(ev.map((x) => x.e), c.reviewsPerApp) };
+}).sort((x, y) => (y.agg.mean ?? -1) - (x.agg.mean ?? -1));
+const committees = await db.select().from(selectionCommittee).where(eq(selectionCommittee.callId, id)).orderBy(desc(selectionCommittee.heldOn));
+const L: Record<string, string> = { recue: 'Reçue', en_evaluation: 'En évaluation', entretien: 'Entretien', admise: 'Admise', liste_attente: "Liste d'attente", refusee: 'Refusée', retiree: 'Retirée' };
+const local = (d: Date | null) => (d ? new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '');
+const state0 = { id: c.id, grid, fields };
+---
+<AdminLayout title={c.title} lead={`${c.programme} · candidature : /programmes/appel/${c.slug}`} obj="programmes">
+  <p class="small" style="margin-top:-8px"><a href="/admin/programmes">← Programmes</a> · <span class={`tag ${state === 'ouvert' ? 'ok' : ''}`}>{CALL_STATE_LABEL[state]}</span></p>
+  <div class="split">
+    <div>
+      <form class="panel" id="callF">
+        <h3 style="margin-top:0">Réglages</h3>
+        <fieldset disabled={!canM} style="border:0;padding:0;margin:0">
+          <div class="grid g2" style="gap:0 12px">
+            <div><label class="f" for="t">Titre</label><input class="in" id="t" name="title" required value={c.title} /></div>
+            <div><label class="f" for="p">Programme</label><input class="in" id="p" name="programme" required value={c.programme} /></div>
+            <div><label class="f" for="s">Identifiant</label><input class="in" id="s" name="slug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" value={c.slug} /></div>
+            <div><label class="f" for="r">Évaluations voulues par dossier</label><input class="in" id="r" name="reviewsPerApp" type="number" min="1" max="10" value={c.reviewsPerApp} /></div>
+            <div><label class="f" for="o">Ouverture</label><input class="in" id="o" name="opensAt" type="datetime-local" value={local(c.opensAt)} /></div>
+            <div><label class="f" for="cl">Clôture</label><input class="in" id="cl" name="closesAt" type="datetime-local" value={local(c.closesAt)} /></div>
+            <div><label class="f" for="ro">Rôle attribué à l'admission</label><select class="in" id="ro" name="role"><option value="">Aucun</option><option value="entrepreneur" selected={c.role === 'entrepreneur'}>Entrepreneur</option></select></div>
+          </div>
+          <label class="f" for="d">Présentation de l'appel (page de candidature)</label><textarea class="in" id="d" name="description" rows="4">{c.description}</textarea>
+
+          <h3 style="margin-top:18px">Grille d'évaluation <span class="xs muted" id="gridSum"></span></h3>
+          <p class="xs muted" style="margin:-6px 0 8px">Chaque critère est noté de 0 à 5 par chaque juré ; le poids (en %) donne le total sur 100. La somme des poids doit faire 100.</p>
+          <div id="gridRows"></div>
+          {canM && <button class="btn btn-ghost btn-sm" type="button" id="addCrit">+ Critère</button>}
+
+          <h3 style="margin-top:18px">Formulaire de candidature</h3>
+          <p class="xs muted" style="margin:-6px 0 8px">Vide pour un programme historique qui garde son formulaire codé. Pour les choix, une option par ligne.</p>
+          <div id="fieldRows"></div>
+          {canM && <button class="btn btn-ghost btn-sm" type="button" id="addField">+ Question</button>}
+        </fieldset>
+        {canM && <div style="margin-top:14px"><button class="btn btn-primary btn-sm" type="submit">Enregistrer</button></div>}
+      </form>
+
+      <h2 style="font-size:1.1rem;margin-top:22px">Dossiers ({rows.length})</h2>
+      {rows.length === 0 && <div class="empty">Aucune candidature pour l'instant.</div>}
+      {rows.length > 0 && (
+        <form class="panel" id="comF">
+          <div class="scroll-x"><table class="t">
+            <thead><tr><th>Candidature</th><th>Évaluations</th><th>Moyenne</th><th>État</th>{canV && <th>Décision</th>}</tr></thead>
+            <tbody>{rows.map(({ a, name, ev, agg }) => (
+              <tr>
+                <td><b>{a.reference}</b> · {name}<details class="xs"><summary>Dossier et notes</summary>
+                  <dl style="display:grid;grid-template-columns:max-content 1fr;gap:2px 10px;margin:6px 0">{Object.entries(a.data as Record<string, unknown>).filter(([k]) => k !== 'documents').map(([k, v]) => <><dt class="muted">{fields.find((f) => f.key === k)?.label ?? k}</dt><dd style="margin:0;white-space:pre-wrap">{String(v ?? '')}</dd></>)}</dl>
+                  {ev.map(({ e, who }) => <div style="border-top:1px solid var(--line);padding:4px 0"><b>{who}</b> : {e.conflict ? 'conflit d’intérêts déclaré' : e.submittedAt ? `${e.total}/100` : 'brouillon'}{!e.conflict && e.submittedAt && <span class="muted"> — {grid.map((g) => `${g.label} ${(e.scores as Record<string, number>)[g.key] ?? '–'}/5`).join(' · ')}</span>}{e.comment && <div style="white-space:pre-wrap">« {e.comment} »</div>}</div>)}
+                </details></td>
+                <td class="small">{agg.n} / {agg.wanted}{!agg.complete && <span class="xs muted"> (incomplet)</span>}</td>
+                <td class="small"><b>{agg.mean ?? '—'}</b>{agg.divergent && <span class="tag gold" title={`Écart de ${agg.spread} points entre jurés`} style="margin-left:4px">écart {agg.spread}</span>}</td>
+                <td><span class="tag">{L[a.status] ?? a.status}</span></td>
+                {canV && <td><select class="in" style="width:auto;padding:4px 6px;font-size:.85rem" data-app={a.id} aria-label={`Décision ${a.reference}`}><option value="">—</option>{['entretien', 'admise', 'liste_attente', 'refusee'].map((s) => <option value={s} selected={s === a.status}>{L[s]}</option>)}</select></td>}
+              </tr>
+            ))}</tbody>
+          </table></div>
+          {canV && (
+            <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
+              <h3 style="margin-top:0">Comité de sélection</h3>
+              <p class="xs muted" style="margin-top:-6px">Choisissez les décisions ci-dessus, puis enregistrez la séance : chaque candidat dont le statut change est notifié, et la moyenne des jurys est retenue comme note.</p>
+              <div class="grid g2" style="gap:0 12px">
+                <div><label class="f" for="ch">Date de la séance</label><input class="in" id="ch" name="heldOn" type="date" required /></div>
+                <div><label class="f" for="cm">Membres présents</label><input class="in" id="cm" name="members" required minlength="3" placeholder="Noms et fonctions" /></div>
+              </div>
+              <label class="f" for="cmin">Procès-verbal</label><textarea class="in" id="cmin" name="minutes" rows="4" data-ai="proces-verbal"></textarea>
+              <button class="btn btn-primary btn-sm" type="submit" style="margin-top:8px">Enregistrer la séance et les décisions</button>
+            </div>
+          )}
+        </form>
+      )}
+      {committees.length > 0 && (
+        <details class="panel" style="margin-top:12px"><summary><b>Séances passées ({committees.length})</b></summary>
+          {committees.map((m) => <div style="border-top:1px solid var(--line);padding:6px 0"><b class="small">{new Date(m.heldOn).toLocaleDateString('fr-FR')}</b> <span class="xs muted">· {m.members}</span>{m.minutes && <p class="xs" style="white-space:pre-wrap;margin:4px 0 0">{m.minutes}</p>}</div>)}
+        </details>
+      )}
+    </div>
+
+    <aside>
+      <div class="panel">
+        <h3>État de l'appel</h3>
+        <p class="small" style="margin:0 0 8px">{CALL_STATE_LABEL[state]}{c.closesAt ? ` · clôture le ${c.closesAt.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}` : ''}</p>
+        {canV && <div class="row" style="gap:6px;flex-wrap:wrap">
+          {c.status !== 'ouvert' && c.status !== 'archive' && <button class="btn btn-primary btn-sm" type="button" data-post="/api/admin/programmes" data-body={JSON.stringify({ action: 'call.status', id: c.id, status: 'ouvert' })} data-reload>Publier l'appel</button>}
+          {c.status === 'ouvert' && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/programmes" data-body={JSON.stringify({ action: 'call.status', id: c.id, status: 'clos' })} data-confirm="Clore l'appel maintenant ?" data-reload>Clore</button>}
+          {c.status !== 'archive' && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/programmes" data-body={JSON.stringify({ action: 'call.status', id: c.id, status: 'archive' })} data-confirm="Archiver l'appel ? Les évaluations seront closes." data-reload>Archiver</button>}
+        </div>}
+        {state === 'ouvert' && <p class="small" style="margin:8px 0 0"><a href={`/programmes/appel/${c.slug}`} target="_blank" rel="noopener">Page de candidature ↗</a></p>}
+      </div>
+      <div class="panel" style="margin-top:14px">
+        <h3>Jury ({jury.length})</h3>
+        {jury.map((j) => <div class="list-row"><span class="small">{j.name} <span class="xs muted">{j.email}</span></span>{canM && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/programmes" data-body={JSON.stringify({ action: 'jury.remove', callId: c.id, userId: j.id })} data-confirm={`Retirer ${j.name} du jury ?`} data-reload aria-label={`Retirer ${j.name}`}>✕</button>}</div>)}
+        {!jury.length && <p class="small muted">Aucun juré.</p>}
+        {canM && <form data-api="/api/admin/programmes" data-reload data-reset class="row" style="gap:6px;margin-top:8px"><input type="hidden" name="action" value="jury.add" /><input type="hidden" name="callId" value={c.id} /><input class="in" name="email" type="email" required placeholder="E-mail du juré (compte existant)" aria-label="E-mail du juré" style="flex:1" /><button class="btn btn-ghost btn-sm" type="submit">Ajouter</button></form>}
+        <p class="xs muted" style="margin:8px 0 0">Chaque juré évalue les dossiers depuis son espace (Mon espace › Jury), sans voir les notes des autres. Il peut se déclarer en conflit d'intérêts.</p>
+      </div>
+    </aside>
+  </div>
+  <script type="application/json" id="callState" set:html={JSON.stringify(state0)} />
+</AdminLayout>
+<script>
+  type Crit = { key: string; label: string; weight: number; hint: string };
+  type Fld = { key: string; label: string; kind: 'text' | 'textarea' | 'number' | 'select'; options: string[]; required: boolean };
+  const S = JSON.parse(document.getElementById('callState')!.textContent!) as { id: string; grid: Crit[]; fields: Fld[] };
+  const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+  const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  const keyOf = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 30) || 'critere';
+  const form = document.getElementById('callF') as HTMLFormElement;
+  const ro = form.querySelector('fieldset')!.disabled;
+  const gridEl = document.getElementById('gridRows')!, fieldEl = document.getElementById('fieldRows')!;
+  const del = (list: string, i: number) => ro ? '' : `<button class="btn btn-ghost btn-sm" type="button" data-del="${list}" data-i="${i}" aria-label="Supprimer">✕</button>`;
+  function render() {
+    gridEl.innerHTML = S.grid.map((c, i) => `<div class="row" style="gap:6px;margin-bottom:6px;align-items:flex-start"><input class="in" data-g="${i}" data-k="label" value="${esc(c.label)}" placeholder="Critère" aria-label="Critère" style="flex:2" /><input class="in" type="number" min="1" max="100" data-g="${i}" data-k="weight" value="${c.weight}" aria-label="Poids" style="width:80px" /><input class="in" data-g="${i}" data-k="hint" value="${esc(c.hint)}" placeholder="Ce que le juré regarde" aria-label="Aide" style="flex:3" />${del('grid', i)}</div>`).join('');
+    fieldEl.innerHTML = S.fields.map((f, i) => `<div class="cms-block"><div class="row" style="gap:6px"><input class="in" data-f="${i}" data-k="label" value="${esc(f.label)}" placeholder="Question" aria-label="Question" style="flex:3" /><select class="in" data-f="${i}" data-k="kind" style="width:auto" aria-label="Type">${[['text', 'Texte court'], ['textarea', 'Texte long'], ['number', 'Nombre'], ['select', 'Choix']].map(([v, l]) => `<option value="${v}"${f.kind === v ? ' selected' : ''}>${l}</option>`).join('')}</select><label class="row xs"><input type="checkbox" data-f="${i}" data-k="required"${f.required ? ' checked' : ''} /> requis</label>${del('fields', i)}</div>${f.kind === 'select' ? `<textarea class="in" rows="3" data-f="${i}" data-k="options" placeholder="Une option par ligne" aria-label="Options">${esc(f.options.join('\n'))}</textarea>` : ''}</div>`).join('');
+    const sum = S.grid.reduce((n, c) => n + (Number(c.weight) || 0), 0);
+    document.getElementById('gridSum')!.textContent = `(total des poids : ${sum} %${sum === 100 ? '' : ' — doit faire 100'})`;
+    if (ro) form.querySelectorAll('#gridRows input, #fieldRows input, #fieldRows select, #fieldRows textarea').forEach((x) => ((x as HTMLInputElement).disabled = true));
+  }
+  render();
+  form.addEventListener('input', (e) => {
+    const el = e.target as HTMLInputElement;
+    if (el.dataset.g !== undefined) { const c = S.grid[Number(el.dataset.g)] as Record<string, unknown>; c[el.dataset.k!] = el.dataset.k === 'weight' ? Number(el.value) : el.value; if (el.dataset.k === 'weight') render(); }
+    if (el.dataset.f !== undefined) { const f = S.fields[Number(el.dataset.f)] as Record<string, unknown>; const k = el.dataset.k!; f[k] = k === 'required' ? el.checked : k === 'options' ? el.value.split('\n').map((x) => x.trim()).filter(Boolean) : el.value; if (k === 'kind') render(); }
+  });
+  form.addEventListener('click', (e) => {
+    const b = (e.target as Element).closest<HTMLButtonElement>('button');
+    if (!b) return;
+    if (b.id === 'addCrit') { S.grid.push({ key: '', label: '', weight: 10, hint: '' }); render(); }
+    if (b.id === 'addField') { S.fields.push({ key: '', label: '', kind: 'textarea', options: [], required: true }); render(); }
+    if (b.dataset.del) { (b.dataset.del === 'grid' ? S.grid : S.fields).splice(Number(b.dataset.i), 1); render(); }
+  });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const iso = (k: string) => { const v = String(fd.get(k) ?? ''); return v ? new Date(v).toISOString() : ''; };
+    // Identifiants stables des critères et questions : dérivés du libellé à la création, conservés ensuite (les notes et réponses y sont rattachées)
+    const uniq = (list: { key: string; label: string }[]) => { const seen = new Set<string>(); for (const x of list) { let k = x.key || keyOf(x.label); while (seen.has(k)) k = `${k}_2`.slice(0, 30); x.key = k; seen.add(k); } };
+    uniq(S.grid); uniq(S.fields);
+    const r = await fetch('/api/admin/programmes', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      action: 'call.save', id: S.id, title: fd.get('title'), programme: fd.get('programme'), slug: fd.get('slug'), description: fd.get('description'),
+      reviewsPerApp: fd.get('reviewsPerApp'), role: fd.get('role'), opensAt: iso('opensAt'), closesAt: iso('closesAt'),
+      grid: S.grid.map((c) => ({ ...c, weight: Number(c.weight) })), fields: S.fields,
+    }) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : { error: 'Erreur réseau.' };
+    toast(d.message ?? d.error ?? 'Erreur.');
+  });
+  // Comité : décisions choisies dans le tableau
+  document.getElementById('comF')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target as HTMLFormElement, fd = new FormData(f);
+    const decisions = [...f.querySelectorAll<HTMLSelectElement>('[data-app]')].filter((s) => s.value).map((s) => ({ applicationId: s.dataset.app, status: s.value }));
+    if (!decisions.length) return toast('Choisissez au moins une décision.');
+    if (!confirm(`Enregistrer ${decisions.length} décision(s) ? Les candidats concernés seront notifiés.`)) return;
+    const r = await fetch('/api/admin/programmes', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'committee.save', callId: S.id, heldOn: fd.get('heldOn'), members: fd.get('members'), minutes: fd.get('minutes'), decisions }) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : { error: 'Erreur réseau.' };
+    toast(d.message ?? d.error ?? 'Erreur.');
+    if (d.ok) setTimeout(() => location.reload(), 800);
+  });
+</script>

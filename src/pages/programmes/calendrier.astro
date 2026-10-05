@@ -2,6 +2,10 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { PROGS, SUBS, dateFr } from '../../data/site';
+import { publicCalls, applyPath } from '../../lib/calls';
+
+export const prerender = false;
+const calls = (await publicCalls()).filter((c) => c.state !== 'clos' && (c.state === 'ouvert' ? c.closesAt : c.opensAt));
 
 const list = PROGS.map(([n, dur, , open, date], i) => ({ i, n: String(n), dur: String(dur), open: !!open, date: String(date) })).sort((a, b) => a.date.localeCompare(b.date));
 ---
@@ -14,6 +18,9 @@ const list = PROGS.map(([n, dur, , open, date], i) => ({ i, n: String(n), dur: S
         <table class="t">
           <thead><tr><th>Programme</th><th>Durée</th><th>Date</th><th>Statut</th><th></th></tr></thead>
           <tbody>
+            {calls.map((c) => { const d = (c.state === 'ouvert' ? c.closesAt : c.opensAt)!; return (
+              <tr><td><a href={applyPath(c.slug)}><b>{c.title}</b></a></td><td>{c.programme}</td><td>{dateFr(d.toISOString().slice(0, 10))}</td><td><span class={`tag ${c.state === 'ouvert' ? 'ok' : ''}`}>{c.state === 'ouvert' ? "Ouvert jusqu'au" : 'Ouverture le'}</span></td><td><a class="btn btn-ghost btn-sm" href={`/programmes/appels.ics?programme=${c.slug}`} download>Ajouter à mon agenda</a></td></tr>
+            ); })}
             {list.map((p) => (
               <tr><td><b>{p.n}</b></td><td>{p.dur}</td><td>{dateFr(p.date)}</td><td><span class={`tag ${p.open ? 'ok' : ''}`}>{p.open ? "Ouvert jusqu'au" : 'Ouverture le'}</span></td><td><a class="btn btn-ghost btn-sm" href={`/programmes/appels.ics?programme=${p.i}`} download>Ajouter à mon agenda</a></td></tr>
             ))}

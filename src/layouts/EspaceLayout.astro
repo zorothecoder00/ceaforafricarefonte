@@ -2,6 +2,9 @@
 /* Espace connecté (CDC §9) : barre latérale sur ordinateur, barre d'onglets en bas de l'écran sur mobile. */
 import BaseLayout from './BaseLayout.astro';
 import { ROLE_LABEL, isStaff, type Role } from '../lib/rbac';
+import { eq } from 'drizzle-orm';
+import { db } from '../lib/db';
+import { callJury, cohortMember } from '../db/schema/programmes';
 
 interface Props { title: string; lead?: string }
 const { title, lead } = Astro.props;
@@ -9,15 +12,20 @@ const user = Astro.locals.user!;
 const path = Astro.url.pathname.replace(/\/$/, '');
 const roles = user.roles as Role[];
 const has = (...r: Role[]) => r.some((x) => roles.includes(x));
+// Entrées liées à un rattachement (programmes, CDC §12) : participant d'une cohorte, membre d'un jury
+const [[inCohort], [isJury]] = await Promise.all([
+  db.select({ u: cohortMember.userId }).from(cohortMember).where(eq(cohortMember.userId, user.id)).limit(1).catch(() => []),
+  db.select({ u: callJury.userId }).from(callJury).where(eq(callJury.userId, user.id)).limit(1).catch(() => []),
+]);
 
 const groups: [string, [string, string, boolean?][]][] = [
   ['Mon compte', [['/espace', 'Tableau de bord'], ['/espace/profil', 'Profil 360°'], ['/espace/carte', 'Carte de membre'], ['/espace/notifications', 'Notifications'], ['/espace/demandes', 'Mes demandes'], ['/espace/securite', 'Sécurité'], ['/espace/confidentialite', 'Confidentialité']]],
   ['Mes activités', [
-    ['/espace/apprentissage', 'Apprentissage'], ['/espace/candidatures', 'Candidatures'], ['/espace/billets', 'Billets'], ['/espace/messages', 'Messagerie'],
+    ['/espace/apprentissage', 'Apprentissage'], ['/espace/programme', 'Mon programme', !!inCohort], ['/espace/candidatures', 'Candidatures'], ['/espace/billets', 'Billets'], ['/espace/messages', 'Messagerie'],
     ['/espace/projets', 'Mes projets', has('entrepreneur', 'membre')], ['/espace/mentorat', 'Mentorat'], ['/espace/cercle', 'Mon cercle Mastermind'],
   ]],
   ['Rôles', [
-    ['/espace/recruteur', 'Espace recruteur', has('employeur')], ['/espace/mentor', 'Espace mentor', has('mentor')],
+    ['/espace/recruteur', 'Espace recruteur', has('employeur')], ['/espace/mentor', 'Espace mentor', has('mentor')], ['/espace/jury', 'Jury', !!isJury],
     ['/kapital/entreprise', 'Kapital — entreprise', has('entrepreneur')], ['/kapital/investisseur', 'Kapital — investisseur', has('investisseur')],
     ['/admin', 'Back-office CEA OS', isStaff(roles)],
   ]],

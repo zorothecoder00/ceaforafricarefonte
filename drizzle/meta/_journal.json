@@ -148,6 +148,13 @@
       "when": 1791197573267,
       "tag": "0020_crm_campagnes",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1791200324000,
+      "tag": "0021_programmes_cohortes",
+      "breakpoints": true
     }
   ]
 }

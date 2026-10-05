@@ -1,0 +1,81 @@
+---
+/* Espace jury (CDC §12) : dossiers des appels dont la personne est jurée, à noter critère par critère (0 à 5).
+   Chaque juré ne voit que sa propre évaluation ; il peut déclarer un conflit d'intérêts. Une candidature décidée n'est plus évaluable. */
+import EspaceLayout from '../../layouts/EspaceLayout.astro';
+import { and, eq, inArray, ne } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { user } from '../../db/schema/auth';
+import { programmeApplication } from '../../db/schema/app';
+import { programmeCall, callJury, evaluation } from '../../db/schema/programmes';
+import { Grid, Fields, DEFAULT_GRID, SCALE, SCALE_LABEL, callState, CALL_STATE_LABEL } from '../../lib/programmes';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const calls = await db.select({ c: programmeCall }).from(callJury).innerJoin(programmeCall, eq(programmeCall.id, callJury.callId)).where(and(eq(callJury.userId, me.id), ne(programmeCall.status, 'archive')));
+const slugs = calls.map((x) => x.c.slug);
+const apps = slugs.length ? await db.select({ a: programmeApplication, name: user.name }).from(programmeApplication).innerJoin(user, eq(user.id, programmeApplication.userId))
+  .where(and(inArray(programmeApplication.programme, slugs), ne(programmeApplication.status, 'brouillon'))) : [];
+const mine = apps.length ? await db.select().from(evaluation).where(and(eq(evaluation.juryId, me.id), inArray(evaluation.applicationId, apps.map((x) => x.a.id)))) : [];
+const DECIDED = ['admise', 'refusee', 'retiree', 'liste_attente'];
+const gridOf = (g: unknown) => (Grid.safeParse(g).success ? (g as Grid) : DEFAULT_GRID);
+const fieldsOf = (f: unknown) => (Fields.safeParse(f).success ? (f as Fields) : []);
+---
+<EspaceLayout title="Jury" lead="Notez chaque dossier selon la grille de l'appel. Vos notes restent confidentielles : l'équipe du programme les agrège, le comité décide.">
+  {calls.length === 0 && <div class="empty">Vous n'êtes membre d'aucun jury en ce moment.</div>}
+  {calls.map(({ c }) => {
+    const grid = gridOf(c.grid), fields = fieldsOf(c.fields);
+    const list = apps.filter((x) => x.a.programme === c.slug);
+    const done = list.filter((x) => mine.some((e) => e.applicationId === x.a.id && e.submittedAt)).length;
+    return (
+      <section style="margin-bottom:24px">
+        <h2 style="font-size:1.15rem">{c.title} <span class="xs muted">· {CALL_STATE_LABEL[callState(c)]} · {done}/{list.length} évalué{done > 1 ? 's' : ''}</span></h2>
+        <details class="panel small" style="margin-bottom:10px"><summary><b>La grille</b></summary><ul style="margin:6px 0;padding-left:18px">{grid.map((g) => <li><b>{g.label}</b> ({g.weight} %) — {g.hint}</li>)}</ul><p class="xs muted" style="margin:0">Échelle : {SCALE.map((v) => `${v} = ${SCALE_LABEL[v]}`).join(' · ')}</p></details>
+        {list.length === 0 && <p class="small muted">Aucun dossier pour l'instant.</p>}
+        {list.map(({ a, name }) => {
+          const e = mine.find((x) => x.applicationId === a.id);
+          const locked = DECIDED.includes(a.status) || a.userId === me.id;
+          const sc = (e?.scores ?? {}) as Record<string, number>;
+          return (
+            <details class="panel" style="margin-bottom:8px">
+              <summary class="row between" style="cursor:pointer"><span><b>{a.reference}</b> · {name}</span><span>{e?.conflict ? <span class="tag">conflit déclaré</span> : e?.submittedAt ? <span class="tag ok">{e.total}/100</span> : e ? <span class="tag gold">brouillon</span> : <span class="tag info">à évaluer</span>}</span></summary>
+              <dl class="small" style="display:grid;grid-template-columns:minmax(120px,max-content) 1fr;gap:4px 12px;margin:10px 0">
+                {Object.entries(a.data as Record<string, unknown>).filter(([k]) => k !== 'documents').map(([k, v]) => <><dt class="muted">{fields.find((f) => f.key === k)?.label ?? k}</dt><dd style="margin:0;white-space:pre-wrap">{String(v ?? '')}</dd></>)}
+              </dl>
+              {a.userId === me.id ? <p class="small">C'est votre propre candidature : vous ne pouvez pas l'évaluer.</p> : locked ? <p class="small muted">La décision est prise : l'évaluation est close.</p> : (
+                <form class="evalF" data-app={a.id}>
+                  {grid.map((g) => (
+                    <fieldset style="border:0;padding:0;margin:8px 0">
+                      <legend class="small"><b>{g.label}</b> <span class="xs muted">({g.weight} %) — {g.hint}</span></legend>
+                      <div class="row" style="gap:4px;flex-wrap:wrap">{SCALE.map((v) => <label class="chip xs" style="display:inline-flex;gap:4px" title={SCALE_LABEL[v]}><input type="radio" name={g.key} value={v} checked={sc[g.key] === v} /> {v}</label>)}</div>
+                    </fieldset>
+                  ))}
+                  <label class="f" for={`c-${a.id}`}>Commentaire pour le comité</label><textarea class="in" id={`c-${a.id}`} name="comment" rows="3">{e?.comment ?? ''}</textarea>
+                  <label class="row small"><input type="checkbox" name="conflict" checked={e?.conflict} /> Je déclare un conflit d'intérêts (lien personnel, professionnel ou financier avec le candidat)</label>
+                  <div class="row" style="gap:6px;margin-top:8px"><button class="btn btn-ghost btn-sm" type="button" data-draft>Enregistrer le brouillon</button><button class="btn btn-primary btn-sm" type="submit">Soumettre mon évaluation</button></div>
+                </form>
+              )}
+            </details>
+          );
+        })}
+      </section>
+    );
+  })}
+</EspaceLayout>
+<script>
+  const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+  document.querySelectorAll<HTMLFormElement>('form.evalF').forEach((f) => {
+    const send = async (submit: boolean) => {
+      const fd = new FormData(f);
+      const scores: Record<string, number> = {};
+      f.querySelectorAll<HTMLInputElement>('input[type=radio]:checked').forEach((i) => (scores[i.name] = Number(i.value)));
+      const conflict = fd.get('conflict') === 'on';
+      if (submit && !conflict && !confirm('Soumettre cette évaluation ? Vous pourrez la modifier tant que la décision n’est pas prise.')) return;
+      const r = await fetch('/api/programmes', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'evaluation.save', applicationId: f.dataset.app, scores, comment: fd.get('comment'), conflict, submit }) }).catch(() => null);
+      const d = r ? await r.json().catch(() => ({})) : { error: 'Erreur réseau.' };
+      toast(d.message ?? d.error ?? 'Erreur.');
+      if (d.ok && submit) setTimeout(() => location.reload(), 700);
+    };
+    f.querySelector('[data-draft]')!.addEventListener('click', () => send(false));
+    f.addEventListener('submit', (e) => { e.preventDefault(); send(true); });
+  });
+</script>

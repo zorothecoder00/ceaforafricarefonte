@@ -1,0 +1,107 @@
+---
+/* Programmes et cohortes (CDC §12) : appels à candidatures (avancement des évaluations) et cohortes (présence, abandons). */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { desc, sql } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { programmeApplication } from '../../../db/schema/app';
+import { programmeCall, callJury, evaluation, cohort, cohortMember } from '../../../db/schema/programmes';
+import { can } from '../../../lib/rbac';
+import { callState, CALL_STATE_LABEL, DEFAULT_GRID, DEFAULT_FIELDS } from '../../../lib/programmes';
+import { LEGACY } from '../../../lib/calls';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const canC = can(me.roles, 'programmes', 'C');
+const calls = await db.select({
+  c: programmeCall,
+  apps: sql<number>`(select count(*)::int from ${programmeApplication} where ${programmeApplication.programme} = ${programmeCall.slug} and ${programmeApplication.status} <> 'brouillon')`,
+  jury: sql<number>`(select count(*)::int from ${callJury} where ${callJury.callId} = ${programmeCall.id})`,
+  evals: sql<number>`(select count(*)::int from ${evaluation} e join ${programmeApplication} a on a.id = e.application_id where a.programme = ${programmeCall.slug} and e.submitted_at is not null)`,
+}).from(programmeCall).orderBy(desc(programmeCall.createdAt));
+const cohorts = await db.select({
+  co: cohort,
+  n: sql<number>`(select count(*)::int from ${cohortMember} where ${cohortMember.cohortId} = ${cohort.id})`,
+  quit: sql<number>`(select count(*)::int from ${cohortMember} where ${cohortMember.cohortId} = ${cohort.id} and ${cohortMember.status} = 'abandon')`,
+}).from(cohort).orderBy(desc(cohort.createdAt));
+const legacyFree = Object.entries(LEGACY).filter(([slug]) => !calls.some(({ c }) => c.slug === slug));
+const legacyApps = await db.select({ p: programmeApplication.programme, n: sql<number>`count(*)::int` }).from(programmeApplication).groupBy(programmeApplication.programme);
+const STATE_TONE: Record<string, string> = { brouillon: '', a_venir: 'gold', ouvert: 'ok', clos: 'info', archive: '' };
+---
+<AdminLayout title="Programmes et cohortes" lead="Appels à candidatures, évaluation par plusieurs jurys, comités de sélection, cohortes, présence, jalons et suivi des anciens." obj="programmes">
+  <h2 style="font-size:1.15rem;margin-top:0">Appels à candidatures</h2>
+  <div class="panel scroll-x">
+    {calls.length === 0 ? <p class="small muted" style="margin:0">Aucun appel en base. Les programmes historiques ci-dessous continuent de recevoir des candidatures.</p> : (
+      <table class="t"><thead><tr><th>Appel</th><th>État</th><th>Candidatures</th><th>Jury</th><th>Évaluations soumises</th></tr></thead>
+        <tbody>{calls.map(({ c, apps, jury, evals }) => { const s = callState(c); return (
+          <tr><td><a href={`/admin/programmes/appel/${c.id}`}><b>{c.title}</b></a><div class="xs muted">{c.programme} · {c.slug}{c.closesAt ? ` · clôture ${c.closesAt.toLocaleDateString('fr-FR')}` : ''}</div></td>
+            <td><span class={`tag ${STATE_TONE[s]}`}>{CALL_STATE_LABEL[s]}</span></td><td class="small">{apps}</td><td class="small">{jury}</td>
+            <td class="small">{evals} / {apps * c.reviewsPerApp}</td></tr>
+        ); })}</tbody></table>
+    )}
+  </div>
+  {canC && (
+    <details class="panel" style="margin-top:12px"><summary><b>Nouvel appel à candidatures</b></summary>
+      <form id="newCall" style="margin-top:10px">
+        <div class="grid g2" style="gap:0 12px">
+          <div><label class="f" for="t">Titre</label><input class="in" id="t" name="title" required minlength="3" maxlength="160" placeholder="Incubation — Cohorte 2027" /></div>
+          <div><label class="f" for="pr">Programme</label><input class="in" id="pr" name="programme" required maxlength="80" placeholder="Incubation" /></div>
+          <div><label class="f" for="s">Identifiant (adresse de candidature)</label><input class="in" id="s" name="slug" required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxlength="60" placeholder="incubation-2027" /></div>
+        </div>
+        <p class="xs muted">Grille d'évaluation et formulaire de candidature proposés par défaut : vous les adapterez sur la fiche de l'appel.</p>
+        <button class="btn btn-primary btn-sm" type="submit">Créer l'appel</button>
+      </form>
+      {legacyFree.length > 0 && (
+        <p class="xs muted" style="margin:12px 0 0">Reprendre un programme historique (ses candidatures existantes lui restent rattachées) :
+          {legacyFree.map(([slug, l]) => <button class="btn btn-ghost btn-sm" type="button" style="margin:4px 4px 0 0" data-legacy={slug} data-title={l.label} data-role={l.role ?? ''}>{l.label} ({legacyApps.find((x) => x.p === slug)?.n ?? 0})</button>)}
+        </p>
+      )}
+    </details>
+  )}
+
+  <h2 style="font-size:1.15rem;margin-top:24px">Cohortes</h2>
+  <div class="panel scroll-x">
+    {cohorts.length === 0 ? <p class="small muted" style="margin:0">Aucune cohorte.</p> : (
+      <table class="t"><thead><tr><th>Cohorte</th><th>Période</th><th>État</th><th>Participants</th><th>Abandons</th></tr></thead>
+        <tbody>{cohorts.map(({ co, n, quit }) => (
+          <tr><td><a href={`/admin/programmes/cohorte/${co.id}`}><b>{co.name}</b></a><div class="xs muted">{co.programme}</div></td>
+            <td class="small">{co.startsOn ? new Date(co.startsOn).toLocaleDateString('fr-FR') : '—'} → {co.endsOn ? new Date(co.endsOn).toLocaleDateString('fr-FR') : '—'}</td>
+            <td class="small">{{ a_venir: 'À venir', en_cours: 'En cours', terminee: 'Terminée' }[co.status]}</td><td class="small">{n}</td><td class="small">{quit}{n ? ` (${Math.round((quit / n) * 100)} %)` : ''}</td></tr>
+        ))}</tbody></table>
+    )}
+  </div>
+  {canC && (
+    <details class="panel" style="margin-top:12px"><summary><b>Nouvelle cohorte</b></summary>
+      <form data-api="/api/admin/programmes" style="margin-top:10px">
+        <input type="hidden" name="action" value="cohort.save" />
+        <div class="grid g2" style="gap:0 12px">
+          <div><label class="f" for="cn">Nom</label><input class="in" id="cn" name="name" required minlength="2" placeholder="Accélérateur — Cohorte 4" /></div>
+          <div><label class="f" for="cp">Programme</label><input class="in" id="cp" name="programme" required placeholder="Accélérateur" /></div>
+          <div><label class="f" for="cc">Appel d'origine (admis)</label><select class="in" id="cc" name="callId"><option value="">—</option>{calls.map(({ c }) => <option value={c.id}>{c.title}</option>)}</select></div>
+          <div><label class="f" for="cs">Début</label><input class="in" id="cs" name="startsOn" type="date" /></div>
+          <div><label class="f" for="ce">Fin</label><input class="in" id="ce" name="endsOn" type="date" /></div>
+        </div>
+        <button class="btn btn-primary btn-sm" type="submit" style="margin-top:10px">Créer la cohorte</button>
+      </form>
+    </details>
+  )}
+  <script type="application/json" id="defaults" set:html={JSON.stringify({ grid: DEFAULT_GRID, fields: DEFAULT_FIELDS })} />
+</AdminLayout>
+<script>
+  const defaults = JSON.parse(document.getElementById('defaults')!.textContent!);
+  const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+  async function create(body: Record<string, unknown>) {
+    const r = await fetch('/api/admin/programmes', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'call.save', description: '', reviewsPerApp: 2, ...defaults, ...body }) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : { error: 'Erreur réseau.' };
+    toast(d.message ?? d.error ?? 'Erreur.');
+    if (d.redirect) setTimeout(() => (location.href = d.redirect), 500);
+  }
+  document.getElementById('newCall')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target as HTMLFormElement);
+    create({ title: fd.get('title'), programme: fd.get('programme'), slug: fd.get('slug'), role: '' });
+  });
+  document.querySelectorAll<HTMLButtonElement>('[data-legacy]').forEach((b) => b.addEventListener('click', () => {
+    // Reprise : les programmes historiques gardent leur formulaire codé (liste de champs vide)
+    create({ title: b.dataset.title, programme: b.dataset.title, slug: b.dataset.legacy, role: b.dataset.role, fields: [] });
+  }));
+</script>

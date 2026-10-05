@@ -2,12 +2,30 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { PROGS, SUBS, dateFr } from '../../data/site';
+import { publicCalls, applyPath } from '../../lib/calls';
+import { CALL_STATE_LABEL } from '../../lib/programmes';
+
+export const prerender = false;
+const calls = (await publicCalls()).filter((c) => c.state !== 'clos');
 
 const progs = PROGS.map(([n, dur, d, open, date]) => ({ n: String(n), dur, d, open: !!open, date: String(date) }));
 ---
 <BaseLayout title="Programmes">
   <PageHead title="Programmes d'accompagnement" lead="De l'idée à la levée de fonds : des parcours structurés, avec des mentors et des jalons clairs." crumbs={[['', 'Programmes']]} subnav={SUBS.programmes} />
   <section class="block">
+    {calls.length > 0 && (
+      <div class="wrap" style="margin-bottom:28px">
+        <h2 style="margin-top:0">Appels à candidatures</h2>
+        <div class="grid g3">{calls.map((c) => (
+          <div class="panel">
+            <div class="row between"><h3 style="margin:0">{c.title}</h3><span class={`tag ${c.state === 'ouvert' ? 'ok' : 'gold'}`}>{CALL_STATE_LABEL[c.state]}</span></div>
+            <p class="muted small" style="margin:8px 0">{c.programme}{c.description ? ` — ${c.description.slice(0, 140)}${c.description.length > 140 ? '…' : ''}` : ''}</p>
+            <p class="small">{c.state === 'ouvert' ? 'Clôture' : 'Ouverture'} : {(c.state === 'ouvert' ? c.closesAt : c.opensAt)?.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) ?? '—'}</p>
+            <a class={`btn btn-sm ${c.state === 'ouvert' ? 'btn-primary' : 'btn-ghost'}`} href={applyPath(c.slug)}>{c.state === 'ouvert' ? 'Postuler' : 'En savoir plus'}</a>
+          </div>
+        ))}</div>
+      </div>
+    )}
     <div class="wrap grid g3">
       {progs.map((p) => (
         <div class="panel">

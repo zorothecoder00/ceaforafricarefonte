@@ -1,0 +1,45 @@
+---
+/* Candidature à un appel créé dans le back-office (CDC §12) : présentation, dates, formulaire défini par l'équipe. */
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import PageHead from '../../../components/PageHead.astro';
+import { eq } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { programmeCall } from '../../../db/schema/programmes';
+import { Fields, callState, CALL_STATE_LABEL } from '../../../lib/programmes';
+import { applyPath } from '../../../lib/calls';
+import { SUBS } from '../../../data/site';
+
+export const prerender = false;
+const slug = Astro.params.slug ?? '';
+const [c] = /^[a-z0-9-]{1,60}$/.test(slug) ? await db.select().from(programmeCall).where(eq(programmeCall.slug, slug)) : [];
+const state = c ? callState(c) : null;
+if (!c || state === 'brouillon' || state === 'archive') return Astro.rewrite('/404');
+const fields = Fields.safeParse(c.fields).success ? (c.fields as Fields) : [];
+if (!fields.length && applyPath(slug) !== `/programmes/appel/${slug}`) return Astro.redirect(applyPath(slug));
+const me = Astro.locals.user;
+const when = (d: Date | null) => (d ? d.toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'short' }) : '—');
+---
+<BaseLayout title={c.title} description={c.description.slice(0, 160) || undefined}>
+  <PageHead title={c.title} lead={`${c.programme} · ${CALL_STATE_LABEL[state!]} · clôture : ${when(c.closesAt)}`} crumbs={[['/programmes', 'Programmes'], ['', c.title]]} subnav={SUBS.programmes} />
+  <section class="block"><div class="wrap" style="max-width:760px">
+    {c.description && <p style="white-space:pre-wrap">{c.description}</p>}
+    {state === 'a_venir' && <div class="panel">Les candidatures ouvrent le {when(c.opensAt)}.</div>}
+    {state === 'clos' && <div class="panel">Les candidatures sont closes. <a href="/programmes">Voir les autres programmes</a></div>}
+    {state === 'ouvert' && !me && <div class="panel"><a class="btn btn-primary" href={`/connexion?retour=${encodeURIComponent(Astro.url.pathname)}`}>Se connecter pour candidater</a></div>}
+    {state === 'ouvert' && me && (
+      <form class="panel" data-api="/api/candidatures" data-redirect="/espace/candidatures">
+        <input type="hidden" name="programme" value={c.slug} />
+        {fields.map((f) => (
+          <>
+            <label class="f" for={`q-${f.key}`}>{f.label}{f.required ? '' : ' (facultatif)'}</label>
+            {f.kind === 'textarea' ? <textarea class="in" id={`q-${f.key}`} name={f.key} rows="4" maxlength="5000" required={f.required} data-ai="candidature"></textarea>
+              : f.kind === 'select' ? <select class="in" id={`q-${f.key}`} name={f.key} required={f.required}><option value="">—</option>{f.options.map((o) => <option>{o}</option>)}</select>
+              : <input class="in" id={`q-${f.key}`} name={f.key} type={f.kind === 'number' ? 'number' : 'text'} maxlength="300" required={f.required} />}
+          </>
+        ))}
+        <label class="row small" style="margin-top:12px"><input type="checkbox" required /> J'accepte que CEA traite ces données et les partage avec les jurys de l'appel pour étudier ma candidature.</label>
+        <button class="btn btn-primary" type="submit" style="margin-top:10px">Envoyer ma candidature</button>
+      </form>
+    )}
+  </div></section>
+</BaseLayout>

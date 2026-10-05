@@ -1,0 +1,85 @@
+---
+/* Mon programme (CDC §12) : pour chaque cohorte suivie — séances à venir et passées avec ma présence, jalons (déclaration d'un jalon
+   atteint, validé par l'équipe), et suivi après programme (indicateurs déclarés à 6, 12, 24, 36 mois). */
+import EspaceLayout from '../../layouts/EspaceLayout.astro';
+import Money from '../../components/Money.astro';
+import { and, asc, eq, inArray } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { cohort, cohortMember, cohortSession, attendance, milestone, milestoneProgress, alumniFollowup } from '../../db/schema/programmes';
+import { rate, MEMBER_STATUS_LABEL, MILESTONE_LABEL, SESSION_KIND_LABEL } from '../../lib/programmes';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const mine = await db.select({ co: cohort, m: cohortMember }).from(cohortMember).innerJoin(cohort, eq(cohort.id, cohortMember.cohortId)).where(eq(cohortMember.userId, me.id));
+const ids = mine.map((x) => x.co.id);
+const sessions = ids.length ? await db.select().from(cohortSession).where(inArray(cohortSession.cohortId, ids)).orderBy(asc(cohortSession.at)) : [];
+const marks = sessions.length ? await db.select().from(attendance).where(and(eq(attendance.userId, me.id), inArray(attendance.sessionId, sessions.map((s) => s.id)))) : [];
+const stones = ids.length ? await db.select().from(milestone).where(inArray(milestone.cohortId, ids)).orderBy(asc(milestone.position), asc(milestone.dueOn)) : [];
+const prog = stones.length ? await db.select().from(milestoneProgress).where(and(eq(milestoneProgress.userId, me.id), inArray(milestoneProgress.milestoneId, stones.map((m) => m.id)))) : [];
+const follow = ids.length ? await db.select().from(alumniFollowup).where(and(eq(alumniFollowup.userId, me.id), inArray(alumniFollowup.cohortId, ids))) : [];
+const now = new Date();
+const fmt = (d: Date) => d.toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const MARK: Record<string, string> = { present: 'Présent·e', absent: 'Absent·e', excuse: 'Excusé·e' };
+const TONE: Record<string, string> = { a_faire: '', declare: 'gold', atteint: 'ok', non_atteint: 'bad' };
+---
+<EspaceLayout title="Mon programme" lead="Vos séances, votre présence, vos jalons et votre suivi après le programme.">
+  {mine.length === 0 && <div class="empty">Vous ne suivez aucun programme en ce moment. <a href="/programmes">Découvrir les programmes</a></div>}
+  {mine.map(({ co, m }) => {
+    const ss = sessions.filter((s) => s.cohortId === co.id);
+    const upcoming = ss.filter((s) => s.at > now), past = ss.filter((s) => s.at <= now);
+    const mk = (sid: string) => marks.find((x) => x.sessionId === sid)?.status;
+    const marked = past.filter((s) => mk(s.id));
+    const assid = rate(marked.filter((s) => mk(s.id) === 'present').length, marked.length);
+    const ms = stones.filter((x) => x.cohortId === co.id);
+    const pr = (mid: string) => prog.find((x) => x.milestoneId === mid);
+    const canFollow = co.status === 'terminee' || m.status === 'diplome';
+    return (
+      <section style="margin-bottom:28px">
+        <h2 style="font-size:1.2rem;margin-bottom:4px">{co.name}</h2>
+        <p class="small muted" style="margin:0 0 12px">{co.programme} · {MEMBER_STATUS_LABEL[m.status]}{assid !== null ? ` · assiduité ${assid} %` : ''} · {ms.filter((x) => pr(x.id)?.status === 'atteint').length}/{ms.length} jalons atteints</p>
+        <div class="grid g2">
+          <div class="panel">
+            <h3>Prochaines séances</h3>
+            {upcoming.length ? upcoming.slice(0, 6).map((s) => <div class="list-row"><span class="small"><b>{s.title}</b><div class="xs muted">{SESSION_KIND_LABEL[s.kind] ?? s.kind}{s.place ? ` · ${s.place}` : ''}</div></span><span class="xs">{fmt(s.at)}</span></div>) : <p class="small muted" style="margin:0">Aucune séance à venir.</p>}
+            {past.length > 0 && <details class="small" style="margin-top:8px"><summary>Séances passées ({past.length})</summary>{past.map((s) => <div class="row between xs" style="padding:3px 0"><span>{s.title} · {fmt(s.at)}</span><span>{MARK[mk(s.id) ?? ''] ?? '—'}</span></div>)}</details>}
+          </div>
+          <div class="panel">
+            <h3>Mes jalons</h3>
+            {ms.length === 0 && <p class="small muted" style="margin:0">Aucun jalon défini pour l'instant.</p>}
+            {ms.map((x) => { const p = pr(x.id); const st = p?.status ?? 'a_faire'; return (
+              <div style="border-top:1px solid var(--line);padding:8px 0">
+                <div class="row between"><b class="small">{x.title}</b><span class={`tag ${TONE[st]}`}>{MILESTONE_LABEL[st]}</span></div>
+                <div class="xs muted">{x.description}{x.dueOn ? ` · échéance ${new Date(x.dueOn).toLocaleDateString('fr-FR')}` : ''}</div>
+                {st !== 'atteint' && (
+                  <details class="xs" style="margin-top:4px"><summary>{st === 'declare' ? 'Modifier ma déclaration' : 'Déclarer ce jalon atteint'}</summary>
+                    <form data-api="/api/programmes" data-reload style="margin-top:6px"><input type="hidden" name="action" value="milestone.declare" /><input type="hidden" name="milestoneId" value={x.id} />
+                      <textarea class="in" name="evidence" required minlength="5" rows="2" placeholder="Preuve ou explication (lien, chiffre, document partagé…)" aria-label="Preuve">{p?.evidence ?? ''}</textarea>
+                      <button class="btn btn-ghost btn-sm" type="submit">Envoyer</button></form>
+                  </details>
+                )}
+              </div>
+            ); })}
+          </div>
+        </div>
+        {canFollow && (
+          <div class="panel" style="margin-top:14px">
+            <h3>Suivi après le programme</h3>
+            <p class="small muted" style="margin-top:-6px">Quelques chiffres à 6, 12, 24 et 36 mois aident CEA à mesurer l'impact de ses programmes (données confidentielles, publiées seulement en agrégé).</p>
+            {follow.filter((f) => f.cohortId === co.id).sort((a, b) => a.monthsAfter - b.monthsAfter).map((f) => <div class="row between xs" style="padding:3px 0"><span>{f.monthsAfter} mois</span><span>{f.employees ?? '—'} emplois · CA {f.revenueXof != null ? <Money xof={f.revenueXof} /> : '—'} · levée {f.fundsRaisedXof != null ? <Money xof={f.fundsRaisedXof} /> : '—'}</span></div>)}
+            <form data-api="/api/programmes" data-reload style="margin-top:8px">
+              <input type="hidden" name="action" value="followup.declare" /><input type="hidden" name="cohortId" value={co.id} />
+              <div class="grid g2" style="gap:0 12px">
+                <div><label class="f" for={`fm-${co.id}`}>Où en êtes-vous ?</label><select class="in" id={`fm-${co.id}`} name="monthsAfter">{[6, 12, 24, 36].map((n) => <option value={n}>{n} mois après le programme</option>)}</select></div>
+                <div><label class="f" for={`fe-${co.id}`}>Emplois</label><input class="in" id={`fe-${co.id}`} name="employees" type="number" min="0" /></div>
+                <div><label class="f" for={`fr-${co.id}`}>Chiffre d'affaires annuel (FCFA)</label><input class="in" id={`fr-${co.id}`} name="revenueXof" type="number" min="0" /></div>
+                <div><label class="f" for={`ff-${co.id}`}>Fonds levés depuis (FCFA)</label><input class="in" id={`ff-${co.id}`} name="fundsRaisedXof" type="number" min="0" /></div>
+              </div>
+              <label class="row small"><input type="checkbox" name="stillActive" checked /> Mon entreprise est toujours active</label>
+              <button class="btn btn-primary btn-sm" type="submit" style="margin-top:6px">Envoyer</button>
+            </form>
+          </div>
+        )}
+      </section>
+    );
+  })}
+</EspaceLayout>
