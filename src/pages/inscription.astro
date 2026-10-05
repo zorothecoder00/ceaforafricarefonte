@@ -49,7 +49,7 @@ const recap: [string, string][] = [['Prénom', 'prenom'], ['Nom', 'nom'], ['Tél
         <div class="panel">
           <h3>Membres inscrits par domaine</h3>
           {perDomain.map(([d, n]) => <div class="row between small" style="padding:5px 0;border-bottom:1px solid var(--line)"><span>{d}</span><b class="num">{fmt(n)}</b></div>)}
-          <a class="btn btn-ghost btn-sm" href="/pays" style="margin-top:12px">Voir par pays</a>
+          <a class="btn btn-ghost btn-sm" href="/membres" style="margin-top:12px">Voir par pays</a>
           <p class="demo-note" style="margin:8px 0 0">Chiffres de démonstration.</p>
         </div>
         <div class="panel" style="margin-top:16px">

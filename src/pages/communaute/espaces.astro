@@ -14,7 +14,7 @@ const mine = me ? (await db.select({ id: spaceMember.spaceId }).from(spaceMember
 const KIND: Record<string, string> = { theme: 'Thème', pays: 'Pays', secteur: 'Secteur', profil: 'Profil' };
 ---
 <BaseLayout title="Espaces thématiques">
-  <PageHead title="Espaces thématiques et pays" lead="Rejoignez les conversations qui vous concernent : par pays, par secteur, par profil." crumbs={[['/communaute', 'Communauté'], ['', 'Espaces']]} subnav={SUBS.communaute} />
+  <PageHead title="Espaces thématiques" lead="Rejoignez les espaces de votre pays, de votre secteur et de votre profil." crumbs={[['/communaute', 'Communauté'], ['', 'Espaces']]} subnav={SUBS.communaute} />
   <section class="block">
     <div class="wrap grid g3">
       {spaces.map(({ s, n }) => {

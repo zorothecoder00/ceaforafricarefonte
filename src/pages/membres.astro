@@ -1,0 +1,50 @@
+---
+/* Registre des entrepreneurs membres par pays et par domaine d'intervention (prototype « Membres par pays »). */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHead from '../components/PageHead.astro';
+import { DOMAINS, HUBS, MEMBERS, SUBS, country, fmt, initials } from '../data/site';
+
+export const prerender = false;
+const c = Astro.url.searchParams.get('c') ?? '';
+const dm = Astro.url.searchParams.get('d') ?? '';
+// Effectifs de démonstration par pays et par domaine (même calcul que l'inscription)
+const BASE: Record<string, number[]> = { TG: [412, 388, 120, 95, 260, 140, 77, 64, 210], CI: [350, 301, 98, 80, 190, 120, 60, 51, 170] };
+const count = (k: string, i: number) => BASE[k]?.[i] ?? Math.round(((HUBS.find((h) => h.c === k)?.m ?? 500) / 40) * (1 + (i % 4) / 3));
+const countries = HUBS.map((h) => h.c);
+const demo = MEMBERS.map((m, i) => ({ nom: m.n, pays: m.c, ent: `${m.r} — ${m.s}`, doms: [DOMAINS[i % DOMAINS.length].id], st: 'Validé' }));
+const all = demo.filter((x) => (!c || x.pays === c) && (!dm || x.doms.includes(dm)));
+const qs = (k: string) => `/membres?c=${k}${dm ? '&d=' + dm : ''}`;
+---
+<BaseLayout title="Membres par pays" description="Le registre des entrepreneurs membres, par pays et par domaine d'intervention.">
+  <PageHead title="Entrepreneurs membres par pays" lead="Le registre des entrepreneurs membres, par pays et par domaine d'intervention." crumbs={[['/communaute', 'CEA Network'], ['', 'Membres par pays']]} subnav={SUBS.communaute} />
+  <section class="block" style="padding-top:20px">
+    <div class="wrap">
+      <div class="panel scroll-x">
+        <h3>Tableau de bord par pays et par domaine</h3>
+        <table class="t small">
+          <thead><tr><th>Pays</th>{DOMAINS.map((x) => <th title={x.dom}>{x.dom.split(' ')[0]}</th>)}<th>Total</th></tr></thead>
+          <tbody>
+            {countries.map((k) => { const v = DOMAINS.map((_, i) => count(k, i)); return (
+              <tr style={k === c ? 'background:var(--gold-soft)' : ''}><td><a href={qs(k)}><b>{country(k)}</b></a></td>{v.map((n) => <td class="num">{fmt(n)}</td>)}<td class="num"><b>{fmt(v.reduce((a, b) => a + b, 0))}</b></td></tr>
+            ); })}
+          </tbody>
+        </table>
+      </div>
+      <form class="filters" method="get" style="margin-top:22px">
+        <select class="in" name="c" aria-label="Pays" onchange="this.form.submit()"><option value="">Tous les pays</option>{countries.map((k) => <option value={k} selected={k === c}>{country(k)}</option>)}</select>
+        <select class="in" name="d" aria-label="Domaine" onchange="this.form.submit()"><option value="">Tous les domaines</option>{DOMAINS.map((x) => <option value={x.id} selected={x.id === dm}>{x.dom}</option>)}</select>
+        <a class="btn btn-primary btn-sm" href="/inscription">Inscrire mon entreprise</a>
+      </form>
+      <p class="small muted">{all.length} membre{all.length > 1 ? 's' : ''} visibles dans l'annuaire (échantillon de démonstration)</p>
+      <div class="grid g3">
+        {all.map((x) => (
+          <div class="panel">
+            <div class="row"><span class="avatar">{initials(x.nom)}</span><div><b>{x.nom}</b><div class="small muted">{x.ent} · {country(x.pays)}</div></div></div>
+            <div class="row" style="margin-top:10px;gap:6px">{x.doms.map((id) => <span class="tag gold">{DOMAINS.find((y) => y.id === id)?.dom}</span>)}<span class="tag ok">{x.st}</span></div>
+          </div>
+        ))}
+        {all.length === 0 && <div class="empty">Aucun membre pour ces critères. <a href="/inscription">Soyez le premier à vous inscrire</a>.</div>}
+      </div>
+    </div>
+  </section>
+</BaseLayout>

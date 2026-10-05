@@ -24,7 +24,7 @@ const sorted = only ? posts : [...posts].sort((a, b) => Number(followed.includes
 const spaceName = (id: string | null) => spaces.find((s) => s.id === id)?.name ?? 'Général';
 ---
 <BaseLayout title="Fil d'actualité">
-  <PageHead title="Fil d'actualité" lead="Les réussites, questions et opportunités partagées par le réseau. Les espaces que vous suivez apparaissent en premier." crumbs={[['/communaute', 'Communauté'], ['', "Fil d'actualité"]]} subnav={SUBS.communaute} />
+  <PageHead title="Fil d'actualité" lead="Les nouvelles des membres et des espaces que vous suivez." crumbs={[['/communaute', 'Communauté'], ['', 'Fil']]} subnav={SUBS.communaute} />
   <section class="block">
     <div class="wrap split">
       <div>
