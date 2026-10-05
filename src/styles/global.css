@@ -512,3 +512,7 @@ footer.foot .footk .btn-ghost{display:inline-flex;color:#1B1305 !important;borde
 .world .panel h3{display:flex;justify-content:space-between;align-items:center}
 .relais{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
 .qrbox.sm{padding:4px}.qrbox.sm svg{width:64px;height:64px}
+/* Connexion : choix Se connecter / Créer un compte */
+.auth-mode{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--surface-2);border-radius:999px;padding:4px;margin-bottom:16px}
+.auth-mode button{border:0;background:none;border-radius:999px;padding:10px 12px;font-weight:700;font-size:.95rem;cursor:pointer;color:var(--muted)}
+.auth-mode button[aria-selected="true"]{background:var(--navy);color:var(--surface)}

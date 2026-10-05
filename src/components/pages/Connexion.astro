@@ -17,6 +17,11 @@ const fs = 'border:0;padding:0;margin:0';
   <div class="wrap" style="max-width:520px">
     <div class="tag info" id="authMotif" hidden style="display:block;border-radius:8px;padding:10px;margin-bottom:16px"></div>
     <div class="panel" id="auth" data-home={L('/espace')}>
+      <div class="auth-mode" role="tablist" aria-label={w('Choisir', 'Choose')}>
+        <button type="button" role="tab" aria-selected="true" data-mode="in">{w('Se connecter', 'Sign in')}</button>
+        <button type="button" role="tab" aria-selected="false" data-mode="up">{w('Créer un compte', 'Create an account')}</button>
+      </div>
+      <p class="small muted" data-only="up" hidden style="margin:0 0 10px">{w('Gratuit. Avec votre numéro de téléphone, le compte est créé dès que vous validez le code reçu.', 'Free. With your phone number, the account is created as soon as you confirm the code you receive.')}</p>
       <div class="filters" style="margin-top:0" role="tablist">
         <button class="chip" type="button" role="tab" aria-pressed="true" data-tab="tel">{w('Téléphone', 'Phone')}</button>
         <button class="chip" type="button" role="tab" aria-pressed="false" data-tab="mail">E-mail</button>
@@ -41,10 +46,7 @@ const fs = 'border:0;padding:0;margin:0';
 
       <!-- E-mail -->
       <form data-pane="mail" novalidate hidden>
-        <div class="row small" style="margin-bottom:12px">
-          <label><input type="radio" name="mode" value="in" checked /> {w("J'ai déjà un compte", 'I have an account')}</label>
-          <label><input type="radio" name="mode" value="up" /> {w('Créer un compte', 'Create an account')}</label>
-        </div>
+        <input type="hidden" name="mode" value="in" />
         <div data-only="up" hidden>
           <label class="f" for="name">{w('Nom complet', 'Full name')}</label>
           <input class="in" id="name" name="name" autocomplete="name" />
@@ -58,7 +60,7 @@ const fs = 'border:0;padding:0;margin:0';
           <label class="row small"><input type="checkbox" name="marketing" /> {w("Recevoir la lettre d'information (facultatif)", 'Receive the newsletter (optional)')}</label>
         </div>
         <button class="btn btn-primary" type="submit" style="width:100%;margin-top:10px" data-submit>{w('Se connecter', 'Sign in')}</button>
-        <button class="btn btn-ghost btn-sm" type="button" data-forgot style="margin-top:10px">{w('Mot de passe oublié ?', 'Forgot password?')}</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-forgot data-only="in" style="margin-top:10px">{w('Mot de passe oublié ?', 'Forgot password?')}</button>
       </form>
 
       <!-- Double authentification -->
@@ -71,6 +73,10 @@ const fs = 'border:0;padding:0;margin:0';
       </form>
 
       <p class="small" data-msg role="alert" style="margin:12px 0 0"></p>
+      <p class="small" style="text-align:center;margin:14px 0 0">
+        <span data-only="in">{w('Pas encore de compte ?', 'No account yet?')} <a href="?mode=inscription" data-switch="up"><b>{w('Créer un compte', 'Create an account')}</b></a></span>
+        <span data-only="up" hidden>{w('Déjà inscrit·e ?', 'Already registered?')} <a href="?" data-switch="in"><b>{w('Se connecter', 'Sign in')}</b></a></span>
+      </p>
 
       <div data-alt>
         <p class="small muted" style="text-align:center;margin:16px 0 8px">{w('ou', 'or')}</p>
@@ -134,15 +140,25 @@ const fs = 'border:0;padding:0;margin:0';
   });
   tel.querySelector('[data-back]')!.addEventListener('click', () => telStep(1));
 
-  // E-mail
+  // Se connecter / Créer un compte (onglets principaux, lien direct ?mode=inscription)
   const mail = root.querySelector<HTMLFormElement>('[data-pane="mail"]')!;
-  const mode = () => (mail.querySelector<HTMLInputElement>('input[name="mode"]:checked')!.value as 'in' | 'up');
-  mail.querySelectorAll('input[name="mode"]').forEach((r) => r.addEventListener('change', () => {
-    const up = mode() === 'up';
-    mail.querySelectorAll<HTMLElement>('[data-only="up"]').forEach((x) => (x.hidden = !up));
+  const modeInput = mail.querySelector<HTMLInputElement>('input[name="mode"]')!;
+  const mode = () => modeInput.value as 'in' | 'up';
+  const setMode = (m: 'in' | 'up') => {
+    const up = m === 'up';
+    modeInput.value = m;
+    root.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.mode === m)));
+    root.querySelectorAll<HTMLElement>('[data-only="up"]').forEach((x) => (x.hidden = !up));
+    root.querySelectorAll<HTMLElement>('[data-only="in"]').forEach((x) => (x.hidden = up));
     mail.querySelector<HTMLButtonElement>('[data-submit]')!.textContent = up ? t('Créer mon compte', 'Create my account') : t('Se connecter', 'Sign in');
     mail.querySelector<HTMLInputElement>('#pw')!.autocomplete = up ? 'new-password' : 'current-password';
-  }));
+    tel.querySelector<HTMLButtonElement>('[data-step="1"] button')!.textContent = up ? t('Recevoir mon code d’inscription', 'Get my sign-up code') : t('Recevoir un code', 'Get a code');
+    document.querySelector('.page-head h1')!.textContent = up ? t('Créer un compte', 'Create an account') : t('Se connecter', 'Sign in');
+    msg.textContent = '';
+  };
+  root.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode as 'in' | 'up')));
+  root.querySelectorAll<HTMLAnchorElement>('[data-switch]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); setMode(a.dataset.switch as 'in' | 'up'); }));
+  if (q.get('mode') === 'inscription') setMode('up');
   mail.addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = new FormData(mail);

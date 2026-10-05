@@ -20,7 +20,8 @@ const en = lang === 'en';
 </div>
 <style>
   .cookie { position: fixed; z-index: 60; left: 16px; bottom: 16px; max-width: 420px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; padding: 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18); }
-  @media (max-width: 640px) { .cookie { left: 8px; right: 8px; bottom: 72px; max-width: none; } }
+  /* Mobile : bandeau compact collé en bas ; la page reçoit un espace équivalent pour que rien ne reste caché dessous */
+  @media (max-width: 640px) { .cookie { left: 0; right: 0; bottom: 0; max-width: none; z-index: 80; border-radius: 12px 12px 0 0; padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px)); } .cookie p { font-size: .82rem; margin: 4px 0 8px !important; } .cookie .row { flex-wrap: nowrap; } .cookie .btn { flex: 1; justify-content: center; white-space: normal; } }
 </style>
 <script>
   const KEY = 'cea-consent';
@@ -38,6 +39,10 @@ const en = lang === 'en';
     s.async = true; s.src = base + 'matomo.js';
     document.head.appendChild(s);
   }
+  // Espace réservé en bas de page tant que le bandeau est affiché (il ne doit masquer aucun bouton ni champ)
+  const reserve = () => { document.body.style.paddingBottom = banner.hidden ? '' : `${banner.offsetHeight + 8}px`; };
+  new MutationObserver(reserve).observe(banner, { attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('resize', reserve);
   function choose(mesure: boolean) {
     try { localStorage.setItem(KEY, JSON.stringify({ mesure, at: new Date().toISOString() })); } catch { /* stockage indisponible */ }
     banner.hidden = true;
@@ -47,7 +52,7 @@ const en = lang === 'en';
     else if (read() && (window as unknown as { _paq?: unknown })._paq) location.reload(); // retrait : décharger le traceur
   }
   const c = read();
-  if (!c) banner.hidden = false;
+  if (!c) { banner.hidden = false; reserve(); }
   else if (c.mesure) loadMatomo();
   banner.querySelectorAll<HTMLButtonElement>('[data-consent]').forEach((b) => b.addEventListener('click', () => choose(b.dataset.consent === '1')));
   document.querySelectorAll('[data-cookie-settings]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); banner.hidden = false; banner.querySelector('button')?.focus(); }));
