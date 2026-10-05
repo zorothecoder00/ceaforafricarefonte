@@ -147,9 +147,10 @@ $$('[data-map]').forEach((map) => {
     const show = () => {
       $$('.hub', map).forEach((x) => x.classList.remove('on'));
       g.classList.add('on');
-      if (card && h) card.innerHTML = `<h4>${h.name}${h.hq ? ` <span class="tag gold">${EN ? 'HQ' : 'Siège'}</span>` : ''}</h4><div class="kv"><span>${EN ? 'Members' : 'Membres'}</span><b>${h.m}</b><span>${EN ? 'Projects supported' : 'Projets accompagnés'}</span><b>${h.p}</b><span>${EN ? 'Events in 2026' : 'Événements en 2026'}</span><b>${h.e}</b></div><a class="small" style="color:#082B4C;font-weight:700" href="${withLang('/pays/' + h.code)}">${EN ? 'Office:' : 'Antenne de'} ${h.city} · ${h.lead}</a>`;
+      if (card && h) card.innerHTML = `<h4>${h.name}${h.hq ? ` <span class="tag gold">${EN ? 'HQ' : 'Siège'}</span>` : ''}</h4><div class="kv"><span>${EN ? 'Members' : 'Membres'}</span><b>${h.m}</b><span>${EN ? 'Projects supported' : 'Projets accompagnés'}</span><b>${h.p}</b><span>${EN ? 'Events in 2026' : 'Événements en 2026'}</span><b>${h.e}</b></div><a class="small" style="color:#082B4C;font-weight:700" href="${withLang('/pays/' + h.code)}">${EN ? 'Country page' : 'Page pays'}</a>`;
     };
-    const go = () => { location.href = withLang('/pays/' + h.code); };
+    // Sans encart (page pays), le clic ouvre la page du pays ; avec encart, il l'affiche comme au survol
+    const go = () => { if (card) show(); else location.href = withLang('/pays/' + h.code); };
     g.addEventListener('mouseenter', show);
     g.addEventListener('focus', show);
     g.addEventListener('click', go);

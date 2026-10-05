@@ -473,3 +473,30 @@ footer.foot .in{background:#0B2540;border-color:#2A4A6B;color:#fff}
 .cms-video{position:relative;aspect-ratio:16/9;margin:20px 0}.cms-video iframe{position:absolute;inset:0;width:100%;height:100%;border:0;border-radius:var(--r-m)}
 .cms-block{border:1px solid var(--line);border-radius:var(--r-m);padding:10px 12px;margin-bottom:10px;background:var(--surface)}
 .cms-block .row.between{margin-bottom:6px}
+
+/* ===== En-tête du prototype : logo et navigation sur une seule ligne ===== */
+.top .wrap.top-row{height:76px;max-width:1440px;gap:14px}
+.logo{height:56px;width:auto;display:block}
+:root[data-theme="dark"] .logo{background:#fff;border-radius:8px;padding:3px 6px}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .logo{background:#fff;border-radius:8px;padding:3px 6px}}
+.nav{display:flex;flex:1;justify-content:center;gap:0}
+.nav a{text-decoration:none;padding:8px 6px;border-radius:var(--r-s);font-weight:600;font-size:.92rem;color:var(--ink);white-space:nowrap}
+.nav a:hover{background:var(--surface-2)}
+.nav a[aria-current="page"]{color:var(--navy);box-shadow:inset 0 -2px 0 var(--gold);border-radius:0}
+.dd{position:relative;display:inline-flex}
+.dd>a{display:inline-flex;align-items:center;gap:3px}
+.ddmenu{display:none;position:absolute;top:calc(100% + 4px);left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--line);border-radius:var(--r-m);box-shadow:0 24px 50px -16px rgba(8,43,76,.35);padding:8px;width:340px;z-index:60}
+.ddmenu::before{content:"";position:absolute;left:0;right:0;top:-8px;height:8px}
+.dd:hover .ddmenu,.dd:focus-within .ddmenu{display:block}
+.ddmenu a{display:flex;gap:10px;align-items:center;padding:7px 10px;border-radius:8px;text-decoration:none;box-shadow:none!important}
+.ddmenu a:hover{background:var(--surface-2)}
+.ddmenu .mi{width:30px;height:30px;border-radius:8px;background:var(--gold-soft);color:var(--gold-ink);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ddmenu b{display:block;font-size:.92rem;color:var(--ink)}
+.ddmenu .d{display:block;font-size:.8rem;color:var(--muted);font-weight:400}
+.prefs-h{display:none}
+@media (min-width:1700px){.prefs-h{display:inline-block}}
+@media (max-width:1340px){.nav{display:none}.menu-btn{display:inline-flex !important}}
+@media (min-width:1341px){.menu-btn{display:none}}
+@media (max-width:520px){#searchBtn{display:none}#loginBtn{padding:6px 10px;font-size:.8rem}}
+.tagline{font-family:var(--display);font-weight:700;letter-spacing:.14em;font-size:.8rem;color:var(--gold);text-transform:uppercase}
+.hero .tagline{letter-spacing:.14em;font-size:.8rem}
