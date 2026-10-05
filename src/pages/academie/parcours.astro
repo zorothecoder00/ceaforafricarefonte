@@ -8,14 +8,14 @@ export const prerender = false;
 const COURSES = await allCourses();
 ---
 <BaseLayout title="Parcours certifiants">
-  <PageHead title="Parcours certifiants" lead="Des suites de cours cohérentes, validées par un certificat vérifiable par QR code." crumbs={[['/academie', 'Académie'], ['', 'Parcours']]} subnav={SUBS.academie} />
+  <PageHead title="Parcours certifiants" lead="Des suites de cours avec une évaluation finale et un certificat vérifiable." crumbs={[['/academie', 'Académie'], ['', 'Parcours certifiants']]} subnav={SUBS.academie} />
   <section class="block">
     <div class="wrap grid g3">
       {PATHS.map((p) => (
         <div class="panel">
           <h3>{p.t}</h3>
           <p class="small muted">{p.d}</p>
-          <ol class="timeline">{p.c.map((id) => { const c = COURSES.find((x) => x.id === id); if (!c) return null; return <li><a href={`/academie/${c.id}`}>{c.t}</a></li>; })}</ol>
+          <ol class="small">{p.c.map((id) => { const c = COURSES.find((x) => x.id === id); if (!c) return null; return <li><a href={`/academie/${c.id}`}>{c.t}</a></li>; })}</ol>
           <button class="btn btn-primary btn-sm" type="button" data-post="/api/academie/parcours" data-body={JSON.stringify({ pathId: p.id })}>Suivre ce parcours</button>
         </div>
       ))}

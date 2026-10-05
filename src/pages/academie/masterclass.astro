@@ -5,14 +5,14 @@ import PageHead from '../../components/PageHead.astro';
 import { MASTERCLASS, SUBS } from '../../data/site';
 ---
 <BaseLayout title="Masterclass">
-  <PageHead title="Masterclass" lead="Des leçons de grands dirigeants africains, en vidéo." crumbs={[['/academie', 'Académie'], ['', 'Masterclass']]} subnav={SUBS.academie} />
+  <PageHead title="Masterclass" lead="Des leçons filmées par des dirigeants africains et internationaux reconnus. Réservé aux membres Premium." crumbs={[['/academie', 'Académie'], ['', 'Masterclass']]} subnav={SUBS.academie} />
   <section class="block">
     <div class="wrap grid g3">
       {MASTERCLASS.map((m) => (
         <div class="panel">
           <MediaPlayer title={m.t} cap={m.dur} />
-          <h3 style="margin-top:14px">{m.t}</h3>
-          <p class="small muted" style="margin:0">{m.by}</p>
+          <h3 style="margin-top:12px">{m.t}</h3>
+          <p class="small muted">{m.by} · {m.dur}</p>
         </div>
       ))}
     </div>
