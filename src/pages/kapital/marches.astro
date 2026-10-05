@@ -10,7 +10,7 @@ function spark(s: number[]) {
 const heat = (ch: number) => (ch >= 0 ? `rgba(30,122,76,${Math.min(0.35 + ch / 3, 1)})` : `rgba(178,58,46,${Math.min(0.35 - ch / 3, 1)})`);
 ---
 <KapitalLayout title="Bourses africaines" ticker>
-  <PageHead title="Tableau des marchés africains" lead="Indices des principales places du continent. Valeurs fictives générées pour la démonstration." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Bourses africaines']]} />
+  <PageHead title="Tableau des marchés" lead="Valeurs fictives générées pour la démonstration. En production : données sous licence, en temps différé, avec source et heure." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Bourses africaines']]} />
   <section class="block">
     <div class="wrap">
       <div class="panel scroll-x">

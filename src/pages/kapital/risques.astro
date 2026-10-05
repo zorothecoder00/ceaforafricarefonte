@@ -12,7 +12,7 @@ const risks = [
 ];
 ---
 <KapitalLayout title="Risques de l'investissement" risk={false}>
-  <PageHead title="Risques de l'investissement" lead="À lire avant d'investir. Nous préférons des investisseurs informés à des investisseurs déçus." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Risques']]} />
+  <PageHead title="Risques de l'investissement" lead="À lire avant tout investissement." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Risques']]} />
   <section class="block">
     <div class="wrap">
       <div class="grid g3">{risks.map(([t, d]) => <div class="panel"><h3>{t}</h3><p class="small" style="margin:0">{d}</p></div>)}</div>
