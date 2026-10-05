@@ -677,3 +677,57 @@ export const aiNote = pgTable('ai_note', {
   createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
   createdAt: ts('created_at').notNull().defaultNow(),
 }, (t) => [index('ai_note_subject_idx').on(t.subjectType, t.subjectId, t.createdAt)]);
+
+/* ===== CMS éditorial (CDC §12) : contenus par blocs, multilingues, avec circuit de validation et historique.
+   Une même « clé » regroupe les versions linguistiques d'un contenu (FR, EN). Publication programmée : statut « programme »
+   et date publishAt — le contenu devient visible à cette date, sans tâche planifiée. */
+export const cmsStatusEnum = pgEnum('cms_status', ['brouillon', 'en_relecture', 'valide', 'programme', 'publie', 'archive']);
+export const cmsContent = pgTable('cms_content', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  type: text('type').notNull().default('article'),
+  key: text('key').notNull(), // regroupe les versions FR/EN
+  slug: text('slug').notNull(),
+  lang: text('lang').notNull().default('fr'),
+  title: text('title').notNull(),
+  excerpt: text('excerpt').notNull().default(''),
+  category: text('category'),
+  country: text('country'), // « Panafricain » ou nom de pays
+  blocks: jsonb('blocks').notNull().default([]),
+  coverId: uuid('cover_id'),
+  seoTitle: text('seo_title'),
+  seoDescription: text('seo_description'),
+  featured: boolean('featured').notNull().default(false),
+  status: cmsStatusEnum('status').notNull().default('brouillon'),
+  publishAt: ts('publish_at'),
+  publishedAt: ts('published_at'),
+  version: integer('version').notNull().default(1),
+  authorId: text('author_id').references(() => user.id, { onDelete: 'set null' }),
+  updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+}, (t) => [uniqueIndex('cms_content_slug_unique').on(t.type, t.lang, t.slug), uniqueIndex('cms_content_key_lang_unique').on(t.key, t.lang), index('cms_content_status_idx').on(t.type, t.status)]);
+
+/* Historique : un instantané complet à chaque enregistrement ou changement d'état, pour comparer et restaurer */
+export const cmsRevision = pgTable('cms_revision', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  contentId: uuid('content_id').notNull().references(() => cmsContent.id, { onDelete: 'cascade' }),
+  version: integer('version').notNull(),
+  status: cmsStatusEnum('status').notNull(),
+  snapshot: jsonb('snapshot').notNull(),
+  note: text('note'),
+  authorId: text('author_id').references(() => user.id, { onDelete: 'set null' }),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('cms_revision_content_idx').on(t.contentId, t.version)]);
+
+/* Médiathèque : images publiques des contenus (texte alternatif obligatoire, crédit) */
+export const cmsMedia = pgTable('cms_media', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  storageKey: text('storage_key').notNull(),
+  mime: text('mime').notNull(),
+  size: integer('size').notNull(),
+  name: text('name').notNull(),
+  alt: text('alt').notNull(),
+  credit: text('credit'),
+  uploadedBy: text('uploaded_by').references(() => user.id, { onDelete: 'set null' }),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});

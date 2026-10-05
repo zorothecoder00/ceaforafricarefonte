@@ -8,13 +8,13 @@ import { MENU, KMENU, COURSES, EVENTS, JOBS, OPPS, ARTICLES, country } from '../
 import { getLang, lp, stripLang, localizeHtml, useT, TRANSLATED } from '../i18n/ui';
 import { CURRENCIES, COUNTRY_CURRENCY } from '../data/currency';
 
-interface Props { title?: string; description?: string }
+interface Props { title?: string; description?: string; image?: string }
 const lang = getLang(Astro.currentLocale);
 const t = useT(lang);
 const defaultDesc = lang === 'en'
   ? 'CEA FOR AFRICA — the platform for African entrepreneurs: training, support, events, opportunities and CEA Kapital Invest.'
   : 'CEA FOR AFRICA — la plateforme des entrepreneurs africains : formation, accompagnement, événements, opportunités et CEA Kapital Invest.';
-const { title, description = defaultDesc } = Astro.props;
+const { title, description = defaultDesc, image } = Astro.props;
 const fullTitle = title ? `${title} — CEA FOR AFRICA` : `CEA FOR AFRICA — ${lang === 'en' ? 'Connect · Build · Act' : 'Connecter · Entreprendre · Agir'}`;
 
 // Chemin français de la page (sur les pages anglaises de repli, Astro fournit déjà le chemin français).
@@ -50,6 +50,7 @@ const searchIndex = ([
     <link rel="alternate" hreflang="x-default" href={alt('fr')} />
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
+    {image && <meta property="og:image" content={new URL(image, Astro.site).href} />}
     <meta property="og:locale" content={lang === 'en' ? 'en_GB' : 'fr_FR'} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />

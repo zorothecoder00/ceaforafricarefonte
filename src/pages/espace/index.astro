@@ -4,7 +4,8 @@ import EspaceLayout from '../../layouts/EspaceLayout.astro';
 import { and, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from '../../lib/db';
 import * as s from '../../db/schema';
-import { EVENTS, COURSES, CONSULTS, ARTICLES, OPPS, country, dateFr } from '../../data/site';
+import { EVENTS, COURSES, CONSULTS, OPPS, country, dateFr } from '../../data/site';
+import { publicArticles } from '../../lib/cms';
 import { ROLE_LABEL, isStaff, type Role } from '../../lib/rbac';
 
 export const prerender = false;
@@ -20,10 +21,11 @@ const enrolls = await db.select().from(s.enrollment).where(eq(s.enrollment.userI
 const votes = await db.select({ id: s.consultationVote.consultationId }).from(s.consultationVote).where(eq(s.consultationVote.userId, user.id));
 const nextEvents = [...EVENTS].filter((e) => e.date >= new Date().toISOString().slice(0, 10)).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3);
 const myCountry = prof?.country ?? null;
-const news = ARTICLES.filter((a) => !myCountry || a.c === country(myCountry) || a.c === 'Panafricain').slice(0, 3);
+const articles = await publicArticles();
+const news = articles.filter((a) => !myCountry || a.c === country(myCountry) || a.c === 'Panafricain').slice(0, 3);
 const openConsults = CONSULTS.filter((c) => !votes.some((v) => v.id === c.id));
 const saved = await db.select().from(s.savedItem).where(and(eq(s.savedItem.userId, user.id), inArray(s.savedItem.kind, ['article', 'course', 'event']))).orderBy(desc(s.savedItem.at)).limit(5);
-const savedRow = (x: typeof saved[number]): [string, string] => x.kind === 'article' ? [ARTICLES.find((a) => a.id === x.itemId)?.t ?? x.itemId, 'Article'] : x.kind === 'course' ? [COURSES.find((c) => c.id === x.itemId)?.t ?? x.itemId, 'Cours'] : [EVENTS.find((e) => e.id === x.itemId)?.t ?? x.itemId, 'Événement'];
+const savedRow = (x: typeof saved[number]): [string, string] => x.kind === 'article' ? [articles.find((a) => a.id === x.itemId)?.t ?? x.itemId, 'Article'] : x.kind === 'course' ? [COURSES.find((c) => c.id === x.itemId)?.t ?? x.itemId, 'Cours'] : [EVENTS.find((e) => e.id === x.itemId)?.t ?? x.itemId, 'Événement'];
 
 type W = { id: string; title: string; href?: string; cta?: string; rows?: [string, string][]; big?: string; note?: string };
 const widgets: W[] = [];

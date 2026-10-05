@@ -465,3 +465,11 @@ footer.foot .in{background:#0B2540;border-color:#2A4A6B;color:#fff}
 .qrbox svg{width:140px;height:140px}
 .membercard{border-radius:var(--r-l);padding:22px;background:linear-gradient(135deg,#082B4C,#0F3A63 60%,#3A2D0E);color:#fff;display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center;max-width:520px}
 .membercard .brand-sub{color:#E7BD62}
+/* Contenus du CMS (CDC §12) */
+.cms-body h2{margin-top:32px}.cms-body h3{margin-top:24px}
+.cms-figure{margin:20px 0}.cms-figure img{width:100%;height:auto;border-radius:var(--r-m)}.cms-figure figcaption{font-size:.85rem;color:var(--muted);margin-top:6px}
+.cms-quote{margin:20px 0;padding:4px 0 4px 18px;border-left:3px solid var(--gold);font-size:1.1rem}.cms-quote footer{font-size:.9rem;color:var(--muted)}
+.cms-callout{margin:20px 0}.cms-callout.tone-info{background:var(--info-soft)}.cms-callout.tone-gold{background:var(--gold-soft)}.cms-callout.tone-ok{background:var(--ok-soft)}
+.cms-video{position:relative;aspect-ratio:16/9;margin:20px 0}.cms-video iframe{position:absolute;inset:0;width:100%;height:100%;border:0;border-radius:var(--r-m)}
+.cms-block{border:1px solid var(--line);border-radius:var(--r-m);padding:10px 12px;margin-bottom:10px;background:var(--surface)}
+.cms-block .row.between{margin-bottom:6px}

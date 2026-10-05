@@ -28,12 +28,14 @@ export function knowledgeBase(): KbDoc[] {
   return docs;
 }
 
-/** Fiches les plus pertinentes pour une question (recherche tolérante aux fautes, titre prioritaire). */
-export function retrieve(query: string, limit = 6): KbDoc[] {
+/** Fiches les plus pertinentes pour une question (recherche tolérante aux fautes, titre prioritaire).
+    extra : fiches supplémentaires (articles publiés du CMS), qui remplacent les fiches de même identifiant. */
+export function retrieve(query: string, limit = 6, extra: KbDoc[] = []): KbDoc[] {
   // Les mots courts et les mots-outils ne départagent rien : on les retire, et une fiche peut ne contenir qu'une partie des mots
   const words = query.split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 3 && !STOP.has(w.toLowerCase()));
   if (!words.length) return [];
-  return knowledgeBase()
+  const ids = new Set(extra.map((d) => d.id));
+  return [...extra, ...knowledgeBase().filter((d) => !ids.has(d.id))]
     .map((d) => ({ d, s: words.reduce((n, w) => n + score(w, d.title, d.kind + ' ' + d.text), 0) }))
     .filter((x) => x.s > 0)
     .sort((a, b) => b.s - a.s)

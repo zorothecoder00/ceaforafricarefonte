@@ -2,7 +2,11 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import DocButton from '../../components/DocButton.astro';
-import { ARTICLES, SUBS, dateFr } from '../../data/site';
+import { SUBS, dateFr } from '../../data/site';
+import { publicArticles } from '../../lib/cms';
+
+export const prerender = false;
+const articles = await publicArticles();
 import { PRESS_KIT } from '../../data/documents';
 ---
 <BaseLayout title="Presse">
@@ -11,7 +15,7 @@ import { PRESS_KIT } from '../../data/documents';
     <div class="wrap split">
       <div>
         <h2>Communiqués</h2>
-        {ARTICLES.filter((a) => a.cat === 'Communiqué' || a.k).map((a) => (
+        {articles.filter((a) => a.cat === 'Communiqué' || a.k).map((a) => (
           <a class="panel" style="display:block;text-decoration:none;margin-bottom:10px" href={`/ressources/article/${a.id}`}><span class="xs muted">{dateFr(a.d)}</span><b style="display:block">{a.t}</b></a>
         ))}
         <h2 style="margin-top:24px">Kit média</h2>

@@ -1,0 +1,61 @@
+---
+/* Médiathèque du CMS (CDC §12) : images publiques des contenus, texte alternatif obligatoire, crédit, suppression si non utilisée. */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { desc, eq } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { cmsMedia } from '../../../db/schema/app';
+import { user } from '../../../db/schema/auth';
+import { can } from '../../../lib/rbac';
+import { mediaUrl } from '../../../lib/cms';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const rows = await db.select({ m: cmsMedia, who: user.name }).from(cmsMedia).leftJoin(user, eq(user.id, cmsMedia.uploadedBy)).orderBy(desc(cmsMedia.createdAt)).limit(300);
+const kb = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} Mo` : `${Math.round(n / 1024)} Ko`);
+---
+<AdminLayout title="Médiathèque" lead="Images utilisables dans les contenus du CMS. Le texte alternatif décrit l'image pour les personnes malvoyantes et les moteurs de recherche." obj="contenus">
+  <p class="small" style="margin-top:-8px"><a href="/admin/cms">← CMS éditorial</a></p>
+  {can(me.roles, 'contenus', 'C') && (
+    <form class="panel" id="upF" style="margin-bottom:16px">
+      <h3 style="margin-top:0">Ajouter une image</h3>
+      <div class="grid g3" style="gap:0 12px;align-items:end">
+        <div><label class="f" for="uf">Fichier (PNG, JPG, WEBP — 15 Mo max.)</label><input class="in" id="uf" name="file" type="file" accept="image/png,image/jpeg,image/webp" required /></div>
+        <div><label class="f" for="ua">Texte alternatif</label><input class="in" id="ua" name="alt" required minlength="3" maxlength="250" placeholder="Ex. Une agricultrice trie du manioc" /></div>
+        <div><label class="f" for="uc">Crédit (facultatif)</label><input class="in" id="uc" name="credit" maxlength="200" placeholder="Photo : …" /></div>
+      </div>
+      <button class="btn btn-primary btn-sm" type="submit" style="margin-top:10px">Ajouter</button>
+    </form>
+  )}
+  {rows.length === 0 && <div class="empty">Aucune image pour l'instant.</div>}
+  <div class="grid g3">
+    {rows.map(({ m, who }) => (
+      <div class="panel">
+        <img src={mediaUrl(m.id)} alt={m.alt} loading="lazy" style="width:100%;height:160px;object-fit:cover;border-radius:8px" />
+        <div class="xs muted" style="margin:6px 0">{m.name} · {kb(m.size)} · {who ?? '—'} · {m.createdAt.toLocaleDateString('fr-FR')}</div>
+        <form data-api="/api/admin/medias" data-method="PATCH">
+          <input type="hidden" name="id" value={m.id} />
+          <input class="in" name="alt" value={m.alt} required minlength="3" maxlength="250" aria-label="Texte alternatif" />
+          <input class="in" name="credit" value={m.credit ?? ''} maxlength="200" placeholder="Crédit" aria-label="Crédit" />
+          <div class="row" style="gap:6px">
+            {can(me.roles, 'contenus', 'M') && <button class="btn btn-ghost btn-sm" type="submit">Enregistrer</button>}
+            {can(me.roles, 'contenus', 'V') && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/medias" data-method="DELETE" data-body={JSON.stringify({ id: m.id })} data-confirm="Supprimer cette image ?" data-reload>Supprimer</button>}
+          </div>
+        </form>
+      </div>
+    ))}
+  </div>
+</AdminLayout>
+<script>
+  // Dépôt en multipart (le gestionnaire data-api générique envoie du JSON)
+  const f = document.getElementById('upF') as HTMLFormElement | null;
+  f?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = f.querySelector<HTMLButtonElement>('[type="submit"]')!;
+    btn.disabled = true;
+    const r = await fetch('/api/admin/medias', { method: 'POST', credentials: 'same-origin', body: new FormData(f) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : { error: 'Erreur réseau.' };
+    btn.disabled = false;
+    (window as unknown as { toast: (t: string) => void }).toast(d.message ?? d.error ?? 'Erreur.');
+    if (d.ok) setTimeout(() => location.reload(), 600);
+  });
+</script>

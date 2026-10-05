@@ -1,0 +1,210 @@
+---
+/* Éditeur du CMS (CDC §12) : métadonnées et SEO, éditeur par blocs, circuit de validation, versions linguistiques, historique et restauration. */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { and, desc, eq, ne } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { cmsContent, cmsRevision, cmsMedia } from '../../../db/schema/app';
+import { user } from '../../../db/schema/auth';
+import { can } from '../../../lib/rbac';
+import { STATUS_LABEL, STATUS_TONE, TRANSITIONS, BLOCK_LABELS, isLive, mediaUrl } from '../../../lib/cms';
+import { COUNTRIES } from '../../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const id = Astro.params.id ?? '';
+if (!/^[0-9a-f-]{36}$/.test(id)) return new Response('Contenu introuvable', { status: 404 });
+const [c] = await db.select().from(cmsContent).where(eq(cmsContent.id, id));
+if (!c) return new Response('Contenu introuvable', { status: 404 });
+const canEdit = can(me.roles, 'contenus', 'M');
+const canValidate = can(me.roles, 'contenus', 'V');
+const live = isLive(c);
+const locked = !canEdit || ((live || c.status === 'valide' || c.status === 'programme') && !canValidate);
+const revisions = await db.select({ r: cmsRevision, who: user.name }).from(cmsRevision).leftJoin(user, eq(user.id, cmsRevision.authorId)).where(eq(cmsRevision.contentId, id)).orderBy(desc(cmsRevision.createdAt)).limit(50);
+const siblings = await db.select({ id: cmsContent.id, lang: cmsContent.lang, status: cmsContent.status }).from(cmsContent).where(and(eq(cmsContent.key, c.key), ne(cmsContent.id, c.id)));
+const media = await db.select({ id: cmsMedia.id, name: cmsMedia.name, alt: cmsMedia.alt }).from(cmsMedia).orderBy(desc(cmsMedia.createdAt)).limit(300);
+const steps = TRANSITIONS[c.status].filter((t) => (t.needs === 'validate' ? canValidate : canEdit));
+const other = c.lang === 'fr' ? 'en' : 'fr';
+const cats = ['Analyse', "Histoire d'entrepreneur", 'Guide', 'Communiqué'];
+const publicUrl = `${c.lang === 'en' ? '/en' : ''}/ressources/article/${c.slug}`;
+const state = { id: c.id, version: c.version, locked, blocks: c.blocks, media: media.map((m) => ({ id: m.id, name: m.name, url: mediaUrl(m.id) })), labels: BLOCK_LABELS };
+---
+<AdminLayout title={c.title} lead={`Article · ${c.lang === 'en' ? 'anglais' : 'français'} · version ${c.version}`} obj="contenus">
+  <p class="small" style="margin-top:-8px"><a href="/admin/cms">← Tous les contenus</a></p>
+  <div class="split">
+    <form class="panel" id="cmsF" data-id={c.id}>
+      {locked && <p class="small" style="margin-top:0"><span class="tag gold">Lecture seule</span> {canEdit ? 'Ce contenu est validé ou en ligne : seule une personne habilitée à publier peut le corriger.' : 'Vous pouvez consulter ce contenu.'}</p>}
+      <fieldset disabled={locked} style="border:0;padding:0;margin:0">
+        <label class="f" for="ti">Titre</label><input class="in" id="ti" name="title" required maxlength="200" value={c.title} />
+        <div class="grid g2" style="gap:0 12px">
+          <div><label class="f" for="sl">Identifiant d'URL</label><input class="in" id="sl" name="slug" required maxlength="80" pattern="[a-z0-9]+(-[a-z0-9]+)*" value={c.slug} /></div>
+          <div><label class="f" for="ca">Rubrique</label><select class="in" id="ca" name="category"><option value="">—</option>{cats.map((x) => <option selected={x === c.category}>{x}</option>)}</select></div>
+          <div><label class="f" for="co">Pays</label><input class="in" id="co" name="country" list="countries" maxlength="60" value={c.country ?? ''} placeholder="Panafricain" /></div>
+          <div><label class="f" for="cv">Image de couverture</label><select class="in" id="cv" name="coverId"><option value="">Aucune</option>{media.map((m) => <option value={m.id} selected={m.id === c.coverId}>{m.name}</option>)}</select></div>
+        </div>
+        <datalist id="countries"><option>Panafricain</option>{Object.values(COUNTRIES).map((x) => <option>{x}</option>)}</datalist>
+        <label class="f" for="ex">Chapeau (résumé affiché dans les listes)</label><textarea class="in" id="ex" name="excerpt" maxlength="400" rows="3">{c.excerpt}</textarea>
+        <label class="row small"><input type="checkbox" name="featured" checked={c.featured} /> Mettre en avant (étiquette dorée)</label>
+
+        <h3 style="margin-top:20px">Contenu</h3>
+        <p class="xs muted" style="margin:-6px 0 10px">Mise en forme dans le texte : **gras**, *italique*, [texte du lien](https://… ou /page).</p>
+        <div id="blocks"></div>
+        {!locked && <div class="row" id="addBlock" style="gap:6px;flex-wrap:wrap">{Object.entries(BLOCK_LABELS).map(([t, l]) => <button class="btn btn-ghost btn-sm" type="button" data-add={t}>+ {l}</button>)}</div>}
+
+        <details style="margin-top:20px" open={!!(c.seoTitle || c.seoDescription)}>
+          <summary><b>Référencement (SEO)</b></summary>
+          <label class="f" for="st">Titre pour les moteurs de recherche <span class="xs muted" data-count="st">0/70</span></label><input class="in" id="st" name="seoTitle" maxlength="70" value={c.seoTitle ?? ''} placeholder={c.title} />
+          <label class="f" for="sd">Description <span class="xs muted" data-count="sd">0/170</span></label><textarea class="in" id="sd" name="seoDescription" maxlength="170" rows="2" placeholder={c.excerpt}>{c.seoDescription ?? ''}</textarea>
+          <div class="panel xs" style="margin-top:8px"><div style="color:#1a0dab" id="serpT">{c.seoTitle || c.title}</div><div style="color:#006621">ceaforafrica.com{publicUrl}</div><div class="muted" id="serpD">{c.seoDescription || c.excerpt}</div></div>
+        </details>
+      </fieldset>
+      {!locked && <div class="row between" style="margin-top:16px;position:sticky;bottom:0;background:var(--surface);padding:8px 0"><span class="xs muted" id="dirty"></span><button class="btn btn-primary" type="submit">Enregistrer</button></div>}
+    </form>
+
+    <aside>
+      <div class="panel">
+        <h3>Circuit de publication</h3>
+        <p style="margin:0 0 8px"><span class={`tag ${STATUS_TONE[c.status]}`}>{STATUS_LABEL[c.status]}</span>{c.status === 'programme' && c.publishAt && <span class="small"> le {c.publishAt.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}</span>}</p>
+        {live && <p class="small" style="margin:0 0 8px">En ligne : <a href={publicUrl} target="_blank" rel="noopener">{publicUrl}</a></p>}
+        <p class="small" style="margin:0 0 10px"><a href={`/admin/cms/${c.id}/apercu`} target="_blank" rel="noopener">Aperçu de la version enregistrée ↗</a></p>
+        {steps.length > 0 && (
+          <div id="steps">
+            {steps.some((s) => s.to === 'programme') && <><label class="f" for="pa">Date de publication programmée</label><input class="in" id="pa" type="datetime-local" /></>}
+            <input class="in" id="note" maxlength="500" placeholder="Note pour l'historique (facultatif)" aria-label="Note" style="margin-bottom:8px" />
+            <div class="row" style="gap:6px;flex-wrap:wrap">{steps.map((s) => <button class={`btn btn-sm ${s.to === 'publie' || s.to === 'valide' || s.to === 'en_relecture' ? 'btn-primary' : 'btn-ghost'}`} type="button" data-step={s.to}>{s.label}</button>)}</div>
+          </div>
+        )}
+        {!steps.length && <p class="xs muted" style="margin:0">Aucune étape disponible pour vous à ce stade.</p>}
+      </div>
+
+      <div class="panel" style="margin-top:14px">
+        <h3>Langues</h3>
+        {siblings.map((s) => <p class="small" style="margin:0 0 6px"><a href={`/admin/cms/${s.id}`}>Version {s.lang.toUpperCase()}</a> <span class={`tag ${STATUS_TONE[s.status]}`}>{STATUS_LABEL[s.status]}</span></p>)}
+        {!siblings.some((s) => s.lang === other) && can(me.roles, 'contenus', 'C') && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/cms" data-body={JSON.stringify({ action: 'translate', id: c.id, lang: other })}>Créer la version {other === 'en' ? 'anglaise' : 'française'}</button>}
+      </div>
+
+      <div class="panel" style="margin-top:14px">
+        <h3>Historique</h3>
+        <ol class="timeline" style="max-height:420px;overflow:auto">
+          {revisions.map(({ r, who }) => (
+            <li>
+              <b class="small">v{r.version}</b> <span class={`tag ${STATUS_TONE[r.status]}`}>{STATUS_LABEL[r.status]}</span>
+              <div class="xs muted">{r.createdAt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} · {who ?? '—'}</div>
+              {r.note && <div class="xs">{r.note}</div>}
+              {r.version !== c.version && canEdit && !locked && <button class="btn btn-ghost btn-sm" type="button" style="margin-top:4px" data-post="/api/admin/cms" data-body={JSON.stringify({ action: 'restore', id: c.id, revisionId: r.id })} data-confirm={`Restaurer la version ${r.version} ? Le contenu actuel reste disponible dans l'historique.`} data-reload>Restaurer</button>}
+            </li>
+          ))}
+        </ol>
+      </div>
+      {canValidate && (c.status === 'brouillon' || c.status === 'archive') && <button class="btn btn-ghost btn-sm" type="button" style="margin-top:14px" data-post="/api/admin/cms" data-body={JSON.stringify({ action: 'delete', id: c.id })} data-confirm="Supprimer définitivement ce contenu et son historique ?">Supprimer</button>}
+    </aside>
+  </div>
+  <script type="application/json" id="cmsState" set:html={JSON.stringify(state)} />
+</AdminLayout>
+
+<script>
+  /* Éditeur par blocs : état en mémoire, rendu des cartes de blocs, enregistrement avec contrôle de version */
+  type B = { t: 'p'; text: string } | { t: 'h'; text: string; level: 2 | 3 } | { t: 'list'; items: string[]; ordered: boolean } | { t: 'quote'; text: string; cite: string }
+    | { t: 'callout'; text: string; tone: 'info' | 'gold' | 'ok' } | { t: 'image'; mediaId: string; caption: string } | { t: 'video'; url: string };
+  const S = JSON.parse(document.getElementById('cmsState')!.textContent!) as { id: string; version: number; locked: boolean; blocks: B[]; media: { id: string; name: string; url: string }[]; labels: Record<string, string> };
+  const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+  const form = document.getElementById('cmsF') as HTMLFormElement;
+  const wrap = document.getElementById('blocks')!;
+  const dirtyEl = document.getElementById('dirty');
+  let blocks: B[] = S.blocks;
+  let dirty = false;
+  const setDirty = (v: boolean) => { dirty = v; if (dirtyEl) dirtyEl.textContent = v ? 'Modifications non enregistrées' : ''; };
+  const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  const NEW: Record<string, () => B> = {
+    p: () => ({ t: 'p', text: '' }), h: () => ({ t: 'h', text: '', level: 2 }), list: () => ({ t: 'list', items: [''], ordered: false }),
+    quote: () => ({ t: 'quote', text: '', cite: '' }), callout: () => ({ t: 'callout', text: '', tone: 'info' }),
+    image: () => ({ t: 'image', mediaId: S.media[0]?.id ?? '', caption: '' }), video: () => ({ t: 'video', url: '' }),
+  };
+
+  function fields(b: B, i: number) {
+    const ro = S.locked ? ' disabled' : '';
+    switch (b.t) {
+      case 'p': return `<textarea class="in" rows="4" data-f="text" data-i="${i}"${ro}>${esc(b.text)}</textarea>`;
+      case 'h': return `<div class="row" style="gap:6px"><select class="in" data-f="level" data-i="${i}" style="width:auto"${ro}><option value="2"${b.level === 2 ? ' selected' : ''}>Niveau 2</option><option value="3"${b.level === 3 ? ' selected' : ''}>Niveau 3</option></select><input class="in" data-f="text" data-i="${i}" value="${esc(b.text)}" maxlength="300"${ro} /></div>`;
+      case 'list': return `<label class="row xs"><input type="checkbox" data-f="ordered" data-i="${i}"${b.ordered ? ' checked' : ''}${ro} /> Liste numérotée</label><textarea class="in" rows="4" data-f="items" data-i="${i}" placeholder="Un élément par ligne"${ro}>${esc(b.items.join('\n'))}</textarea>`;
+      case 'quote': return `<textarea class="in" rows="3" data-f="text" data-i="${i}"${ro}>${esc(b.text)}</textarea><input class="in" data-f="cite" data-i="${i}" value="${esc(b.cite)}" placeholder="Auteur de la citation" maxlength="200"${ro} />`;
+      case 'callout': return `<select class="in" data-f="tone" data-i="${i}" style="width:auto"${ro}>${[['info', 'Information'], ['gold', 'À retenir'], ['ok', 'Bonne pratique']].map(([v, l]) => `<option value="${v}"${b.tone === v ? ' selected' : ''}>${l}</option>`).join('')}</select><textarea class="in" rows="3" data-f="text" data-i="${i}"${ro}>${esc(b.text)}</textarea>`;
+      case 'image': {
+        const m = S.media.find((x) => x.id === b.mediaId);
+        return (S.media.length ? `<select class="in" data-f="mediaId" data-i="${i}"${ro}>${S.media.map((x) => `<option value="${x.id}"${x.id === b.mediaId ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : '<p class="xs">La médiathèque est vide : <a href="/admin/cms/medias" target="_blank">ajoutez une image</a>, puis rechargez la page.</p>')
+          + (m ? `<img src="${m.url}" alt="" style="max-height:140px;border-radius:8px;margin:6px 0" />` : '')
+          + `<input class="in" data-f="caption" data-i="${i}" value="${esc(b.caption)}" placeholder="Légende (facultatif)" maxlength="300"${ro} />`;
+      }
+      case 'video': return `<input class="in" type="url" data-f="url" data-i="${i}" value="${esc(b.url)}" placeholder="Lien YouTube ou Vimeo" maxlength="500"${ro} />`;
+    }
+  }
+  function render() {
+    wrap.innerHTML = blocks.map((b, i) => `<div class="cms-block" data-b="${i}"><div class="row between"><b class="xs">${S.labels[b.t]}</b>${S.locked ? '' : `<span class="row" style="gap:4px"><button class="btn btn-ghost btn-sm" type="button" data-mv="-1" data-i="${i}" aria-label="Monter"${i === 0 ? ' disabled' : ''}>↑</button><button class="btn btn-ghost btn-sm" type="button" data-mv="1" data-i="${i}" aria-label="Descendre"${i === blocks.length - 1 ? ' disabled' : ''}>↓</button><button class="btn btn-ghost btn-sm" type="button" data-del="${i}" aria-label="Supprimer le bloc">✕</button></span>`}</div>${fields(b, i)}</div>`).join('')
+      || '<p class="small muted">Aucun bloc : ajoutez un paragraphe pour commencer.</p>';
+  }
+  render();
+
+  wrap.addEventListener('input', (e) => {
+    const el = e.target as HTMLInputElement;
+    const i = Number(el.dataset.i), f = el.dataset.f;
+    if (!f || Number.isNaN(i)) return;
+    const b = blocks[i] as Record<string, unknown>;
+    b[f] = f === 'items' ? el.value.split('\n') : f === 'ordered' ? el.checked : f === 'level' ? Number(el.value) : el.value;
+    setDirty(true);
+    if (f === 'mediaId') render();
+  });
+  wrap.addEventListener('click', (e) => {
+    const el = (e.target as Element).closest<HTMLButtonElement>('button');
+    if (!el) return;
+    if (el.dataset.del) { if (!confirm('Supprimer ce bloc ?')) return; blocks.splice(Number(el.dataset.del), 1); }
+    else if (el.dataset.mv) { const i = Number(el.dataset.i), j = i + Number(el.dataset.mv); [blocks[i], blocks[j]] = [blocks[j], blocks[i]]; }
+    else return;
+    setDirty(true); render();
+  });
+  document.getElementById('addBlock')?.addEventListener('click', (e) => {
+    const t = (e.target as HTMLElement).dataset.add;
+    if (!t) return;
+    blocks.push(NEW[t]()); setDirty(true); render();
+    (wrap.lastElementChild?.querySelector('textarea, input') as HTMLElement | null)?.focus();
+  });
+  form.addEventListener('input', (e) => { if (!(e.target as Element).closest('#blocks')) setDirty(true); });
+
+  // Compteurs et aperçu du résultat de recherche
+  const counter = (id: string, max: number, fallback: () => string, out: string) => {
+    const el = document.getElementById(id) as HTMLInputElement, c = document.querySelector(`[data-count="${id}"]`)!;
+    const up = () => { c.textContent = `${el.value.length}/${max}`; document.getElementById(out)!.textContent = el.value || fallback(); };
+    el.addEventListener('input', up); up();
+  };
+  counter('st', 70, () => (document.getElementById('ti') as HTMLInputElement).value, 'serpT');
+  counter('sd', 170, () => (document.getElementById('ex') as HTMLTextAreaElement).value, 'serpD');
+
+  async function post(body: Record<string, unknown>) {
+    const r = await fetch('/api/admin/cms', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : { error: 'Erreur réseau.' };
+    if (!d.ok) toast(d.error ?? 'Erreur.');
+    return d;
+  }
+  async function save() {
+    const fd = new FormData(form);
+    const v = (k: string) => String(fd.get(k) ?? '').trim();
+    const clean = blocks.map((b) => (b.t === 'list' ? { ...b, items: b.items.filter((x) => x.trim()) } : b)).filter((b) => !(b.t === 'image' && !b.mediaId));
+    const d = await post({ action: 'save', id: S.id, version: S.version, title: v('title'), slug: v('slug'), excerpt: v('excerpt'), category: v('category') || null, country: v('country') || null,
+      blocks: clean, coverId: v('coverId') || null, seoTitle: v('seoTitle') || null, seoDescription: v('seoDescription') || null, featured: fd.get('featured') === 'on' });
+    if (d.ok) { S.version = d.version; setDirty(false); toast(d.message); }
+    return !!d.ok;
+  }
+  form.addEventListener('submit', (e) => { e.preventDefault(); if (!S.locked) save(); });
+  document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && !S.locked) { e.preventDefault(); save(); } });
+  addEventListener('beforeunload', (e) => { if (dirty) e.preventDefault(); });
+
+  // Étapes du circuit : on enregistre d'abord les modifications en cours
+  document.getElementById('steps')?.addEventListener('click', async (e) => {
+    const to = (e.target as HTMLElement).dataset.step;
+    if (!to) return;
+    if (dirty && !(await save())) return;
+    const pa = (document.getElementById('pa') as HTMLInputElement | null)?.value;
+    if (to === 'programme' && !pa) { toast('Choisissez la date de publication.'); return; }
+    const note = (document.getElementById('note') as HTMLInputElement).value.trim() || undefined;
+    const d = await post({ action: 'transition', id: S.id, to, note, ...(to === 'programme' ? { publishAt: new Date(pa!).toISOString() } : {}) });
+    if (d.ok) { toast(d.message); setTimeout(() => location.reload(), 600); }
+  });
+</script>

@@ -1,0 +1,19 @@
+---
+/* Corps d'un contenu du CMS (CDC §12) : couverture et blocs. Utilisé par la page publique et par l'aperçu du back-office. */
+import { inArray } from 'drizzle-orm';
+import { db } from '../lib/db';
+import { cmsMedia } from '../db/schema/app';
+import { renderBlocks, mediaUrl, type Block } from '../lib/cms';
+
+interface Props { blocks: Block[]; coverId?: string | null; excerpt?: string }
+const { blocks, coverId, excerpt } = Astro.props;
+const ids = [...new Set([coverId, ...blocks.flatMap((b) => (b.t === 'image' ? [b.mediaId] : []))].filter((x): x is string => !!x))];
+const media = ids.length ? await db.select({ id: cmsMedia.id, alt: cmsMedia.alt, credit: cmsMedia.credit }).from(cmsMedia).where(inArray(cmsMedia.id, ids)) : [];
+const alts = Object.fromEntries(media.map((m) => [m.id, m.alt]));
+const cover = media.find((m) => m.id === coverId);
+---
+<div class="cms-body">
+  {cover && <figure class="cms-figure"><img src={mediaUrl(cover.id)} alt={cover.alt} />{cover.credit && <figcaption>© {cover.credit}</figcaption>}</figure>}
+  {excerpt && <p style="font-size:1.15rem">{excerpt}</p>}
+  <Fragment set:html={renderBlocks(blocks, alts)} />
+</div>

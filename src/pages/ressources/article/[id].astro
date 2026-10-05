@@ -1,24 +1,38 @@
 ---
+/* Article (CDC §7.7) : contenu du CMS éditorial s'il est publié (CDC §12), sinon article écrit dans le code (src/data). */
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import PageHead from '../../../components/PageHead.astro';
 import ArticleCard from '../../../components/ArticleCard.astro';
 import KapitalAd from '../../../components/KapitalAd.astro';
+import CmsBody from '../../../components/CmsBody.astro';
 import { ARTICLES, dateFr } from '../../../data/site';
+import { cmsArticle, publicArticles, readingTime, mediaUrl, type Block } from '../../../lib/cms';
+import { getLang } from '../../../i18n/ui';
 
-export function getStaticPaths() {
-  return ARTICLES.map((a) => ({ params: { id: a.id }, props: { a } }));
-}
-const { a } = Astro.props;
-const others = ARTICLES.filter((x) => x.id !== a.id).slice(0, 2);
+export const prerender = false;
+const lang = getLang(Astro.currentLocale) === 'en' ? 'en' : 'fr';
+const id = Astro.params.id ?? '';
+const cms = await cmsArticle(id, lang);
+const legacy = cms ? null : ARTICLES.find((a) => a.id === id);
+if (!cms && !legacy) return Astro.rewrite('/404');
+const blocks = (cms?.blocks ?? []) as Block[];
+const a = cms
+  ? { id, t: cms.title, x: cms.excerpt, cat: cms.category ?? 'Article', c: cms.country ?? 'Panafricain', d: (cms.publishedAt ?? cms.publishAt ?? cms.updatedAt).toISOString().slice(0, 10), r: readingTime(blocks), k: cms.featured }
+  : legacy!;
+const others = (await publicArticles(lang)).filter((x) => x.id !== id).slice(0, 2);
 ---
-<BaseLayout title={a.t} description={a.x}>
+<BaseLayout title={cms?.seoTitle || a.t} description={cms?.seoDescription || a.x} image={cms?.coverId ? mediaUrl(cms.coverId) : undefined}>
   <PageHead title={a.t} lead={`${a.cat} · ${a.c} · ${dateFr(a.d)} · ${a.r} de lecture`} crumbs={[['/ressources', 'Ressources'], ['', a.cat]]} />
   <section class="block">
     <div class="wrap split">
       <article>
-        <p style="font-size:1.15rem">{a.x}</p>
-        <p>Ce texte est un contenu de démonstration. Dans la plateforme, chaque article est rédigé dans le respect de la charte éditoriale de CEA FOR AFRICA, relu par un expert du sujet, et disponible en français et en anglais.</p>
-        <p>Les chiffres cités proviennent de sources publiques référencées en fin d'article. Les témoignages sont recueillis avec l'accord des personnes concernées.</p>
+        {cms ? <CmsBody blocks={blocks} coverId={cms.coverId} excerpt={cms.excerpt} /> : (
+          <>
+            <p style="font-size:1.15rem">{a.x}</p>
+            <p>Ce texte est un contenu de démonstration. Dans la plateforme, chaque article est rédigé dans le respect de la charte éditoriale de CEA FOR AFRICA, relu par un expert du sujet, et disponible en français et en anglais.</p>
+            <p>Les chiffres cités proviennent de sources publiques référencées en fin d'article. Les témoignages sont recueillis avec l'accord des personnes concernées.</p>
+          </>
+        )}
         <div class="row" style="margin-top:20px"><button class="btn btn-ghost btn-sm" type="button" data-share={a.t}>Partager</button><button class="btn btn-ghost btn-sm" type="button" data-post="/api/favoris" data-body={JSON.stringify({ kind: 'article', itemId: a.id })}>Enregistrer</button></div>
         <h2 style="margin-top:40px">À lire aussi</h2>
         <div class="grid g2">{others.map((o) => <ArticleCard a={o} />)}</div>

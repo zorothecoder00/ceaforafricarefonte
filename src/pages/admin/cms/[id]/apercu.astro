@@ -1,0 +1,27 @@
+---
+/* Aperçu d'un contenu du CMS (CDC §12) tel qu'il apparaîtra sur le site, quel que soit son état. Réservé à l'équipe (droit « contenus »). */
+import BaseLayout from '../../../../layouts/BaseLayout.astro';
+import PageHead from '../../../../components/PageHead.astro';
+import CmsBody from '../../../../components/CmsBody.astro';
+import { eq } from 'drizzle-orm';
+import { db } from '../../../../lib/db';
+import { cmsContent } from '../../../../db/schema/app';
+import { can } from '../../../../lib/rbac';
+import { STATUS_LABEL, readingTime, type Block } from '../../../../lib/cms';
+import { dateFr } from '../../../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user;
+if (!me || !can(me.roles, 'contenus', 'L')) return new Response('Accès refusé', { status: 403 });
+const id = Astro.params.id ?? '';
+if (!/^[0-9a-f-]{36}$/.test(id)) return new Response('Contenu introuvable', { status: 404 });
+const [c] = await db.select().from(cmsContent).where(eq(cmsContent.id, id));
+if (!c) return new Response('Contenu introuvable', { status: 404 });
+const blocks = c.blocks as Block[];
+Astro.response.headers.set('X-Robots-Tag', 'noindex');
+---
+<BaseLayout title={`Aperçu — ${c.seoTitle || c.title}`} description={c.seoDescription || c.excerpt}>
+  <div class="i18n-note">Aperçu ({STATUS_LABEL[c.status]}, version {c.version}) — cette page n'est pas publique. <a href={`/admin/cms/${c.id}`}>Retour à l'éditeur</a></div>
+  <PageHead title={c.title} lead={`${c.category ?? 'Article'} · ${c.country ?? 'Panafricain'} · ${dateFr((c.publishedAt ?? c.updatedAt).toISOString())} · ${readingTime(blocks)} de lecture`} crumbs={[['/ressources', 'Ressources'], ['', c.category ?? 'Article']]} />
+  <section class="block"><div class="wrap" style="max-width:780px"><CmsBody blocks={blocks} coverId={c.coverId} excerpt={c.excerpt} /></div></section>
+</BaseLayout>

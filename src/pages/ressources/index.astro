@@ -3,7 +3,12 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import ArticleCard from '../../components/ArticleCard.astro';
 import KapitalAd from '../../components/KapitalAd.astro';
-import { ARTICLES, SUBS } from '../../data/site';
+import { SUBS } from '../../data/site';
+import { publicArticles } from '../../lib/cms';
+import { getLang } from '../../i18n/ui';
+
+export const prerender = false;
+const articles = await publicArticles(getLang(Astro.currentLocale) === 'en' ? 'en' : 'fr');
 
 const cats = ['', 'Analyse', "Histoire d'entrepreneur", 'Guide', 'Communiqué'];
 ---
@@ -13,7 +18,7 @@ const cats = ['', 'Analyse', "Histoire d'entrepreneur", 'Guide', 'Communiqué'];
     <div class="wrap">
       <div class="filters" id="af">{cats.map((c) => <button class="chip" type="button" aria-pressed={c ? 'false' : 'true'} data-cat={c}>{c || 'Tout'}</button>)}</div>
       <div class="split">
-        <div class="grid g2" id="al">{ARTICLES.map((a) => <ArticleCard a={a} />)}</div>
+        <div class="grid g2" id="al">{articles.map((a) => <ArticleCard a={a} />)}</div>
         <aside><KapitalAd variant={1} /><div style="margin-top:16px"><KapitalAd variant={2} /></div></aside>
       </div>
     </div>
