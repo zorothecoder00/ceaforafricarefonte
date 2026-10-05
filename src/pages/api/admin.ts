@@ -6,7 +6,7 @@ import { db } from '../../lib/db';
 import { contactMessage, ticketReply, ticketPriorityEnum, report, post, courseReview, job, jobAlert, programmeApplication, userRole, proposal, space, hireDeclaration, roleEnum, ticketFlowEnum, applicationStatusEnum, proposalStatusEnum, profile } from '../../db/schema/app';
 import { dossier, dossierEvent, committeeDecision, kycCheck, investorProfile, featureFlag, dossierStatusEnum, verificationLevelEnum, committeeDecisionEnum, kycStatusEnum } from '../../db/schema/kapital';
 import { json, fail, audit, clientIp } from '../../lib/session';
-import { staffApi, countriesFor } from '../../lib/admin';
+import { staffApi, staffApiAll, countriesFor } from '../../lib/admin';
 import { hasRole, type Obj, type Action } from '../../lib/rbac';
 import { statusLabel, FEATURES } from '../../lib/kapital';
 import { notify } from '../../lib/notify';
@@ -146,7 +146,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       return ok('Candidature mise à jour.');
     }
     case 'dossier.status': {
-      const u = guard('dossier_kapital', 'M'); if (u instanceof Response) return u;
+      const u = staffApiAll(locals.user, 'dossier_kapital', 'M'); if (u instanceof Response) return u;
       const [d] = await db.select().from(dossier).where(eq(dossier.id, b.id));
       if (!d) return fail('Dossier introuvable.', 404);
       if (b.status === d.status) return ok('Statut inchangé.');
@@ -157,7 +157,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       return ok(`Dossier passé à « ${statusLabel(b.status)} ».`);
     }
     case 'dossier.update': {
-      const u = guard('dossier_kapital', 'M'); if (u instanceof Response) return u;
+      const u = staffApiAll(locals.user, 'dossier_kapital', 'M'); if (u instanceof Response) return u;
       const [d] = await db.select().from(dossier).where(eq(dossier.id, b.id));
       if (!d) return fail('Dossier introuvable.', 404);
       if (b.published && !d.shareConsent) return fail("Publication impossible : l'entreprise n'a pas donné son accord de partage.");

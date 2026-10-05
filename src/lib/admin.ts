@@ -31,6 +31,14 @@ export function staffApi(user: CurrentUser | null | undefined, obj: Obj, action:
   return user;
 }
 
+/** Garde d'API exigeant le droit sur tous les objets : un droit limité à ses propres données (« * ») ne suffit pas.
+    Pour les actions d'équipe sur des objets qui appartiennent à d'autres (ex. statut d'un dossier Kapital). */
+export function staffApiAll(user: CurrentUser | null | undefined, obj: Obj, action: Action): CurrentUser | Response {
+  const u = staffApi(user, obj, action);
+  if (u instanceof Response) return u;
+  return scope(u.roles, obj, action) === 'all' ? u : fail('Accès refusé.', 403);
+}
+
 /** Pays couverts : null = tous ; tableau = limité (responsable pays, droit « * »). */
 export async function countriesFor(user: CurrentUser, obj: Obj, action: Action = 'L'): Promise<string[] | null> {
   const sc = scope(user.roles, obj, action);
