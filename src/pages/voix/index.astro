@@ -5,8 +5,8 @@ import PageHead from '../../components/PageHead.astro';
 import VoteBox from '../../components/VoteBox.astro';
 import { desc, eq, sql } from 'drizzle-orm';
 import { db } from '../../lib/db';
-import { proposal, proposalSupport, workingGroupMember } from '../../db/schema/app';
-import { CONSULTS, POSITIONS, WGROUPS, SUBS, COUNTRIES, country, dateFr } from '../../data/site';
+import { proposal, proposalSupport } from '../../db/schema/app';
+import { CONSULTS, WGROUPS, SUBS, COUNTRIES, country, fmt } from '../../data/site';
 
 export const prerender = false;
 const me = Astro.locals.user;
@@ -15,66 +15,49 @@ const props = await db.select({
   n: sql<number>`(select count(*)::int from ${proposalSupport} where ${proposalSupport.proposalId} = ${proposal.id})`,
   mine: me ? sql<boolean>`exists(select 1 from ${proposalSupport} where ${proposalSupport.proposalId} = ${proposal.id} and ${proposalSupport.userId} = ${me.id})` : sql<boolean>`false`,
 }).from(proposal).orderBy(desc(sql`2`), desc(proposal.createdAt)).limit(30);
-const groups = await db.select({ g: workingGroupMember.group, n: sql<number>`count(*)::int` }).from(workingGroupMember).groupBy(workingGroupMember.group);
-const myGroups = me ? (await db.select({ g: workingGroupMember.group }).from(workingGroupMember).where(eq(workingGroupMember.userId, me.id))).map((r) => r.g) : [];
-const ST: Record<string, [string, string]> = { deposee: ['Déposée', ''], en_discussion: ['En discussion', 'info'], adoptee: ['Adoptée', 'ok'], rejetee: ['Non retenue', 'warn'] };
+const ST: Record<string, [string, string]> = { deposee: ['Déposée', 'gold'], en_discussion: ['En discussion', 'info'], adoptee: ['Adoptée', 'ok'], rejetee: ['Rejetée', 'bad'] };
 ---
-<BaseLayout title="Voix des entrepreneurs">
-  <PageHead title="Voix des entrepreneurs" lead="Consultations, propositions et plaidoyer : portons ensemble la voix des entrepreneurs auprès des décideurs." crumbs={[['', 'Voix des entrepreneurs']]} subnav={SUBS.voix} />
+<BaseLayout title="CEA Voix des Entrepreneurs">
+  <PageHead title="CEA Voix des Entrepreneurs" lead="Consulter les membres, construire des propositions, défendre les intérêts des entrepreneurs auprès des décideurs. En toute neutralité politique." crumbs={[['', 'CEA Voix des Entrepreneurs']]} subnav={SUBS.voix} />
   <section class="block" style="padding-top:28px">
     <div class="wrap">
       <h2>Consultations ouvertes</h2>
-      <p class="small muted">Réservées aux adhérents à jour de cotisation : une voix par adhérent, résultats agrégés uniquement.</p>
       <div class="grid g2">{CONSULTS.map((v) => <VoteBox v={v} />)}</div>
-      <p class="small" style="margin-top:12px">Donnez aussi votre avis sur le climat des affaires : <a href="/voix/barometre">répondre au baromètre trimestriel</a>.</p>
 
-      <h2 style="margin-top:44px">Propositions des membres</h2>
-      <div class="split">
-        <div>
-          {props.map(({ p, n, mine }) => (
-            <div class="panel" style="margin-bottom:12px">
-              <div class="row between"><b>{p.title}</b><span class={`tag ${ST[p.status][1]}`}>{ST[p.status][0]}</span></div>
-              <div class="xs muted">{[p.theme, p.country ? country(p.country) : '', dateFr(p.createdAt.toISOString().slice(0, 10))].filter(Boolean).join(' · ')}</div>
-              <p class="small" style="margin:8px 0">{p.body.length > 320 ? p.body.slice(0, 320) + '…' : p.body}</p>
-              {p.response && <p class="small" style="border-left:3px solid var(--gold);padding-left:10px"><b>Suite donnée :</b> {p.response}</p>}
-              <div class="row between"><span class="small"><b>{n}</b> soutien{n > 1 ? 's' : ''}</span>
-                {me ? <button class="btn btn-ghost btn-sm" type="button" disabled={mine} data-post="/api/voix" data-body={JSON.stringify({ action: 'soutien', proposalId: p.id })} data-reload>{mine ? 'Soutenue ✓' : 'Soutenir'}</button> : <a class="small" href="/connexion?retour=/voix">Se connecter pour soutenir</a>}
-              </div>
-            </div>
-          ))}
-          {props.length === 0 && <div class="empty">Aucune proposition pour le moment : soyez la première ou le premier.</div>}
-        </div>
-        <aside>
-          {me ? (
-            <form class="panel" data-api="/api/voix" data-reload data-reset>
-              <h3>Déposer une proposition</h3>
-              <input type="hidden" name="action" value="proposition" />
-              <label class="f" for="pt">Titre</label><input class="in" id="pt" name="title" required minlength="8" maxlength="160" />
-              <label class="f" for="pth">Thème</label><select class="in" id="pth" name="theme">{WGROUPS.map((g) => <option>{g}</option>)}</select>
-              <label class="f" for="pc">Pays concerné</label><select class="in" id="pc" name="country"><option value="">Tous pays</option>{Object.entries(COUNTRIES).map(([k, v]) => <option value={k}>{v}</option>)}</select>
-              <label class="f" for="pb">La difficulté et la solution proposée</label><textarea class="in" id="pb" name="body" required minlength="30" maxlength="5000"></textarea>
-              <button class="btn btn-primary" type="submit">Déposer</button>
-            </form>
-          ) : <div class="panel"><h3>Déposer une proposition</h3><p class="small">Connectez-vous pour proposer et soutenir des mesures.</p><a class="btn btn-primary btn-sm" href="/connexion?retour=/voix">Se connecter</a></div>}
-        </aside>
+      <h2 style="margin-top:44px">Suivi de nos propositions</h2>
+      <div class="panel scroll-x">
+        <table class="t">
+          <thead><tr><th>Proposition</th><th>Pays</th><th>Soutiens</th><th>Statut</th><th></th></tr></thead>
+          <tbody>
+            {props.map(({ p, n, mine }) => (
+              <tr>
+                <td><details><summary style="cursor:pointer">{p.title}</summary><p class="small" style="margin:6px 0 0">{p.body}</p>{p.response && <p class="small" style="border-left:3px solid var(--gold);padding-left:10px"><b>Suite donnée :</b> {p.response}</p>}</details></td>
+                <td>{p.country ? country(p.country) : 'Tous pays'}</td>
+                <td class="num">{fmt(n)}</td>
+                <td><span class={`tag ${ST[p.status][1]}`}>{ST[p.status][0]}</span></td>
+                <td>{me ? <button class="btn btn-ghost btn-sm" type="button" disabled={mine} data-post="/api/voix" data-body={JSON.stringify({ action: 'soutien', proposalId: p.id })} data-reload>{mine ? 'Soutenu ✓' : 'Soutenir'}</button> : <a class="btn btn-ghost btn-sm" href="/connexion?retour=/voix">Soutenir</a>}</td>
+              </tr>
+            ))}
+            {props.length === 0 && <tr><td colspan="5" class="muted">Aucune proposition pour le moment : soyez la première ou le premier.</td></tr>}
+          </tbody>
+        </table>
       </div>
 
-      <h2 style="margin-top:44px">Nos positions</h2>
-      {POSITIONS.map((p) => (
-        <div class="panel row between" style="margin-bottom:12px">
-          <div><b>{p.t}</b><div class="small muted">{dateFr(p.d)} · {p.p}</div></div>
-          <a class="btn btn-ghost btn-sm" href="/voix/positions">Lire</a>
-        </div>
-      ))}
-
-      <h2 style="margin-top:44px">Commissions de travail</h2>
-      <div class="grid g3">
-        {WGROUPS.map((g) => { const n = groups.find((x) => x.g === g)?.n ?? 0; const inG = myGroups.includes(g); return (
-          <div class="panel"><h3>Commission {g}</h3><p class="small muted">{n} membre{n > 1 ? 's' : ''} · réunion mensuelle</p>
-            {me ? <button class="btn btn-ghost btn-sm" type="button" data-post="/api/voix" data-body={JSON.stringify({ action: 'groupe', group: g, join: !inG })} data-reload>{inG ? 'Quitter' : 'Rejoindre'}</button> : <a class="small" href="/connexion?retour=/voix">Se connecter pour rejoindre</a>}
+      {me ? (
+        <form class="panel" style="margin-top:30px" data-api="/api/voix" data-reload data-reset>
+          <h3>Déposer une proposition</h3>
+          <input type="hidden" name="action" value="proposition" />
+          <div class="grid g3" style="gap:0 12px">
+            <div><label class="f" for="pt">Titre</label><input class="in" id="pt" name="title" required minlength="8" maxlength="160" /></div>
+            <div><label class="f" for="pth">Thème</label><select class="in" id="pth" name="theme">{WGROUPS.map((g) => <option>{g}</option>)}</select></div>
+            <div><label class="f" for="pc">Pays concerné</label><select class="in" id="pc" name="country"><option value="">Tous pays</option>{Object.entries(COUNTRIES).map(([k, v]) => <option value={k}>{v}</option>)}</select></div>
           </div>
-        ); })}
-      </div>
+          <textarea class="in" id="pb" name="body" required minlength="30" maxlength="5000" placeholder="Décrivez la difficulté et la solution que vous proposez." aria-label="La difficulté et la solution proposée"></textarea>
+          <button class="btn btn-primary" type="submit">Déposer</button>
+        </form>
+      ) : (
+        <div class="panel" style="margin-top:30px"><h3>Déposer une proposition</h3><textarea class="in" disabled placeholder="Décrivez la difficulté et la solution que vous proposez." aria-label="Proposition"></textarea><a class="btn btn-primary" href="/connexion?retour=/voix">Se connecter pour déposer</a></div>
+      )}
     </div>
   </section>
 </BaseLayout>

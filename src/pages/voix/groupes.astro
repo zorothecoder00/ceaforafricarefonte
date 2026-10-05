@@ -1,0 +1,30 @@
+---
+/* Commissions thématiques de Voix des entrepreneurs (CDC §7.7), ouvertes aux adhérents. */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { eq, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { workingGroupMember } from '../../db/schema/app';
+import { WGROUPS, SUBS } from '../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user;
+const groups = await db.select({ g: workingGroupMember.group, n: sql<number>`count(*)::int` }).from(workingGroupMember).groupBy(workingGroupMember.group);
+const mine = me ? (await db.select({ g: workingGroupMember.group }).from(workingGroupMember).where(eq(workingGroupMember.userId, me.id))).map((r) => r.g) : [];
+---
+<BaseLayout title="Groupes de travail">
+  <PageHead title="Groupes de travail" lead="Des commissions thématiques ouvertes aux adhérents, avec un espace collaboratif." crumbs={[['/voix', 'Voix des entrepreneurs'], ['', 'Groupes de travail']]} subnav={SUBS.voix} />
+  <section class="block">
+    <div class="wrap grid g3">
+      {WGROUPS.map((g) => { const n = groups.find((x) => x.g === g)?.n ?? 0; const on = mine.includes(g); return (
+        <div class="panel">
+          <h3>Commission {g}</h3>
+          <p class="small muted">{n} membre{n > 1 ? 's' : ''} · réunion mensuelle</p>
+          {me
+            ? <button class={`btn ${on ? 'btn-ghost' : 'btn-primary'} btn-sm`} type="button" data-post="/api/voix" data-body={JSON.stringify({ action: 'groupe', group: g, join: !on })} data-reload>{on ? 'Inscrit ✓' : 'Rejoindre'}</button>
+            : <a class="btn btn-primary btn-sm" href="/connexion?retour=/voix/groupes">Rejoindre</a>}
+        </div>
+      ); })}
+    </div>
+  </section>
+</BaseLayout>

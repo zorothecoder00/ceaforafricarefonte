@@ -1,0 +1,26 @@
+---
+/* Assistance aux membres : une difficulté signalée est routée vers l'équipe Voix des entrepreneurs (numéro de suivi, accusé de réception). */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { SUBS } from '../../data/site';
+
+const kinds = ["Paiement tardif d'un client public", 'Démarche administrative bloquée', 'Litige commercial', 'Contrôle fiscal', 'Autre'];
+---
+<BaseLayout title="Assistance aux membres">
+  <PageHead title="Assistance aux membres" lead="Signalez une difficulté (administration, paiements tardifs, litige) : nous vous orientons vers une ressource ou un partenaire." crumbs={[['/voix', 'Voix des entrepreneurs'], ['', 'Assistance']]} subnav={SUBS.voix} />
+  <section class="block">
+    <div class="wrap" style="max-width:720px">
+      <form class="panel" data-api="/api/demande" data-reset style="position:relative">
+        <input type="hidden" name="type" value="assistance" /><input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px" />
+        <label class="f" for="at">Type de difficulté</label><select class="in" id="at" name="difficulte">{kinds.map((k) => <option>{k}</option>)}</select>
+        <label class="f" for="ad">Description</label><textarea class="in" id="ad" name="message" required minlength="10"></textarea>
+        <div class="grid g2" style="gap:0 12px">
+          <div><label class="f" for="an">Nom</label><input class="in" id="an" name="name" minlength="2" autocomplete="name" /></div>
+          <div><label class="f" for="ac">E-mail ou téléphone</label><input class="in" id="ac" name="contact" minlength="5" /></div>
+        </div>
+        <label class="row small"><input type="checkbox" name="barometre" value="oui" /> J'accepte que cette difficulté soit comptée (de façon anonyme) dans le baromètre.</label>
+        <button class="btn btn-primary" type="submit" style="margin-top:12px">Envoyer</button>
+      </form>
+    </div>
+  </section>
+</BaseLayout>
