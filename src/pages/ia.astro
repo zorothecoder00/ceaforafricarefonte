@@ -1,0 +1,69 @@
+---
+/* Registre public des usages de l'IA (CDC §11, gouvernance) : partie non confidentielle.
+   Usages en service, fournisseur, données utilisées, garde-fous et volumes des 30 derniers jours (table ai_usage). */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHead from '../components/PageHead.astro';
+import { and, count, eq, gte } from 'drizzle-orm';
+import { db } from '../lib/db';
+import { aiUsage } from '../db/schema/app';
+import { AI_FEATURES, aiEnabled, type AiFeature } from '../lib/ai';
+
+export const prerender = false;
+
+// Usages déclarés : à passer à « true » quand l'usage est mis en service
+const USES: Record<AiFeature, { live: boolean; who: string; what: string; data: string; human: string }> = {
+  copilot: { live: true, who: 'Tous les visiteurs', what: 'Répond aux questions sur la plateforme, les programmes, l’entrepreneuriat et la finance, en citant les pages de la base de connaissances de CEA.', data: 'La question posée et la conversation en cours. Aucun accès à votre compte.', human: 'Aucune décision : l’assistant oriente vers les pages et l’équipe.' },
+  orientation: { live: false, who: 'Visiteurs et membres', what: 'Pose 5 questions et recommande un parcours (programme, cours, mentor, financement).', data: 'Vos 5 réponses.', human: 'Simple recommandation ; l’admission reste décidée par l’équipe.' },
+  redaction: { live: false, who: 'Entrepreneurs et employeurs', what: 'Propose un brouillon de fiche projet, de pitch, d’offre d’emploi ou de candidature.', data: 'Les éléments que vous saisissez dans le formulaire.', human: 'Vous relisez et modifiez le texte avant tout envoi.' },
+  tuteur: { live: false, who: 'Apprenants', what: 'Explique, résume et propose des quiz d’entraînement dans les cours de l’Académie.', data: 'Le contenu de la leçon et votre question.', human: 'Les certificats reposent sur les quiz officiels, pas sur le tuteur.' },
+  analyse: { live: false, who: 'Analystes CEA', what: 'Pré-analyse des dossiers Kapital : complétude, incohérences, synthèse.', data: 'Le dossier déposé par l’entrepreneur (traitement confidentiel).', human: 'L’analyste et le comité décident ; l’IA ne note ni ne sélectionne.' },
+  matching: { live: false, who: 'Tous', what: 'Propose des mises en relation (mentor, investisseur, talent, participant) avec un score expliqué.', data: 'Les informations de profil que vous avez choisi de partager.', human: 'Chaque mise en relation doit être acceptée par les deux personnes.' },
+  synthese: { live: false, who: 'Tous', what: 'Résumés et transcriptions des sessions, replays et réunions.', data: 'L’enregistrement ou la transcription de la session.', human: 'Les comptes rendus officiels sont relus par l’équipe.' },
+  moderation: { live: false, who: 'Équipe CEA', what: 'Signale les contenus inappropriés, annonces trompeuses et faux profils probables.', data: 'Les contenus publiés sur la plateforme.', human: 'Un modérateur décide de chaque retrait ou suspension.' },
+};
+
+const since = new Date(Date.now() - 30 * 864e5);
+const rows = await db.select({ feature: aiUsage.feature, n: count() }).from(aiUsage)
+  .where(and(gte(aiUsage.createdAt, since), eq(aiUsage.outcome, 'ok'))).groupBy(aiUsage.feature).catch(() => []);
+const volume = (f: string) => rows.find((r) => r.feature === f)?.n ?? 0;
+const enabled = aiEnabled();
+---
+<BaseLayout title="L'IA chez CEA" description="Registre public des usages de l'intelligence artificielle sur la plateforme CEA FOR AFRICA : usages, données, garde-fous.">
+  <PageHead title="L'intelligence artificielle chez CEA" lead="CEA Copilot est au service de chacun, de façon utile, transparente et encadrée. Voici la partie publique de notre registre des usages de l'IA." crumbs={[['', "L'IA chez CEA"]]} />
+  <section class="block">
+    <div class="wrap" style="max-width:900px">
+      <div class="panel" style="margin-bottom:20px">
+        <h2 style="font-size:1.2rem;margin-top:0">Nos engagements</h2>
+        <ul style="margin:0;padding-left:20px;line-height:1.7">
+          <li><b>Un humain décide.</b> Admission, sélection, investissement et publication sont toujours décidés par l'équipe CEA. L'IA propose, explique et documente.</li>
+          <li><b>Vos données ne servent pas à entraîner des modèles.</b> Nous utilisons les modèles Claude d'Anthropic par API ; les conditions commerciales de ce fournisseur excluent l'utilisation des données transmises pour entraîner ses modèles.</li>
+          <li><b>Les contenus générés sont signalés.</b> Chaque réponse produite par l'IA porte la mention « Réponse générée par IA » et, lorsqu'elle s'appuie sur nos pages, la liste de ses sources.</li>
+          <li><b>Des réponses sourcées.</b> CEA Copilot s'appuie sur la base de connaissances validée de CEA (pages d'aide, programmes, cours, événements, articles) et cite les passages utilisés.</li>
+          <li><b>Pas de conseil en investissement personnalisé.</b> L'IA ne recommande jamais d'acheter ou de vendre un titre.</li>
+          <li><b>Des algorithmes de mise en relation testés.</b> Leurs résultats sont vérifiés régulièrement pour détecter des biais selon le genre, le pays et la langue.</li>
+        </ul>
+      </div>
+
+      <h2 style="font-size:1.2rem">Registre des usages</h2>
+      {!enabled && <p class="small muted">L'assistant IA n'est pas activé en ce moment : CEA Copilot répond alors à partir de réponses préparées par l'équipe.</p>}
+      <div class="scroll-x">
+        <table class="t">
+          <thead><tr><th>Usage</th><th>Pour qui</th><th>Ce qu'il fait</th><th>Données utilisées</th><th>Décision humaine</th><th style="text-align:right">Réponses (30 j)</th></tr></thead>
+          <tbody>
+            {(Object.keys(USES) as AiFeature[]).map((k) => (
+              <tr>
+                <td><b>{AI_FEATURES[k]}</b><br /><span class={`tag ${USES[k].live ? 'ok' : 'info'}`}>{USES[k].live ? 'En service' : 'Prévu'}</span></td>
+                <td class="small">{USES[k].who}</td>
+                <td class="small">{USES[k].what}</td>
+                <td class="small">{USES[k].data}</td>
+                <td class="small">{USES[k].human}</td>
+                <td class="small" style="text-align:right">{USES[k].live ? volume(k).toLocaleString('fr-FR') : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="small muted" style="margin-top:16px">Fournisseur : Anthropic (modèles Claude), par API. Le registre interne, qui détaille les volumes, coûts et incidents, est tenu par l'équipe CEA. Une question ou une contestation sur un usage de l'IA ? <a href="/contact">Écrivez-nous</a>.</p>
+    </div>
+  </section>
+</BaseLayout>

@@ -652,3 +652,16 @@ export const eventWaitlist = pgTable('event_waitlist', {
   notifiedAt: ts('notified_at'), // prévenu·e qu'une place s'est libérée
   createdAt: ts('created_at').notNull().defaultNow(),
 }, (t) => [uniqueIndex('event_waitlist_unique').on(t.eventId, t.email)]);
+
+/* ===== Registre des usages de l'IA (CDC §11, gouvernance) : un appel au modèle = une ligne, sans le contenu échangé.
+   Sert au suivi interne (volumes, coûts, replis) et à la partie publique du registre (/ia : volumes par usage). */
+export const aiUsage = pgTable('ai_usage', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  feature: text('feature').notNull(), // copilot, orientation, redaction, tuteur, analyse, matching…
+  userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
+  model: text('model').notNull(),
+  inputTokens: integer('input_tokens').notNull().default(0),
+  outputTokens: integer('output_tokens').notNull().default(0),
+  outcome: text('outcome').notNull(), // ok, refus, erreur
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('ai_usage_feature_idx').on(t.feature, t.createdAt)]);

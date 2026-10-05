@@ -340,6 +340,8 @@ input[type=range]{width:100%;accent-color:var(--gold)}
 .msg{max-width:88%;padding:10px 13px;border-radius:14px;font-size:.95rem;white-space:pre-wrap}
 .msg.u{align-self:flex-end;background:var(--navy);color:var(--surface)}
 .msg.a{align-self:flex-start;background:var(--surface-2)}
+.msg-src,.msg-ai{display:block;margin-top:8px;font-size:.78rem;color:var(--muted);white-space:normal}
+.msg-ai{font-style:italic}
 .chat-f{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line)}
 .chat-f input{flex:1;border:1px solid var(--line);border-radius:999px;padding:10px 14px;background:var(--surface)}
 .sugg{display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 10px}

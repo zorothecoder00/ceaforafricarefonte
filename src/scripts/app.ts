@@ -318,11 +318,21 @@ const RULES: [RegExp, string, string][] = [
   [/contact|aide|support|help/, 'Écrivez-nous depuis /contact : votre message est transmis directement à la bonne équipe dans votre pays.', 'Write to us at /contact: your message goes straight to the right team in your country.'],
   [/commencer|start|perdu|lost/, 'Pas sûr de savoir par où commencer ? Choisissez votre profil sur /commencer.', 'Not sure where to start? Choose your profile at /commencer.'],
 ];
-function say(text: string, who: 'u' | 'a') {
+type Source = { n: number; title: string; url: string; kind: string };
+let said = 0; // numéro de réponse, pour des ancres de sources uniques
+function say(text: string, who: 'u' | 'a', ai?: { sources: Source[] }) {
   const m = document.createElement('div');
   m.className = 'msg ' + who;
-  if (who === 'a') m.innerHTML = esc(text).replace(/(\/[a-z0-9/-]+)/g, (p) => `<a href="${withLang(p)}">${withLang(p)}</a>`);
-  else m.textContent = text;
+  if (who === 'a') {
+    const k = String(++said);
+    m.innerHTML = esc(text).replace(/(\/[a-z0-9/-]+)/g, (p) => `<a href="${withLang(p)}">${withLang(p)}</a>`)
+      .replace(/\[(\d+)\]/g, (s, n) => (ai?.sources.some((x) => x.n === Number(n)) ? `<sup><a href="#src-${k}-${n}" aria-label="Source ${n}">[${n}]</a></sup>` : s));
+    // Gouvernance de l'IA (CDC §11) : réponse signalée comme générée par IA, avec ses sources
+    if (ai) {
+      m.insertAdjacentHTML('beforeend', (ai.sources.length ? `<span class="msg-src">Sources : ${ai.sources.map((s) => `<a id="src-${k}-${s.n}" href="${withLang(s.url)}" title="${esc(s.kind)}">[${s.n}] ${esc(s.title)}</a>`).join(' · ')}</span>` : '')
+        + `<span class="msg-ai">${EN ? 'AI-generated answer — check important information.' : 'Réponse générée par IA — vérifiez les informations importantes.'} <a href="${withLang('/ia')}">${EN ? 'About AI at CEA' : "L'IA chez CEA"}</a></span>`);
+    }
+  } else m.textContent = text;
   body?.appendChild(m);
   body!.scrollTop = body!.scrollHeight;
 }
@@ -339,16 +349,18 @@ async function answer(q: string) {
   wait.className = 'msg a';
   wait.textContent = '…';
   body?.appendChild(wait);
-  let reply = '';
+  let reply = '', sources: Source[] | undefined;
   try {
-    const r = await fetch('/api/copilot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: history.slice(-10), lang: EN ? 'en' : 'fr' }) });
+    // L'historique commence toujours par une question de l'utilisateur
+    const h = history.slice(-10);
+    const r = await fetch('/api/copilot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: h[0]?.role === 'assistant' ? h.slice(1) : h, lang: EN ? 'en' : 'fr' }) });
     const d = await r.json();
-    if (d.ok && d.reply) reply = d.reply;
+    if (d.ok && d.reply) { reply = d.reply; sources = d.sources ?? []; }
   } catch { /* hors ligne : réponses locales */ }
   wait.remove();
   if (!reply) reply = ruleAnswer(q);
-  history.push({ role: 'assistant', content: reply });
-  say(reply, 'a');
+  history.push({ role: 'assistant', content: reply.replace(/\[\d+\]/g, '') });
+  say(reply, 'a', sources ? { sources } : undefined);
 }
 $('#chatForm')?.addEventListener('submit', (e) => {
   e.preventDefault();
