@@ -54,13 +54,14 @@ const chev = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke
       <a class="btn btn-gold btn-sm" href={L('/kapital')} aria-label="CEA Kapital Invest"><span class="kfull">Kapital Invest</span><span class="kshort">Kapital</span></a>
       <a class="btn btn-primary btn-sm" id="loginBtn" href={L('/connexion')} data-auth="out">{t('login')}</a>
       <a class="btn btn-primary btn-sm" href="/espace" data-auth="in" hidden><span data-username>{t('mySpace')}</span></a>
+      <button class="btn btn-ghost btn-sm top-logout" type="button" data-auth="in" data-logout hidden title={t('logout')} aria-label={t('logout')}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></svg><span class="lo-txt">{t('logout')}</span></button>
       <button class="icon-btn menu-btn" id="menuBtn" type="button" aria-label={t('menu')} aria-expanded="false" aria-controls="drawer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18" /></svg></button>
     </div>
   </div>
 </header>
 <div class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label={t('mainNav')}>
   <div class="drawer-h">
-    <a class="brand" href={L('/')}><span><span class="brand-mark">CEA</span><br /><span class="brand-sub">FOR AFRICA</span></span></a>
+    <a class="brand" href={L('/')} aria-label={t('brandHome')}><img class="logo" src="/logo.png" alt="CEA FOR AFRICA" width="101" height="56" /></a>
     <button class="icon-btn" type="button" id="drawerClose" aria-label={t('close')}>✕</button>
   </div>
   <div class="drawer-b">

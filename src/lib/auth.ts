@@ -11,7 +11,7 @@ import { user, session, account, verification, twoFactor as twoFactorTable, pass
 import { profile, userRole, consent, auditLog } from '../db/schema/app';
 import { dossier } from '../db/schema/kapital';
 import { APIError } from 'better-auth/api';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { env, requireEnv } from './env';
 import { sendOtp, sendEmail } from './messaging';
 
@@ -62,6 +62,14 @@ export const auth = betterAuth({
           await db.insert(userRole).values({ userId: u.id, role: 'membre' }).onConflictDoNothing();
           await db.insert(consent).values({ userId: u.id, kind: 'compte', granted: true });
           await db.insert(auditLog).values({ actorId: u.id, action: 'compte.creation', target: u.id });
+          // Premier compte d'une base sans administrateur : il devient administrateur (les suivants sont nommés depuis
+          // /admin/membres). Verrou de transaction : deux inscriptions simultanées ne peuvent pas créer deux administrateurs.
+          const first = await db.transaction(async (tx) => {
+            await tx.execute(sql`select pg_advisory_xact_lock(4242001)`);
+            const r = await tx.execute(sql`insert into user_role (user_id, role) select ${u.id}, 'admin' where not exists (select 1 from user_role where role = 'admin')`);
+            return (r.rowCount ?? 0) > 0;
+          });
+          if (first) await db.insert(auditLog).values({ actorId: u.id, action: 'role.ajout.premier_admin', target: u.id, meta: { role: 'admin' } });
         },
       },
     },
