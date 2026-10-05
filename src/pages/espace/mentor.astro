@@ -41,7 +41,7 @@ const done = sessions.filter((x) => x.s.status === 'realisee').length;
             <form data-api="/api/mentorat" data-method="PATCH" style="margin-top:10px">
               <input type="hidden" name="id" value={s.id} />
               <label class="f" for={`n-${s.id}`}>Compte rendu (confidentiel : vous, l’entrepreneur et le chargé de programme)</label>
-              <textarea class="in" id={`n-${s.id}`} name="mentorNotes" maxlength="5000">{s.mentorNotes ?? ''}</textarea>
+              <textarea class="in" id={`n-${s.id}`} name="mentorNotes" maxlength="5000" data-ai="compte-rendu">{s.mentorNotes ?? ''}</textarea>
               <button class="btn btn-ghost btn-sm" type="submit">Enregistrer le compte rendu</button>
             </form>
           )}

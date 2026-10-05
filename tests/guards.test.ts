@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../src/lib/db', () => ({ db: {} }));
 vi.mock('../src/lib/auth', () => ({ auth: {} }));
 
-const { staffApi } = await import('../src/lib/admin');
+const { staffApi, staffApiAll } = await import('../src/lib/admin');
 const { requireUser, requirePermission } = await import('../src/lib/session');
 
 const user = (roles: string[], twoFactorEnabled = false) => ({ id: 'u1', name: 'Test', email: 't@cea.demo', roles, twoFactorEnabled });
@@ -38,4 +38,15 @@ describe('staffApi (back-office)', () => {
   it("refuse à l'analyste les pièces KYC, même avec double authentification", () => expect(status(staffApi(user(['analyste'], true), 'pieces_kyc', 'L'))).toBe(403));
 
   it("refuse à l'administrateur la validation des décisions de comité", () => expect(status(staffApi(user(['admin'], true), 'decision_comite', 'V'))).toBe(403));
+});
+
+describe('staffApiAll', () => {
+  it("refuse un entrepreneur sur le dossier Kapital d'un autre (droit limité à ses propres dossiers)", () => {
+    expect(status(staffApi(user(['entrepreneur']), 'dossier_kapital', 'M'))).toBe(200); // droit « M* » : passe la garde simple
+    expect(status(staffApiAll(user(['entrepreneur']), 'dossier_kapital', 'M'))).toBe(403);
+  });
+  it('laisse passer un analyste avec double authentification', () => {
+    expect(status(staffApiAll(user(['analyste'], true), 'dossier_kapital', 'M'))).toBe(200);
+    expect(status(staffApiAll(user(['analyste'], false), 'dossier_kapital', 'M'))).toBe(403);
+  });
 });

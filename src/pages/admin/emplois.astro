@@ -7,11 +7,14 @@ import { job, hireDeclaration, jobStatusEnum } from '../../db/schema/app';
 import { user } from '../../db/schema/auth';
 import { can } from '../../lib/rbac';
 import { country } from '../../data/site';
+import AiModNote, { type ModNote } from '../../components/AiModNote.astro';
+import { aiEnabled, latestNotes } from '../../lib/ai';
 
 export const prerender = false;
 const me = Astro.locals.user!;
 const st = (Astro.url.searchParams.get('statut') ?? 'en_moderation') as (typeof jobStatusEnum.enumValues)[number];
 const rows = await db.select({ j: job, employer: user.email }).from(job).leftJoin(user, eq(user.id, job.employerId)).where(eq(job.status, jobStatusEnum.enumValues.includes(st) ? st : 'en_moderation')).orderBy(desc(job.createdAt)).limit(200);
+const notes = await latestNotes<ModNote>('job', rows.map((r) => r.j.id), 'moderation');
 const hires = can(me.roles, 'parametres', 'M') ? await db.select().from(hireDeclaration).orderBy(desc(hireDeclaration.hiredOn)).limit(100) : [];
 const L: Record<string, string> = { brouillon: 'Brouillons', en_moderation: 'À valider', publiee: 'Publiées', fermee: 'Fermées', refusee: 'Refusées' };
 const sixMonths = Date.now() - 182 * 864e5, year = Date.now() - 365 * 864e5;
@@ -24,6 +27,7 @@ const sixMonths = Date.now() - 182 * 864e5, year = Date.now() - 365 * 864e5;
       <div class="row between"><b>{j.featured ? '★ ' : ''}{j.title} — {j.company}</b><span class="xs muted">{country(j.country)} · {j.type}{j.remote ? ' · télétravail' : ''}</span></div>
       <div class="xs muted">{employer ?? 'Saisie CEA'} · {j.salary ?? 'Salaire non précisé'} · {j.skills.join(', ')}</div>
       {j.description && <details><summary class="small">Description</summary><p class="small" style="white-space:pre-wrap">{j.description}</p></details>}
+      {j.status === 'en_moderation' && <AiModNote kind="job" id={j.id} note={notes.get(j.id)} enabled={aiEnabled()} />}
       <div class="row" style="gap:6px;margin-top:8px">
         {j.status !== 'publiee' && <button class="btn btn-primary btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'job.moderate', id: j.id, status: 'publiee' })} data-reload>Publier</button>}
         {j.status === 'en_moderation' && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'job.moderate', id: j.id, status: 'refusee' })} data-confirm="Refuser cette offre ?" data-reload>Refuser</button>}

@@ -10,6 +10,7 @@ import { user } from '../../../db/schema/auth';
 import { PIPELINE, statusLabel, INSTRUMENT_LABEL, VERIF_LABEL } from '../../../lib/kapital';
 import { can } from '../../../lib/rbac';
 import { country } from '../../../data/site';
+import { latestNote, aiEnabled } from '../../../lib/ai';
 
 export const prerender = false;
 const me = Astro.locals.user!;
@@ -28,6 +29,9 @@ const [diag] = await db.select().from(diagnostic).where(eq(diagnostic.dossierId,
 const kyb = await db.select().from(kycCheck).where(eq(kycCheck.dossierId, id));
 const analysts = await db.select({ id: user.id, name: user.name }).from(userRole).innerJoin(user, eq(user.id, userRole.userId)).where(eq(userRole.role, 'analyste'));
 const x = d.d;
+type Analyse = { synthese: string; completude: { element: string; statut: 'complet' | 'partiel' | 'manquant'; commentaire: string }[]; incoherences: { point: string; detail: string }[]; questions: string[] };
+const ia = edit ? await latestNote<Analyse>('dossier', id, 'analyse') : null;
+const ST: Record<string, string> = { complet: 'ok', partiel: 'gold', manquant: 'bad' };
 const raised = ints.reduce((a, r) => a + (r.i.amountXof ?? 0), 0);
 ---
 <AdminLayout title={`${x.companyName} — ${x.reference}`} lead={`${country(x.country)} · ${x.sector ?? '—'} · ${x.stage ?? '—'} · porteur : ${d.owner} (${d.email})`} obj="dossier_kapital">
@@ -81,6 +85,25 @@ const raised = ints.reduce((a, r) => a + (r.i.amountXof ?? 0), 0);
           </form>
         </>
       )}
+      {edit && (
+        <div class="panel" style="margin-top:14px">
+          <h3>Pré-analyse IA</h3>
+          <p class="xs muted" style="margin:-4px 0 8px">Complétude, incohérences et questions, à partir des informations du dossier. L'IA ne note ni ne recommande : l'analyste et le comité décident.</p>
+          {ia && (
+            <div class="small">
+              <p class="xs muted" style="margin:0 0 6px">Générée par IA le {ia.createdAt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</p>
+              <p style="white-space:pre-wrap">{ia.content.synthese}</p>
+              <b>Complétude</b>
+              <ul style="margin:4px 0 8px;padding-left:18px">{ia.content.completude.map((c) => <li><span class={`tag ${ST[c.statut] ?? ''}`}>{c.statut}</span> {c.element}{c.commentaire && <span class="muted"> — {c.commentaire}</span>}</li>)}</ul>
+              {ia.content.incoherences.length > 0 && <><b>Incohérences à vérifier</b><ul style="margin:4px 0 8px;padding-left:18px">{ia.content.incoherences.map((x) => <li><b>{x.point}</b> : {x.detail}</li>)}</ul></>}
+              {ia.content.questions.length > 0 && <><b>Questions à poser</b><ol style="margin:4px 0 8px;padding-left:18px">{ia.content.questions.map((q) => <li>{q}</li>)}</ol></>}
+            </div>
+          )}
+          {aiEnabled()
+            ? <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/ia" data-body={JSON.stringify({ action: 'dossier.analyse', id: x.id })} data-reload>{ia ? 'Relancer la pré-analyse' : 'Lancer la pré-analyse'}</button>
+            : <p class="xs muted" style="margin:0">Assistance IA non activée.</p>}
+        </div>
+      )}
       {kyb.length > 0 && <div class="panel" style="margin-top:14px"><h3>KYB</h3>{kyb.map((k) => <div class="list-row"><span class="small">{k.kind}</span><span class="tag">{k.status}</span></div>)}</div>}
       <div class="panel" style="margin-top:14px">
         <h3>Comité d'investissement</h3>
@@ -90,7 +113,7 @@ const raised = ints.reduce((a, r) => a + (r.i.amountXof ?? 0), 0);
             <input type="hidden" name="action" value="committee.decide" /><input type="hidden" name="id" value={x.id} />
             <label class="f" for="cm">Date de séance</label><input class="in" id="cm" name="meetingOn" type="date" required />
             <label class="f" for="cd">Décision</label><select class="in" id="cd" name="decision"><option value="favorable">Favorable</option><option value="ajourne">Ajourné</option><option value="defavorable">Défavorable</option></select>
-            <label class="f" for="cmn">Procès-verbal</label><textarea class="in" id="cmn" name="minutes"></textarea>
+            <label class="f" for="cmn">Procès-verbal</label><textarea class="in" id="cmn" name="minutes" data-ai="proces-verbal"></textarea>
             <label class="f" for="cc">Conflit d'intérêts déclaré (facultatif)</label><input class="in" id="cc" name="conflicts" />
             <button class="btn btn-primary btn-sm" type="submit">Enregistrer la décision</button>
           </form>

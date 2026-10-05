@@ -665,3 +665,15 @@ export const aiUsage = pgTable('ai_usage', {
   outcome: text('outcome').notNull(), // ok, refus, erreur
   createdAt: ts('created_at').notNull().defaultNow(),
 }, (t) => [index('ai_usage_feature_idx').on(t.feature, t.createdAt)]);
+
+/* ===== Notes produites par l'IA pour l'équipe (CDC §11) : pré-analyse d'un dossier Kapital, avis de modération…
+   L'IA propose et documente, l'équipe décide : ces notes ne déclenchent aucune action et restent internes. */
+export const aiNote = pgTable('ai_note', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  subjectType: text('subject_type').notNull(), // dossier, post, job
+  subjectId: text('subject_id').notNull(),
+  feature: text('feature').notNull(), // analyse, moderation
+  content: jsonb('content').notNull(),
+  createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('ai_note_subject_idx').on(t.subjectType, t.subjectId, t.createdAt)]);

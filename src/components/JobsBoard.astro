@@ -4,12 +4,13 @@
 import JobCard from './JobCard.astro';
 import KapitalAd from './KapitalAd.astro';
 import { country } from '../data/site';
-import { mySkills, type JobRow } from '../lib/jobs';
+import { myTalent, type JobRow } from '../lib/jobs';
 import { STUDY_LEVELS } from '../data/etudes';
 interface Props { jobs: JobRow[]; student?: boolean; avail?: { from: string | null; until: string | null } }
 const { jobs, student = false, avail } = Astro.props;
 const me = Astro.locals.user;
-const skills = await mySkills(me?.id);
+const talent = await myTalent(me?.id);
+const skills = talent.skills;
 const types = [...new Set(jobs.map((j) => j.type))];
 const countries = [...new Set(jobs.map((j) => j.c))];
 ---
@@ -28,7 +29,7 @@ const countries = [...new Set(jobs.map((j) => j.c))];
     <div class="split">
       <div>
         <p class="small muted" data-count>{jobs.length} offre{jobs.length > 1 ? 's' : ''}</p>
-        <div data-list>{jobs.map((j) => <JobCard j={j} mine={skills} />)}</div>
+        <div data-list>{jobs.map((j) => <JobCard j={j} mine={skills} myCountry={talent.country} />)}</div>
         <div class="empty" data-empty hidden={jobs.length > 0}>Aucune offre ne correspond. Retirez un filtre ou créez une alerte.</div>
       </div>
       <aside>

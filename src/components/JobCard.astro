@@ -1,11 +1,12 @@
 ---
-/* Carte d'offre d'emploi (CDC §7.4) : candidature en un clic, sauvegarde, signalement, correspondance « n compétences sur m ». */
+/* Carte d'offre d'emploi (CDC §7.4) : candidature en un clic, sauvegarde, signalement, score de correspondance expliqué (CDC §11). */
 import { country, dateFr } from '../data/site';
-interface Props { j: { id: string; t: string; co: string; c: string; type: string; remote: boolean; sal: string; skills: string[]; featured?: boolean; saved?: boolean; start?: string | null; dur?: number | null; level?: string | null; tutor?: string | null }; mine?: string[] }
-const { j, mine = [] } = Astro.props;
+import { jobMatch } from '../lib/matching';
+interface Props { j: { id: string; t: string; co: string; c: string; type: string; remote: boolean; sal: string; skills: string[]; featured?: boolean; saved?: boolean; start?: string | null; dur?: number | null; level?: string | null; tutor?: string | null }; mine?: string[]; myCountry?: string | null }
+const { j, mine = [], myCountry = null } = Astro.props;
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const have = new Set(mine.map(norm));
-const match = j.skills.filter((s) => have.has(norm(s))).length;
+const m = mine.length ? jobMatch({ skills: mine, country: myCountry }, j) : null;
 const logged = !!Astro.locals.user;
 ---
 <div class="panel row between" style="align-items:flex-start;margin-bottom:12px" data-type={j.type} data-c={j.c} data-remote={j.remote ? '1' : '0'} data-q={`${j.t} ${j.co} ${j.skills.join(' ')}`} data-start={j.start ?? ''} data-level={j.level ?? ''} data-dur={j.dur ?? ''}>
@@ -14,7 +15,8 @@ const logged = !!Astro.locals.user;
     <div class="muted small">{j.co} · {country(j.c)} · {j.type}{j.remote ? ' · Télétravail' : ''}</div>
     {(j.start || j.dur) && <div class="small" style="margin-top:6px">{j.start && <>Début : <b>{dateFr(j.start)}</b></>}{j.dur && <> · Durée : <b>{j.dur} mois</b></>}{j.level && <> · {j.level}</>}{j.tutor && <> · Tuteur : {j.tutor}</>}</div>}
     <div class="row" style="margin-top:10px">{j.skills.map((s) => <span class={`tag ${have.has(norm(s)) ? 'ok' : ''}`}>{s}</span>)}</div>
-    <div class="small" style="margin-top:8px">Rémunération : {j.sal}{mine.length > 0 && <> · <b>{match}/{j.skills.length} compétences correspondent</b></>}</div>
+    <div class="small" style="margin-top:8px">Rémunération : {j.sal}</div>
+    {m && <details class="xs" style="margin-top:6px"><summary style="cursor:pointer"><b style="color:var(--ok)">Correspondance {m.score}/100</b> — pourquoi ?</summary><ul style="margin:4px 0 0;padding-left:18px">{m.factors.map((f) => <li>{f.label} : {Math.round(f.points)}/{f.max}</li>)}</ul></details>}
   </div>
   <div class="row">
     {logged ? (

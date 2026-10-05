@@ -5,7 +5,8 @@
    Sans clé d'API, askModel renvoie null : chaque usage prévoit alors un repli sans IA. */
 import Anthropic from '@anthropic-ai/sdk';
 import { db } from './db';
-import { aiUsage } from '../db/schema/app';
+import { and, desc, eq, inArray } from 'drizzle-orm';
+import { aiNote, aiUsage } from '../db/schema/app';
 import { env } from './env';
 
 export const aiModel = () => env('COPILOT_MODEL') || 'claude-opus-5-5';
@@ -72,3 +73,18 @@ export async function askModel(a: Ask): Promise<Anthropic.Beta.BetaMessage | nul
 
 /** Texte de la réponse (blocs texte mis bout à bout). */
 export const replyText = (m: Anthropic.Beta.BetaMessage) => m.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('').trim();
+
+/** Dernière note IA d'un sujet (pré-analyse, avis de modération), pour l'affichage dans le back-office. */
+export async function latestNote<T>(subjectType: string, subjectId: string, feature: string) {
+  const [n] = await db.select().from(aiNote).where(and(eq(aiNote.subjectType, subjectType), eq(aiNote.subjectId, subjectId), eq(aiNote.feature, feature))).orderBy(desc(aiNote.createdAt)).limit(1);
+  return n ? { ...n, content: n.content as T } : null;
+}
+
+/** Dernières notes IA d'une liste de sujets (une requête), indexées par identifiant. */
+export async function latestNotes<T>(subjectType: string, subjectIds: string[], feature: string) {
+  const out = new Map<string, { content: T; createdAt: Date }>();
+  if (!subjectIds.length) return out;
+  const rows = await db.select().from(aiNote).where(and(eq(aiNote.subjectType, subjectType), inArray(aiNote.subjectId, subjectIds), eq(aiNote.feature, feature))).orderBy(desc(aiNote.createdAt));
+  for (const r of rows) if (!out.has(r.subjectId)) out.set(r.subjectId, { content: r.content as T, createdAt: r.createdAt });
+  return out;
+}

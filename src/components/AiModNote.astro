@@ -1,0 +1,16 @@
+---
+/* Avis de modération proposé par l'IA (CDC §11) : affiché au modérateur, qui décide. Voir /api/admin/ia. */
+export type ModNote = { avis: 'conforme' | 'a_verifier' | 'a_retirer'; motifs: string[]; explication: string };
+interface Props { kind: 'post' | 'job'; id: string; note?: { content: ModNote; createdAt: Date }; enabled: boolean }
+const { kind, id, note, enabled } = Astro.props;
+const AVIS: Record<ModNote['avis'], [string, string]> = { conforme: ['ok', 'Conforme'], a_verifier: ['gold', 'À vérifier'], a_retirer: ['bad', 'À retirer'] };
+---
+{note && (
+  <p class="xs" style="margin:8px 0 0;padding:6px 8px;border-left:3px solid var(--line)">
+    <b>Avis IA :</b> <span class={`tag ${AVIS[note.content.avis][0]}`}>{AVIS[note.content.avis][1]}</span>
+    {note.content.motifs.length > 0 && <span class="muted"> ({note.content.motifs.map((m) => m.replace(/_/g, ' ')).join(', ')})</span>}
+    {' '}{note.content.explication}
+    <span class="muted"> — généré par IA, {note.createdAt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} ; la décision vous revient.</span>
+  </p>
+)}
+{enabled && !note && <button class="btn btn-ghost btn-sm" type="button" style="margin-top:8px" data-post="/api/admin/ia" data-body={JSON.stringify({ action: 'moderation', kind, id })} data-reload>Avis IA</button>}

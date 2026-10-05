@@ -1,28 +1,27 @@
 ---
-/* Liste des mentors ou experts avec créneaux réservables (CDC §7.6). Matching simple : secteur et langue du profil du visiteur. */
+/* Liste des mentors ou experts avec créneaux réservables (CDC §7.6). Mise en relation avec score expliqué (CDC §11) : voir src/lib/matching.ts. */
 import { and, eq, gt, sql } from 'drizzle-orm';
 import { db } from '../lib/db';
 import { mentorProfile, mentoringSession, profile } from '../db/schema/app';
 import { user } from '../db/schema/auth';
 import { upcomingSlots, type WeeklySlot } from '../lib/slots';
 import Money from './Money.astro';
+import { mentorMatch } from '../lib/matching';
 import { initials } from '../data/site';
 
 interface Props { kind: 'mentorat' | 'expert' }
 const { kind } = Astro.props;
 const me = Astro.locals.user;
-const [mine] = me ? await db.select({ sector: profile.sector, lang: profile.lang }).from(profile).where(eq(profile.userId, me.id)) : [];
+const [mine] = me ? await db.select({ sector: profile.sector, lang: profile.lang, needs: profile.needs }).from(profile).where(eq(profile.userId, me.id)) : [];
 const rows = await db.select({ id: user.id, name: user.name, m: mentorProfile, country: profile.country, avg: sql<number | null>`(select round(avg(${mentoringSession.menteeRating})::numeric, 1) from ${mentoringSession} where ${mentoringSession.mentorId} = ${user.id} and ${mentoringSession.menteeRating} is not null)` })
   .from(mentorProfile).innerJoin(user, eq(user.id, mentorProfile.userId)).leftJoin(profile, eq(profile.userId, user.id))
   .where(and(eq(mentorProfile.kind, kind), eq(mentorProfile.active, true)));
 const taken = await db.select({ mentorId: mentoringSession.mentorId, at: mentoringSession.startsAt }).from(mentoringSession).where(gt(mentoringSession.startsAt, new Date()));
-// Score de correspondance expliqué (CDC §11 : matching avec score expliqué)
+// Score de correspondance expliqué (CDC §11), calculé seulement pour un visiteur connecté
 const scored = rows.map((r) => {
-  const reasons: string[] = [];
-  if (mine?.sector && r.m.sectors.some((s) => s.toLowerCase().includes(mine.sector!.toLowerCase()))) reasons.push('même secteur');
-  if (mine?.lang && r.m.languages.some((l) => l.toLowerCase().startsWith(mine.lang === 'en' ? 'ang' : 'fr'))) reasons.push('même langue');
-  return { ...r, reasons, slots: upcomingSlots(r.m.slots as WeeklySlot[], taken.filter((t) => t.mentorId === r.id).map((t) => t.at)) };
-}).sort((a, b) => b.reasons.length - a.reasons.length);
+  const match = mine ? mentorMatch(mine, { ...r.m, rating: r.avg ? Number(r.avg) * 10 : null }) : null;
+  return { ...r, match, slots: upcomingSlots(r.m.slots as WeeklySlot[], taken.filter((t) => t.mentorId === r.id).map((t) => t.at)) };
+}).sort((a, b) => (b.match?.score ?? 0) - (a.match?.score ?? 0));
 ---
 <div class="grid g2">
   {scored.map((r) => (
@@ -33,7 +32,7 @@ const scored = rows.map((r) => {
       </div>
       <p class="small" style="margin:12px 0 6px">{r.m.expertise}</p>
       {r.m.sectors.length > 0 && <div class="row" style="margin-bottom:8px">{r.m.sectors.map((s) => <span class="tag">{s}</span>)}</div>}
-      {r.reasons.length > 0 && <p class="xs" style="color:var(--ok);margin:0 0 8px">Correspondance : {r.reasons.join(' + ')}</p>}
+      {r.match && <details class="xs" style="margin:0 0 8px"><summary style="cursor:pointer"><b style="color:var(--ok)">Correspondance {r.match.score}/100</b> — pourquoi ?</summary><ul style="margin:4px 0 0;padding-left:18px">{r.match.factors.map((f) => <li>{f.label} : {f.points}/{f.max}</li>)}</ul><p class="muted" style="margin:4px 0 0">Calcul à partir de votre profil (secteur, besoins, langue). Ni le genre ni le pays n'entrent dans le score. <a href="/ia">En savoir plus</a></p></details>}
       {kind === 'expert' && <p class="small"><b><Money xof={r.m.priceXof} /></b> la consultation de 45 minutes</p>}
       {me && me.id !== r.id ? (
         r.slots.length ? (

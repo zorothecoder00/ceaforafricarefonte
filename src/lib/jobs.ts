@@ -18,6 +18,13 @@ export async function listJobs(opts: { userId?: string; types?: string[]; diaspo
   return rows.map(({ j, saved }) => ({ id: j.id, t: j.title, co: j.company, c: j.country, type: j.type, remote: j.remote, diaspora: j.diaspora, sal: j.salary ?? 'Selon profil', skills: j.skills, featured: j.featured, saved, start: j.startDate, dur: j.durationMonths, level: j.studyLevel, tutor: j.tutor }));
 }
 
+/** Compétences et pays du profil, pour le score de correspondance des offres (CDC §11). */
+export async function myTalent(userId?: string): Promise<{ skills: string[]; country: string | null }> {
+  if (!userId) return { skills: [], country: null };
+  const [p] = await db.select({ skills: profile.skills, country: profile.country }).from(profile).where(eq(profile.userId, userId));
+  return { skills: p?.skills ?? [], country: p?.country ?? null };
+}
+
 export async function mySkills(userId?: string) {
   if (!userId) return [];
   const [p] = await db.select({ skills: profile.skills }).from(profile).where(eq(profile.userId, userId));

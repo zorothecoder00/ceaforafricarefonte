@@ -1,4 +1,4 @@
-/* Rédaction assistée (CDC §11) : propose un brouillon pour un champ de formulaire ; l'utilisateur garde la main
+/* Rédaction assistée et synthèses (CDC §11) : propose un brouillon pour un champ de formulaire ; l'utilisateur garde la main
    (il relit, puis remplace, complète ou ignore). Réservée aux membres connectés.
    POST { kind, field, label, current, fields: { nom: valeur… }, lang } → { ok, draft } */
 import type { APIRoute } from 'astro';
@@ -14,7 +14,11 @@ const KINDS = {
   pitch: "le pitch oral d'une minute (environ 150 mots) d'un projet, à partir de sa fiche projet : accroche, problème, solution, marché, traction, demande",
   offre: "la description d'une offre d'emploi, de stage ou de mission publiée par un employeur : contexte de l'entreprise, missions, profil recherché, conditions",
   candidature: "une réponse du dossier de candidature d'un entrepreneur à un programme d'accompagnement de CEA",
+  // Synthèses : mise en forme de notes prises pendant une séance ou une réunion
+  'compte-rendu': "le compte rendu structuré d'une séance de mentorat, à partir des notes brutes du mentor : objectifs, points abordés, conseils, prochaines étapes avec responsable",
+  'proces-verbal': "le procès-verbal d'une séance du comité d'investissement de CEA Kapital Invest, à partir des notes brutes : participants, dossier examiné, points discutés, décision et conditions, réserves ; la décision doit rester exactement celle notée",
 } as const;
+const SYNTHESES = new Set(['compte-rendu', 'proces-verbal']);
 
 const Body = z.object({
   kind: z.enum(Object.keys(KINDS) as [keyof typeof KINDS, ...(keyof typeof KINDS)[]]),
@@ -45,7 +49,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const { kind, label, current, fields, lang } = p.data;
   const context = Object.entries(fields).filter(([k, v]) => k !== p.data.field && v.trim()).map(([k, v]) => `${k} : ${v.trim()}`).join('\n');
   const res = await askModel({
-    feature: 'redaction',
+    feature: SYNTHESES.has(kind) ? 'synthese' : 'redaction',
     userId: u.id,
     system: SYSTEM,
     messages: [{ role: 'user', content: `À rédiger : ${KINDS[kind]}.\nChamp : « ${label} »\nLangue du formulaire : ${lang === 'en' ? 'anglais' : 'français'}\n\nAutres champs du formulaire :\n${context || '(aucun)'}\n\nTexte déjà saisi dans ce champ :\n${current.trim() || '(vide)'}` }],

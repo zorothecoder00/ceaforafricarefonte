@@ -42,6 +42,21 @@ const related = COURSES.filter((x) => x.id !== c.id && (x.th === c.th || x.lv ==
             <ul>{content?.lessons[i]?.k.map((k) => <li>{k}</li>)}</ul>
             <label class="f" for={`note-${i}`}>Mes notes (enregistrées sur cet appareil)</label>
             <textarea class="in" id={`note-${i}`} data-note={i} placeholder="Vos idées pour votre entreprise…"></textarea>
+            {content?.lessons[i] && (
+              <div class="tutor" data-tutor={i} style="border:1px dashed var(--line);border-radius:10px;padding:10px 12px;margin-top:12px">
+                <b class="small">Tuteur IA</b> <span class="xs muted">— réponses générées par IA à partir de cette leçon</span>
+                <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px">
+                  <button class="btn btn-ghost btn-sm" type="button" data-act="expliquer">Expliquer simplement</button>
+                  <button class="btn btn-ghost btn-sm" type="button" data-act="resumer">Résumer</button>
+                  <button class="btn btn-ghost btn-sm" type="button" data-act="quiz">M'entraîner (quiz)</button>
+                </div>
+                <form class="row" style="gap:6px;margin-top:8px" data-act="question">
+                  <input class="in" name="question" maxlength="600" placeholder="Posez une question sur cette leçon" aria-label="Question au tuteur" style="flex:1;min-width:180px" />
+                  <button class="btn btn-ghost btn-sm" type="submit">Demander</button>
+                </form>
+                <div class="small" data-out aria-live="polite" style="margin-top:8px;white-space:pre-wrap"></div>
+              </div>
+            )}
             <div class="row between" style="margin-top:8px">
               <button class="btn btn-ghost btn-sm" type="button" data-go={i - 1} disabled={i === 0}>← Précédente</button>
               <button class="btn btn-primary btn-sm" type="button" data-done={i}>Marquer comme terminée</button>
@@ -226,4 +241,33 @@ const related = COURSES.filter((x) => x.id !== c.id && (x.th === c.th || x.lv ==
   let start = 0;
   try { start = Number(localStorage.getItem(`cea-course-${id}-at`) ?? 0); } catch { /* ignoré */ }
   show(Math.min(Math.max(start, 0), last), false);
+
+  /* Tuteur IA (CDC §11) : explication, résumé, quiz d'entraînement (sans effet sur le certificat) ou question libre */
+  const escT = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+  document.querySelectorAll<HTMLElement>('[data-tutor]').forEach((box) => {
+    const out = box.querySelector<HTMLElement>('[data-out]')!;
+    const ask = async (action: string, question?: string) => {
+      out.innerHTML = '<span class="muted">Le tuteur réfléchit…</span>';
+      const r = await fetch('/api/academie/tuteur', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ course: id, lesson: Number(box.dataset.tutor), action, question, lang: prefix ? 'en' : 'fr' }) }).catch(() => null);
+      const d = r ? await r.json().catch(() => ({})) : {};
+      if (r?.status === 401) { out.innerHTML = `<a href="/connexion?retour=${encodeURIComponent(location.pathname)}">Connectez-vous</a> pour utiliser le tuteur.`; return; }
+      if (!d.ok) { out.textContent = d.error ?? 'Erreur réseau.'; return; }
+      if (d.text) { out.textContent = d.text; return; }
+      // Quiz d'entraînement : correction immédiate, côté navigateur
+      out.innerHTML = '<p class="xs muted" style="margin:0 0 6px">Quiz d\'entraînement généré par IA — il ne compte pas pour le certificat.</p>' + d.quiz.map((q: { q: string; o: string[]; a: number; why: string }, qi: number) =>
+        `<fieldset style="border:0;padding:0;margin:0 0 10px" data-a="${q.a}"><legend><b>${qi + 1}. ${escT(q.q)}</b></legend>${q.o.map((o, oi) => `<label class="row small" style="gap:6px"><input type="radio" name="tq-${box.dataset.tutor}-${qi}" value="${oi}" /> ${escT(o)}</label>`).join('')}<p class="xs" data-why hidden>${escT(q.why)}</p></fieldset>`).join('');
+      out.querySelectorAll<HTMLFieldSetElement>('fieldset').forEach((fs) => fs.addEventListener('change', (e) => {
+        const ok = (e.target as HTMLInputElement).value === fs.dataset.a;
+        const why = fs.querySelector<HTMLElement>('[data-why]')!;
+        why.hidden = false;
+        why.innerHTML = `<b style="color:var(${ok ? '--ok' : '--bad'})">${ok ? 'Bonne réponse.' : 'Pas tout à fait.'}</b> ${escT(why.dataset.t ??= why.textContent ?? '')}`;
+      }));
+    };
+    box.querySelectorAll<HTMLButtonElement>('button[data-act]').forEach((b) => b.addEventListener('click', () => ask(b.dataset.act!)));
+    box.querySelector<HTMLFormElement>('form')!.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const inp = (e.target as HTMLFormElement).question as HTMLInputElement;
+      if (inp.value.trim()) ask('question', inp.value.trim());
+    });
+  });
 </script>
