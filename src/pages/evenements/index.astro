@@ -18,21 +18,35 @@ const types = [...new Set(Object.values(TYPE))];
 const countries = [...new Set(EVENTS.map((e) => e.c))];
 // Points de la vue carte : événements avec un lieu physique
 const points = list.filter((e) => e.extra?.venue).map((e) => ({ id: e.id, t: e.t, date: e.date, name: e.extra!.venue!.name, lat: e.extra!.venue!.lat, lon: e.extra!.venue!.lon }));
+// Vue calendrier : grilles mensuelles couvrant les événements à venir (au plus 4 mois)
+const months: { label: string; cells: (null | { d: number; evs: typeof list })[] }[] = [];
+if (list.length) {
+  const start = new Date(list[0].date.slice(0, 7) + '-01T00:00:00');
+  for (let i = 0; i < 4; i++) {
+    const y = start.getFullYear(), m = start.getMonth() + i, first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate();
+    const evs = list.filter((e) => { const d = new Date(e.date + 'T00:00:00'); return d.getFullYear() === first.getFullYear() && d.getMonth() === first.getMonth(); });
+    if (!evs.length && i > 0) continue;
+    const cells: (null | { d: number; evs: typeof list })[] = Array((first.getDay() + 6) % 7).fill(null);
+    for (let d = 1; d <= days; d++) cells.push({ d, evs: evs.filter((e) => Number(e.date.slice(8, 10)) === d) });
+    months.push({ label: first.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }), cells });
+  }
+}
 const gcal = `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(`webcal://${new URL(Astro.site!).host}/evenements.ics`)}`;
 ---
 <BaseLayout title="Événements">
-  <PageHead title="Événements" lead="Forums, masterclass, ateliers et rencontres investisseurs, en présentiel et en ligne." crumbs={[['', 'Événements']]} subnav={SUBS.evenements} />
+  <PageHead title="CEA Events" lead="Forums, masterclass, ateliers et rencontres investisseurs, en présentiel et en ligne." crumbs={[['', 'CEA Events']]} subnav={SUBS.evenements} />
   <section class="block" style="padding-top:20px">
     <div class="wrap">
       <div class="filters">
+        <div class="row" role="group" aria-label="Affichage" style="gap:4px">
+          <button class="chip" type="button" data-view="liste" aria-pressed="true">Liste</button>
+          <button class="chip" type="button" data-view="cal" aria-pressed="false">Calendrier</button>
+          <button class="chip" type="button" data-view="carte" aria-pressed="false">Carte</button>
+        </div>
         <select class="in" id="fType" aria-label="Type"><option value="">Tous les types</option>{types.map((t) => <option>{t}</option>)}</select>
         <select class="in" id="fFmt" aria-label="Format"><option value="">Tous les formats</option><option>Présentiel</option><option>En ligne</option><option>Hybride</option></select>
         <select class="in" id="fC" aria-label="Pays"><option value="">Tous les pays</option>{countries.map((c) => <option value={c}>{country(c)}</option>)}</select>
         <select class="in" id="fP" aria-label="Prix"><option value="">Gratuit et payant</option><option value="1">Accès gratuit</option><option value="0">Payant</option></select>
-        <div class="row" role="group" aria-label="Affichage" style="gap:4px">
-          <button class="chip" type="button" data-view="liste" aria-pressed="true">Liste</button>
-          <button class="chip" type="button" data-view="carte" aria-pressed="false">Carte</button>
-        </div>
         <details style="position:relative">
           <summary class="btn btn-ghost btn-sm">S'abonner au calendrier</summary>
           <div class="panel" style="position:absolute;z-index:5;right:0;min-width:280px;margin-top:6px">
@@ -47,6 +61,17 @@ const gcal = `https://calendar.google.com/calendar/render?cid=${encodeURICompone
         <div>
           <div id="evList">{list.map((e) => <div data-type={TYPE[e.id]} data-id={e.id} data-free={e.tk.some((t) => !t.p) ? '1' : '0'}><EventRow e={e} /></div>)}</div>
           <div class="empty" id="evEmpty" hidden style="margin-top:12px">Aucun événement pour ces critères.</div>
+          <div id="evCal" hidden>
+            {months.map((mo) => (
+              <>
+                <h3 style="margin-top:14px">{mo.label}</h3>
+                <div class="cal">
+                  {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d) => <div class="h">{d}</div>)}
+                  {mo.cells.map((c) => (c ? <div><b>{c.d}</b>{c.evs.map((e) => <a href={`/evenements/${e.id}`} data-ev={e.id}>{e.t.slice(0, 22)}…</a>)}</div> : <div></div>))}
+                </div>
+              </>
+            ))}
+          </div>
           <div id="evMap" hidden>
             <div id="map" style="height:460px;border-radius:12px;margin-top:12px;border:1px solid var(--line)" role="region" aria-label="Carte des événements"></div>
             <p class="xs muted" style="margin:6px 0 0">Les événements en ligne n'apparaissent pas sur la carte. Fond de carte © contributeurs OpenStreetMap.</p>
@@ -80,6 +105,7 @@ const gcal = `https://calendar.google.com/calendar/render?cid=${encodeURICompone
       if (ok) { n++; visible.add(box.dataset.id!); } else visible.delete(box.dataset.id!);
     });
     document.getElementById('evEmpty')!.hidden = n > 0;
+    document.querySelectorAll<HTMLElement>('#evCal [data-ev]').forEach((a) => { a.hidden = !visible.has(a.dataset.ev!); });
     drawMarkers();
   }
   [f, c, ty, pr].forEach((x) => x.addEventListener('change', apply));
@@ -116,9 +142,10 @@ const gcal = `https://calendar.google.com/calendar/render?cid=${encodeURICompone
     else map.setView([5, 10], 3);
   }
   document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) => b.addEventListener('click', async () => {
-    const carte = b.dataset.view === 'carte';
+    const carte = b.dataset.view === 'carte', cal = b.dataset.view === 'cal';
     document.querySelectorAll('[data-view]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-    document.getElementById('evList')!.hidden = carte;
+    document.getElementById('evList')!.hidden = carte || cal;
+    document.getElementById('evCal')!.hidden = !cal;
     document.getElementById('evMap')!.hidden = !carte;
     if (carte) await openMap().catch(() => { document.getElementById('map')!.innerHTML = '<p class="empty">La carte ne peut pas être chargée. Vérifiez votre connexion.</p>'; });
   }));

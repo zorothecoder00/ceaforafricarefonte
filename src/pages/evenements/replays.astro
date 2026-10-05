@@ -5,7 +5,7 @@ import PageHead from '../../components/PageHead.astro';
 import { REPLAYS, SUBS } from '../../data/site';
 ---
 <BaseLayout title="Replays">
-  <PageHead title="Replays" lead="Revoyez les plénières, masterclass et ateliers, chapitre par chapitre." crumbs={[['/evenements', 'Événements'], ['', 'Replays']]} subnav={SUBS.evenements} />
+  <PageHead title="Replays" lead="Les événements passés, chapitrés, avec un résumé généré par IA et relu par l'équipe." crumbs={[['/evenements', 'Événements'], ['', 'Replays']]} subnav={SUBS.evenements} />
   <section class="block">
     <div class="wrap grid g3">
       {REPLAYS.map((r) => (
