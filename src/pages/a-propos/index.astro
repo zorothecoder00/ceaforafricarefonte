@@ -3,7 +3,6 @@ import MediaPlayer from '../../components/MediaPlayer.astro';
 import { MEDIA, PRESIDENT_VIDEO } from '../../data/media';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
-import AfricaMap from '../../components/AfricaMap.astro';
 import { SUBS } from '../../data/site';
 
 const pillars = [
@@ -19,21 +18,20 @@ const history = [
 ];
 ---
 <BaseLayout title="À propos">
-  <PageHead title="Connecter, entreprendre, agir" lead="CEA FOR AFRICA réunit les entrepreneurs du continent pour apprendre, se financer, recruter et peser ensemble." crumbs={[['', 'À propos']]} subnav={SUBS.apropos} />
+  <PageHead title="Connecter, entreprendre, accélérer" lead="CEA FOR AFRICA réunit les entrepreneurs du continent pour apprendre, se financer, recruter et peser ensemble." crumbs={[['', 'À propos']]} subnav={SUBS.apropos} />
   <section class="block">
     <div class="wrap">
       <div class="grid g3">{pillars.map(([t, d]) => <div class="panel"><h3>{t}</h3><p style="margin:0">{d}</p></div>)}</div>
-      <div class="grid g2" style="margin-top:40px;align-items:center">
-        <div>
-          <h2>Notre histoire</h2>
-          <ol class="timeline">{history.map(([y, t, c]) => <li class={c}><b>{y}</b> — {t}</li>)}</ol>
-        </div>
-        <div class="panel" style="background:#082B4C;border:0"><AfricaMap /></div>
-      </div>
-      <div class="panel" style="margin-top:30px">
-        <h3 style="margin:0">Le mot du Président</h3><p class="muted small">Vidéo de 2 minutes, sous-titrée en français et en anglais.</p>
-        {MEDIA[PRESIDENT_VIDEO] ? <MediaPlayer title={PRESIDENT_VIDEO} ratio="16/9" /> : <p class="small" style="margin:0">La vidéo sera publiée prochainement. En attendant, découvrez <a href="/a-propos/gouvernance">notre gouvernance</a> et <a href="/a-propos/transparence">nos engagements</a>.</p>}
-      </div>
+      <h2 style="margin-top:40px">Notre histoire</h2>
+      <ol class="timeline">{history.map(([y, t, c]) => <li class={c}><b>{y}</b> — {t}</li>)}</ol>
+      {MEDIA[PRESIDENT_VIDEO] ? (
+        <details class="panel" style="margin-top:30px">
+          <summary class="row between" style="list-style:none"><div><h3 style="margin:0">Le mot du Président</h3><p class="muted small" style="margin:0">Vidéo de 2 minutes, sous-titrée en français et en anglais.</p></div><span class="btn btn-primary">Regarder</span></summary>
+          <div style="margin-top:14px"><MediaPlayer title={PRESIDENT_VIDEO} ratio="16/9" /></div>
+        </details>
+      ) : (
+        <div class="panel row between" style="margin-top:30px"><div><h3 style="margin:0">Le mot du Président</h3><p class="muted small" style="margin:0">Vidéo de 2 minutes, sous-titrée en français et en anglais. Publication prochaine.</p></div><span class="btn btn-primary" aria-disabled="true" style="opacity:.6">Regarder</span></div>
+      )}
     </div>
   </section>
 </BaseLayout>

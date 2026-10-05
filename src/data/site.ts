@@ -20,7 +20,7 @@ export const NAV: [key: string, href: string, label: string][] = [
 
 /** Sous-navigation de chaque rubrique. */
 export const SUBS: Record<string, Link[]> = {
-  apropos: [['/a-propos', 'Qui sommes-nous'], ['/a-propos/gouvernance', 'Gouvernance'], ['/pays', 'Présence en Afrique'], ['/monde', 'Vue sur le monde'], ['/representants', 'Représentants pays'], ['/a-propos/transparence', 'Transparence'], ['/a-propos/presse', 'Presse'], ['/a-propos/carrieres', 'Carrières'], ['/contact', 'Contact']],
+  apropos: [['/a-propos', 'Qui sommes-nous'], ['/a-propos/gouvernance', 'Gouvernance'], ['/pays', 'Présence en Afrique'], ['/monde', 'Vue sur le monde'], ['/representants', 'Représentants pays'], ['/a-propos/transparence', 'Transparence'], ['/a-propos/presse', 'Presse'], ['/a-propos/carrieres', 'Carrières']],
   domaines: [['/domaines', 'Tous les domaines'], ['/actionnariat', 'Actionnariat']],
   actionnariat: [['/actionnariat', 'Comprendre'], ['/actionnariat/modeles', 'Modèles'], ['/actionnariat/studio', 'Studio de capital'], ['/actionnariat/salaries', 'Actionnariat salarié'], ['/actionnariat/club', 'Club des actionnaires'], ['/actionnariat/gouvernance', 'Gouvernance'], ['/actionnariat/quiz', 'Quiz et certificat']],
   programmes: [['/programmes', 'Tous les programmes'], ['/programmes/accelerateur', 'Accélérateur'], ['/programmes/calendrier', 'Calendrier'], ['/programmes/alumni', 'Alumni'], ['/programmes/candidature', 'Postuler'], ['/kapital/investor-ready', 'Investor Ready']],

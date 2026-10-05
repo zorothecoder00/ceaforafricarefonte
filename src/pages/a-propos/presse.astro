@@ -19,7 +19,7 @@ import { PRESS_KIT } from '../../data/documents';
           <a class="panel" style="display:block;text-decoration:none;margin-bottom:10px" href={`/ressources/article/${a.id}`}><span class="xs muted">{dateFr(a.d)}</span><b style="display:block">{a.t}</b></a>
         ))}
         <h2 style="margin-top:24px">Kit média</h2>
-        {PRESS_KIT.map((k) => <div class="row between" style="padding:8px 0;border-bottom:1px solid var(--line)"><span>{k}</span><DocButton kind="presse" title={k} /></div>)}
+        <div class="row">{PRESS_KIT.map((k) => <DocButton kind="presse" title={k} label={k} />)}</div>
       </div>
       <aside>
         <form class="panel" data-api="/api/demande" data-reset>

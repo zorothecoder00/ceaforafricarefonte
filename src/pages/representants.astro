@@ -35,7 +35,7 @@ const list = [...regs, ...reps];
               <tr><td class="muted">Adresse</td><td>Bureau CEA, {x.city}</td></tr>
             </tbody></table>
             <div class="row" style="justify-content:center;margin-top:10px">
-              <a class="btn btn-primary btn-sm" href={`/contact?c=${x.c}`}>Contacter</a>
+              <a class="btn btn-primary btn-sm" href={`/contact?pays=${x.c}`}>Contacter</a>
               <details style="display:contents">
                 <summary class="btn btn-ghost btn-sm" style="list-style:none">Prendre rendez-vous</summary>
                 <form data-api="/api/demande" data-reset style="flex-basis:100%;text-align:left;position:relative">

@@ -38,7 +38,7 @@ const kpis: [string, string | number][] = [['Membres', fmt(h.m)], ['Projets acco
         <aside>
           <div class="panel">
             <h3>Contacter l'antenne</h3>
-            <p class="small">{h.city}, {name}. Votre message est transmis à l'équipe de l'antenne.</p>
+            <p class="small">{h.city}, {name}<br />{h.c.toLowerCase()}@cea4africa.com</p>
             <a class="btn btn-primary btn-sm" href={`/contact?pays=${h.c}`}>Écrire à l'antenne</a>
           </div>
           <div style="margin-top:16px"><KapitalAd variant={0} /></div>
