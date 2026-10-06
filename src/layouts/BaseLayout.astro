@@ -8,13 +8,14 @@ import { MENU, KMENU, COURSES, EVENTS, JOBS, OPPS, ARTICLES, country } from '../
 import { getLang, lp, stripLang, localizeHtml, useT, TRANSLATED } from '../i18n/ui';
 import { getLocalisation } from '../lib/localisation';
 
-interface Props { title?: string; description?: string; image?: string }
+/* os : application CEA OS (back-office) — sans en-tête ni pied de page du site public, typographies du prototype CEA OS */
+interface Props { title?: string; description?: string; image?: string; os?: boolean }
 const lang = getLang(Astro.currentLocale);
 const t = useT(lang);
 const defaultDesc = lang === 'en'
   ? 'CEA FOR AFRICA — the platform for African entrepreneurs: training, support, events, opportunities and CEA Kapital Invest.'
   : 'CEA FOR AFRICA — la plateforme des entrepreneurs africains : formation, accompagnement, événements, opportunités et CEA Kapital Invest.';
-const { title, description = defaultDesc, image } = Astro.props;
+const { title, description = defaultDesc, image, os = false } = Astro.props;
 const fullTitle = title ? `${title} — CEA FOR AFRICA` : `CEA FOR AFRICA — ${lang === 'en' ? 'Connect · Build · Act' : 'Connecter · Entreprendre · Agir'}`;
 
 // Chemin français de la page (sur les pages anglaises de repli, Astro fournit déjà le chemin français).
@@ -64,6 +65,8 @@ const searchIndex = ([
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    {os && <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />}
+    {os && <meta name="robots" content="noindex" />}
     <script is:inline>
       try {
         var t = localStorage.getItem('cea-theme'); if (t) document.documentElement.dataset.theme = t;
@@ -73,12 +76,12 @@ const searchIndex = ([
       } catch (e) {}
     </script>
   </head>
-  <body data-univers={univers}>
+  <body data-univers={univers} class={os ? 'os' : undefined}>
     <a class="sr" href="#app">{t('skip')}</a>
-    <Header />
-    {!translated && <div class="i18n-note">{t('notTranslated')} <a href={alt('fr')} hreflang="fr">Version française</a></div>}
+    {!os && <Header />}
+    {!os && !translated && <div class="i18n-note">{t('notTranslated')} <a href={alt('fr')} hreflang="fr">Version française</a></div>}
     <main id="app" tabindex="-1" lang={translated ? lang : 'fr'} set:html={body} />
-    <Footer />
+    {!os && <Footer />}
     <Copilot />
     <CookieBanner lang={lang === 'en' ? 'en' : 'fr'} />
     <script type="application/json" id="searchIndex" set:html={JSON.stringify(searchIndex)} />

@@ -35,6 +35,17 @@ export const ADMIN_NAV: [string, string, Obj][] = [
   ['/admin/audit', "Journal d'audit", 'journal_audit'],
 ];
 
+/** Rubriques du menu latéral de CEA OS (comme le prototype : Pilotage, Relations…) ; une entrée non classée va dans « Autres ». */
+export const ADMIN_GROUPS: [string, string[]][] = [
+  ['Pilotage', ['/admin', '/admin/rapports', '/admin/audit']],
+  ['Relations', ['/admin/messages', '/admin/crm', '/admin/membres', '/admin/campagnes']],
+  ['Contenus et communauté', ['/admin/moderation', '/admin/textes', '/admin/domaines', '/admin/cms', '/admin/contenus', '/admin/assemblees']],
+  ['Programmes et talents', ['/admin/programmes', '/admin/candidatures', '/admin/projets', '/admin/emplois']],
+  ['CEA Kapital Invest', ['/admin/kapital', '/admin/conformite']],
+  ['Gestion', ['/admin/paiements', '/admin/finance', '/admin/formulaires', '/admin/automatisations', '/admin/documents']],
+  ['Administration', ['/admin/parametrage', '/admin/droits', '/admin/interrupteurs']],
+];
+
 /** Icône de chaque entrée du menu du back-office (noms de src/data ICON). */
 export const ADMIN_ICON: Record<string, string> = {
   '/admin': 'home', '/admin/messages': 'mail', '/admin/moderation': 'shield', '/admin/emplois': 'job', '/admin/programmes': 'rocket',

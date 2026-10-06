@@ -7,12 +7,28 @@ import { db } from '../../lib/db';
 import { contactMessage, report, post, job, programmeApplication, payment, membership, project } from '../../db/schema/app';
 import { user } from '../../db/schema/auth';
 import { dossier, kycCheck, investorProfile } from '../../db/schema/kapital';
-import { can } from '../../lib/rbac';
+import { can, ROLE_LABEL, type Role } from '../../lib/rbac';
 import { PIPELINE } from '../../lib/kapital';
 import { webVital } from '../../db/schema/ops';
 
 export const prerender = false;
 const r = Astro.locals.user!.roles;
+// En-tête et actions rapides, comme l'accueil du prototype CEA OS
+const meName = Astro.locals.user!.name.split(' ')[0];
+const hour = Number(new Date().toLocaleString('fr-FR', { hour: '2-digit', hour12: false, timeZone: 'Africa/Lome' }));
+const greeting = `${hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir'} ${meName}`;
+const roleLine = r.filter((x) => x !== 'membre').map((x) => ROLE_LABEL[x as Role] ?? x).join(' · ');
+const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Africa/Lome' });
+const quick = ([
+  ['/admin/messages', 'Traiter les messages', 'Demandes, conversations en direct', can(r, 'messages_contact', 'M')],
+  ['/admin/moderation', 'Modérer', 'Publications, avis, fraude', can(r, 'moderation', 'M')],
+  ['/admin/emplois', 'Valider des offres', 'Annonces en attente', can(r, 'offre_emploi', 'M')],
+  ['/admin/membres', 'Créer un compte', 'Invitation par e-mail', can(r, 'membres', 'C')],
+  ['/admin/cms', 'Publier un contenu', 'Article, événement, cours, page', can(r, 'contenus', 'C')],
+  ['/admin/campagnes', 'Nouvelle campagne', 'E-mail, SMS, WhatsApp', can(r, 'campagnes', 'C')],
+  ['/admin/domaines?nouveau', 'Créer un domaine', 'Domaines d’intervention', can(r, 'parametres', 'C')],
+  ['/admin/rapports/impact', 'Rapport d’impact', 'Par programme ou partenaire', can(r, 'rapports', 'L')],
+] as [string, string, string, boolean][]).filter((q) => q[3]).slice(0, 8);
 const n = async (q: Promise<{ n: number }[]>) => (await q)[0]?.n ?? 0;
 const cnt = sql<number>`count(*)::int`;
 const since = new Date(Date.now() - 30 * 864e5);
@@ -67,7 +83,8 @@ const kpis: [string, string, string?][] = [];
 if (members !== null) kpis.push(['Membres', members.toLocaleString('fr-FR')], ['Inscrits sur 30 jours', `+${newMembers}`], ['Adhésions actives', String(active)]);
 for (const [l, h, v] of queues) kpis.push([l, String(v), h]);
 ---
-<AdminLayout title="Tableau de bord — CEA OS" lead="Vos files de travail selon vos droits. Toutes les actions sont tracées dans le journal d'audit." obj="contenus" hints={[]}>
+<AdminLayout title={greeting} lead={`${roleLine} · ${today} · vos files de travail selon vos droits ; toutes les actions sont tracées dans le journal d'audit.`} obj="contenus" hints={[]}>
+  {quick.length > 0 && <div class="quick" style="margin-bottom:16px">{quick.map(([href, label, sub]) => <a href={href}>{label}<small>{sub}</small></a>)}</div>}
   <div class="grid g4">
     {kpis.map(([l, v, h]) => h
       ? <a class="panel kpi" href={h} style="text-decoration:none"><span class="small muted">{l}</span><b>{v}</b></a>
