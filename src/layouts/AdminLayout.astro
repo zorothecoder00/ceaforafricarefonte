@@ -2,7 +2,8 @@
 /* Back-office « CEA OS » (CDC §11) : navigation filtrée selon les droits de l'utilisateur. Chaque page vérifie aussi son propre droit. */
 import BaseLayout from './BaseLayout.astro';
 import RightsHint from '../components/RightsHint.astro';
-import { ADMIN_NAV } from '../lib/admin';
+import { ADMIN_NAV, ADMIN_ICON } from '../lib/admin';
+import Icon from '../components/Icon.astro';
 import { can, ROLE_LABEL, type Obj, type Role } from '../lib/rbac';
 
 /* hints : objets dont les droits manquants sont expliqués en haut de page (par défaut l'objet de la page ; [] pour aucun) */
@@ -15,12 +16,12 @@ const allowed = can(me.roles, obj, 'L');
 <BaseLayout title={`${title} — CEA OS`}>
   <div class="wrap dash">
     <nav class="side" id="sideNav" aria-label="Back-office">
-      <button class="side-toggle" type="button" data-side-toggle aria-controls="sideBody" aria-expanded="true"><span class="st-open">‹ Réduire le menu</span><span class="st-closed" aria-hidden="true">☰</span></button>
+      <button class="side-toggle" type="button" data-side-toggle aria-controls="sideNav" aria-pressed="false"><span class="st-open">‹ Réduire le menu</span><span class="st-closed" aria-hidden="true">›</span></button>
       <div class="side-body" id="sideBody">
         <h5 style="margin-top:0">CEA OS</h5>
         <div class="xs muted" style="padding:0 12px 8px">{me.roles.filter((r) => r !== 'membre').map((r) => ROLE_LABEL[r as Role] ?? r).join(' · ')}</div>
-        {ADMIN_NAV.filter(([, , o]) => can(me.roles, o, 'L')).map(([href, label]) => <a href={href} aria-current={path === href || (href !== '/admin' && path.startsWith(href)) ? 'page' : undefined}>{label}</a>)}
-        <a href="/espace" style="margin-top:12px">← Mon espace</a>
+        {ADMIN_NAV.filter(([, , o]) => can(me.roles, o, 'L')).map(([href, label]) => <a href={href} title={label} aria-current={path === href || (href !== '/admin' && path.startsWith(href)) ? 'page' : undefined}><Icon name={ADMIN_ICON[href] ?? 'info'} size={18} /><span class="sl">{label}</span></a>)}
+        <a href="/espace" title="Mon espace" style="margin-top:12px"><Icon name="back" size={18} /><span class="sl">Mon espace</span></a>
       </div>
     </nav>
     <div style="min-width:0">

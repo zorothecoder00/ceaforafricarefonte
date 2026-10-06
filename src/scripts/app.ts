@@ -51,14 +51,14 @@ liteBtn?.addEventListener('click', () => {
 const LANG = document.documentElement.lang === 'en' ? 'en' : 'fr';
 const EN = LANG === 'en';
 
-/* Menu latéral (back-office, Mon espace) : réduit ou déplié, choix mémorisé sur cet appareil */
+/* Menu latéral (back-office, Mon espace) : largeur normale ou réduite (liens toujours visibles), choix mémorisé sur cet appareil */
 const sideBtn = $<HTMLButtonElement>('[data-side-toggle]');
 if (sideBtn) {
   const sync = () => {
     const min = root.classList.contains('side-min');
-    sideBtn.setAttribute('aria-expanded', String(!min));
-    sideBtn.setAttribute('aria-label', min ? (EN ? 'Show the menu' : 'Afficher le menu') : (EN ? 'Collapse the menu' : 'Réduire le menu'));
-    sideBtn.title = min ? (EN ? 'Show the menu' : 'Afficher le menu') : '';
+    sideBtn.setAttribute('aria-pressed', String(min));
+    sideBtn.title = min ? (EN ? 'Show the menu labels' : 'Afficher les libellés du menu') : (EN ? 'Collapse to icons' : 'Réduire le menu aux icônes');
+    sideBtn.setAttribute('aria-label', sideBtn.title);
   };
   sync();
   sideBtn.addEventListener('click', () => {

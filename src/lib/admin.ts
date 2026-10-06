@@ -34,6 +34,15 @@ export const ADMIN_NAV: [string, string, Obj][] = [
   ['/admin/audit', "Journal d'audit", 'journal_audit'],
 ];
 
+/** Icône de chaque entrée du menu du back-office (noms de src/data ICON). */
+export const ADMIN_ICON: Record<string, string> = {
+  '/admin': 'home', '/admin/messages': 'mail', '/admin/moderation': 'shield', '/admin/emplois': 'job', '/admin/programmes': 'rocket',
+  '/admin/candidatures': 'check', '/admin/projets': 'proj', '/admin/kapital': 'fund', '/admin/conformite': 'lock', '/admin/membres': 'users',
+  '/admin/droits': 'key', '/admin/interrupteurs': 'toggle', '/admin/paiements': 'bank', '/admin/finance': 'invoice', '/admin/rapports': 'chart',
+  '/admin/formulaires': 'form', '/admin/automatisations': 'bolt', '/admin/documents': 'folder', '/admin/parametrage': 'gear', '/admin/crm': 'circle',
+  '/admin/campagnes': 'megaphone', '/admin/textes': 'edit', '/admin/cms': 'press', '/admin/contenus': 'voice', '/admin/assemblees': 'gov', '/admin/audit': 'list',
+};
+
 /** Garde d'API du back-office : droit (objet, action) + double authentification pour les rôles sensibles. */
 export function staffApi(user: CurrentUser | null | undefined, obj: Obj, action: Action): CurrentUser | Response {
   if (!user) return fail('Connexion requise.', 401);
