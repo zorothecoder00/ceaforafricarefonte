@@ -67,7 +67,7 @@ const kpis: [string, string, string?][] = [];
 if (members !== null) kpis.push(['Membres', members.toLocaleString('fr-FR')], ['Inscrits sur 30 jours', `+${newMembers}`], ['Adhésions actives', String(active)]);
 for (const [l, h, v] of queues) kpis.push([l, String(v), h]);
 ---
-<AdminLayout title="Tableau de bord — CEA OS" lead="Vos files de travail selon vos droits. Toutes les actions sont tracées dans le journal d'audit." obj="contenus">
+<AdminLayout title="Tableau de bord — CEA OS" lead="Vos files de travail selon vos droits. Toutes les actions sont tracées dans le journal d'audit." obj="contenus" hints={[]}>
   <div class="grid g4">
     {kpis.map(([l, v, h]) => h
       ? <a class="panel kpi" href={h} style="text-decoration:none"><span class="small muted">{l}</span><b>{v}</b></a>

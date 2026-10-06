@@ -4,26 +4,28 @@ import EspaceLayout from '../../layouts/EspaceLayout.astro';
 import { desc, eq } from 'drizzle-orm';
 import { db } from '../../lib/db';
 import { programmeApplication, jobApplication, job } from '../../db/schema/app';
+import { programmeCall } from '../../db/schema/programmes';
+import { LEGACY } from '../../lib/calls';
 
 export const prerender = false;
 const user = Astro.locals.user!;
-const progs = await db.select().from(programmeApplication).where(eq(programmeApplication.userId, user.id)).orderBy(desc(programmeApplication.updatedAt));
+const progs = await db.select({ p: programmeApplication, call: programmeCall.title }).from(programmeApplication).leftJoin(programmeCall, eq(programmeCall.slug, programmeApplication.programme)).where(eq(programmeApplication.userId, user.id)).orderBy(desc(programmeApplication.updatedAt));
 const jobs = await db.select({ a: jobApplication, title: job.title, company: job.company }).from(jobApplication).innerJoin(job, eq(job.id, jobApplication.jobId)).where(eq(jobApplication.userId, user.id)).orderBy(desc(jobApplication.updatedAt));
-const PROG: Record<string, string> = { 'accelerateur-c4': 'Accélérateur — Cohorte 4', 'investor-ready': 'Investor Ready', mastermind: 'Mastermind Circles' };
+const STATUS: Record<string, string> = { brouillon: 'Brouillon', recue: 'Reçue', en_evaluation: 'En évaluation', entretien: 'Entretien', admise: 'Admise', liste_attente: "Liste d'attente", refusee: 'Non retenue', retiree: 'Retirée' };
 const STEPS = ['recue', 'en_evaluation', 'entretien', 'admise'];
 const JOB_COLS: [string, string][] = [['envoyee', 'Envoyée'], ['vue', 'Vue'], ['entretien', 'Entretien'], ['offre', 'Offre'], ['refus', 'Refus']];
 ---
 <EspaceLayout title="Mes candidatures" lead="Suivez chaque étape. Vous êtes notifié par WhatsApp et e-mail à chaque changement.">
   <h2 style="font-size:1.2rem">Programmes</h2>
-  {progs.length ? progs.map((p) => {
+  {progs.length ? progs.map(({ p, call }) => {
     const i = STEPS.indexOf(p.status);
     return (
       <div class="panel" style="margin-bottom:12px">
-        <div class="row between"><b>{PROG[p.programme] ?? p.programme}</b><span class="small muted num">{p.reference}</span></div>
+        <div class="row between"><b>{call ?? LEGACY[p.programme]?.label ?? p.programme}</b><span class="small muted num">{p.reference}</span></div>
         {['refusee', 'retiree', 'liste_attente'].includes(p.status)
-          ? <p class="small" style="margin:8px 0 0"><span class="tag">{p.status.replace('_', ' ')}</span></p>
+          ? <p class="small" style="margin:8px 0 0"><span class="tag">{STATUS[p.status]}</span></p>
           : <div class="steps" style="margin:12px 0 4px">{STEPS.map((_, k) => <span class={k <= i ? 'on' : ''}></span>)}</div>}
-        <div class="xs muted">Statut : {p.status.replace('_', ' ')} · mis à jour le {p.updatedAt.toLocaleDateString('fr-FR')}</div>
+        <div class="xs muted">Statut : {STATUS[p.status] ?? p.status} · mis à jour le {p.updatedAt.toLocaleDateString('fr-FR')}</div>
       </div>
     );
   }) : <div class="empty">Aucune candidature. <a href="/programmes">Voir les programmes</a></div>}

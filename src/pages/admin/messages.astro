@@ -40,7 +40,7 @@ const firstHours = msgs.filter((m) => m.answeredAt).map((m) => (m.answeredAt!.ge
 const median = firstHours.length ? Math.round(firstHours[Math.floor(firstHours.length / 2)]) : null;
 const fmt = (d: Date) => d.toLocaleString('fr-FR', { timeZone: 'Africa/Lome', dateStyle: 'short', timeStyle: 'short' });
 ---
-<AdminLayout title="Messages et signalements" lead={cs ? `Limité à : ${cs.map(country).join(', ') || 'aucun pays'}` : 'Tous pays.'} obj="messages_contact">
+<AdminLayout title="Messages et signalements" lead={cs ? `Limité à : ${cs.map(country).join(', ') || 'aucun pays'}` : 'Tous pays.'} obj="messages_contact" hints={['messages_contact', 'moderation']}>
   <nav class="subnav" style="margin:0 0 12px">
     <a href="?onglet=messages" aria-current={tab === 'messages' ? 'page' : undefined}>Messages de contact</a>
     {can(me.roles, 'moderation', 'L') && <a href="?onglet=signalements" aria-current={tab === 'signalements' ? 'page' : undefined}>Signalements</a>}

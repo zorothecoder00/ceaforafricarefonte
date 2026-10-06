@@ -30,7 +30,8 @@ export type Obj =
 type Rights = string; // sous-ensemble de 'LCMV', suffixe '*' = limité aux éléments propres / assignés
 type Matrix = Partial<Record<Obj, Rights>>;
 
-/* Extrait §18.1 complété pour les objets du back-office. */
+/* Extrait §18.1 complété pour les objets du back-office.
+   Écart assumé au §18.1 (décision du 2026-10-06) : l'administrateur gère les fiches projet (LCMV au lieu de L) pour créer et supprimer des projets. */
 export const MATRIX: Record<Role, Matrix> = {
   membre: { contenus: 'L', profil: 'LM*', candidature: 'C' },
   entrepreneur: { contenus: 'L', profil: 'LM*', fiche_projet: 'LCM*', candidature: 'LCM*', notes_mentorat: 'L*', dossier_kapital: 'LCM*', data_room: 'LCM*', decision_comite: 'L*', pieces_kyc: 'C' },
@@ -46,7 +47,7 @@ export const MATRIX: Record<Role, Matrix> = {
   conformite: { contenus: 'L', pieces_kyc: 'LMV', dossier_kapital: 'L', membres: 'L', journal_audit: 'L', documents: 'L*' },
   editeur: { contenus: 'LCMV', moderation: 'LMV', offre_emploi: 'LCMV', messages_contact: 'LM', campagnes: 'LCM', formulaires: 'LCMV', documents: 'L*' },
   responsable_pays: { contenus: 'LCM*', membres: 'L*', messages_contact: 'LM*', moderation: 'LM*', controle_acces: 'LV', crm: 'LCM*', campagnes: 'L', programmes: 'L', rapports: 'L*', formulaires: 'L', documents: 'L*' },
-  admin: { contenus: 'LCMV', profil: 'L', fiche_projet: 'L', candidature: 'L', dossier_kapital: 'L', decision_comite: 'L', journal_audit: 'L', membres: 'LCMV', parametres: 'LCMV', paiements: 'LCMV', messages_contact: 'LM', moderation: 'LMV', offre_emploi: 'LCMV', interrupteurs: 'LMV', controle_acces: 'LV', crm: 'LCMV', campagnes: 'LCMV', programmes: 'LCMV', rapports: 'LCMV', formulaires: 'LCMV', automatisations: 'LCMV', documents: 'LCMV' },
+  admin: { contenus: 'LCMV', profil: 'L', fiche_projet: 'LCMV', candidature: 'L', dossier_kapital: 'L', decision_comite: 'L', journal_audit: 'L', membres: 'LCMV', parametres: 'LCMV', paiements: 'LCMV', messages_contact: 'LM', moderation: 'LMV', offre_emploi: 'LCMV', interrupteurs: 'LMV', controle_acces: 'LV', crm: 'LCMV', campagnes: 'LCMV', programmes: 'LCMV', rapports: 'LCMV', formulaires: 'LCMV', automatisations: 'LCMV', documents: 'LCMV' },
   direction: { crm: 'L', campagnes: 'L', programmes: 'L', rapports: 'LC', contenus: 'L', profil: 'L', candidature: 'L', dossier_kapital: 'L', decision_comite: 'LV', journal_audit: 'L', membres: 'L', paiements: 'L', interrupteurs: 'L', formulaires: 'L', automatisations: 'L', documents: 'L*' },
 };
 

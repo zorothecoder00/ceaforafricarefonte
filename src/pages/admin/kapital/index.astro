@@ -20,7 +20,7 @@ const rows = await db.select({
 const days = (d: Date) => Math.floor((Date.now() - new Date(d).getTime()) / 864e5);
 const cols = PIPELINE.filter((p) => !only || p.key === only);
 ---
-<AdminLayout title="Pipeline Kapital Invest" lead="Délai indicatif par étape (SLA) : un dossier en dépassement est signalé en rouge." obj="dossier_kapital">
+<AdminLayout title="Pipeline Kapital Invest" lead="Délai indicatif par étape (SLA) : un dossier en dépassement est signalé en rouge." obj="dossier_kapital" hints={['dossier_kapital', 'decision_comite']}>
   <div class="kanban" style={`grid-template-columns:repeat(${cols.length},minmax(200px,1fr))`}>
     {cols.map((c) => { const list = rows.filter((r) => r.d.status === c.key); return (
       <div class="col"><h4><span>{c.label}</span><span>{list.length}</span></h4>

@@ -1,11 +1,13 @@
 ---
 /* Back-office « CEA OS » (CDC §11) : navigation filtrée selon les droits de l'utilisateur. Chaque page vérifie aussi son propre droit. */
 import BaseLayout from './BaseLayout.astro';
+import RightsHint from '../components/RightsHint.astro';
 import { ADMIN_NAV } from '../lib/admin';
 import { can, ROLE_LABEL, type Obj, type Role } from '../lib/rbac';
 
-interface Props { title: string; lead?: string; obj: Obj }
-const { title, lead, obj } = Astro.props;
+/* hints : objets dont les droits manquants sont expliqués en haut de page (par défaut l'objet de la page ; [] pour aucun) */
+interface Props { title: string; lead?: string; obj: Obj; hints?: Obj[] }
+const { title, lead, obj, hints = [obj] } = Astro.props;
 const me = Astro.locals.user!;
 const path = Astro.url.pathname.replace(/\/$/, '');
 const allowed = can(me.roles, obj, 'L');
@@ -21,6 +23,7 @@ const allowed = can(me.roles, obj, 'L');
     <div style="min-width:0">
       <h1 style="font-size:2rem">{title}</h1>
       {lead && <p class="muted">{lead}</p>}
+      {allowed && <RightsHint objs={hints} />}
       {allowed ? <slot /> : <div class="empty">Vous n’avez pas accès à cette rubrique.</div>}
     </div>
   </div>

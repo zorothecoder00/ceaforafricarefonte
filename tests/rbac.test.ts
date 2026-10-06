@@ -10,7 +10,8 @@ const ACTIONS: Action[] = ['L', 'C', 'M', 'V'];
 const CDC: Partial<Record<Obj, Partial<Record<Role, string>>>> = {
   contenus: { membre: 'L', entrepreneur: 'L', mentor: 'L', investisseur: 'L', charge_programme: 'L', analyste: 'L', comite: 'L', admin: 'LCMV' },
   profil: { membre: 'LM', entrepreneur: 'LM', mentor: 'LM', investisseur: 'LM', charge_programme: 'L', analyste: 'L', comite: '', admin: 'L' },
-  fiche_projet: { membre: '', entrepreneur: 'LCM', mentor: 'L', investisseur: 'L', charge_programme: 'LMV', analyste: 'L', comite: 'L', admin: 'L' },
+  // Écart assumé au §18.1 : l'administrateur gère les fiches projet (L dans le cahier des charges)
+  fiche_projet: { membre: '', entrepreneur: 'LCM', mentor: 'L', investisseur: 'L', charge_programme: 'LMV', analyste: 'L', comite: 'L', admin: 'LCMV' },
   candidature: { membre: 'C', entrepreneur: 'LCM', mentor: '', investisseur: '', charge_programme: 'LMV', analyste: '', comite: '', admin: 'L' },
   notes_mentorat: { membre: '', entrepreneur: 'L', mentor: 'LCM', investisseur: '', charge_programme: 'L', analyste: '', comite: '', admin: '' },
   dossier_kapital: { membre: '', entrepreneur: 'LCM', mentor: '', investisseur: 'L', charge_programme: '', analyste: 'LM', comite: 'L', admin: 'L' },

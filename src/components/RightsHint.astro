@@ -1,0 +1,36 @@
+---
+/* Ligne d'explication des droits sur une page du back-office : actions indisponibles pour la personne connectée,
+   droit qui manque, et où l'obtenir (Matrice des droits pour qui peut la modifier, sinon un administrateur).
+   Rien si tout est permis ; les objets que la personne ne peut même pas lire sont ignorés (section absente de la page). */
+import { missingRights, lockedFor, objLabel, ACTION_LABEL } from '../lib/rights-hints';
+import { scope, type Obj } from '../lib/rbac';
+
+interface Props { objs: Obj[] }
+const me = Astro.locals.user!;
+const canEditMatrix = scope(me.roles, 'parametres', 'M') === 'all';
+const items = Astro.props.objs
+  .filter((o) => scope(me.roles, o, 'L') !== null)
+  .map((o) => ({ o, missing: missingRights(me.roles, o), locked: lockedFor(me.roles, o) }))
+  .filter((x) => x.missing.length);
+const letters = (m: { action: string }[]) => [...new Set(m.map((x) => x.action))].join(', ');
+const grantable = items.some((x) => !x.locked);
+---
+{items.length > 0 && (
+  <div class="panel small rights-hint" role="note">
+    {items.map(({ o, missing, locked }) => {
+      const none = missing.filter((m) => !m.own), own = missing.filter((m) => m.own);
+      return (
+        <p style="margin:0 0 6px">
+          <b>Vos droits sur « {objLabel(o)} » :</b>
+          {none.length > 0 && <> vous ne pouvez pas {none.map((m) => m.what).join(' ; ')} — droit{none.length > 1 ? 's' : ''} {letters(none)} ({none.map((m) => ACTION_LABEL[m.action]).join(', ')}) nécessaire{none.length > 1 ? 's' : ''}.</>}
+          {own.length > 0 && <> Vous pouvez {own.map((m) => m.what).join(' ; ')} seulement sur vos éléments ou votre pays.</>}
+          {locked && <span class="xs muted"> {locked}</span>}
+        </p>
+      );
+    })}
+    {grantable && <p class="xs muted" style="margin:0">{canEditMatrix ? <>Vous pouvez accorder ces droits à votre rôle dans la <a href="/admin/droits">Matrice des droits</a>.</> : 'Pour obtenir ces droits, adressez-vous à un administrateur (Matrice des droits).'}</p>}
+  </div>
+)}
+<style>
+  .rights-hint{border-left:4px solid var(--gold);margin:0 0 14px;padding:10px 14px}
+</style>

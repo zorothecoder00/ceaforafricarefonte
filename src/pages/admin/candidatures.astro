@@ -53,7 +53,7 @@ const labelOf = (p: string, k: string) => {
         ) : canDecide ? (
           <form data-api="/api/admin" data-reload class="row" style="gap:6px;align-items:end">
             <input type="hidden" name="action" value="application.update" /><input type="hidden" name="id" value={a.id} />
-            <div><label class="f" for={`s-${a.id}`}>Statut</label><select class="in" id={`s-${a.id}`} name="status" style="margin:0">{applicationStatusEnum.enumValues.map((s) => <option value={s} selected={s === a.status}>{L[s]}</option>)}</select></div>
+            <div><label class="f" for={`s-${a.id}`}>Statut</label><select class="in" id={`s-${a.id}`} name="status" style="margin:0">{applicationStatusEnum.enumValues.filter((s) => s !== 'brouillon').map((s) => <option value={s} selected={s === a.status}>{L[s]}</option>)}</select></div>
             <div><label class="f" for={`n-${a.id}`}>Note /100</label><input class="in" id={`n-${a.id}`} name="score" type="number" min="0" max="100" value={a.score ?? ''} style="margin:0;width:110px" /></div>
             <button class="btn btn-primary btn-sm" type="submit">Enregistrer</button>
           </form>

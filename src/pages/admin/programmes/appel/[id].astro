@@ -37,7 +37,7 @@ const L: Record<string, string> = { recue: 'Reçue', en_evaluation: 'En évaluat
 const local = (d: Date | null) => (d ? new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '');
 const state0 = { id: c.id, grid, fields };
 ---
-<AdminLayout title={c.title} lead={`${c.programme} · candidature : /programmes/appel/${c.slug}`} obj="programmes">
+<AdminLayout title={c.title} lead={`${c.programme} · candidature : /programmes/appel/${c.slug}`} obj="programmes" hints={['programmes', 'candidature']}>
   <p class="small" style="margin-top:-8px"><a href="/admin/programmes">← Programmes</a> · <span class={`tag ${state === 'ouvert' ? 'ok' : ''}`}>{CALL_STATE_LABEL[state]}</span></p>
   <div class="split">
     <div>

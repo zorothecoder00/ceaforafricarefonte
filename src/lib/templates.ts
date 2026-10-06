@@ -6,6 +6,8 @@ import { messageTemplate } from '../db/schema/finance';
 
 export const TEMPLATES = {
   'candidature.recue': { label: 'Candidature reçue', vars: ['reference', 'programme'], body: 'Candidature {reference} reçue : {programme}. Prochaine étape : diagnostic de maturité.' },
+  'candidature.en_evaluation': { label: 'Candidature en évaluation', vars: ['reference'], body: 'Votre candidature {reference} est en cours d’évaluation.' },
+  'candidature.retiree': { label: 'Candidature retirée', vars: ['reference'], body: 'Votre candidature {reference} est enregistrée comme retirée.' },
   'candidature.entretien': { label: 'Candidature — entretien', vars: ['reference'], body: 'Votre candidature {reference} : vous êtes invité·e à un entretien.' },
   'candidature.admise': { label: 'Candidature admise', vars: ['reference'], body: 'Votre candidature {reference} est acceptée. Félicitations !' },
   'candidature.liste_attente': { label: "Candidature sur liste d'attente", vars: ['reference'], body: 'Votre candidature {reference} est sur liste d’attente.' },

@@ -34,7 +34,7 @@ const ia = edit ? await latestNote<Analyse>('dossier', id, 'analyse') : null;
 const ST: Record<string, string> = { complet: 'ok', partiel: 'gold', manquant: 'bad' };
 const raised = ints.reduce((a, r) => a + (r.i.amountXof ?? 0), 0);
 ---
-<AdminLayout title={`${x.companyName} — ${x.reference}`} lead={`${country(x.country)} · ${x.sector ?? '—'} · ${x.stage ?? '—'} · porteur : ${d.owner} (${d.email})`} obj="dossier_kapital">
+<AdminLayout title={`${x.companyName} — ${x.reference}`} lead={`${country(x.country)} · ${x.sector ?? '—'} · ${x.stage ?? '—'} · porteur : ${d.owner} (${d.email})`} obj="dossier_kapital" hints={['dossier_kapital', 'decision_comite']}>
   <div class="split">
     <div>
       <div class="panel">

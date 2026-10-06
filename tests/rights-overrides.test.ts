@@ -5,8 +5,8 @@ afterEach(() => setRightsOverrides({}));
 
 describe('matrice des droits modifiable', () => {
   it('sans écart, applique la matrice du cahier des charges', () => {
-    expect(rightsOf('admin', 'fiche_projet')).toBe('L');
-    expect(can(['admin'], 'fiche_projet', 'M')).toBe(false);
+    expect(rightsOf('admin', 'candidature')).toBe('L');
+    expect(can(['admin'], 'candidature', 'V')).toBe(false);
   });
 
   it('un écart enregistré étend ou retire des droits', () => {

@@ -15,7 +15,7 @@ const canV = scope(me.roles, 'parametres', 'V') === 'all';
 const changes = await db.select({ r: roleRight, by: user.name }).from(roleRight).leftJoin(user, eq(user.id, roleRight.updatedBy)).orderBy(desc(roleRight.updatedAt)).catch(() => []);
 const show = (v: string) => v || '—';
 ---
-<AdminLayout title="Matrice des droits" lead="L = lecture · C = création · M = modification · V = validation · * = limité aux éléments propres, partagés ou assignés · — = aucun accès. Cette matrice est celle qu'applique la plateforme." obj="contenus">
+<AdminLayout title="Matrice des droits" lead="L = lecture · C = création · M = modification · V = validation · * = limité aux éléments propres, partagés ou assignés · — = aucun accès. Cette matrice est celle qu'applique la plateforme." obj="contenus" hints={['parametres']}>
   {canM && (
     <div class="panel small" style="margin-bottom:14px;border-left:4px solid var(--gold)">
       <b>Modifier un droit :</b> cliquez sur une case. Les cases <span style="background:#FFF3D6;padding:0 4px;border-radius:4px">surlignées</span> s'écartent du cahier des charges ; 🔒 = case verrouillée. Les rôles restent ceux du cahier des charges ; seuls leurs droits changent. La modification s'applique en moins d'une minute sur tout le site et est inscrite au journal d'audit.

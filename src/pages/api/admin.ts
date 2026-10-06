@@ -13,6 +13,7 @@ import { statusLabel, FEATURES } from '../../lib/kapital';
 import { notify } from '../../lib/notify';
 import { sendEmail } from '../../lib/messaging';
 import { siteUrl, trackPath } from '../../lib/support';
+import { message } from '../../lib/templates';
 
 import { isLastAdmin } from '../../lib/members';
 
@@ -26,7 +27,7 @@ const Body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('report.status'), id, status: z.enum(ticketFlowEnum.enumValues) }),
   z.object({ action: z.literal('post.status'), id, status: z.enum(['publie', 'masque']) }),
   z.object({ action: z.literal('review.hidden'), userId: z.string().min(1).max(64), courseId: z.string().max(20), hidden: z.boolean() }),
-  z.object({ action: z.literal('application.update'), id, status: z.enum(applicationStatusEnum.enumValues), score: z.coerce.number().int().min(0).max(100).nullish() }),
+  z.object({ action: z.literal('application.update'), id, status: z.enum(['recue', 'en_evaluation', 'entretien', 'admise', 'liste_attente', 'refusee', 'retiree']) /* pas de retour au brouillon */, score: z.coerce.number().int().min(0).max(100).nullish() }),
   z.object({ action: z.literal('dossier.status'), id, status: z.enum(dossierStatusEnum.enumValues), note: z.string().max(2000).optional() }),
   z.object({ action: z.literal('dossier.update'), id, analystId: z.string().max(64).nullish(), verification: z.enum(verificationLevelEnum.enumValues).optional(), published: z.boolean().optional() }),
   z.object({ action: z.literal('committee.decide'), id, decision: z.enum(committeeDecisionEnum.enumValues), meetingOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), minutes: z.string().max(10000).optional(), conflicts: z.string().max(1000).optional() }),
@@ -123,10 +124,8 @@ export const POST: APIRoute = async ({ locals, request }) => {
       const [call] = await db.select({ id: programmeCall.id }).from(programmeCall).where(and(eq(programmeCall.slug, a.programme), ne(programmeCall.status, 'brouillon')));
       if (call) return fail('Cette candidature relève d’un appel avec jury : décidez-la en comité, sur la fiche de l’appel.', 409);
       await db.update(programmeApplication).set({ status: b.status, ...(b.score !== undefined && { score: b.score }), updatedAt: new Date() }).where(eq(programmeApplication.id, b.id));
-      if (b.status !== a.status) {
-        const MSG: Record<string, string> = { en_evaluation: 'est en cours d’évaluation', entretien: ': vous êtes invité·e à un entretien', admise: 'est acceptée. Félicitations !', liste_attente: 'est sur liste d’attente', refusee: "n'a pas été retenue cette fois" };
-        if (MSG[b.status]) await notify(a.userId, `Votre candidature ${a.reference} ${MSG[b.status]}`, '/espace/candidatures', { email: true, whatsapp: b.status === 'entretien' || b.status === 'admise' });
-      }
+      // Mêmes modèles de messages que le comité (modifiables dans Paramétrage › Modèles de messages)
+      if (b.status !== a.status && b.status !== 'recue') await notify(a.userId, await message(`candidature.${b.status}`, { reference: a.reference }), '/espace/candidatures', { email: true, whatsapp: b.status === 'entretien' || b.status === 'admise' });
       await audit(u.id, 'admin.candidature.statut', a.reference, { from: a.status, to: b.status, score: b.score }, ip);
       return ok('Candidature mise à jour.');
     }
