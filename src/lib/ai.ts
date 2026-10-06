@@ -25,6 +25,7 @@ export const AI_FEATURES = {
   matching: 'Mise en relation',
   synthese: 'Synthèses',
   moderation: 'Aide à la modération',
+  recherche: 'Recherche par le sens',
 } as const;
 export type AiFeature = keyof typeof AI_FEATURES;
 

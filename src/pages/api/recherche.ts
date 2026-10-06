@@ -1,5 +1,6 @@
 /* Recherche universelle (CDC §10) : contenus publiés du CMS (articles, événements, cours, pages), ajoutés par le navigateur
-   à l'index des pages statiques. GET ?lang=fr|en → { entries: [{ t, d, h, ty, c?, s?, dt? }] }. Mis en cache 5 minutes. */
+   à l'index des pages statiques. GET ?lang=fr|en → { entries: [{ t, d, h, ty, c?, s?, dt? }] }. Mis en cache 5 minutes.
+   POST { q, lang } → recherche par le sens (IA, repli par mots) : { mode: 'ia' | 'mots', reformulation?, results } */
 import type { APIRoute } from 'astro';
 import { and, inArray } from 'drizzle-orm';
 import { db } from '../../lib/db';
@@ -7,6 +8,9 @@ import { cmsContent } from '../../db/schema/app';
 import { allEvents, allCourses } from '../../lib/catalog';
 import { isLive } from '../../lib/cms';
 import { country } from '../../data/site';
+import { semanticSearch } from '../../lib/semantic';
+import { rateLimit, readJson } from '../../lib/guard';
+import { json, fail } from '../../lib/session';
 
 export const prerender = false;
 
@@ -27,4 +31,13 @@ export const GET: APIRoute = async ({ url }) => {
     ...(await allCourses({ lang })).filter((c) => c.fromCms).map((c) => ({ t: c.t, d: `${c.th} · ${c.by}`, h: pre(`/academie/${c.id}`), ty: en ? 'Course' : 'Cours', s: c.th })),
   ];
   return new Response(JSON.stringify({ entries }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' } });
+};
+
+export const POST: APIRoute = async ({ request }) => {
+  const limited = rateLimit(request, 'recherche-ia', 20);
+  if (limited) return limited;
+  const b = await readJson(request);
+  const q = typeof b?.q === 'string' ? b.q.trim() : '';
+  if (q.length < 3 || q.length > 300) return fail('Posez une question de 3 à 300 caractères.');
+  return json({ ok: true, ...(await semanticSearch(q, b?.lang === 'en' ? 'en' : 'fr')) });
 };

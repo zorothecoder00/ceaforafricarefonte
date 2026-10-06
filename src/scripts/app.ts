@@ -321,7 +321,29 @@ function runSearch() {
   sres!.innerHTML = res.length
     ? res.map((x) => `<a href="${x.h}"><span class="tag info">${esc(x.ty)}</span><span><b>${esc(x.t)}</b><br><span class="small muted">${esc(x.d)}</span></span></a>`).join('')
     : `<div class="empty">${EN ? 'No results. Try another word or ask CEA Copilot.' : 'Aucun résultat. Essayez un autre mot ou demandez à CEA Copilot.'}</div>`;
+  // Question en langage courant (3 mots ou plus, ou point d'interrogation) : recherche par le sens proposée
+  const raw = sq!.value.trim();
+  if (raw.length >= 3 && (raw.split(/\s+/).length >= 3 || raw.includes('?'))) {
+    sres!.insertAdjacentHTML('beforeend', `<div class="sai" id="sai"><button class="btn btn-ghost btn-sm" type="button" data-ai-search>${EN ? 'Search by meaning (AI): understand my question' : 'Rechercher par le sens (IA) : comprendre ma question'}</button></div>`);
+  }
 }
+/* Recherche par le sens (CDC §10) : l'IA lit la question et propose les pages qui y répondent ; repli par mots sans IA */
+sres?.addEventListener('click', async (e) => {
+  const b = (e.target as Element).closest<HTMLButtonElement>('[data-ai-search]');
+  if (!b) return;
+  const box = $('#sai')!;
+  b.disabled = true;
+  box.innerHTML = `<span class="skel w80" aria-hidden="true"></span><span class="skel w60" aria-hidden="true"></span><span class="sr">${EN ? 'Searching…' : 'Recherche en cours…'}</span>`;
+  const r = await fetch('/api/recherche', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ q: sq!.value.trim(), lang: EN ? 'en' : 'fr' }) }).catch(() => null);
+  const d = r?.ok ? await r.json().catch(() => null) as { mode: 'ia' | 'mots'; reformulation?: string; results: Entry[] } | null : null;
+  if (!d) { box.innerHTML = `<p class="small muted">${EN ? 'Search unavailable, try again.' : 'Recherche indisponible, réessayez.'}</p>`; return; }
+  const head = d.mode === 'ia'
+    ? `<p class="xs muted">${EN ? 'Suggested by AI' : 'Suggestions de l’IA'}${d.reformulation ? ` — « ${esc(d.reformulation)} »` : ''}</p>`
+    : `<p class="xs muted">${EN ? 'AI unavailable: pages containing your words' : 'IA indisponible : pages contenant vos mots'}</p>`;
+  box.innerHTML = head + (d.results.length
+    ? d.results.map((x) => `<a href="${x.h}"><span class="tag gold">${esc(x.ty)}</span><span><b>${esc(x.t)}</b><br><span class="small muted">${esc(x.d)}</span></span></a>`).join('')
+    : `<div class="empty">${EN ? 'Nothing found. Ask CEA Copilot or the team.' : 'Rien trouvé. Demandez à CEA Copilot ou à l’équipe.'}</div>`);
+});
 function openSearch() { closeMegas(); dlg?.showModal(); loadCmsIndex(); sq!.value = ''; [sCountry, sSector, sDate].forEach((s) => { if (s) s.value = ''; }); runSearch(); sq!.focus(); }
 sq?.addEventListener('input', runSearch);
 $('#searchBtn')?.addEventListener('click', openSearch);

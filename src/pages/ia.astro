@@ -12,6 +12,7 @@ export const prerender = false;
 
 // Usages déclarés : à passer à « true » quand l'usage est mis en service
 const USES: Record<AiFeature, { live: boolean; rules?: boolean; who: string; what: string; data: string; human: string }> = {
+  recherche: { live: true, who: 'Tous les visiteurs', what: 'Comprend une question posée en langage courant dans la recherche (Ctrl+K) et propose les pages du site qui y répondent, même sans mot en commun.', data: 'La question tapée dans la recherche. Aucun accès à votre compte.', human: 'Aucune décision : simple classement de pages publiques.' },
   copilot: { live: true, who: 'Tous les visiteurs', what: 'Répond aux questions sur la plateforme, les programmes, l’entrepreneuriat et la finance, en citant les pages de la base de connaissances de CEA.', data: 'La question posée et la conversation en cours. Aucun accès à votre compte.', human: 'Aucune décision : l’assistant oriente vers les pages et l’équipe.' },
   orientation: { live: true, who: 'Visiteurs et membres', what: 'Pose 5 questions et recommande un parcours (programme, cours, mentor, financement).', data: 'Vos 5 réponses.', human: 'Simple recommandation ; l’admission reste décidée par l’équipe.' },
   redaction: { live: true, who: 'Entrepreneurs et employeurs', what: 'Propose un brouillon de fiche projet, de pitch, d’offre d’emploi ou de candidature.', data: 'Les éléments que vous saisissez dans le formulaire.', human: 'Vous relisez et modifiez le texte avant tout envoi.' },
