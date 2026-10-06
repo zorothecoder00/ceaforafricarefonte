@@ -2,9 +2,10 @@
 /* Paramétrage (CDC §12) : identité légale, fiscalité et comptes comptables ; modèles de messages ; redirections ; consentements.
    Les interrupteurs par pays, les rôles et la matrice des droits ont leurs propres pages. */
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import { desc, sql } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import { db } from '../../lib/db';
-import { consent } from '../../db/schema/app';
+import { consent, auditLog } from '../../db/schema/app';
+import { runRetention, RETENTION_LABEL } from '../../lib/retention';
 import { messageTemplate, redirect } from '../../db/schema/finance';
 import { can } from '../../lib/rbac';
 import { getSetting } from '../../lib/settings';
@@ -14,6 +15,10 @@ export const prerender = false;
 const me = Astro.locals.user!;
 const canM = can(me.roles, 'parametres', 'M');
 const tab = Astro.url.searchParams.get('onglet') ?? 'reglages';
+// Conservation des données : réglages, aperçu de ce que le prochain passage traiterait, dernier passage
+const keep = tab === 'conservation' ? await getSetting('conservation') : null;
+const preview = tab === 'conservation' ? await runRetention(new Date(), { dryRun: true }).catch(() => null) : null;
+const [lastRun] = tab === 'conservation' ? await db.select().from(auditLog).where(eq(auditLog.action, 'conservation.passage')).orderBy(desc(auditLog.at)).limit(1) : [];
 const [org, fisc, acc] = await Promise.all([getSetting('organisation'), getSetting('fiscalite'), getSetting('comptabilite')]);
 const custom = tab === 'modeles' ? await db.select().from(messageTemplate) : [];
 const redirects = tab === 'redirections' ? await db.select().from(redirect).orderBy(desc(redirect.createdAt)) : [];
@@ -23,7 +28,7 @@ const CONSENT: Record<string, string> = { compte: 'Conditions du compte', profil
 const PURPOSE: Record<string, string> = { adhesion: 'Adhésions', billet: 'Billetterie', cours: 'Formations', programme: 'Programmes', mastermind: 'Mastermind', expert: 'Consultations d’experts', mise_en_avant: 'Mises en avant d’offres', recherche: 'Abonnements recherche', sponsoring: 'Sponsoring', autre: 'Autres ventes' };
 ---
 <AdminLayout title="Paramétrage" lead="Réglages modifiables sans développeur. Chaque modification est inscrite au journal d'audit." obj="parametres">
-  <nav class="subnav" style="margin:0 0 14px">{[['reglages', 'Identité, fiscalité, comptabilité'], ['modeles', 'Modèles de messages'], ['redirections', 'Redirections'], ['consentements', 'Consentements']].map(([k, l]) => <a href={`?onglet=${k}`} aria-current={k === tab ? 'page' : undefined}>{l}</a>)}<a href="/admin/interrupteurs">Interrupteurs par pays</a><a href="/admin/droits">Rôles et droits</a></nav>
+  <nav class="subnav" style="margin:0 0 14px">{[['reglages', 'Identité, fiscalité, comptabilité'], ['modeles', 'Modèles de messages'], ['redirections', 'Redirections'], ['consentements', 'Consentements'], ['conservation', 'Conservation des données']].map(([k, l]) => <a href={`?onglet=${k}`} aria-current={k === tab ? 'page' : undefined}>{l}</a>)}<a href="/admin/interrupteurs">Interrupteurs par pays</a><a href="/admin/droits">Rôles et droits</a></nav>
 
   {tab === 'reglages' && (
     <fieldset disabled={!canM} style="border:0;padding:0;margin:0">
@@ -102,6 +107,33 @@ const PURPOSE: Record<string, string> = { adhesion: 'Adhésions', billet: 'Bille
       <p class="xs muted" style="margin:8px 0 0">Dernier choix connu de chaque membre. L'historique complet de chaque personne est dans sa fiche CRM ; les contacts externes portent la base légale de leur consentement.</p>
     </div>
   )}
+
+  {tab === 'conservation' && keep && (
+    <>
+      <form class="panel set" data-key="conservation">
+        <h3 style="margin-top:0">Durées de conservation</h3>
+        <p class="small muted" style="margin-top:0">Appliquées automatiquement chaque jour, comme l'annonce la politique de confidentialité. Les données de paiement et factures (10 ans) et les pièces KYC (5 ans après la fin de la relation) relèvent d'obligations légales et sont traitées par la conformité.</p>
+        <fieldset disabled={!canM} style="border:0;padding:0;margin:0">
+          <label class="row small"><input type="checkbox" name="enabled" checked={keep.enabled} /> Appliquer automatiquement</label>
+          <div class="grid g3" style="gap:0 12px;margin-top:8px">
+            {([['inactiveMonths', 'Compte inactif supprimé après (mois)', 12, 120], ['noticeDays', 'Préavis avant suppression (jours)', 15, 90], ['contactMonths', 'Messages de contact anonymisés après (mois)', 6, 120], ['rejectedMonths', 'Candidatures non retenues effacées après (mois)', 6, 120], ['notificationsMonths', 'Notifications supprimées après (mois)', 1, 60], ['technicalDays', 'Mesures techniques supprimées après (jours)', 30, 730], ['newsletterPendingDays', 'Inscriptions non confirmées supprimées après (jours)', 7, 365], ['auditMonths', 'Journal d’audit conservé (mois, 60 minimum)', 60, 240]] as [keyof typeof keep, string, number, number][]).map(([k, l, min, max]) => <div><label class="f" for={`k-${k}`}>{l}</label><input class="in" id={`k-${k}`} name={k} type="number" min={min} max={max} value={String(keep[k])} data-kind="int" required /></div>)}
+          </div>
+          {canM && <button class="btn btn-primary btn-sm" type="submit" style="margin-top:10px">Enregistrer</button>}
+        </fieldset>
+      </form>
+      <div class="grid g2" style="margin-top:14px">
+        <div class="panel">
+          <h3 style="margin-top:0">Prochain passage (aperçu)</h3>
+          {preview && !('disabled' in preview) ? <table class="t"><tbody>{Object.entries(preview).map(([k, v]) => <tr><td class="small">{RETENTION_LABEL[k] ?? k}</td><td class="num">{v}</td></tr>)}</tbody></table> : <p class="small muted">Aperçu indisponible.</p>}
+          {!keep.enabled && <p class="xs" style="margin:6px 0 0"><b>Application automatique désactivée :</b> rien n'est supprimé.</p>}
+        </div>
+        <div class="panel">
+          <h3 style="margin-top:0">Dernier passage</h3>
+          {lastRun ? <><p class="xs muted" style="margin-top:0">{lastRun.at.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lome' })}</p><table class="t"><tbody>{Object.entries(lastRun.meta as Record<string, number>).map(([k, v]) => <tr><td class="small">{RETENTION_LABEL[k] ?? k}</td><td class="num">{v}</td></tr>)}</tbody></table></> : <p class="small muted">Aucun passage pour l'instant (tâche quotidienne).</p>}
+        </div>
+      </div>
+    </>
+  )}
 </AdminLayout>
 <script>
   const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
@@ -116,6 +148,7 @@ const PURPOSE: Record<string, string> = { adhesion: 'Adhésions', billet: 'Bille
     const value: Record<string, unknown> = {}, accounts: Record<string, string> = {};
     f.querySelectorAll<HTMLInputElement>('input[name]').forEach((i) => {
       if (i.name.startsWith('acc_')) { if (i.value.trim()) accounts[i.name.slice(4)] = i.value.trim(); return; }
+      if (i.type === 'checkbox') { value[i.name] = i.checked; return; }
       value[i.name] = i.dataset.kind === 'permille' ? Math.round(Number(i.value || 0) * 10) : i.dataset.kind === 'int' ? Number(i.value || 0) : i.value.trim();
     });
     if (f.dataset.key === 'comptabilite') value.accounts = accounts;

@@ -1,5 +1,5 @@
 /* Rappels de rendez-vous (CDC §10 « rappels ») : tâche planifiée quotidienne (Vercel Cron, voir vercel.json).
-   Au même passage : relances des tickets, fermeture des offres d'emploi expirées et questionnaires de suivi des anciens.
+   Au même passage : relances des tickets, fermeture des offres d'emploi expirées et questionnaires de suivi des anciens, durées de conservation des données.
    Envoie un rappel unique pour chaque rendez-vous d'équipe et chaque séance de mentorat confirmée des 36 prochaines heures :
    avec un passage par jour, chaque rendez-vous est rappelé une fois, entre 12 et 36 heures avant.
    Les rappels de dernière minute sont portés par les alarmes du fichier agenda (.ics).
@@ -17,6 +17,7 @@ import { cronAuthorized } from '../../../lib/cron';
 import { runEscalations } from '../../../lib/escalations';
 import { closeExpiredJobs } from '../../../lib/jobs';
 import { sendFollowupRequests } from '../../../lib/followups';
+import { runRetention } from '../../../lib/retention';
 import { agendaKey, siteUrl } from '../../../lib/agenda';
 
 export const prerender = false;
@@ -66,5 +67,7 @@ export const GET: APIRoute = async ({ request }) => {
   const expiredJobs = await closeExpiredJobs(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
   // Questionnaires de suivi des anciens à 3, 6 et 12 mois après la fin de leur cohorte (une relance au bout de 14 jours)
   const followups = await sendFollowupRequests(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-  return json({ ok: true, sent, failed, tickets, expiredJobs, followups });
+  // Durées de conservation de la politique de confidentialité : suppression ou anonymisation automatique (CDC §15.1)
+  const retention = await runRetention(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+  return json({ ok: true, sent, failed, tickets, expiredJobs, followups, retention });
 };

@@ -47,6 +47,18 @@ export const SETTINGS = {
       whatsapp: true, reviewLinks: true,
     },
   },
+  conservation: {
+    label: 'Conservation des données',
+    // Durées de la politique de confidentialité (CDC §15.1) ; appliquées chaque jour par /api/cron/rappels (src/lib/retention.ts)
+    schema: z.object({
+      enabled: z.boolean(),
+      inactiveMonths: z.number().int().min(12).max(120), noticeDays: z.number().int().min(15).max(90),
+      contactMonths: z.number().int().min(6).max(120), rejectedMonths: z.number().int().min(6).max(120),
+      notificationsMonths: z.number().int().min(1).max(60), technicalDays: z.number().int().min(30).max(730),
+      newsletterPendingDays: z.number().int().min(7).max(365), auditMonths: z.number().int().min(60).max(240),
+    }),
+    defaults: { enabled: true, inactiveMonths: 36, noticeDays: 30, contactMonths: 36, rejectedMonths: 24, notificationsMonths: 12, technicalDays: 90, newsletterPendingDays: 30, auditMonths: 60 },
+  },
   tutoriels: {
     label: "Tutoriels vidéo du centre d'aide",
     schema: z.object({ videos: z.record(z.string(), z.string()) }),
