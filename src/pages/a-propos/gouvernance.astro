@@ -9,12 +9,17 @@ const heads = ['Akossiwa Amegah', 'Kofi Mensah-Attipoe', 'Edem Kpodar'];
 const line = '<div style="width:2px;height:22px;background:var(--gold)"></div>';
 ---
 <BaseLayout title="Gouvernance">
-  <PageHead title="Gouvernance" lead="CEA FOR AFRICA a été créée par son fondateur, qui en assure la Direction générale. L'organisation est structurée en départements, un par domaine d'intervention, et s'appuie sur des bureaux régionaux et des bureaux de représentation dans les pays." crumbs={[['/a-propos', 'À propos'], ['', 'Gouvernance']]} subnav={SUBS.apropos} />
+  <PageHead title="Gouvernance" lead="CEA FOR AFRICA a été créée par son fondateur, qui en assure la Direction générale, aux côtés d'un conseil consultatif et d'un comité des investisseurs indépendants. L'organisation est structurée en départements, un par domaine d'intervention, et s'appuie sur des bureaux régionaux et des bureaux de représentation dans les pays." crumbs={[['/a-propos', 'À propos'], ['', 'Gouvernance']]} subnav={SUBS.apropos} />
   <section class="block">
     <div class="wrap">
       <h2>Organigramme</h2>
       <div style="display:flex;flex-direction:column;align-items:center;gap:0">
-        <div class="panel" style="text-align:center;min-width:300px;border:2px solid var(--gold)"><div class="avatar" style="margin:0 auto 8px;width:64px;height:64px;background:var(--gold);color:#1B1305">DG</div><b>Fondateur & Directeur général</b><div class="small muted">Direction générale</div></div>
+        <div class="grid g2" style="width:100%;max-width:760px;gap:14px">
+          <div class="panel" style="text-align:center"><b>Conseil consultatif</b><div class="small muted">Oriente la stratégie et conseille la Direction générale</div></div>
+          <div class="panel" style="text-align:center"><b>Comité des investisseurs indépendants</b><div class="small muted">CEA Kapital Invest : sélection et suivi des dossiers</div></div>
+        </div>
+        <Fragment set:html={line} />
+        <div class="panel" style="text-align:center;min-width:min(300px,100%);border:2px solid var(--gold)"><div class="avatar" style="margin:0 auto 8px;width:64px;height:64px;background:var(--gold);color:#1B1305">DG</div><b>Fondateur & Directeur général</b><div class="small muted">Direction générale</div></div>
         <Fragment set:html={line} />
         <div class="panel small" style="text-align:center;padding:10px 18px"><b>Direction générale</b> · Secrétariat, finances, communication, juridique et conformité</div>
         <Fragment set:html={line} />
@@ -26,8 +31,6 @@ const line = '<div style="width:2px;height:22px;background:var(--gold)"></div>';
       <div class="grid g2">
         <div class="panel"><h4>Bureaux régionaux ({REGIONS.length})</h4>{REGIONS.map((r) => <div class="row between small" style="padding:6px 0;border-bottom:1px solid var(--line)"><span><b>{r.n}</b> — {r.city}</span><span class="muted">{r.cs.length} pays</span></div>)}</div>
         <div class="panel"><h4>Bureaux de représentation ({HUBS.length} pays)</h4><p class="small">Un représentant par pays, rattaché au bureau régional. Il accueille les entrepreneurs, valide les inscriptions des membres et organise les activités locales.</p><a class="btn btn-primary btn-sm" href="/representants">Voir les représentants</a></div>
-      </div>
-      <div class="panel" style="margin-top:22px"><h3>Instances à venir</h3><p class="small" style="margin:0">Avec la croissance de l'organisation, la Direction générale prévoit de mettre en place un conseil consultatif et un comité d'investissement indépendant pour CEA Kapital Invest.</p></div>
-    </div>
+      </div>    </div>
   </section>
 </BaseLayout>
