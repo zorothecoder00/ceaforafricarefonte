@@ -2,7 +2,8 @@
    POST { action: 'save', page, kind, key, original, value, scope: 'page' | 'site' } → { ok, value, s }
    POST { action: 'reset', page, kind, key, original, scope: 'page' | 'site' } → { ok, value, s } (valeur désormais affichée)
    POST { action: 'update', id, value } · { action: 'delete', id } (liste du back-office)
-   POST { action: 'reseaux', linkedin: 'https://…', … } (réseaux sociaux du pied de page) */
+   POST { action: 'reseaux', linkedin: 'https://…', … } (réseaux sociaux du pied de page)
+   POST { action: 'tutoriels', <article>: 'https://…', … } (tutoriels vidéo du centre d'aide) */
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -11,6 +12,8 @@ import { siteText } from '../../../db/schema/app';
 import { json, fail, audit, clientIp } from '../../../lib/session';
 import { canEditSite, clearOverrides, keyOf, norm, safeAttr, SITE, ATTRS } from '../../../lib/site-text';
 import { setSetting, SETTINGS } from '../../../lib/settings';
+
+import { HELP } from '../../../data/aide';
 
 export const prerender = false;
 
@@ -22,6 +25,7 @@ const Body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('update'), id: z.uuid(), value: z.string().max(5000) }),
   z.object({ action: z.literal('delete'), id: z.uuid() }),
   z.object({ action: z.literal('reseaux') }).catchall(z.string().trim().max(300)),
+  z.object({ action: z.literal('tutoriels') }).catchall(z.string().trim().max(500)),
 ]);
 
 // Caractères de contrôle retirés (sauf retours à la ligne, réduits par l'affichage)
@@ -53,6 +57,20 @@ export const POST: APIRoute = async ({ locals, request }) => {
     await setSetting('reseaux', links as never, u.id);
     await audit(u.id, 'site.reseaux', 'reseaux', links, ip);
     return json({ ok: true, message: 'Réseaux sociaux enregistrés.' });
+  }
+
+  if (b.action === 'tutoriels') {
+    // Un champ par article du centre d'aide (nom = identifiant de l'article) ; vide = pas de tutoriel
+    const videos: Record<string, string> = {};
+    for (const h of HELP) {
+      const v = (b as Record<string, string>)[h.slug]?.trim() ?? '';
+      if (!v) continue;
+      if (!/^https:\/\//i.test(v)) return fail(`Tutoriel « ${h.q} » : l’adresse doit commencer par https://`);
+      videos[h.slug] = v;
+    }
+    await setSetting('tutoriels', { videos }, u.id);
+    await audit(u.id, 'site.tutoriels', 'tutoriels', { nombre: Object.keys(videos).length }, ip);
+    return json({ ok: true, message: `Tutoriels enregistrés (${Object.keys(videos).length}).` });
   }
 
   if (b.action === 'update' || b.action === 'delete') {

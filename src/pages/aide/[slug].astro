@@ -2,7 +2,9 @@
 /* Article de la base de connaissances (CDC §10) : réponse, liens utiles, tutoriel vidéo s'il existe, « Cet article vous a-t-il aidé ? ». */
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
+import MediaPlayer from '../../components/MediaPlayer.astro';
 import { HELP, HELP_CATS, type HelpArticle } from '../../data/aide';
+import { getSetting } from '../../lib/settings';
 
 export const prerender = false;
 
@@ -10,7 +12,8 @@ const found = HELP.find((x) => x.slug === Astro.params.slug);
 if (!found) return Astro.rewrite('/404');
 const h: HelpArticle = found;
 const related = HELP.filter((x) => x.cat === h.cat && x.slug !== h.slug).slice(0, 4);
-const embed = h.video && /youtube\.com|youtu\.be|vimeo\.com/.test(h.video);
+// Tutoriel vidéo : lien renseigné dans Administration système › Tutoriels vidéo (sinon celui du code)
+const video = (await getSetting('tutoriels')).videos[h.slug] || h.video;
 ---
 <BaseLayout title={h.q} description={h.a[0]}>
   <PageHead listen="#app article, .prose" title={h.q} crumbs={[['/aide', "Centre d'aide"], ['', HELP_CATS[h.cat]]]} />
@@ -18,9 +21,7 @@ const embed = h.video && /youtube\.com|youtu\.be|vimeo\.com/.test(h.video);
     <div class="wrap split">
       <article class="panel">
         {h.a.map((p) => <p>{p}</p>)}
-        {h.video && (embed
-          ? <a class="btn btn-ghost btn-sm" href={h.video} target="_blank" rel="noopener">Voir le tutoriel vidéo</a>
-          : <video src={h.video} controls preload="none" style="width:100%;border-radius:8px;margin:8px 0"></video>)}
+        {video && <div style="margin:12px 0"><h2 style="font-size:1rem;margin:0 0 8px">Tutoriel vidéo</h2><MediaPlayer title={`Tutoriel : ${h.q}`} url={video} ratio="16/9" /></div>}
         {h.links && <div class="row" style="margin-top:12px">{h.links.map(([href, label]) => <a class="btn btn-primary btn-sm" href={href}>{label}</a>)}</div>}
         <hr style="margin:20px 0;border:0;border-top:1px solid var(--line)" />
         <div id="fb" class="row small" data-article={h.slug}>

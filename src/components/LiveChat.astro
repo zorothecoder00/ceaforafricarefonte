@@ -1,0 +1,107 @@
+---
+/* Conversation en direct avec l'équipe (CDC §10) : ouverte depuis le bouton d'assistance. Elle crée un ticket que l'équipe
+   traite dans le back-office ; la fenêtre interroge le fil toutes les 5 secondes tant qu'elle est ouverte. La conversation
+   reprend à la visite suivante (référence et clé gardées dans le navigateur). */
+import { getLang } from '../i18n/ui';
+import { teamOnline } from '../lib/support';
+const en = getLang(Astro.currentLocale) === 'en';
+const w = (fr: string, e: string) => (en ? e : fr);
+const me = Astro.locals.user;
+const online = teamOnline();
+---
+<section class="chat" id="live" aria-label={w("Conversation avec l'équipe CEA", 'Chat with the CEA team')} data-lang={en ? 'en' : 'fr'}>
+  <div class="chat-h">
+    <div>
+      <b style="font-family:var(--display)">{w("L'équipe CEA", 'The CEA team')}</b>
+      <div class="small muted" id="liveState">{online ? w('En ligne · réponse en quelques minutes', 'Online · reply within minutes') : w('Hors ligne · nous répondons du lundi au vendredi, 8 h–18 h (GMT) ; vous serez prévenu de la réponse', 'Offline · we reply Monday to Friday, 8am–6pm GMT; you will be notified')}</div>
+    </div>
+    <button class="icon-btn" id="liveClose" type="button" aria-label={w('Fermer', 'Close')}>✕</button>
+  </div>
+  <div class="chat-b" id="liveBody" aria-live="polite">
+    <div class="msg a">{w('Bonjour ! Posez votre question : une personne de l’équipe vous répond ici.', 'Hello! Ask your question: a member of the team will answer here.')}</div>
+  </div>
+  <form class="chat-start" id="liveStart">
+    <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px" />
+    {!me && <>
+      <input class="in" name="name" required minlength="2" maxlength="120" autocomplete="name" placeholder={w('Votre nom', 'Your name')} aria-label={w('Votre nom', 'Your name')} />
+      <input class="in" name="contact" required minlength="5" maxlength="160" autocomplete="email" placeholder={w('E-mail ou téléphone (pour la réponse)', 'Email or phone (for the reply)')} aria-label={w('E-mail ou téléphone', 'Email or phone')} />
+    </>}
+    <textarea class="in" name="body" required minlength="2" maxlength="2000" rows="2" placeholder={w('Votre message…', 'Your message…')} aria-label={w('Votre message', 'Your message')}></textarea>
+    <button class="btn btn-primary btn-sm" type="submit">{w('Démarrer la conversation', 'Start the conversation')}</button>
+  </form>
+  <form class="chat-f" id="liveForm" hidden>
+    <input class="in" id="liveIn" maxlength="2000" required placeholder={w('Votre message…', 'Your message…')} aria-label={w('Votre message', 'Your message')} autocomplete="off" />
+    <button class="btn btn-primary btn-sm" type="submit">{w('Envoyer', 'Send')}</button>
+  </form>
+  <p class="xs muted chat-new" id="liveNew" hidden><button class="linkbtn xs" type="button" id="liveReset">{w('Nouvelle conversation', 'New conversation')}</button></p>
+</section>
+<script>
+  const box = document.getElementById('live')!, body = document.getElementById('liveBody')!;
+  const start = document.getElementById('liveStart') as HTMLFormElement, form = document.getElementById('liveForm') as HTMLFormElement;
+  const input = document.getElementById('liveIn') as HTMLInputElement;
+  const EN = box.dataset.lang === 'en';
+  const KEY = 'cea-live';
+  type Conv = { ref: string; k: string };
+  const load = (): Conv | null => { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { return null; } };
+  const save = (c: Conv | null) => { try { c ? localStorage.setItem(KEY, JSON.stringify(c)) : localStorage.removeItem(KEY); } catch {} };
+  let conv = load(), timer = 0, shown = 0;
+  const toast = (t: string) => (window as unknown as { toast?: (t: string) => void }).toast?.(t);
+
+  const bubble = (m: { staff: boolean; body: string }) => {
+    const d = document.createElement('div');
+    d.className = 'msg ' + (m.staff ? 'a' : 'u');
+    d.textContent = m.body;
+    if (m.staff) { const who = document.createElement('div'); who.className = 'xs muted'; who.textContent = EN ? 'CEA team' : 'Équipe CEA'; d.prepend(who); }
+    body.append(d);
+    body.scrollTop = body.scrollHeight;
+  };
+  const mode = () => { start.hidden = !!conv; form.hidden = !conv; document.getElementById('liveNew')!.hidden = !conv; };
+  async function poll() {
+    if (!conv) return;
+    const r = await fetch(`/api/chat?ref=${encodeURIComponent(conv.ref)}&k=${encodeURIComponent(conv.k)}`, { credentials: 'same-origin' }).catch(() => null);
+    if (r?.status === 404) { conv = null; save(null); mode(); return; }
+    const d = r?.ok ? await r.json() : null;
+    if (!d) return;
+    (d.messages as { staff: boolean; body: string }[]).slice(shown).forEach(bubble);
+    shown = d.messages.length;
+  }
+  const setOpen = (open: boolean) => {
+    box.classList.toggle('open', open);
+    clearInterval(timer);
+    if (open) {
+      document.getElementById('chat')?.classList.remove('open');
+      mode(); poll();
+      timer = window.setInterval(poll, 5000);
+      (conv ? input : start.querySelector<HTMLElement>('input:not([aria-hidden]), textarea'))?.focus();
+    }
+  };
+  document.querySelectorAll('[data-live-open]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); setOpen(true); }));
+  document.getElementById('liveClose')!.addEventListener('click', () => setOpen(false));
+  document.getElementById('liveReset')!.addEventListener('click', () => {
+    conv = null; save(null); shown = 0;
+    body.querySelectorAll('.msg').forEach((m, i) => i > 0 && m.remove());
+    mode();
+  });
+  start.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(start);
+    const payload = { ...Object.fromEntries(fd), lang: EN ? 'en' : 'fr' };
+    const btn = start.querySelector('button')!; btn.disabled = true;
+    const r = await fetch('/api/chat', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    btn.disabled = false;
+    if (!d.ok || !d.ref) return toast(d.error || (EN ? 'Something went wrong.' : 'Une erreur est survenue.'));
+    conv = { ref: d.ref, k: d.k }; save(conv); shown = 0;
+    start.reset(); mode(); await poll();
+    bubble({ staff: true, body: d.online ? (EN ? 'Thank you, a member of the team will answer you here shortly.' : 'Merci, une personne de l’équipe vous répond ici dans quelques minutes.') : (EN ? 'Thank you. The team is offline: you will receive the answer here and by notification or email.' : 'Merci. L’équipe est hors ligne : vous recevrez la réponse ici et par notification ou e-mail.') });
+  });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text || !conv) return;
+    input.value = '';
+    const r = await fetch('/api/support', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ref: conv.ref, k: conv.k, body: text }) }).catch(() => null);
+    if (!r?.ok) { input.value = text; return toast(EN ? 'Message not sent, try again.' : 'Message non envoyé, réessayez.'); }
+    await poll();
+  });
+</script>

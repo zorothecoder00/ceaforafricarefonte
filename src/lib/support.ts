@@ -39,6 +39,11 @@ export async function ticketFor(ref: string, key: string | null | undefined, use
   return byKey || (userId && t.userId === userId) ? t : null;
 }
 
+/** Conversation en direct (centre d'aide) : motif des tickets ouverts depuis la fenêtre de discussion. */
+export const CHAT_MOTIF = 'Conversation en direct';
+/** Heures de présence de l'équipe pour la conversation en direct (lundi–vendredi, 8 h–18 h, heure de Lomé = GMT). */
+export const teamOnline = (d = new Date()) => d.getUTCDay() >= 1 && d.getUTCDay() <= 5 && d.getUTCHours() >= 8 && d.getUTCHours() < 18;
+
 export const PRIORITY_LABEL = { basse: 'Basse', normale: 'Normale', haute: 'Haute', urgente: 'Urgente' } as const;
 export const STATUS_LABEL = { nouveau: 'Reçue', en_cours: 'En cours', traite: 'Traitée', clos: 'Close' } as const;
 

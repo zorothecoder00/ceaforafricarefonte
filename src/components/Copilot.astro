@@ -3,6 +3,7 @@
    renseigné dans Administration système › Réseaux sociaux) et au formulaire de contact. */
 import { getLang, useT } from '../i18n/ui';
 import { getSetting } from '../lib/settings';
+import LiveChat from './LiveChat.astro';
 const lang = getLang(Astro.currentLocale);
 const t = useT(lang);
 const en = lang === 'en';
@@ -17,7 +18,7 @@ const whatsapp = (await getSetting('reseaux').catch(() => null))?.whatsapp ?? ''
   <nav class="chat-alt" aria-label={en ? 'Other ways to get help' : "Autres moyens d'obtenir de l'aide"}>
     <a href={en ? '/en/aide' : '/aide'}>{en ? 'Help centre' : "Centre d'aide"}</a>
     {whatsapp && <a href={whatsapp} target="_blank" rel="noopener">WhatsApp</a>}
-    <a href={en ? '/en/contact' : '/contact'}>{en ? 'Contact the team' : "Écrire à l'équipe"}</a>
+    <a href={en ? '/en/contact' : '/contact'} data-live-open>{en ? 'Chat with the team' : "Discuter avec l'équipe"}</a>
   </nav>
   <div class="chat-b" id="chatBody" aria-live="polite"><div class="msg a">{t('copHello')}</div></div>
   <div class="sugg" id="sugg">{t('sugg').split('|').map((s) => <button type="button">{s}</button>)}</div>
@@ -26,6 +27,7 @@ const whatsapp = (await getSetting('reseaux').catch(() => null))?.whatsapp ?? ''
     <button class="btn btn-primary btn-sm" type="submit">{t('send')}</button>
   </form>
 </section>
+<LiveChat />
 <dialog id="dlg">
   <div class="dlg-h"><h3 id="dlgTitle">{lang === 'en' ? 'Search' : 'Rechercher'}</h3><button class="icon-btn" type="button" id="dlgClose" aria-label={t('close')}>✕</button></div>
   <div class="dlg-b" id="dlgBody">

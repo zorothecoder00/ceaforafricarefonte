@@ -2,9 +2,10 @@
 /* Lecteur vidéo ou audio : lit le média publié (src/data/media.ts), ou affiche « à venir » s'il n'est pas encore en ligne.
    Les vidéos YouTube/Vimeo ne sont chargées qu'au clic (aucun cookie tiers avant lecture). */
 import { MEDIA, embedUrl } from '../data/media';
-interface Props { title: string; kind?: 'video' | 'audio'; cap?: string; live?: boolean; ratio?: string; soon?: string }
-const { title, kind = 'video', cap, live = false, ratio = '16/10', soon } = Astro.props;
-const m = MEDIA[title];
+/* url : lien direct (prioritaire sur la médiathèque), par exemple un tutoriel renseigné dans le back-office */
+interface Props { title: string; kind?: 'video' | 'audio'; cap?: string; live?: boolean; ratio?: string; soon?: string; url?: string }
+const { title, kind = 'video', cap, live = false, ratio = '16/10', soon, url } = Astro.props;
+const m = url ? { url } as (typeof MEDIA)[string] : MEDIA[title];
 const embed = m ? embedUrl(m.url) : null;
 const pending = soon ?? (kind === 'audio' ? 'Épisode à venir' : live ? 'Le direct démarre à l’heure prévue' : 'Vidéo bientôt en ligne');
 ---

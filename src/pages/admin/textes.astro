@@ -9,6 +9,7 @@ import { MEGA, SOCIAL } from '../../data/nav';
 import { SUBS } from '../../data/site';
 import { canEditSite, KIND_LABEL, SITE } from '../../lib/site-text';
 import { getSetting } from '../../lib/settings';
+import { HELP, HELP_CATS } from '../../data/aide';
 
 export const prerender = false;
 const me = Astro.locals.user!;
@@ -30,6 +31,7 @@ const groups: { k: string; h: string; links: [string, string][] }[] = [
 const editUrl = (h: string, en = false) => (en ? (h === '/' ? '/en/' : '/en' + h) : h) + '?edition=1';
 
 const links = await getSetting('reseaux');
+const tutos = (await getSetting('tutoriels')).videos;
 const rows = await db.select({ t: siteText, by: user.name }).from(siteText).leftJoin(user, eq(user.id, siteText.updatedBy)).orderBy(desc(siteText.updatedAt)).catch(() => []);
 const where = (s: string) => (s === SITE ? 'Tout le site' : s);
 const fmt = (d: Date) => d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Africa/Lome' });
@@ -52,6 +54,7 @@ const tab = (k: string) => ({ class: `btn btn-sm ${vue === k ? 'btn-primary' : '
   <nav class="row" aria-label="Rubriques du site" style="gap:8px;margin-bottom:18px">
     {groups.map((g) => { const n = count(g); return <a {...tab(g.k)}>{g.h}{n > 0 && <span class="xs" style="opacity:.75"> ({n})</span>}</a>; })}
     <a {...tab('reseaux')}>Réseaux sociaux</a>
+    <a {...tab('tutoriels')}>Tutoriels vidéo <span class="xs" style="opacity:.75">({Object.keys(tutos).length})</span></a>
     <a {...tab('modifs')}>Toutes les modifications <span class="xs" style="opacity:.75">({rows.length})</span></a>
   </nav>
 
@@ -71,6 +74,23 @@ const tab = (k: string) => ({ class: `btn btn-sm ${vue === k ? 'btn-primary' : '
       </ul>
     </section>
   )}
+
+  {vue === 'tutoriels' && <section class="panel" style="margin-bottom:18px">
+    <h2 style="font-size:1.15rem;margin-top:0">Tutoriels vidéo du centre d'aide</h2>
+    <p class="small muted" style="margin-top:0">Collez le lien de la vidéo (YouTube, Vimeo ou fichier vidéo, adresse en https://) en face de l'article qu'elle illustre. La vidéo apparaît dans l'article et dans la rubrique « Tutoriels vidéo » du centre d'aide. Laissez vide s'il n'y a pas encore de vidéo.</p>
+    <form data-api="/api/admin/textes" data-reload>
+      <input type="hidden" name="action" value="tutoriels" />
+      <fieldset disabled={!canEdit} style="border:0;padding:0;margin:0">
+        {Object.entries(HELP_CATS).map(([cat, label]) => (
+          <div style="margin-bottom:12px">
+            <h3 style="font-size:.95rem;margin:8px 0">{label}</h3>
+            {HELP.filter((h) => h.cat === cat).map((h) => <div><label class="f" for={`tu-${h.slug}`}>{h.q}</label><input class="in" id={`tu-${h.slug}`} name={h.slug} type="url" placeholder="https://" value={tutos[h.slug] ?? h.video ?? ''} /></div>)}
+          </div>
+        ))}
+        {canEdit && <button class="btn btn-primary btn-sm" type="submit">Enregistrer les tutoriels</button>}
+      </fieldset>
+    </form>
+  </section>}
 
   {vue === 'reseaux' && <section class="panel" style="margin-bottom:18px">
     <h2 style="font-size:1.15rem;margin-top:0">Réseaux sociaux</h2>

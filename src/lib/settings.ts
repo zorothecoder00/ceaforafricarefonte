@@ -47,6 +47,12 @@ export const SETTINGS = {
       whatsapp: true, reviewLinks: true,
     },
   },
+  tutoriels: {
+    label: "Tutoriels vidéo du centre d'aide",
+    schema: z.object({ videos: z.record(z.string(), z.string()) }),
+    // Article de la base de connaissances → lien de la vidéo (YouTube, Vimeo ou fichier https://)
+    defaults: { videos: {} as Record<string, string> },
+  },
   reseaux: {
     label: 'Réseaux sociaux (pied de page)',
     schema: z.object({ linkedin: z.string(), facebook: z.string(), x: z.string(), youtube: z.string(), instagram: z.string(), tiktok: z.string(), whatsapp: z.string() }),

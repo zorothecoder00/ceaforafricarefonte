@@ -3,10 +3,16 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHead from '../components/PageHead.astro';
 import { HELP, HELP_CATS } from '../data/aide';
+import { getSetting } from '../lib/settings';
+import { teamOnline } from '../lib/support';
 
 export const prerender = false;
 
 const wa = (import.meta.env.PUBLIC_WHATSAPP_NUMBER ?? '').replace(/\D/g, '');
+// Tutoriels vidéo renseignés dans Administration système › Tutoriels vidéo
+const videos = (await getSetting('tutoriels')).videos;
+const tutorials = HELP.filter((h) => videos[h.slug] || h.video);
+const online = teamOnline();
 const index = HELP.map((h) => ({ s: h.slug, q: h.q, a: h.a.join(' '), c: HELP_CATS[h.cat] }));
 ---
 <BaseLayout title="Centre d'aide">
@@ -17,6 +23,13 @@ const index = HELP.map((h) => ({ s: h.slug, q: h.q, a: h.a.join(' '), c: HELP_CA
       <input class="in" id="hq" type="search" placeholder="Ex. : billet, mot de passe, Mobile Money…" autocomplete="off" />
       <div id="hres" class="search-res" aria-live="polite" style="margin-top:8px"></div>
       <script type="application/json" id="helpIndex" set:html={JSON.stringify(index)} />
+
+      {tutorials.length > 0 && (
+        <section style="margin-top:20px" aria-labelledby="tutoT">
+          <h2 id="tutoT" style="font-size:1.2rem">Tutoriels vidéo</h2>
+          <div class="grid g3">{tutorials.map((h) => <a class="panel tuto" href={`/aide/${h.slug}`}><span class="tuto-play" aria-hidden="true">▶</span><b>{h.q}</b><span class="xs muted">{HELP_CATS[h.cat]}</span></a>)}</div>
+        </section>
+      )}
 
       <div class="grid g2" style="margin-top:20px">
         {Object.entries(HELP_CATS).map(([k, label]) => (
@@ -45,6 +58,8 @@ const index = HELP.map((h) => ({ s: h.slug, q: h.q, a: h.a.join(' '), c: HELP_CA
       <div class="panel">
         <h2 style="font-size:1.1rem;margin-top:0">Autres moyens de nous joindre</h2>
         <div class="row" style="flex-direction:column;align-items:flex-start;gap:8px">
+          <button class="btn btn-primary btn-sm" type="button" data-live-open>Discuter en direct avec l'équipe</button>
+          <span class="xs muted">{online ? 'Équipe en ligne : réponse en quelques minutes.' : 'Équipe hors ligne : réponse du lundi au vendredi, 8 h–18 h (GMT).'}</span>
           <button class="btn btn-ghost btn-sm" type="button" onclick="openChat()">Demander à CEA Copilot (réponse immédiate)</button>
           {wa && <a class="btn btn-ghost btn-sm" href={`https://wa.me/${wa}?text=${encodeURIComponent("Bonjour CEA FOR AFRICA, j'ai besoin d'aide : ")}`} target="_blank" rel="noopener">Écrire sur WhatsApp</a>}
           <a class="btn btn-ghost btn-sm" href="/espace/demandes">Suivre mes demandes</a>
