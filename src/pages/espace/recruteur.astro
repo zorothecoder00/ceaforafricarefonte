@@ -1,16 +1,18 @@
 ---
 /* Espace recruteur (CDC §7.4) : publier une offre (modération, mise en avant payante), trier les candidatures, déclarer les embauches, rechercher des talents visibles. */
 import EspaceLayout from '../../layouts/EspaceLayout.astro';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import { db } from '../../lib/db';
-import { job, jobApplication, hireDeclaration, profile, jobTypeEnum } from '../../db/schema/app';
+import { job, jobApplication, hireDeclaration, profile, jobTypeEnum, jobRecruiter, jobApplicationNote, jobInterview, recruiterTemplate } from '../../db/schema/app';
 import { user } from '../../db/schema/auth';
 import { COUNTRIES, country } from '../../data/site';
 import { STUDY_LEVELS } from '../../data/etudes';
+import { DEFAULT_TEMPLATES, INTERVIEW_MODES, interviewPlace } from '../../lib/recruiting';
 
 export const prerender = false;
 const me = Astro.locals.user!;
-const jobs = await db.select().from(job).where(eq(job.employerId, me.id)).orderBy(desc(job.createdAt));
+// Offres dont je suis l'auteur ou dont je fais partie de l'équipe de recrutement
+const jobs = await db.select().from(job).where(or(eq(job.employerId, me.id), inArray(job.id, db.select({ id: jobRecruiter.jobId }).from(jobRecruiter).where(eq(jobRecruiter.userId, me.id))))).orderBy(desc(job.createdAt));
 const ids = jobs.map((j) => j.id);
 const apps = ids.length ? await db.select({ a: jobApplication, name: user.name, email: user.email, headline: profile.headline, skills: profile.skills, cv: profile.cvKey }).from(jobApplication).innerJoin(user, eq(user.id, jobApplication.userId)).leftJoin(profile, eq(profile.userId, jobApplication.userId)).where(inArray(jobApplication.jobId, ids)).orderBy(desc(jobApplication.createdAt)) : [];
 const hires = await db.select().from(hireDeclaration).where(eq(hireDeclaration.employerId, me.id)).orderBy(desc(hireDeclaration.hiredOn));
@@ -18,6 +20,15 @@ const sk = (Astro.url.searchParams.get('competence') ?? '').trim();
 const talents = sk ? await db.select({ id: user.id, name: user.name, headline: profile.headline, country: profile.country, skills: profile.skills }).from(profile).innerJoin(user, eq(user.id, profile.userId)).where(and(eq(profile.recruiterVisible, true), sql`exists(select 1 from unnest(${profile.skills}) s where s ilike ${'%' + sk + '%'})`)).limit(30) : [];
 const ST: Record<string, string> = { brouillon: 'Brouillon', en_moderation: 'En modération', publiee: 'Publiée', fermee: 'Fermée', refusee: 'Refusée' };
 const COLS: [string, string][] = [['envoyee', 'Reçues'], ['vue', 'Vues'], ['entretien', 'Entretien'], ['offre', 'Offre'], ['refus', 'Non retenues']];
+// Outils du recruteur : notes d'équipe, entretiens, équipe de chaque offre, réponses types
+const appIds = apps.map((x) => x.a.id);
+const notes = appIds.length ? await db.select({ n: jobApplicationNote, by: user.name }).from(jobApplicationNote).innerJoin(user, eq(user.id, jobApplicationNote.authorId)).where(inArray(jobApplicationNote.applicationId, appIds)).orderBy(asc(jobApplicationNote.createdAt)) : [];
+const interviews = appIds.length ? await db.select().from(jobInterview).where(inArray(jobInterview.applicationId, appIds)).orderBy(asc(jobInterview.startsAt)) : [];
+const team = ids.length ? await db.select({ jobId: jobRecruiter.jobId, userId: jobRecruiter.userId, name: user.name, email: user.email }).from(jobRecruiter).innerJoin(user, eq(user.id, jobRecruiter.userId)).where(inArray(jobRecruiter.jobId, ids)) : [];
+const mine = await db.select().from(recruiterTemplate).where(eq(recruiterTemplate.userId, me.id)).orderBy(asc(recruiterTemplate.createdAt));
+const templates = [...mine.map((t) => ({ name: t.name, body: t.body })), ...DEFAULT_TEMPLATES]; // les siennes d'abord, puis celles proposées par défaut
+const when = (d: Date) => d.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lome' });
+const soon = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10) + 'T10:00';
 ---
 <EspaceLayout title="Espace recruteur" lead="Publiez vos offres, triez les candidatures et déclarez vos embauches.">
   <div class="kpis" style="margin-bottom:18px">
@@ -39,7 +50,39 @@ const COLS: [string, string][] = [['envoyee', 'Reçues'], ['vue', 'Vues'], ['ent
               {x.headline && <div class="xs">{x.headline}</div>}
               {x.skills?.length ? <div class="xs muted">{x.skills.slice(0, 4).join(', ')}</div> : null}
               <select class="in" aria-label="Statut" style="margin:6px 0 0;padding:3px;font-size:.8rem" data-app={x.a.id}>{COLS.map(([v, t]) => <option value={v} selected={v === k}>{t}</option>)}</select>
-              <form data-api="/api/messages" data-reset style="margin-top:4px"><input type="hidden" name="to" value={x.a.userId} /><input type="hidden" name="body" value={`Bonjour ${x.name}, merci pour votre candidature.`} /><button class="btn btn-ghost btn-sm" type="submit">Écrire</button></form>
+              {(() => { const myNotes = notes.filter((n) => n.n.applicationId === x.a.id); const ivs = interviews.filter((i) => i.applicationId === x.a.id && !i.cancelledAt); const jt = jobs.find((j) => j.id === x.a.jobId); return (
+                <>
+                <button class="btn btn-ghost btn-sm ats-open" type="button" data-ats-open={`ats-${x.a.id}`}>Dossier{myNotes.length ? ` · ${myNotes.length} note${myNotes.length > 1 ? 's' : ''}` : ''}</button>
+                {ivs.length > 0 && <div class="xs muted" style="margin-top:4px">Entretien : {when(ivs[ivs.length - 1].startsAt)}</div>}
+                <dialog class="ats-dlg" id={`ats-${x.a.id}`} aria-label={`Dossier de ${x.name}`}>
+                  <div class="dlg-h"><div><h3 style="margin:0">{x.name}</h3><div class="xs muted">{jt?.title} · {jt?.company}</div></div><button class="icon-btn" type="button" data-ats-close aria-label="Fermer">✕</button></div>
+                  <div class="ats-b">
+                    <b class="xs">Notes de l'équipe</b>
+                    {myNotes.map((n) => <p class="xs ats-note"><span class="muted">{n.by} · {when(n.n.createdAt)}</span><br />{n.n.body}</p>)}
+                    <form data-api="/api/recrutement" data-reload data-reset><input type="hidden" name="action" value="note" /><input type="hidden" name="applicationId" value={x.a.id} /><textarea class="in" name="body" rows="2" required maxlength="2000" placeholder="Note visible de l'équipe seulement" aria-label="Note d'équipe"></textarea><button class="btn btn-ghost btn-sm" type="submit">Ajouter la note</button></form>
+
+                    <b class="xs">Entretiens</b>
+                    {ivs.map((i) => <p class="xs ats-note">{when(i.startsAt)} · {INTERVIEW_MODES[i.mode]} · {i.minutes} min{interviewPlace(i.id, i.mode, i.place) ? <><br /><span class="muted">{interviewPlace(i.id, i.mode, i.place)}</span></> : null} <button class="linkbtn xs" type="button" data-post="/api/recrutement" data-body={JSON.stringify({ action: 'entretien.annuler', id: i.id })} data-confirm="Annuler cet entretien ? Le candidat sera prévenu." data-reload>Annuler</button></p>)}
+                    <form data-api="/api/recrutement" data-reload data-reset>
+                      <input type="hidden" name="action" value="entretien" /><input type="hidden" name="applicationId" value={x.a.id} />
+                      <label class="f xs" for={`iv-${x.a.id}`}>Date et heure (heure de Lomé, GMT)</label><input class="in" id={`iv-${x.a.id}`} name="startsAt" type="datetime-local" value={soon} required />
+                      <select class="in" name="mode" aria-label="Mode d'entretien">{Object.entries(INTERVIEW_MODES).map(([v, l]) => <option value={v}>{l}</option>)}</select>
+                      <label class="f xs" for={`ivm-${x.a.id}`}>Durée (minutes)</label><input class="in" id={`ivm-${x.a.id}`} name="minutes" type="number" min="10" max="240" value="45" />
+                      <input class="in" name="place" maxlength="300" placeholder="Adresse, numéro ou lien (visio : lien créé si vide)" aria-label="Lieu" />
+                      <button class="btn btn-ghost btn-sm" type="submit">Planifier l'entretien</button>
+                    </form>
+
+                    <b class="xs">Répondre au candidat</b>
+                    <form data-api="/api/messages" data-reset data-reply data-prenom={x.name.split(' ')[0]} data-poste={jt?.title ?? ''} data-entreprise={jt?.company ?? ''}>
+                      <input type="hidden" name="to" value={x.a.userId} />
+                      <select class="in" data-tpl aria-label="Réponse type"><option value="">Réponse type…</option>{templates.map((t, k) => <option value={k}>{t.name}</option>)}</select>
+                      <textarea class="in" name="body" rows="4" required maxlength="4000" aria-label="Message au candidat"></textarea>
+                      <button class="btn btn-primary btn-sm" type="submit">Envoyer</button>
+                    </form>
+                  </div>
+                </dialog>
+                </>
+              ); })()}
             </div>
           ))}
         </div>
@@ -83,8 +126,26 @@ const COLS: [string, string][] = [['envoyee', 'Reçues'], ['vue', 'Vues'], ['ent
             <span class="small">{j.featured ? '★ ' : ''}{j.title} <span class="xs muted">· {country(j.country)}{j.status === 'publiee' && j.expiresAt ? ` · visible jusqu’au ${j.expiresAt.toLocaleDateString('fr-FR', { timeZone: 'Africa/Lome' })}` : ''}</span></span>
             <span class="tag">{ST[j.status]}</span>
             {j.status === 'refusee' && j.moderationNote && <p class="xs" style="flex-basis:100%;margin:4px 0 0">Motif de la modération : {j.moderationNote}</p>}
+            <details style="flex-basis:100%;margin-top:4px">
+              <summary class="xs">Équipe de recrutement ({team.filter((t) => t.jobId === j.id).length + 1})</summary>
+              <p class="xs" style="margin:4px 0">{j.employerId === me.id ? 'Vous (auteur de l’offre)' : 'Auteur de l’offre'}</p>
+              {team.filter((t) => t.jobId === j.id).map((t) => <p class="xs" style="margin:2px 0">{t.name} <span class="muted">{t.email}</span>{j.employerId === me.id && <> <button class="linkbtn xs" type="button" data-post="/api/recrutement" data-body={JSON.stringify({ action: 'equipe.retirer', jobId: j.id, userId: t.userId })} data-confirm="Retirer ce collègue de l’équipe ?" data-reload>Retirer</button></>}</p>)}
+              {j.employerId === me.id && <form class="row" data-api="/api/recrutement" data-reload data-reset style="gap:6px;margin-top:4px"><input type="hidden" name="action" value="equipe" /><input type="hidden" name="jobId" value={j.id} /><input class="in" name="email" type="email" required placeholder="E-mail d'un collègue (compte CEA)" aria-label="E-mail du collègue" style="flex:1;margin:0;min-width:160px" /><button class="btn btn-ghost btn-sm" type="submit">Ajouter</button></form>}
+              <p class="xs muted" style="margin:4px 0 0">L'équipe voit les candidatures, les notes et les entretiens de cette offre.</p>
+            </details>
           </div>
         )) : <p class="small muted">Aucune offre.</p>}
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <h3>Mes réponses types</h3>
+        <p class="xs muted" style="margin-top:0">Variables remplacées à l'envoi : {'{prenom}'}, {'{poste}'}, {'{entreprise}'}. Quatre modèles sont aussi proposés par défaut (accusé de réception, invitation, réponse négative, proposition).</p>
+        {mine.map((t) => <div class="list-row"><span class="small">{t.name}</span><button class="linkbtn xs" type="button" data-post="/api/recrutement" data-body={JSON.stringify({ action: 'modele.supprimer', id: t.id })} data-confirm="Supprimer cette réponse type ?" data-reload>Supprimer</button></div>)}
+        <form data-api="/api/recrutement" data-reload data-reset>
+          <input type="hidden" name="action" value="modele" />
+          <label class="f" for="tn">Nom</label><input class="in" id="tn" name="name" required minlength="2" maxlength="80" placeholder="Ex. Convocation au second entretien" />
+          <label class="f" for="tb">Texte</label><textarea class="in" id="tb" name="body" rows="4" required minlength="5" maxlength="4000">Bonjour {'{prenom}'},&#10;&#10;</textarea>
+          <button class="btn btn-ghost btn-sm" type="submit">Enregistrer</button>
+        </form>
       </div>
       <form class="panel" data-api="/api/emplois" data-reload data-reset style="margin-top:16px">
         <h3>Déclarer une embauche</h3>
@@ -104,6 +165,7 @@ const COLS: [string, string][] = [['envoyee', 'Reçues'], ['vue', 'Vues'], ['ent
   <form method="get" class="row" style="gap:6px"><input class="in" name="competence" value={sk} placeholder="Compétence (ex. comptabilité, React)" aria-label="Compétence" style="flex:1;margin:0" /><button class="btn btn-primary btn-sm" type="submit">Rechercher</button></form>
   <p class="xs muted">Seuls les talents ayant choisi d'être visibles des recruteurs apparaissent.</p>
   {sk && (talents.length ? <div class="grid g3">{talents.map((t) => <div class="panel"><b>{t.name}</b><div class="small muted">{t.headline ?? ''}{t.country ? ` · ${country(t.country)}` : ''}</div><div class="xs" style="margin-top:6px">{(t.skills ?? []).join(', ')}</div></div>)}</div> : <p class="small muted">Aucun talent visible pour « {sk} ».</p>)}
+  <script type="application/json" id="tplData" set:html={JSON.stringify(templates).replace(/</g, '\\u003c')} />
 </EspaceLayout>
 <script>
   // Champs propres aux stages et à l'alternance : affichés et obligatoires seulement pour ces contrats
@@ -119,6 +181,19 @@ const COLS: [string, string][] = [['envoyee', 'Reçues'], ['vue', 'Vues'], ['ent
     jd.minLength = on ? 80 : 0;
     jd.placeholder = on ? 'Missions confiées, compétences acquises, encadrement…' : '';
   };
+  // Réponse type : remplit le message avec le modèle choisi et les variables du candidat (modifiable avant envoi)
+  const TEMPLATES = JSON.parse(document.getElementById('tplData')!.textContent!) as { name: string; body: string }[];
+  document.querySelectorAll<HTMLFormElement>('form[data-reply]').forEach((f) => {
+    const sel = f.querySelector<HTMLSelectElement>('[data-tpl]')!, body = f.querySelector<HTMLTextAreaElement>('textarea[name="body"]')!;
+    sel.addEventListener('change', () => {
+      const t = TEMPLATES[Number(sel.value)];
+      if (sel.value === '' || !t) return;
+      body.value = t.body.replaceAll('{prenom}', f.dataset.prenom ?? '').replaceAll('{poste}', f.dataset.poste ?? '').replaceAll('{entreprise}', f.dataset.entreprise ?? '');
+    });
+  });
+  // Dossier d'un candidat : fenêtre au-dessus de la page (plus lisible que dans la colonne étroite du tableau)
+  document.querySelectorAll<HTMLButtonElement>('[data-ats-open]').forEach((b) => b.addEventListener('click', () => (document.getElementById(b.dataset.atsOpen!) as HTMLDialogElement | null)?.showModal()));
+  document.querySelectorAll<HTMLButtonElement>('[data-ats-close]').forEach((b) => b.addEventListener('click', () => b.closest('dialog')?.close()));
   jy?.addEventListener('change', syncIntern);
   syncIntern();
   document.querySelectorAll<HTMLSelectElement>('[data-app]').forEach((s) => s.addEventListener('change', async () => {

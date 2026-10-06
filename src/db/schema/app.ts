@@ -249,6 +249,42 @@ export const jobApplication = pgTable('job_application', {
   updatedAt: ts('updated_at').notNull().defaultNow(),
 }, (t) => [uniqueIndex('job_application_unique').on(t.jobId, t.userId)]);
 
+/* Outils du recruteur (CDC §7.4) : équipe de recrutement d'une offre, notes d'équipe sur un candidat, entretiens planifiés,
+   réponses types personnelles. Le candidat ne voit jamais les notes ; il voit ses entretiens. */
+export const jobRecruiter = pgTable('job_recruiter', {
+  jobId: uuid('job_id').notNull().references(() => job.id, { onDelete: 'cascade' }),
+  userId: userRef('user_id').notNull(),
+  addedAt: ts('added_at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.jobId, t.userId] })]);
+
+export const jobApplicationNote = pgTable('job_application_note', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  applicationId: uuid('application_id').notNull().references(() => jobApplication.id, { onDelete: 'cascade' }),
+  authorId: userRef('author_id').notNull(),
+  body: text('body').notNull(),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('job_application_note_app').on(t.applicationId)]);
+
+export const jobInterview = pgTable('job_interview', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  applicationId: uuid('application_id').notNull().references(() => jobApplication.id, { onDelete: 'cascade' }),
+  startsAt: ts('starts_at').notNull(),
+  minutes: integer('minutes').notNull().default(45),
+  mode: text('mode').notNull().default('visio'), // visio | presentiel | telephone
+  place: text('place'), // adresse, numéro ou lien de visio
+  createdBy: userRef('created_by').notNull(),
+  cancelledAt: ts('cancelled_at'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('job_interview_app').on(t.applicationId)]);
+
+export const recruiterTemplate = pgTable('recruiter_template', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: userRef('user_id').notNull(),
+  name: text('name').notNull(),
+  body: text('body').notNull(),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+
 /* Mesure des emplois créés (vérification à 6 et 12 mois) */
 export const hireDeclaration = pgTable('hire_declaration', {
   id: uuid('id').primaryKey().defaultRandom(),

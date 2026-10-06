@@ -615,3 +615,15 @@ body[data-univers] .subnav a[aria-current="page"]{background:var(--u);border-col
 .perso-l li:last-child{border-bottom:0}
 .perso-l a{font-weight:600;text-decoration:none}
 .perso-l a:hover{text-decoration:underline}
+/* Espace recruteur : dossier d'un candidat dans la carte du tableau */
+.ats-dlg .ats-b{padding:14px 18px 18px;max-height:min(75vh,700px);overflow:auto}
+.ats-open{margin-top:6px;font-size:.8rem}
+.ats-b{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.ats-b .in{margin:0;font-size:.9rem;padding:7px 10px;width:100%;box-sizing:border-box}
+.ats-b form{display:flex;flex-direction:column;gap:4px}
+.ats-note{margin:0;padding:6px;border-radius:6px;background:var(--surface-2)}
+/* Chiffres clés en tête de page (paiements, contenus, cohortes, espace recruteur) */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr));gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-m);padding:14px 16px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.kpi b{font-family:var(--display);font-size:1.5rem;color:var(--navy);line-height:1.2}
+.kpi span{font-size:.85rem;color:var(--muted)}

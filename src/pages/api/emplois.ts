@@ -4,7 +4,7 @@
    POST { action:'alerte', q?, country?, type?, remote? } → alerte (WhatsApp)
    POST { action:'publier', title, company, country, type, remote, salary, skills, description, featured } → offre en modération
    POST { action:'embauche', personName, contract, hiredOn, country }   → déclaration d'embauche (mesure des emplois)
-   PATCH { applicationId, status, note? }               → tri des candidatures par l'employeur */
+   PATCH { applicationId, status, note? }               → tri des candidatures par l'employeur et son équipe de recrutement */
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
@@ -13,6 +13,7 @@ import { job, jobApplication, savedItem, jobAlert, hireDeclaration, userRole, jo
 import { json, fail, requireUser, audit } from '../../lib/session';
 import { notify } from '../../lib/notify';
 import { JobFields, jobLive, jobProblem, internColumns } from '../../lib/jobs';
+import { canRecruit } from '../../lib/recruiting';
 
 export const prerender = false;
 
@@ -72,7 +73,7 @@ export const PATCH: APIRoute = async ({ locals, request }) => {
   const p = z.object({ applicationId: z.uuid(), status: z.enum(['envoyee', 'vue', 'entretien', 'offre', 'refus']), note: z.string().max(2000).optional() }).safeParse(await request.json().catch(() => null));
   if (!p.success) return fail('Données invalides.');
   const [a] = await db.select({ a: jobApplication, employer: job.employerId, title: job.title }).from(jobApplication).innerJoin(job, eq(job.id, jobApplication.jobId)).where(eq(jobApplication.id, p.data.applicationId));
-  if (!a || a.employer !== u.id) return fail('Accès refusé.', 403);
+  if (!a || !(await canRecruit(u.id, a.a.jobId))) return fail('Accès refusé.', 403);
   await db.update(jobApplication).set({ status: p.data.status, note: p.data.note ?? a.a.note, updatedAt: new Date() }).where(eq(jobApplication.id, a.a.id));
   const MSG: Record<string, string> = { vue: 'a été consultée', entretien: ': vous êtes invité·e en entretien', offre: ': une offre vous est faite', refus: "n'a pas été retenue" };
   if (MSG[p.data.status]) await notify(a.a.userId, `Votre candidature « ${a.title} » ${MSG[p.data.status]}.`, '/espace/candidatures', { email: true, whatsapp: p.data.status === 'entretien' || p.data.status === 'offre' });

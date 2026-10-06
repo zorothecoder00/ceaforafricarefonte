@@ -211,6 +211,13 @@
       "when": 1791279182911,
       "tag": "0029_offres_emploi",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1791303639841,
+      "tag": "0030_outils_recruteur",
+      "breakpoints": true
     }
   ]
 }
