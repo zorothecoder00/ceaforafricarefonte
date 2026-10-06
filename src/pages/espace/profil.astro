@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../../lib/db';
 import { profile, userRole } from '../../db/schema/app';
 import { HUBS, country } from '../../data/site';
-import { CURRENCIES } from '../../data/currency';
+import { getLocalisation } from '../../lib/localisation';
 import { ROLE_LABEL, type Role } from '../../lib/rbac';
 
 export const prerender = false;
@@ -34,7 +34,7 @@ const filled = [p?.headline, p?.bio, p?.country, p?.sector, p?.skills?.length ? 
       <div class="grid g3" style="gap:0 14px">
         <div><label class="f" for="pvis">Visibilité du profil</label><select class="in" id="pvis" name="visibility"><option value="public" selected={p?.visibility === 'public'}>Public</option><option value="membres" selected={!p || p.visibility === 'membres'}>Membres connectés</option><option value="prive" selected={p?.visibility === 'prive'}>Privé</option></select></div>
         <div><label class="f" for="pl">Langue</label><select class="in" id="pl" name="lang"><option value="fr" selected={p?.lang !== 'en'}>Français</option><option value="en" selected={p?.lang === 'en'}>English</option></select></div>
-        <div><label class="f" for="pcur">Devise</label><select class="in" id="pcur" name="currency">{CURRENCIES.map((c) => <option value={c.code} selected={(p?.currency ?? 'XOF') === c.code}>{c.code}</option>)}</select></div>
+        <div><label class="f" for="pcur">Devise</label><select class="in" id="pcur" name="currency">{(await getLocalisation()).currencies.filter((c) => c.active || c.code === p?.currency).map((c) => <option value={c.code} selected={(p?.currency ?? 'XOF') === c.code}>{c.code}</option>)}</select></div>
       </div>
       <button class="btn btn-primary" type="submit">Enregistrer</button>
     </form>

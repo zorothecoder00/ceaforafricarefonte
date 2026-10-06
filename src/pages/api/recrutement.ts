@@ -10,11 +10,12 @@ import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '../../lib/db';
-import { job, jobApplication, jobRecruiter, jobApplicationNote, jobInterview, recruiterTemplate } from '../../db/schema/app';
+import { job, jobApplication, jobRecruiter, jobApplicationNote, jobInterview, recruiterTemplate, profile } from '../../db/schema/app';
 import { user } from '../../db/schema/auth';
 import { json, fail, requireUser, audit } from '../../lib/session';
 import { notify } from '../../lib/notify';
 import { canRecruit, interviewPlace, INTERVIEW_MODES } from '../../lib/recruiting';
+import { timezoneOf } from '../../lib/localisation';
 
 export const prerender = false;
 
@@ -68,9 +69,12 @@ export const POST: APIRoute = async ({ locals, request }) => {
       if (startsAt.getTime() < Date.now()) return fail('Choisissez une date à venir.');
       const [row] = await db.insert(jobInterview).values({ applicationId: x.a.id, startsAt, minutes: b.minutes, mode: b.mode, place: b.place || null, createdBy: u.id }).returning();
       if (x.a.status !== 'entretien') await db.update(jobApplication).set({ status: 'entretien', updatedAt: new Date() }).where(eq(jobApplication.id, x.a.id));
-      const when = startsAt.toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'short', timeZone: 'Africa/Lome' });
+      // Heure donnée au candidat dans le fuseau de son pays (Paramétrage › Pays, langues, devises), heure de Lomé à défaut
+      const [cand] = await db.select({ c: profile.country }).from(profile).where(eq(profile.userId, x.a.userId));
+      const tz = await timezoneOf(cand?.c);
+      const when = startsAt.toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'short', timeZone: tz });
       const where = interviewPlace(row.id, b.mode, row.place);
-      await notify(x.a.userId, `Entretien pour « ${x.title} » : ${when} (heure de Lomé, GMT) · ${INTERVIEW_MODES[b.mode]}${where ? ` · ${where}` : ''}.`, '/espace/candidatures', { email: true, whatsapp: true });
+      await notify(x.a.userId, `Entretien pour « ${x.title} » : ${when} (heure locale, ${tz.replace('Africa/', '').replace('_', ' ')}) · ${INTERVIEW_MODES[b.mode]}${where ? ` · ${where}` : ''}.`, '/espace/candidatures', { email: true, whatsapp: true });
       await audit(u.id, 'recrutement.entretien', x.a.id, { startsAt: startsAt.toISOString(), mode: b.mode });
       return json({ ok: true, message: 'Entretien planifié : le candidat est prévenu.' });
     }

@@ -6,7 +6,7 @@ import Copilot from '../components/Copilot.astro';
 import CookieBanner from '../components/CookieBanner.astro';
 import { MENU, KMENU, COURSES, EVENTS, JOBS, OPPS, ARTICLES, country } from '../data/site';
 import { getLang, lp, stripLang, localizeHtml, useT, TRANSLATED } from '../i18n/ui';
-import { CURRENCIES, COUNTRY_CURRENCY } from '../data/currency';
+import { getLocalisation } from '../lib/localisation';
 
 interface Props { title?: string; description?: string; image?: string }
 const lang = getLang(Astro.currentLocale);
@@ -20,6 +20,8 @@ const fullTitle = title ? `${title} — CEA FOR AFRICA` : `CEA FOR AFRICA — ${
 // Chemin français de la page (sur les pages anglaises de repli, Astro fournit déjà le chemin français).
 const frPath = (stripLang(Astro.url.pathname).replace(/\/$/, '') || '/');
 const translated = lang === 'fr' || TRANSLATED.has(frPath);
+// Devises actives, taux et devise/fuseau de chaque pays : Paramétrage › Pays, langues, devises
+const loc = await getLocalisation();
 // Univers de la page (CDC §5.2) : couleur secondaire d'orientation pour l'Académie, Talents et Events (Kapital a son propre thème)
 const section = frPath.split('/')[1] ?? '';
 const univers = ({ academie: 'academie', programmes: 'academie', opportunites: 'talents', evenements: 'events' } as Record<string, string>)[section];
@@ -80,8 +82,9 @@ const searchIndex = ([
     <Copilot />
     <CookieBanner lang={lang === 'en' ? 'en' : 'fr'} />
     <script type="application/json" id="searchIndex" set:html={JSON.stringify(searchIndex)} />
-    <script type="application/json" id="currencies" set:html={JSON.stringify(CURRENCIES.map(({ code, perEur, symbol }) => ({ code, perEur, symbol })))} />
-    <script type="application/json" id="countryCur" set:html={JSON.stringify(COUNTRY_CURRENCY)} />
+    <script type="application/json" id="currencies" set:html={JSON.stringify(loc.currencies.filter((c) => c.active).map(({ code, perEur, symbol }) => ({ code, perEur, symbol })))} />
+    <script type="application/json" id="countryCur" set:html={JSON.stringify(Object.fromEntries(loc.countries.map((c) => [c.code, c.currency])))} />
+    <script type="application/json" id="countryTz" set:html={JSON.stringify(Object.fromEntries(loc.countries.map((c) => [c.code, c.tz])))} />
     <script>
       import '../scripts/app.ts';
     </script>

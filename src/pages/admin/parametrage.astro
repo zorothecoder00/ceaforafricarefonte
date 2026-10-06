@@ -6,6 +6,7 @@ import { desc, eq, sql } from 'drizzle-orm';
 import { db } from '../../lib/db';
 import { consent, auditLog } from '../../db/schema/app';
 import { runRetention, RETENTION_LABEL } from '../../lib/retention';
+import { getLocalisation, TIMEZONES, LANGUAGES, FIXED_RATES } from '../../lib/localisation';
 import { messageTemplate, redirect } from '../../db/schema/finance';
 import { can } from '../../lib/rbac';
 import { getSetting } from '../../lib/settings';
@@ -15,6 +16,7 @@ export const prerender = false;
 const me = Astro.locals.user!;
 const canM = can(me.roles, 'parametres', 'M');
 const tab = Astro.url.searchParams.get('onglet') ?? 'reglages';
+const loc = tab === 'localisation' ? await getLocalisation() : null;
 // Conservation des données : réglages, aperçu de ce que le prochain passage traiterait, dernier passage
 const keep = tab === 'conservation' ? await getSetting('conservation') : null;
 const preview = tab === 'conservation' ? await runRetention(new Date(), { dryRun: true }).catch(() => null) : null;
@@ -28,7 +30,7 @@ const CONSENT: Record<string, string> = { compte: 'Conditions du compte', profil
 const PURPOSE: Record<string, string> = { adhesion: 'Adhésions', billet: 'Billetterie', cours: 'Formations', programme: 'Programmes', mastermind: 'Mastermind', expert: 'Consultations d’experts', mise_en_avant: 'Mises en avant d’offres', recherche: 'Abonnements recherche', sponsoring: 'Sponsoring', autre: 'Autres ventes' };
 ---
 <AdminLayout title="Paramétrage" lead="Réglages modifiables sans développeur. Chaque modification est inscrite au journal d'audit." obj="parametres">
-  <nav class="subnav" style="margin:0 0 14px">{[['reglages', 'Identité, fiscalité, comptabilité'], ['modeles', 'Modèles de messages'], ['redirections', 'Redirections'], ['consentements', 'Consentements'], ['conservation', 'Conservation des données']].map(([k, l]) => <a href={`?onglet=${k}`} aria-current={k === tab ? 'page' : undefined}>{l}</a>)}<a href="/admin/interrupteurs">Interrupteurs par pays</a><a href="/admin/droits">Rôles et droits</a></nav>
+  <nav class="subnav" style="margin:0 0 14px">{[['reglages', 'Identité, fiscalité, comptabilité'], ['modeles', 'Modèles de messages'], ['redirections', 'Redirections'], ['consentements', 'Consentements'], ['localisation', 'Pays, langues, devises'], ['conservation', 'Conservation des données']].map(([k, l]) => <a href={`?onglet=${k}`} aria-current={k === tab ? 'page' : undefined}>{l}</a>)}<a href="/admin/interrupteurs">Interrupteurs par pays</a><a href="/admin/droits">Rôles et droits</a></nav>
 
   {tab === 'reglages' && (
     <fieldset disabled={!canM} style="border:0;padding:0;margin:0">
@@ -108,6 +110,33 @@ const PURPOSE: Record<string, string> = { adhesion: 'Adhésions', billet: 'Bille
     </div>
   )}
 
+  {tab === 'localisation' && loc && (
+    <form class="panel" id="locF">
+      <fieldset disabled={!canM} style="border:0;padding:0;margin:0">
+        <h3 style="margin-top:0">Pays de présence</h3>
+        <p class="small muted" style="margin-top:0">Un pays désactivé n'est plus proposé dans le sélecteur de pays de l'en-tête. Sa devise est proposée par défaut aux visiteurs qui le choisissent ; son fuseau sert aux heures données à ses membres (entretiens…).</p>
+        <div class="scroll-x"><table class="t"><thead><tr><th>Actif</th><th>Pays</th><th>Devise</th><th>Fuseau horaire</th><th>Langue</th></tr></thead><tbody>
+          {loc.countries.map((c) => <tr data-country={c.code}><td><input type="checkbox" data-k="active" checked={c.active} aria-label={`${c.name} actif`} /></td><td class="small">{c.name} <span class="xs muted">{c.code}</span></td>
+            <td><select class="in" data-k="currency" aria-label={`Devise ${c.name}`} style="width:auto;padding:4px 8px;margin:0">{loc.currencies.map((x) => <option selected={x.code === c.currency}>{x.code}</option>)}</select></td>
+            <td><select class="in" data-k="tz" aria-label={`Fuseau ${c.name}`} style="width:auto;padding:4px 8px;margin:0">{TIMEZONES.map((z) => <option selected={z === c.tz}>{z}</option>)}</select></td>
+            <td><select class="in" data-k="lang" aria-label={`Langue ${c.name}`} style="width:auto;padding:4px 8px;margin:0"><option value="fr" selected={c.lang === 'fr'}>Français</option><option value="en" selected={c.lang === 'en'}>English</option></select></td></tr>)}
+        </tbody></table></div>
+        <h3>Langues de l'interface</h3>
+        {LANGUAGES.map((l) => <label class="row small"><input type="checkbox" id={`lang-${l.code}`} checked={l.code === 'fr' || (l.code === 'en' && loc.english)} disabled={l.code !== 'en'} /> {l.name}{l.code === 'fr' ? ' (langue principale)' : !l.ready ? ` — traduction prévue en ${'phase' in l ? l.phase : 'V2'}` : ''}</label>)}
+        <h3>Devises et taux indicatifs</h3>
+        <p class="small muted" style="margin-top:0">Taux pour 1 euro, affichés avec leur date et leur source. Le franc CFA (XOF, XAF) a une parité fixe avec l'euro.</p>
+        <div class="scroll-x"><table class="t"><thead><tr><th>Active</th><th>Devise</th><th class="num">Pour 1 €</th></tr></thead><tbody>
+          {loc.currencies.map((c) => <tr data-currency={c.code}><td><input type="checkbox" data-k="active" checked={c.active} disabled={c.code === 'XOF'} aria-label={`${c.code} active`} /></td><td class="small">{c.code} <span class="xs muted">{c.name.fr}</span></td><td class="num"><input class="in" data-k="perEur" type="number" step="any" min="0" value={c.perEur} disabled={c.code in FIXED_RATES} aria-label={`Taux ${c.code}`} style="width:130px;margin:0;text-align:right" /></td></tr>)}
+        </tbody></table></div>
+        <div class="grid g2" style="gap:0 12px;margin-top:8px">
+          <div><label class="f" for="rd">Date des taux</label><input class="in" id="rd" type="date" value={loc.ratesDate} /></div>
+          <div><label class="f" for="rs">Source des taux</label><input class="in" id="rs" maxlength="200" value={loc.ratesSource} placeholder="Ex. BCEAO, cours indicatifs du jour" /></div>
+        </div>
+        {canM && <button class="btn btn-primary btn-sm" type="submit" style="margin-top:10px">Enregistrer</button>}
+      </fieldset>
+    </form>
+  )}
+
   {tab === 'conservation' && keep && (
     <>
       <form class="panel set" data-key="conservation">
@@ -154,6 +183,20 @@ const PURPOSE: Record<string, string> = { adhesion: 'Adhésions', billet: 'Bille
     if (f.dataset.key === 'comptabilite') value.accounts = accounts;
     api({ action: 'setting.save', key: f.dataset.key, value });
   }));
+  // Pays, langues, devises : un seul réglage « localisation » construit à partir des tableaux
+  document.getElementById('locF')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const countries: Record<string, unknown> = {}, currencies: Record<string, unknown> = {};
+    document.querySelectorAll<HTMLTableRowElement>('tr[data-country]').forEach((tr) => {
+      const v = (k: string) => tr.querySelector<HTMLInputElement | HTMLSelectElement>(`[data-k="${k}"]`)!;
+      countries[tr.dataset.country!] = { active: (v('active') as HTMLInputElement).checked, currency: v('currency').value, tz: v('tz').value, lang: v('lang').value };
+    });
+    document.querySelectorAll<HTMLTableRowElement>('tr[data-currency]').forEach((tr) => {
+      const rate = tr.querySelector<HTMLInputElement>('[data-k="perEur"]')!;
+      currencies[tr.dataset.currency!] = { active: tr.querySelector<HTMLInputElement>('[data-k="active"]')!.checked || tr.dataset.currency === 'XOF', perEur: Number(rate.value) };
+    });
+    api({ action: 'setting.save', key: 'localisation', value: { countries, currencies, english: (document.getElementById('lang-en') as HTMLInputElement).checked, ratesDate: (document.getElementById('rd') as HTMLInputElement).value, ratesSource: (document.getElementById('rs') as HTMLInputElement).value.trim() } }, true);
+  });
   document.querySelectorAll<HTMLFormElement>('form.tpl').forEach((f) => f.addEventListener('submit', (e) => {
     e.preventDefault();
     api({ action: 'template.save', key: f.dataset.key, body: (f.querySelector('textarea') as HTMLTextAreaElement).value }, true);

@@ -59,6 +59,22 @@ export const SETTINGS = {
     }),
     defaults: { enabled: true, inactiveMonths: 36, noticeDays: 30, contactMonths: 36, rejectedMonths: 24, notificationsMonths: 12, technicalDays: 90, newsletterPendingDays: 30, auditMonths: 60 },
   },
+  localisation: {
+    label: 'Pays, langues, devises et fuseaux',
+    // Réglages superposés aux valeurs du code (src/lib/localisation.ts) : un pays ou une devise absents gardent leurs valeurs par défaut
+    schema: z.object({
+      countries: z.record(z.string().regex(/^[A-Z]{2}$/), z.object({ active: z.boolean(), currency: z.string().regex(/^[A-Z]{3}$/), tz: z.string().min(3).max(40), lang: z.enum(['fr', 'en']) })),
+      currencies: z.record(z.string().regex(/^[A-Z]{3}$/), z.object({ active: z.boolean(), perEur: z.number().positive().max(1e6) })),
+      english: z.boolean(),
+      ratesDate: z.string().regex(/^(\d{4}-\d{2}-\d{2})?$/),
+      ratesSource: z.string().trim().max(200),
+    }),
+    defaults: { countries: {}, currencies: {}, english: true, ratesDate: '', ratesSource: '' } as {
+      countries: Record<string, { active: boolean; currency: string; tz: string; lang: 'fr' | 'en' }>;
+      currencies: Record<string, { active: boolean; perEur: number }>;
+      english: boolean; ratesDate: string; ratesSource: string;
+    },
+  },
   tutoriels: {
     label: "Tutoriels vidéo du centre d'aide",
     schema: z.object({ videos: z.record(z.string(), z.string()) }),

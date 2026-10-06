@@ -5,6 +5,8 @@ import { and, asc, desc, eq, gt, inArray, isNull } from 'drizzle-orm';
 import { db } from '../../lib/db';
 import { programmeApplication, jobApplication, job, jobInterview } from '../../db/schema/app';
 import { INTERVIEW_MODES, interviewPlace } from '../../lib/recruiting';
+import { timezoneOf } from '../../lib/localisation';
+import { profile } from '../../db/schema/app';
 import { programmeCall } from '../../db/schema/programmes';
 import { LEGACY } from '../../lib/calls';
 
@@ -14,6 +16,9 @@ const progs = await db.select({ p: programmeApplication, call: programmeCall.tit
 const jobs = await db.select({ a: jobApplication, title: job.title, company: job.company }).from(jobApplication).innerJoin(job, eq(job.id, jobApplication.jobId)).where(eq(jobApplication.userId, user.id)).orderBy(desc(jobApplication.updatedAt));
 // Entretiens à venir planifiés par les recruteurs (CDC §7.4)
 const ivs = jobs.length ? await db.select().from(jobInterview).where(and(inArray(jobInterview.applicationId, jobs.map((j) => j.a.id)), isNull(jobInterview.cancelledAt), gt(jobInterview.startsAt, new Date()))).orderBy(asc(jobInterview.startsAt)) : [];
+// Heures d'entretien dans le fuseau du pays du membre
+const [myProf] = ivs.length ? await db.select({ c: profile.country }).from(profile).where(eq(profile.userId, user.id)) : [];
+const tz = ivs.length ? await timezoneOf(myProf?.c) : 'Africa/Lome';
 const STATUS: Record<string, string> = { brouillon: 'Brouillon', recue: 'Reçue', en_evaluation: 'En évaluation', entretien: 'Entretien', admise: 'Admise', liste_attente: "Liste d'attente", refusee: 'Non retenue', retiree: 'Retirée' };
 const STEPS = ['recue', 'en_evaluation', 'entretien', 'admise'];
 const JOB_COLS: [string, string][] = [['envoyee', 'Envoyée'], ['vue', 'Vue'], ['entretien', 'Entretien'], ['offre', 'Offre'], ['refus', 'Refus']];
@@ -38,7 +43,7 @@ const JOB_COLS: [string, string][] = [['envoyee', 'Envoyée'], ['vue', 'Vue'], [
     <div class="kanban" style="grid-template-columns:repeat(5,minmax(160px,1fr))">
       {JOB_COLS.map(([k, l]) => (
         <div class="col"><h4><span>{l}</span><span>{jobs.filter((j) => j.a.status === k).length}</span></h4>
-          {jobs.filter((j) => j.a.status === k).map((j) => <div class="kcard"><b>{j.title}</b><div class="xs muted">{j.company}</div>{ivs.filter((i) => i.applicationId === j.a.id).map((i) => { const where = interviewPlace(i.id, i.mode, i.place); return <p class="xs" style="margin:6px 0 0"><b>Entretien</b> · {i.startsAt.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lome' })} (GMT) · {INTERVIEW_MODES[i.mode]} · {i.minutes} min{where && (/^https?:/.test(where) ? <><br /><a href={where} target="_blank" rel="noopener">Rejoindre la visio</a></> : <><br />{where}</>)}</p>; })}</div>)}
+          {jobs.filter((j) => j.a.status === k).map((j) => <div class="kcard"><b>{j.title}</b><div class="xs muted">{j.company}</div>{ivs.filter((i) => i.applicationId === j.a.id).map((i) => { const where = interviewPlace(i.id, i.mode, i.place); return <p class="xs" style="margin:6px 0 0"><b>Entretien</b> · {i.startsAt.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short', timeZone: tz })} ({tz.replace('Africa/', '').replace('_', ' ')}) · {INTERVIEW_MODES[i.mode]} · {i.minutes} min{where && (/^https?:/.test(where) ? <><br /><a href={where} target="_blank" rel="noopener">Rejoindre la visio</a></> : <><br />{where}</>)}</p>; })}</div>)}
         </div>
       ))}
     </div>
