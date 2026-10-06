@@ -21,11 +21,11 @@ const show = (v: string) => v || '—';
       <b>Modifier un droit :</b> cliquez sur une case. Les cases <span style="background:#FFF3D6;padding:0 4px;border-radius:4px">surlignées</span> s'écartent du cahier des charges ; 🔒 = case verrouillée. Les rôles restent ceux du cahier des charges ; seuls leurs droits changent. La modification s'applique en moins d'une minute sur tout le site et est inscrite au journal d'audit.
     </div>
   )}
-  <div class="panel scroll-x">
+  <div class="panel matrix-scroll" tabindex="0" aria-label="Matrice des droits (défilement horizontal et vertical)">
     <table class="t droits">
-      <thead><tr><th>Objet</th>{ROLES.map((r) => <th class="xs" style="writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap">{ROLE_LABEL[r]}{SENSITIVE.includes(r) ? ' 🔐' : ''}</th>)}</tr></thead>
+      <thead><tr><th class="corner">Objet</th>{ROLES.map((r) => <th class="xs rh"><span>{ROLE_LABEL[r]}{SENSITIVE.includes(r) ? ' 🔐' : ''}</span></th>)}</tr></thead>
       <tbody>{OBJS.map((o) => (
-        <tr><th class="small" style="text-align:left">{OBJ_LABEL[o]}</th>{ROLES.map((r) => {
+        <tr><th class="small obj" scope="row">{OBJ_LABEL[o]}</th>{ROLES.map((r) => {
           const v = rightsOf(r, o), def = MATRIX[r][o] ?? '', lock = lockReason(r, o), diff = v !== def;
           return (
             <td class="xs" style={`text-align:center;padding:0;${diff ? 'background:#FFF3D6;' : ''}`}>
@@ -82,6 +82,15 @@ const show = (v: string) => v || '—';
 </AdminLayout>
 
 <style>
+  /* Tableau dans sa propre zone de défilement (horizontal et vertical) : rôles et objets restent visibles en permanence */
+  .matrix-scroll{padding:0;overflow:auto;max-height:calc(100vh - 170px);max-height:calc(100dvh - 170px);overscroll-behavior:contain}
+  .matrix-scroll:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+  .droits{border-collapse:separate;border-spacing:0;margin:0}
+  .droits thead th{position:sticky;top:0;z-index:2;background:var(--surface);vertical-align:bottom;box-shadow:inset 0 -1px 0 var(--line)}
+  .droits .rh span{display:inline-block;writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;padding:6px 0}
+  .droits th.obj,.droits th.corner{position:sticky;left:0;background:var(--surface);text-align:left;min-width:190px;max-width:240px;box-shadow:inset -1px 0 0 var(--line)}
+  .droits th.obj{z-index:1}
+  .droits th.corner{z-index:3}
   .droits .cell{display:block;width:100%;min-width:38px;padding:6px 4px;background:none;border:0;font:inherit;color:inherit;cursor:default}
   .droits button.cell{cursor:pointer}
   .droits button.cell:hover,.droits button.cell:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}

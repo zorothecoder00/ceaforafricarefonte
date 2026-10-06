@@ -300,12 +300,21 @@ dialog::backdrop{background:rgba(5,15,28,.6)}
 .notif .it.unread{background:var(--info-soft)}
 
 /* ===== dashboard / admin ===== */
-.dash{display:grid;grid-template-columns:240px 1fr;gap:24px;padding:28px 20px}
-.side{position:sticky;top:calc(env(safe-area-inset-top,0px) + 100px);align-self:start}
+.dash{display:grid;grid-template-columns:240px minmax(0,1fr);gap:24px;padding:28px 20px}
+/* Menu latéral : collé sous l'en-tête, défile seul (sans faire défiler la page), réductible (bouton, choix mémorisé) */
+.side{position:sticky;top:calc(env(safe-area-inset-top,0px) + 84px);align-self:start;min-width:0;max-height:calc(100vh - 100px);max-height:calc(100dvh - 100px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;padding-right:4px}
+.side-toggle{display:flex;align-items:center;gap:6px;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-s);padding:6px 10px;margin:0 0 10px;font:inherit;font-size:.82rem;font-weight:600;color:var(--muted);cursor:pointer;position:sticky;top:0;z-index:1}
+.side-toggle:hover,.side-toggle:focus-visible{color:var(--navy);border-color:var(--navy)}
+.side-toggle .st-closed{display:none}
+html.side-min .dash{grid-template-columns:44px minmax(0,1fr)}
+html.side-min .side-body{display:none}
+html.side-min .side-toggle{justify-content:center;padding:8px 0;font-size:1.1rem}
+html.side-min .side-toggle .st-open{display:none}
+html.side-min .side-toggle .st-closed{display:inline}
 .side a{display:block;text-decoration:none;padding:9px 12px;border-radius:var(--r-s);font-weight:600;color:var(--muted)}
 .side a[aria-current="page"]{background:var(--surface);color:var(--navy);box-shadow:inset 3px 0 0 var(--gold)}
 .side h5{font-family:var(--display);font-size:.75rem;color:var(--muted);margin:16px 12px 4px}
-@media (max-width:860px){.dash{grid-template-columns:1fr}.side{position:static;display:flex;overflow-x:auto;gap:4px}.side a{white-space:nowrap}.side h5{display:none}}
+@media (max-width:860px){.dash,html.side-min .dash{grid-template-columns:1fr}.side{position:static;max-height:none;overflow:visible;padding-right:0}.side-toggle{display:none}.side-body,html.side-min .side-body{display:flex;overflow-x:auto;gap:4px}.side a{white-space:nowrap}.side h5{display:none}}
 .kanban{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:12px;overflow-x:auto}
 .kanban.k4{grid-template-columns:repeat(4,minmax(200px,1fr))}
 .col{background:var(--surface-2);border-radius:var(--r-m);padding:10px;min-height:220px}

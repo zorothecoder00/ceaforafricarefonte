@@ -16,6 +16,7 @@ export const ADMIN_NAV: [string, string, Obj][] = [
   ['/admin/kapital', 'Pipeline Kapital', 'dossier_kapital'],
   ['/admin/conformite', 'Conformité et KYC', 'pieces_kyc'],
   ['/admin/membres', 'Membres et rôles', 'membres'],
+  ['/admin/droits', 'Matrice des droits', 'contenus'],
   ['/admin/interrupteurs', 'Interrupteurs par pays', 'interrupteurs'],
   ['/admin/paiements', 'Paiements', 'paiements'],
   ['/admin/finance', 'Factures et comptabilité', 'paiements'],
@@ -31,7 +32,6 @@ export const ADMIN_NAV: [string, string, Obj][] = [
   ['/admin/contenus', 'Contenus et voix', 'contenus'],
   ['/admin/assemblees', 'Assemblées et votes', 'journal_audit'],
   ['/admin/audit', "Journal d'audit", 'journal_audit'],
-  ['/admin/droits', 'Matrice des droits', 'contenus'],
 ];
 
 /** Garde d'API du back-office : droit (objet, action) + double authentification pour les rôles sensibles. */

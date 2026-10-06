@@ -14,11 +14,14 @@ const allowed = can(me.roles, obj, 'L');
 ---
 <BaseLayout title={`${title} — CEA OS`}>
   <div class="wrap dash">
-    <nav class="side" aria-label="Back-office">
-      <h5 style="margin-top:0">CEA OS</h5>
-      <div class="xs muted" style="padding:0 12px 8px">{me.roles.filter((r) => r !== 'membre').map((r) => ROLE_LABEL[r as Role] ?? r).join(' · ')}</div>
-      {ADMIN_NAV.filter(([, , o]) => can(me.roles, o, 'L')).map(([href, label]) => <a href={href} aria-current={path === href || (href !== '/admin' && path.startsWith(href)) ? 'page' : undefined}>{label}</a>)}
-      <a href="/espace" style="margin-top:12px">← Mon espace</a>
+    <nav class="side" id="sideNav" aria-label="Back-office">
+      <button class="side-toggle" type="button" data-side-toggle aria-controls="sideBody" aria-expanded="true"><span class="st-open">‹ Réduire le menu</span><span class="st-closed" aria-hidden="true">☰</span></button>
+      <div class="side-body" id="sideBody">
+        <h5 style="margin-top:0">CEA OS</h5>
+        <div class="xs muted" style="padding:0 12px 8px">{me.roles.filter((r) => r !== 'membre').map((r) => ROLE_LABEL[r as Role] ?? r).join(' · ')}</div>
+        {ADMIN_NAV.filter(([, , o]) => can(me.roles, o, 'L')).map(([href, label]) => <a href={href} aria-current={path === href || (href !== '/admin' && path.startsWith(href)) ? 'page' : undefined}>{label}</a>)}
+        <a href="/espace" style="margin-top:12px">← Mon espace</a>
+      </div>
     </nav>
     <div style="min-width:0">
       <h1 style="font-size:2rem">{title}</h1>

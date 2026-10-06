@@ -50,6 +50,23 @@ liteBtn?.addEventListener('click', () => {
 /* ===== langue courante ===== */
 const LANG = document.documentElement.lang === 'en' ? 'en' : 'fr';
 const EN = LANG === 'en';
+
+/* Menu latéral (back-office, Mon espace) : réduit ou déplié, choix mémorisé sur cet appareil */
+const sideBtn = $<HTMLButtonElement>('[data-side-toggle]');
+if (sideBtn) {
+  const sync = () => {
+    const min = root.classList.contains('side-min');
+    sideBtn.setAttribute('aria-expanded', String(!min));
+    sideBtn.setAttribute('aria-label', min ? (EN ? 'Show the menu' : 'Afficher le menu') : (EN ? 'Collapse the menu' : 'Réduire le menu'));
+    sideBtn.title = min ? (EN ? 'Show the menu' : 'Afficher le menu') : '';
+  };
+  sync();
+  sideBtn.addEventListener('click', () => {
+    root.classList.toggle('side-min');
+    store('cea-side', root.classList.contains('side-min') ? 'min' : null);
+    sync();
+  });
+}
 const withLang = (p: string) => (EN && p.startsWith('/') && !p.startsWith('/en/') ? '/en' + p : p);
 
 /* ===== méga-menus (CDC §5.3) ===== */

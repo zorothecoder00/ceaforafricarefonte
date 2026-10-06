@@ -64,6 +64,7 @@ const searchIndex = ([
         var t = localStorage.getItem('cea-theme'); if (t) document.documentElement.dataset.theme = t;
         var f = localStorage.getItem('cea-fs'); if (f) document.documentElement.style.setProperty('--fs', f + 'px');
         if (localStorage.getItem('cea-lite') === '1') document.documentElement.classList.add('lite');
+        if (localStorage.getItem('cea-side') === 'min') document.documentElement.classList.add('side-min');
       } catch (e) {}
     </script>
   </head>
