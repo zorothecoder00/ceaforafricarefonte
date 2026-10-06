@@ -150,7 +150,7 @@ export function megaOf(path: string): string | null {
   return best?.k ?? null;
 }
 
-/** Réseaux sociaux du pied de page : les adresses se renseignent dans le back-office (Textes et images du site) ;
+/** Réseaux sociaux du pied de page : les adresses se renseignent dans le back-office (Administration système) ;
     aucune icône n'est affichée tant que l'adresse est vide. */
 export const SOCIAL: { k: 'linkedin' | 'facebook' | 'x' | 'youtube' | 'instagram' | 'tiktok' | 'whatsapp'; n: string; path: string }[] = [
   { k: 'linkedin', n: 'LinkedIn', path: 'M4 9h4v11H4zM6 3.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM10 9h3.8v1.6c.6-1 1.9-1.9 3.7-1.9 3.6 0 4.3 2.3 4.3 5.4V20h-4v-5.2c0-1.3 0-2.9-1.8-2.9s-2 1.4-2 2.8V20h-4z' },

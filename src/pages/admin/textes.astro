@@ -1,6 +1,6 @@
 ---
-/* Textes et images du site : ouverture de chaque page de la navigation en mode édition (éditeur visuel),
-   réseaux sociaux du pied de page, et liste de toutes les modifications enregistrées (corriger, rétablir l'original). */
+/* Administration système (textes et images du site) : un bouton par rubrique de la navigation ; la rubrique choisie affiche ses pages
+   (ouverture en mode édition) et leurs modifications. Réseaux sociaux et liste complète des modifications ont aussi leur bouton. */
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { desc, eq } from 'drizzle-orm';
 import { db } from '../../lib/db';
@@ -16,50 +16,63 @@ const canEdit = canEditSite(me);
 const q = (Astro.url.searchParams.get('q') ?? '').trim().toLowerCase();
 const pageFilter = Astro.url.searchParams.get('page') ?? '';
 
-// Pages de la navigation : accueil, méga-menu (rubriques et sous-rubriques), sous-navigations, pied de page
+// Rubriques de la navigation (un bouton chacune) : accueil, méga-menu (rubriques et sous-rubriques), sous-navigations, pied de page
 const clean = (h: string) => h.split(/[?#]/)[0].replace(/\/$/, '') || '/';
 const seen = new Set<string>();
 const take = (links: [string, string][]) => links.map(([h, t]) => [clean(h), t] as [string, string]).filter(([h]) => !/^\/(espace|admin)\b/.test(h) && !seen.has(h) && seen.add(h));
-const groups: { h: string; links: [string, string][] }[] = [
-  { h: 'Accueil', links: take([['/', 'Page d’accueil'], ['/commencer', 'Par où commencer ?'], ['/connexion', 'Connexion'], ['/inscription', 'Inscription']]) },
-  ...MEGA.map((m) => ({ h: m.label.fr, links: take([[m.href, m.label.fr], ...m.cols.flatMap((c) => c.items.map((i) => [i.href, i.t.fr] as [string, string])), ...(SUBS[m.k] ?? [])]) })),
-  { h: 'Projets et Voix', links: take([...SUBS.projets, ...SUBS.voix, ...SUBS.actionnariat]) },
-  { h: 'CEA Kapital Invest', links: take([['/kapital', 'Accueil Kapital'], ['/kapital/opportunites', 'Opportunités'], ['/kapital/marches', 'Bourses africaines'], ['/kapital/capital-risque', 'Capital-risque'], ['/kapital/obligations', 'Marché des capitaux'], ['/kapital/risques', 'Risques'], ['/kapital/diagnostic', 'Diagnostic'], ['/kapital/devenir-investisseur', 'Devenir investisseur']]) },
-  { h: 'Pied de page et informations', links: take([['/domaines/btp', 'BTP & Infrastructures'], ['/monde', 'Vue sur le monde'], ['/representants', 'Représentants pays'], ['/legal/mentions-legales', 'Mentions légales'], ['/legal/confidentialite', 'Confidentialité'], ['/legal/cookies', 'Cookies'], ['/legal/conditions', 'Conditions d’utilisation'], ['/legal/accessibilite', 'Accessibilité'], ['/aide', 'Centre d’aide'], ['/statut', 'Statut de la plateforme'], ['/plan-du-site', 'Plan du site']]) },
+const groups: { k: string; h: string; links: [string, string][] }[] = [
+  { k: 'accueil', h: 'Accueil', links: take([['/', 'Page d’accueil'], ['/commencer', 'Par où commencer ?'], ['/connexion', 'Connexion'], ['/inscription', 'Inscription']]) },
+  ...MEGA.map((m) => ({ k: m.k, h: m.label.fr, links: take([[m.href, m.label.fr], ...m.cols.flatMap((c) => c.items.map((i) => [i.href, i.t.fr] as [string, string])), ...(SUBS[m.k] ?? [])]) })),
+  { k: 'projets', h: 'Projets et Voix', links: take([...SUBS.projets, ...SUBS.voix, ...SUBS.actionnariat]) },
+  { k: 'kapital', h: 'CEA Kapital Invest', links: take([['/kapital', 'Accueil Kapital'], ['/kapital/opportunites', 'Opportunités'], ['/kapital/marches', 'Bourses africaines'], ['/kapital/capital-risque', 'Capital-risque'], ['/kapital/obligations', 'Marché des capitaux'], ['/kapital/risques', 'Risques'], ['/kapital/diagnostic', 'Diagnostic'], ['/kapital/devenir-investisseur', 'Devenir investisseur']]) },
+  { k: 'infos', h: 'Pied de page et informations', links: take([['/domaines/btp', 'BTP & Infrastructures'], ['/monde', 'Vue sur le monde'], ['/representants', 'Représentants pays'], ['/legal/mentions-legales', 'Mentions légales'], ['/legal/confidentialite', 'Confidentialité'], ['/legal/cookies', 'Cookies'], ['/legal/conditions', 'Conditions d’utilisation'], ['/legal/accessibilite', 'Accessibilité'], ['/aide', 'Centre d’aide'], ['/statut', 'Statut de la plateforme'], ['/plan-du-site', 'Plan du site']]) },
 ].filter((g) => g.links.length);
 const editUrl = (h: string, en = false) => (en ? (h === '/' ? '/en/' : '/en' + h) : h) + '?edition=1';
 
 const links = await getSetting('reseaux');
 const rows = await db.select({ t: siteText, by: user.name }).from(siteText).leftJoin(user, eq(user.id, siteText.updatedBy)).orderBy(desc(siteText.updatedAt)).catch(() => []);
-const scopes = [...new Set(rows.map((r) => r.t.scope))].sort();
-const shown = rows.filter(({ t }) => (!pageFilter || t.scope === pageFilter) && (!q || t.original.toLowerCase().includes(q) || t.value.toLowerCase().includes(q)));
 const where = (s: string) => (s === SITE ? 'Tout le site' : s);
 const fmt = (d: Date) => d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Africa/Lome' });
+
+// Rubrique choisie (?vue=…) : rien n'est affiché tant qu'aucun bouton n'est choisi
+const vue = Astro.url.searchParams.get('vue') ?? '';
+const group = groups.find((g) => g.k === vue);
+// Une modification appartient à une rubrique si elle porte sur l'une de ses pages (français ou version /en)
+const inGroup = (g: (typeof groups)[number], scope: string) => g.links.some(([h]) => scope === h || scope === (h === '/' ? '/en' : '/en' + h));
+const count = (g: (typeof groups)[number]) => rows.filter(({ t }) => inGroup(g, t.scope)).length;
+const scopes = [...new Set(rows.map((r) => r.t.scope))].sort();
+const shown = group
+  ? rows.filter(({ t }) => inGroup(group, t.scope))
+  : vue === 'modifs' ? rows.filter(({ t }) => (!pageFilter || t.scope === pageFilter) && (!q || t.original.toLowerCase().includes(q) || t.value.toLowerCase().includes(q))) : [];
+const tab = (k: string) => ({ class: `btn btn-sm ${vue === k ? 'btn-primary' : 'btn-ghost'}`, href: `?vue=${k}`, 'aria-current': vue === k ? ('page' as const) : undefined });
 ---
-<AdminLayout title="Textes et images du site" lead="Tous les textes, titres, chiffres, liens et images des pages publiques se modifient directement sur la page, en mode édition. Chaque modification est inscrite au journal d'audit et peut être annulée." obj="contenus">
+<AdminLayout title="Administration système" lead="Tous les textes, titres, chiffres, liens et images des pages publiques se modifient directement sur la page, en mode édition. Choisissez une rubrique pour voir ses pages. Chaque modification est inscrite au journal d'audit et peut être annulée." obj="contenus">
   {!canEdit && <div class="panel small" style="margin-bottom:16px;border-left:4px solid var(--gold)">Consultation seule : la modification des textes du site est réservée aux éditeurs et administrateurs, avec la double authentification active.</div>}
 
-  <section class="panel" style="margin-bottom:18px">
-    <h2 style="font-size:1.15rem;margin-top:0">Modifier une page</h2>
-    <p class="small muted" style="margin-top:0">La page s'ouvre dans un nouvel onglet avec une barre d'édition en bas de l'écran. Cliquez sur un texte, un chiffre, un lien ou une image, modifiez-le, puis choisissez s'il change <b>sur cette page</b> ou <b>partout sur le site</b> (en-tête, pied de page, texte répété). Le mode « Naviguer » permet d'ouvrir les menus et de passer d'une page à l'autre sans quitter l'édition. La version anglaise (EN) se modifie séparément.</p>
-    <div class="grid g3" style="gap:14px">
-      {groups.map((g) => (
-        <div>
-          <h3 style="font-size:.95rem;margin:6px 0">{g.h}</h3>
-          <ul style="list-style:none;margin:0;padding:0">
-            {g.links.map(([h, t]) => (
-              <li class="row between small" style="padding:4px 0;border-bottom:1px solid var(--line, #E3E8EF);gap:8px">
-                <span style="min-width:0">{t}<span class="xs muted" style="display:block">{h}</span></span>
-                {canEdit ? <span class="row" style="gap:4px;flex:none"><a class="btn btn-primary btn-sm" href={editUrl(h)} target="_blank" rel="noopener">Modifier</a><a class="btn btn-ghost btn-sm" href={editUrl(h, true)} target="_blank" rel="noopener" title="Version anglaise">EN</a></span> : <a class="btn btn-ghost btn-sm" href={h} target="_blank" rel="noopener">Voir</a>}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
-    </div>
-  </section>
+  <nav class="row" aria-label="Rubriques du site" style="gap:8px;margin-bottom:18px">
+    {groups.map((g) => { const n = count(g); return <a {...tab(g.k)}>{g.h}{n > 0 && <span class="xs" style="opacity:.75"> ({n})</span>}</a>; })}
+    <a {...tab('reseaux')}>Réseaux sociaux</a>
+    <a {...tab('modifs')}>Toutes les modifications <span class="xs" style="opacity:.75">({rows.length})</span></a>
+  </nav>
 
-  <section class="panel" style="margin-bottom:18px">
+  {!vue && <div class="empty">Choisissez une rubrique ci-dessus pour afficher ses pages, ses textes et ses images.</div>}
+
+  {group && (
+    <section class="panel" style="margin-bottom:18px">
+      <h2 style="font-size:1.15rem;margin-top:0">{group.h}</h2>
+      <p class="small muted" style="margin-top:0">La page s'ouvre dans un nouvel onglet avec une barre d'édition en bas de l'écran. Cliquez sur un texte, un chiffre, un lien ou une image, modifiez-le, puis choisissez s'il change <b>sur cette page</b> ou <b>partout sur le site</b> (en-tête, pied de page, texte répété). Le mode « Naviguer » permet d'ouvrir les menus et de passer d'une page à l'autre sans quitter l'édition. La version anglaise (EN) se modifie séparément.</p>
+      <ul style="list-style:none;margin:0;padding:0">
+        {group.links.map(([h, t]) => (
+          <li class="row between small" style="padding:8px 0;border-bottom:1px solid var(--line, #E3E8EF);gap:8px">
+            <span style="min-width:0">{t}<span class="xs muted" style="display:block">{h}</span></span>
+            {canEdit ? <span class="row" style="gap:4px;flex:none"><a class="btn btn-primary btn-sm" href={editUrl(h)} target="_blank" rel="noopener">Modifier</a><a class="btn btn-ghost btn-sm" href={editUrl(h, true)} target="_blank" rel="noopener" title="Version anglaise">EN</a></span> : <a class="btn btn-ghost btn-sm" href={h} target="_blank" rel="noopener">Voir</a>}
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
+
+  {vue === 'reseaux' && <section class="panel" style="margin-bottom:18px">
     <h2 style="font-size:1.15rem;margin-top:0">Réseaux sociaux</h2>
     <p class="small muted" style="margin-top:0">Les icônes apparaissent dans le pied de page de toutes les pages dès que l'adresse est renseignée (adresse complète commençant par https://). Pour WhatsApp : https://wa.me/228XXXXXXXX.</p>
     <form data-api="/api/admin/textes" data-reload>
@@ -71,19 +84,20 @@ const fmt = (d: Date) => d.toLocaleString('fr-FR', { dateStyle: 'short', timeSty
         {canEdit && <button class="btn btn-primary btn-sm" type="submit" style="margin-top:10px">Enregistrer</button>}
       </fieldset>
     </form>
-  </section>
+  </section>}
 
-  <section>
-    <h2 style="font-size:1.15rem">Modifications enregistrées <span class="xs muted">({rows.length})</span></h2>
-    <form class="row" method="get" style="gap:8px;margin-bottom:12px;flex-wrap:wrap">
+  {(group || vue === 'modifs') && <section>
+    <h2 style="font-size:1.15rem">{group ? `Modifications déjà faites dans « ${group.h} »` : 'Toutes les modifications enregistrées'} <span class="xs muted">({shown.length})</span></h2>
+    {vue === 'modifs' && <form class="row" method="get" style="gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <input type="hidden" name="vue" value="modifs" />
       <input class="in" name="q" value={q} placeholder="Rechercher un texte" aria-label="Rechercher un texte" style="max-width:280px" />
       <select class="in" name="page" aria-label="Page" style="max-width:260px">
         <option value="">Toutes les pages</option>
         {scopes.map((s) => <option value={s} selected={s === pageFilter}>{where(s)}</option>)}
       </select>
       <button class="btn btn-ghost btn-sm" type="submit">Filtrer</button>
-    </form>
-    {shown.length === 0 && <div class="empty">{rows.length ? 'Aucune modification ne correspond.' : 'Aucune modification pour l’instant : le site affiche ses textes d’origine.'}</div>}
+    </form>}
+    {shown.length === 0 && <div class="empty">{group ? 'Aucune modification sur ces pages pour l’instant : elles affichent leurs textes d’origine.' : rows.length ? 'Aucune modification ne correspond.' : 'Aucune modification pour l’instant : le site affiche ses textes d’origine.'}</div>}
     {shown.map(({ t, by }) => (
       <details class="panel" style="margin-bottom:8px">
         <summary class="row between" style="cursor:pointer;gap:10px">
@@ -106,5 +120,5 @@ const fmt = (d: Date) => d.toLocaleString('fr-FR', { dateStyle: 'short', timeSty
         </form>
       </details>
     ))}
-  </section>
+  </section>}
 </AdminLayout>
