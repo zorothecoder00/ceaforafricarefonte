@@ -4,6 +4,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 import PageHead from '../../../components/PageHead.astro';
 import { SUBS } from '../../../data/site';
 import { MODELES, MODELE_AVERTISSEMENT, CATEGORIES } from '../../../data/modeles';
+
+export const prerender = false;
 ---
 <BaseLayout title="Modèles juridiques">
   <PageHead title="Modèles juridiques" lead="Pacte d'associés, statuts et procès-verbaux : des trames fondées sur le droit OHADA, à faire relire et adapter par un conseil." crumbs={[['/actionnariat', 'Actionnariat'], ['', 'Modèles']]} subnav={SUBS.actionnariat} />

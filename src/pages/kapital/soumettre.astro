@@ -4,6 +4,8 @@ import PageHead from '../../components/PageHead.astro';
 import Wizard from '../../components/Wizard.astro';
 import { COUNTRIES } from '../../data/site';
 
+export const prerender = false;
+
 const instruments = ['Actions ordinaires', 'Actions de préférence', 'SAFE / BSA AIR', 'Obligations convertibles', 'Dette privée', 'Mezzanine', 'Financement islamique'];
 const fs = 'border:0;padding:0;margin:0';
 ---

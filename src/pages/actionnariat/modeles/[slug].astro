@@ -4,10 +4,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 import PageHead from '../../../components/PageHead.astro';
 import { MODELES, MODELE_AVERTISSEMENT } from '../../../data/modeles';
 
-export function getStaticPaths() {
-  return MODELES.map((m) => ({ params: { slug: m.slug }, props: { m } }));
-}
-const { m } = Astro.props;
+export const prerender = false;
+
+const m = MODELES.find((x) => x.slug === Astro.params.slug);
+if (!m) return Astro.rewrite('/404');
 ---
 <BaseLayout title={m.title} description={m.short}>
   <PageHead title={m.title} lead={m.usage} crumbs={[['/actionnariat', 'Actionnariat'], ['/actionnariat/modeles', 'Modèles'], ['', m.title]]} />

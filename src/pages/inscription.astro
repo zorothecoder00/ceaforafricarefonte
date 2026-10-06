@@ -4,6 +4,8 @@ import PageHead from '../components/PageHead.astro';
 import Wizard from '../components/Wizard.astro';
 import { COUNTRIES, DOMAINS, HUBS, NEEDS, SUBS, fmt } from '../data/site';
 
+export const prerender = false;
+
 const pays = HUBS.map((h) => [h.c, COUNTRIES[h.c]] as const).sort((a, b) => a[1].localeCompare(b[1]));
 const formes = ['Entreprise individuelle', 'SARL', 'SA', 'SAS', 'Coopérative', 'Pas encore immatriculée'];
 // Effectifs de démonstration par domaine (même calcul que le prototype)

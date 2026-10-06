@@ -3,6 +3,8 @@ import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { STOCKS, fmt } from '../../data/site';
 
+export const prerender = false;
+
 const exchanges = [...new Set(STOCKS.map((s) => s.ex))];
 ---
 <KapitalLayout title="Sociétés cotées">

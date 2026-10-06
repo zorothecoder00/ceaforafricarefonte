@@ -4,8 +4,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { HELP, HELP_CATS, type HelpArticle } from '../../data/aide';
 
-export const getStaticPaths = () => HELP.map((h) => ({ params: { slug: h.slug }, props: { h } }));
-const { h } = Astro.props as { h: HelpArticle };
+export const prerender = false;
+
+const found = HELP.find((x) => x.slug === Astro.params.slug);
+if (!found) return Astro.rewrite('/404');
+const h: HelpArticle = found;
 const related = HELP.filter((x) => x.cat === h.cat && x.slug !== h.slug).slice(0, 4);
 const embed = h.video && /youtube\.com|youtu\.be|vimeo\.com/.test(h.video);
 ---

@@ -6,6 +6,8 @@ import Wizard from '../../components/Wizard.astro';
 import { COUNTRIES, SUBS } from '../../data/site';
 import { SHEET_FIELDS } from '../../lib/projects';
 
+export const prerender = false;
+
 const fs = 'border:0;padding:0;margin:0';
 const steps: [string, string[]][] = [['Problème et solution', ['probleme', 'solution']], ['Marché et équipe', ['marche', 'equipe']], ['Modèle et traction', ['modele', 'traction']], ['Besoins et impact', ['besoins', 'impact']]];
 const field = (k: string) => SHEET_FIELDS.find(([f]) => f === k)!;

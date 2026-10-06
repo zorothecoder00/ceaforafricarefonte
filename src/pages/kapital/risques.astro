@@ -2,6 +2,8 @@
 import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 
+export const prerender = false;
+
 const risks = [
   ['Perte en capital', "Une entreprise non cotée peut échouer. Vous pouvez perdre tout ou partie de la somme investie."],
   ['Illiquidité', "Il peut être impossible de revendre vos titres avant plusieurs années. N'investissez que de l'argent dont vous n'aurez pas besoin."],

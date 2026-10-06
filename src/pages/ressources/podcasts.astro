@@ -3,6 +3,8 @@ import MediaPlayer from '../../components/MediaPlayer.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { PODCASTS, SUBS } from '../../data/site';
+
+export const prerender = false;
 ---
 <BaseLayout title="Podcasts et vidéos">
   <PageHead title="Podcasts et vidéos" lead="« Entreprendre en Afrique », le podcast de CEA. Transcriptions disponibles." crumbs={[['/ressources', 'Ressources'], ['', 'Podcasts']]} subnav={SUBS.ressources} />

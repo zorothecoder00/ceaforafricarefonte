@@ -6,6 +6,8 @@ import PageHead from '../../components/PageHead.astro';
 import VoteBox from '../../components/VoteBox.astro';
 import { SUBS } from '../../data/site';
 
+export const prerender = false;
+
 const poll: [string, number][] = [['Transformation', 412], ['Irrigation', 238], ['Logistique du froid', 184], ['Fintech agricole', 250]];
 const questions: [string, number][] = [["Quel est le coût d'acquisition client ?", 12], ['Comment gérez-vous les impayés ?', 7]];
 ---

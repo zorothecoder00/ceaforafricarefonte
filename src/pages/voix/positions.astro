@@ -3,6 +3,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { POSITIONS, SUBS, dateFr } from '../../data/site';
 
+export const prerender = false;
+
 const agenda = [['12 sept. 2026', 'Rencontre avec le ministère du Commerce (Togo)', 'done'], ['3 oct. 2026', "Audition à la Commission de l'UEMOA", 'cur'], ['20 nov. 2026', 'Remise du baromètre aux autorités du Sénégal', '']];
 ---
 <BaseLayout title="Nos positions">

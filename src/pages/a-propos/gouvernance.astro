@@ -3,6 +3,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { DOMAINS, HUBS, REGIONS, SUBS } from '../../data/site';
 
+export const prerender = false;
+
 const heads = ['Akossiwa Amegah', 'Kofi Mensah-Attipoe', 'Edem Kpodar'];
 const line = '<div style="width:2px;height:22px;background:var(--gold)"></div>';
 ---

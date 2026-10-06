@@ -3,6 +3,8 @@ import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { OPPS, country } from '../../data/site';
 
+export const prerender = false;
+
 const criteria = [
   ['Stade', "De l'amorçage à la série A"],
   ['Ticket', '50 à 500 millions de FCFA'],

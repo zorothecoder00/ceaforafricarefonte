@@ -5,10 +5,10 @@ import PageHead from '../../components/PageHead.astro';
 import { LEGAL } from '../../data/legal';
 import { dateFr } from '../../data/site';
 
-export function getStaticPaths() {
-  return Object.keys(LEGAL).map((slug) => ({ params: { slug } }));
-}
-const doc = LEGAL[Astro.params.slug!];
+export const prerender = false;
+
+const doc = Object.hasOwn(LEGAL, Astro.params.slug ?? '') ? LEGAL[Astro.params.slug!] : undefined;
+if (!doc) return Astro.rewrite('/404');
 const others = Object.entries(LEGAL).filter(([k]) => k !== Astro.params.slug);
 ---
 <BaseLayout title={doc.title}>

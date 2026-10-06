@@ -38,6 +38,12 @@ export const SETTINGS = {
     // Relance du responsable N heures avant l'échéance ; escalade N heures après le dépassement, vers un rôle (et une adresse facultative)
     defaults: { remindHours: 24, escalateHours: 24, role: 'admin', email: '' },
   },
+  reseaux: {
+    label: 'Réseaux sociaux (pied de page)',
+    schema: z.object({ linkedin: z.string(), facebook: z.string(), x: z.string(), youtube: z.string(), instagram: z.string(), tiktok: z.string(), whatsapp: z.string() }),
+    // Adresses https:// ; une icône n'apparaît dans le pied de page que si son adresse est renseignée
+    defaults: { linkedin: '', facebook: '', x: '', youtube: '', instagram: '', tiktok: '', whatsapp: '' },
+  },
 } as const;
 export type SettingKey = keyof typeof SETTINGS;
 export type SettingValue<K extends SettingKey> = z.infer<(typeof SETTINGS)[K]['schema']>;

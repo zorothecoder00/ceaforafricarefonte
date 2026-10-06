@@ -4,6 +4,8 @@ import PageHead from '../../components/PageHead.astro';
 import Money from '../../components/Money.astro';
 import { SUBS } from '../../data/site';
 
+export const prerender = false;
+
 const packs: [string, number, string[]][] = [
   ['Partenaire', 500000, ['Logo sur le site', '2 pass']],
   ['Argent', 2000000, ['Stand', '5 pass', '1 prise de parole']],

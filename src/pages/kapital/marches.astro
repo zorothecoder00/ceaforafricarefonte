@@ -3,6 +3,8 @@ import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { MARKETS, STOCKS, fmt } from '../../data/site';
 
+export const prerender = false;
+
 function spark(s: number[]) {
   const min = Math.min(...s), max = Math.max(...s);
   return s.map((v, i) => `${((i / (s.length - 1)) * 120).toFixed(1)},${(30 - ((v - min) / (max - min || 1)) * 28 - 1).toFixed(1)}`).join(' ');

@@ -2,6 +2,8 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { SUBS } from '../../data/site';
+
+export const prerender = false;
 ---
 <BaseLayout title="Actionnariat salarié">
   <PageHead title="Actionnariat salarié" lead="Associez vos salariés à la réussite de l'entreprise." crumbs={[['/actionnariat', 'Actionnariat'], ['', 'Actionnariat salarié']]} subnav={SUBS.actionnariat} />

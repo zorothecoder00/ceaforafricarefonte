@@ -5,6 +5,8 @@ import Icon from '../../components/Icon.astro';
 import KapitalAd from '../../components/KapitalAd.astro';
 import { SUBS } from '../../data/site';
 
+export const prerender = false;
+
 const steps = [['Candidature', 'Formulaire et pièces'], ['Diagnostic de maturité', '8 dimensions, avec un analyste'], ["Plan d'accompagnement", 'Objectifs et jalons sur 6 mois'], ['Séances de mentorat', 'Toutes les 2 semaines'], ['Jalons validés', "Chiffre d'affaires, équipe, produit"], ['Demo Day', 'Devant les investisseurs de Kapital Invest']];
 const gets = ['Un mentor dédié et 12 séances', "Un accès gratuit à tous les cours de l'Académie", 'La préparation Investor Ready avec Kapital Invest', 'Une place au Demo Day du Forum 2026'];
 ---

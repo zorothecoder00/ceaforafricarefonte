@@ -5,6 +5,8 @@ import PageHead from '../../components/PageHead.astro';
 import Money from '../../components/Money.astro';
 import { SUBS } from '../../data/site';
 
+export const prerender = false;
+
 const session = ['Tour de table et nouvelles (20 min)', "Sujet approfondi d'un membre — « hot seat » (45 min)", 'Engagements pour le mois suivant (15 min)'];
 const quotes: [string, string][] = [
   ['« En un an, mon cercle m’a évité deux erreurs de recrutement et m’a aidée à négocier mon premier crédit bancaire. »', 'Dirigeante d’une PME agroalimentaire, Dakar'],

@@ -735,3 +735,16 @@ export const cmsMedia = pgTable('cms_media', {
   uploadedBy: text('uploaded_by').references(() => user.id, { onDelete: 'set null' }),
   createdAt: ts('created_at').notNull().defaultNow(),
 });
+
+/* Textes et images du site modifiés depuis l'éditeur visuel : remplacement d'un texte (ou d'un attribut : lien, image…)
+   sur une page (« /a-propos », « /en/a-propos ») ou sur tout le site (« * »). La clé dérive du type et du texte d'origine. */
+export const siteText = pgTable('site_text', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  scope: text('scope').notNull(),
+  key: text('key').notNull(),
+  kind: text('kind').notNull(), // 'text' ou nom d'attribut (href, src, alt, title, placeholder, data-countdown)
+  original: text('original').notNull(),
+  value: text('value').notNull(),
+  updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+}, (t) => [uniqueIndex('site_text_scope_key_idx').on(t.scope, t.key)]);

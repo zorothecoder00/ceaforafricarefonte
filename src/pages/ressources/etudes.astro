@@ -3,6 +3,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import DocButton from '../../components/DocButton.astro';
 import PageHead from '../../components/PageHead.astro';
 import { STUDIES, SUBS } from '../../data/site';
+
+export const prerender = false;
 ---
 <BaseLayout title="Études et rapports">
   <PageHead title="Études et rapports" lead="Baromètres, rapports d'impact et études sectorielles." crumbs={[['/ressources', 'Ressources'], ['', 'Études']]} subnav={SUBS.ressources} />

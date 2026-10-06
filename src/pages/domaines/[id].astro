@@ -4,10 +4,10 @@ import PageHead from '../../components/PageHead.astro';
 import KapitalAd from '../../components/KapitalAd.astro';
 import { DOMAINS } from '../../data/site';
 
-export function getStaticPaths() {
-  return DOMAINS.map((d) => ({ params: { id: d.id }, props: { d } }));
-}
-const { d } = Astro.props;
+export const prerender = false;
+
+const d = DOMAINS.find((x) => x.id === Astro.params.id);
+if (!d) return Astro.rewrite('/404');
 ---
 <BaseLayout title={d.n} description={d.d}>
   <PageHead title={d.n} lead={d.d} crumbs={[['/domaines', 'Nos domaines'], ['', d.n]]} />

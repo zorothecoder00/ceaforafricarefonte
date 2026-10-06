@@ -4,6 +4,8 @@ import PageHead from '../../components/PageHead.astro';
 import { SUBS } from '../../data/site';
 import { MODELES } from '../../data/modeles';
 
+export const prerender = false;
+
 const checks = ["Nous avons un pacte d'associés signé", 'Le conseil se réunit au moins 4 fois par an', 'Les comptes sont certifiés', 'Les décisions importantes sont consignées dans des procès-verbaux', "Les conflits d'intérêts sont déclarés"];
 const cal = [['31 mars', 'Dépôt des états financiers'], ['30 juin', 'Assemblée générale annuelle'], ['Trimestriel', 'Réunion du conseil']];
 const models = MODELES.filter((m) => m.cat === 'gouvernance');

@@ -2,6 +2,8 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { SUBS } from '../../data/site';
+
+export const prerender = false;
 ---
 <BaseLayout title="Studio de capital">
   <PageHead title="Studio de capital" lead="Simulez une levée et voyez son effet sur la répartition du capital. Outil pédagogique : il ne remplace pas un conseil professionnel." crumbs={[['/actionnariat', 'Actionnariat'], ['', 'Studio de capital']]} subnav={SUBS.actionnariat} />

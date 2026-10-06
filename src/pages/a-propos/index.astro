@@ -5,6 +5,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { SUBS } from '../../data/site';
 
+export const prerender = false;
+
 const pillars = [
   ['Vision', 'Des entrepreneurs africains qui créent les emplois du continent, connectés de Dakar à Nairobi.'],
   ['Mission', "Donner à chaque entrepreneur l'accès au savoir, au réseau, au capital et à une voix collective."],

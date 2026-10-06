@@ -5,6 +5,8 @@ import Icon from '../../components/Icon.astro';
 import DocButton from '../../components/DocButton.astro';
 import { SUBS } from '../../data/site';
 import { REPORTS as reports, POLICIES as policies } from '../../data/documents';
+
+export const prerender = false;
 const line = 'padding:10px 0;border-bottom:1px solid var(--line)';
 ---
 <BaseLayout title="Transparence">

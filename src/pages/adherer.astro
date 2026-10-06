@@ -5,6 +5,8 @@ import PageHead from '../components/PageHead.astro';
 import Money from '../components/Money.astro';
 import { SUBS } from '../data/site';
 
+export const prerender = false;
+
 const plans: [string, string, number, string[]][] = [
   ['gratuit', 'Gratuit', 0, ['Annuaire et espaces', 'Cours gratuits', 'Événements gratuits']],
   ['membre', 'Membre', 30000, ['Tout Gratuit', "Tous les cours de l'Académie", 'Votes et consultations', 'Carte de membre']],

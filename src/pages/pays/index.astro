@@ -3,6 +3,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import AfricaMap from '../../components/AfricaMap.astro';
 import { HUBS, REGIONS, SUBS, country, regionOf } from '../../data/site';
+
+export const prerender = false;
 ---
 <BaseLayout title="Présence en Afrique">
   <PageHead title="Présence en Afrique" lead={`${REGIONS.length} bureaux régionaux et ${HUBS.length} bureaux de représentation pays. Cliquez sur la carte ou dans la liste.`} crumbs={[['/a-propos', 'À propos'], ['', 'Présence en Afrique']]} subnav={SUBS.apropos} />

@@ -4,6 +4,8 @@ import PageHead from '../../components/PageHead.astro';
 import MemberCard from '../../components/MemberCard.astro';
 import { MEMBERS, SUBS } from '../../data/site';
 
+export const prerender = false;
+
 const kpis = [['Anciens', '312'], ['Ont levé des fonds', '58'], ['Emplois créés', '2 340'], ['Pays', '16']];
 const alumni = MEMBERS.filter((m) => m.b.includes('Alumni')).concat(MEMBERS.slice(1, 3));
 ---

@@ -1,0 +1,47 @@
+/* Éditeur visuel (mode édition) — chargé uniquement pour les éditeurs et administrateurs. */
+cea-t{display:inline}
+.cea-editing body{padding-bottom:64px}
+.cea-editing:not(.cea-nav) cea-t,.cea-editing:not(.cea-nav) [data-cea-a]:is(img,[data-countdown],input,textarea){cursor:text;outline:1px dashed transparent;outline-offset:2px;border-radius:2px;transition:outline-color .15s,background-color .15s}
+.cea-editing:not(.cea-nav) cea-t:hover,.cea-editing:not(.cea-nav) [data-cea-a]:is(img,[data-countdown],input,textarea):hover{outline-color:#D49A2A;background-color:rgba(212,154,42,.12)}
+.cea-editing:not(.cea-nav) cea-t[data-s]{outline:1px dotted rgba(46,160,90,.7)}
+.cea-editing:not(.cea-nav) a[data-cea-a]{cursor:pointer}
+.cea-editing .cea-cur{outline:2px solid #D49A2A !important;background-color:rgba(212,154,42,.18)}
+.cea-visitor [data-auth="in"]{display:none !important}
+.cea-visitor [data-auth="out"][hidden]{display:inline-flex !important}
+
+.cea-bar{position:fixed;left:0;right:0;bottom:0;z-index:2147483000;display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:10px 16px;background:#082B4C;color:#fff;font:500 14px/1.3 system-ui,-apple-system,"Segoe UI",sans-serif;box-shadow:0 -4px 18px rgba(0,0,0,.25)}
+.cea-bar a{color:#E7BD62;text-decoration:none;font-weight:600}
+.cea-bar a:hover{text-decoration:underline}
+.cea-bar .cea-quit{background:#E7BD62;color:#1B1305;padding:6px 12px;border-radius:999px}
+.cea-bar-t{font-weight:700;letter-spacing:.02em}
+.cea-sp{flex:1}
+.cea-n{color:#B9C9DA;font-size:13px}
+.cea-seg{display:inline-flex;border:1px solid #2A5079;border-radius:999px;overflow:hidden}
+.cea-seg button{background:none;border:0;color:#B9C9DA;padding:5px 12px;font:inherit;cursor:pointer}
+.cea-seg button[aria-pressed="true"]{background:#E7BD62;color:#1B1305}
+.cea-chk{display:inline-flex;gap:6px;align-items:center;color:#B9C9DA;cursor:pointer}
+
+.cea-panel{position:fixed;right:16px;bottom:72px;z-index:2147483001;width:min(420px,calc(100vw - 32px));max-height:calc(100vh - 100px);overflow:auto;background:#fff;color:#14202E;border-radius:14px;box-shadow:0 18px 50px rgba(8,43,76,.35);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+.cea-ph{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #E3E8EF}
+.cea-x{background:none;border:0;font-size:18px;cursor:pointer;color:#5B6B7D}
+.cea-pb{padding:12px 16px 16px;margin:0}
+.cea-f{margin-bottom:12px}
+.cea-f label{display:block;font-weight:600;font-size:13px;margin-bottom:4px;color:#33475B}
+.cea-f textarea,.cea-f input[type=text]{width:100%;box-sizing:border-box;border:1px solid #C9D3DE;border-radius:8px;padding:8px 10px;font:inherit;color:inherit;background:#fff;resize:vertical}
+.cea-f textarea:focus,.cea-f input[type=text]:focus{outline:2px solid #D49A2A;border-color:#D49A2A}
+.cea-file{display:block;margin:6px 0;font-size:13px}
+.cea-prev{display:block;max-width:100%;max-height:120px;border-radius:8px;background:#F2F5F8;margin-bottom:4px}
+.cea-o{font-size:12.5px;color:#5B6B7D;margin-top:4px}
+.cea-o span{font-style:italic}
+.cea-reset{background:none;border:0;color:#B4401F;font:inherit;font-weight:600;cursor:pointer;text-decoration:underline;padding:0}
+.cea-scope{border:1px solid #E3E8EF;border-radius:8px;padding:8px 12px;margin:0 0 12px;font-size:14px}
+.cea-scope legend{font-weight:600;font-size:13px;color:#33475B;padding:0 4px}
+.cea-scope label{display:block;margin:3px 0;cursor:pointer}
+.cea-scope small{color:#5B6B7D}
+.cea-act{display:flex;flex-wrap:wrap;gap:8px}
+.cea-act button{border-radius:999px;padding:8px 16px;font:inherit;font-weight:600;cursor:pointer;border:1px solid #C9D3DE;background:#fff;color:#14202E}
+.cea-act .cea-save{background:#082B4C;border-color:#082B4C;color:#fff}
+.cea-act .cea-save:disabled{opacity:.6}
+.cea-msg{margin:8px 0 0;font-size:13px;color:#B4401F;min-height:1em}
+.cea-toast{position:fixed;left:50%;bottom:76px;transform:translateX(-50%);z-index:2147483002;background:#1F7A4D;color:#fff;padding:10px 18px;border-radius:999px;font:600 14px system-ui,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+@media (max-width:640px){.cea-panel{right:8px;left:8px;width:auto;bottom:110px}.cea-chk{display:none}}

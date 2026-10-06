@@ -2,6 +2,8 @@
 import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 
+export const prerender = false;
+
 const AXES = ['Équipe', 'Marché', 'Produit', 'Traction', 'Modèle économique', 'Finances', 'Gouvernance', 'Impact'];
 const QS = [
   'Votre équipe dirigeante est-elle complète (commerce, technique, finance) ?',

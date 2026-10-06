@@ -5,6 +5,8 @@ import AfricaMap from '../components/AfricaMap.astro';
 import { HUBS, SUBS, country, fmt, dateFr } from '../data/site';
 import { KPIS, JOBS_BY_QUARTER, DATASETS, IMPACT_ASOF, IMPACT_LICENSE } from '../data/impact';
 
+export const prerender = false;
+
 const kpis = KPIS;
 const top = [...HUBS].sort((a, b) => b.m - a.m).slice(0, 8);
 const maxM = top[0].m;

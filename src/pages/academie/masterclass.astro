@@ -3,6 +3,8 @@ import MediaPlayer from '../../components/MediaPlayer.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { MASTERCLASS, SUBS } from '../../data/site';
+
+export const prerender = false;
 ---
 <BaseLayout title="Masterclass">
   <PageHead title="Masterclass" lead="Des leçons filmées par des dirigeants africains et internationaux reconnus. Réservé aux membres Premium." crumbs={[['/academie', 'Académie'], ['', 'Masterclass']]} subnav={SUBS.academie} />

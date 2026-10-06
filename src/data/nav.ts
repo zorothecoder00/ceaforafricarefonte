@@ -150,11 +150,14 @@ export function megaOf(path: string): string | null {
   return best?.k ?? null;
 }
 
-/** Réseaux sociaux : renseigner les adresses officielles (aucune icône n'est affichée tant que l'adresse est vide). */
-export const SOCIAL: { n: string; href: string; path: string }[] = [
-  { n: 'LinkedIn', href: '', path: 'M4 9h4v11H4zM6 3.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM10 9h3.8v1.6c.6-1 1.9-1.9 3.7-1.9 3.6 0 4.3 2.3 4.3 5.4V20h-4v-5.2c0-1.3 0-2.9-1.8-2.9s-2 1.4-2 2.8V20h-4z' },
-  { n: 'Facebook', href: '', path: 'M14 8h3V4h-3c-2.8 0-4 1.8-4 4.3V10H7v4h3v8h4v-8h3l1-4h-4V8.6c0-.4.3-.6.7-.6z' },
-  { n: 'X', href: '', path: 'M4 4l7 9-7 7h2l6-6 5 6h4l-7-9 6-7h-2l-5 5-4-5z' },
-  { n: 'YouTube', href: '', path: 'M22 8.2a3 3 0 0 0-2-2C18 5.7 12 5.7 12 5.7s-6 0-8 .5a3 3 0 0 0-2 2A31 31 0 0 0 1.7 12 31 31 0 0 0 2 15.8a3 3 0 0 0 2 2c2 .5 8 .5 8 .5s6 0 8-.5a3 3 0 0 0 2-2 31 31 0 0 0 .3-3.8 31 31 0 0 0-.3-3.8zM10 15V9l5 3z' },
-  { n: 'WhatsApp', href: '', path: 'M12 2a10 10 0 0 0-8.6 15L2 22l5.1-1.3A10 10 0 1 0 12 2zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2s-1 .3-3.4-.7a11.6 11.6 0 0 1-4.5-4c-.4-.5-1-1.6-1-2.6s.6-1.6.8-1.8.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .6l-.4.6-.4.4c-.1.2-.3.3-.1.6a8.7 8.7 0 0 0 4 3.5c.3.2.5.1.7-.1l.9-1.1c.2-.3.4-.2.7-.1l1.9.9c.3.1.5.2.5.4a2.3 2.3 0 0 1 0 1.1z' },
+/** Réseaux sociaux du pied de page : les adresses se renseignent dans le back-office (Textes et images du site) ;
+    aucune icône n'est affichée tant que l'adresse est vide. */
+export const SOCIAL: { k: 'linkedin' | 'facebook' | 'x' | 'youtube' | 'instagram' | 'tiktok' | 'whatsapp'; n: string; path: string }[] = [
+  { k: 'linkedin', n: 'LinkedIn', path: 'M4 9h4v11H4zM6 3.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM10 9h3.8v1.6c.6-1 1.9-1.9 3.7-1.9 3.6 0 4.3 2.3 4.3 5.4V20h-4v-5.2c0-1.3 0-2.9-1.8-2.9s-2 1.4-2 2.8V20h-4z' },
+  { k: 'facebook', n: 'Facebook', path: 'M14 8h3V4h-3c-2.8 0-4 1.8-4 4.3V10H7v4h3v8h4v-8h3l1-4h-4V8.6c0-.4.3-.6.7-.6z' },
+  { k: 'x', n: 'X', path: 'M4 4l7 9-7 7h2l6-6 5 6h4l-7-9 6-7h-2l-5 5-4-5z' },
+  { k: 'youtube', n: 'YouTube', path: 'M22 8.2a3 3 0 0 0-2-2C18 5.7 12 5.7 12 5.7s-6 0-8 .5a3 3 0 0 0-2 2A31 31 0 0 0 1.7 12 31 31 0 0 0 2 15.8a3 3 0 0 0 2 2c2 .5 8 .5 8 .5s6 0 8-.5a3 3 0 0 0 2-2 31 31 0 0 0 .3-3.8 31 31 0 0 0-.3-3.8zM10 15V9l5 3z' },
+  { k: 'instagram', n: 'Instagram', path: 'M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5zm0 2a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3zm5 3.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zm5.5-4a1 1 0 1 1 0 2 1 1 0 0 1 0-2z' },
+  { k: 'tiktok', n: 'TikTok', path: 'M16 3c.4 2.3 1.9 3.8 4 4v3.2c-1.5 0-2.9-.4-4-1.2V15a6 6 0 1 1-6-6v3.3a2.8 2.8 0 1 0 2.8 2.7V3z' },
+  { k: 'whatsapp', n: 'WhatsApp', path: 'M12 2a10 10 0 0 0-8.6 15L2 22l5.1-1.3A10 10 0 1 0 12 2zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2s-1 .3-3.4-.7a11.6 11.6 0 0 1-4.5-4c-.4-.5-1-1.6-1-2.6s.6-1.6.8-1.8.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .6l-.4.6-.4.4c-.1.2-.3.3-.1.6a8.7 8.7 0 0 0 4 3.5c.3.2.5.1.7-.1l.9-1.1c.2-.3.4-.2.7-.1l1.9.9c.3.1.5.2.5.4a2.3 2.3 0 0 1 0 1.1z' },
 ];

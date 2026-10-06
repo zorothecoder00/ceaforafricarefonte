@@ -6,6 +6,8 @@ import PageHead from '../../components/PageHead.astro';
 import { SUBS } from '../../data/site';
 import { AG, AG_CHOICES } from '../../data/assemblee';
 
+export const prerender = false;
+
 const docs = CLUB_DOCS;
 const resolutions = AG.resolutions;
 ---

@@ -4,6 +4,8 @@ import PageHead from '../components/PageHead.astro';
 import { COUNTRIES } from '../data/site';
 import { TEAM_SLOTS } from '../data/teams';
 
+export const prerender = false;
+
 // Numéro WhatsApp officiel (format international sans « + »), fourni par variable d'environnement : sans numéro, le canal est masqué
 const wa = (import.meta.env.PUBLIC_WHATSAPP_NUMBER ?? '').replace(/\D/g, '');
 const teams = Object.keys(TEAM_SLOTS);

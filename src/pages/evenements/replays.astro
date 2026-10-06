@@ -3,6 +3,8 @@ import MediaPlayer from '../../components/MediaPlayer.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { REPLAYS, SUBS } from '../../data/site';
+
+export const prerender = false;
 ---
 <BaseLayout title="Replays">
   <PageHead title="Replays" lead="Les événements passés, chapitrés, avec un résumé généré par IA et relu par l'équipe." crumbs={[['/evenements', 'Événements'], ['', 'Replays']]} subnav={SUBS.evenements} />

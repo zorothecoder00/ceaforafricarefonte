@@ -1,6 +1,8 @@
 ---
 import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
+
+export const prerender = false;
 ---
 <KapitalLayout title="Réclamations" risk={false}>
   <PageHead title="Réclamations" lead="Accusé de réception sous 48 heures, réponse sous 15 jours." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Réclamations']]} />

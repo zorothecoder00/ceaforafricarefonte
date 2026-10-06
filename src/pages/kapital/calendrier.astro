@@ -2,6 +2,8 @@
 import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { FINCAL } from '../../data/site';
+
+export const prerender = false;
 ---
 <KapitalLayout title="Calendrier financier">
   <PageHead title="Calendrier financier" lead="Résultats, dividendes, assemblées et introductions en bourse." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Calendrier financier']]} />

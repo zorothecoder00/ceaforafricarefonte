@@ -1,6 +1,8 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Page from '../../components/pages/Commencer.astro';
+
+export const prerender = false;
 ---
 <BaseLayout title="Where to start?">
   <Page lang="en" />

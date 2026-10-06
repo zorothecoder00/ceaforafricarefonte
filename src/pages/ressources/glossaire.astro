@@ -2,6 +2,8 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { GLOSS, SUBS } from '../../data/site';
+
+export const prerender = false;
 ---
 <BaseLayout title="Glossaire">
   <PageHead title="Glossaire" lead="Les mots de l'entrepreneuriat et de la finance, expliqués simplement." crumbs={[['/ressources', 'Ressources'], ['', 'Glossaire']]} subnav={SUBS.ressources} />

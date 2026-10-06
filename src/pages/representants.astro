@@ -3,6 +3,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHead from '../components/PageHead.astro';
 import { HUBS, REGIONS, REP_LANG, SUBS, country, fmt, regionOf } from '../data/site';
 
+export const prerender = false;
+
 // Directeurs régionaux d'abord, puis un représentant par pays (données de démonstration)
 const regs = REGIONS.map((r) => ({ key: 'R-' + r.id, n: r.lead, c: r.c, city: r.city, type: 'Bureau régional', fn: 'Directeur·rice régional·e — ' + r.n, r, m: r.cs.reduce((a, c) => a + (HUBS.find((h) => h.c === c)?.m ?? 0), 0) }));
 const reps = HUBS.map((h) => ({ key: h.c, n: h.lead, c: h.c, city: h.city, type: h.hq ? 'Siège et bureau de représentation' : 'Bureau de représentation', fn: 'Représentant·e pays', r: regionOf(h.c), m: h.m }));

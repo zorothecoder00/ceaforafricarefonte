@@ -2,6 +2,8 @@
 import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { BONDS } from '../../data/site';
+
+export const prerender = false;
 ---
 <KapitalLayout title="Obligations et sukuk">
   <PageHead title="Obligations et sukuk" lead="Base des émissions sur les marchés africains et calculateur de rendement." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Obligations et sukuk']]} />

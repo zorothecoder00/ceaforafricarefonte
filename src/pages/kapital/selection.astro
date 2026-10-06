@@ -2,6 +2,8 @@
 import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 
+export const prerender = false;
+
 const steps = [
   ['Contrôle de complétude', 'Toutes les pièces requises sont présentes.'],
   ['Vérification (KYB)', "Existence de l'entreprise, dirigeants, bénéficiaires effectifs, listes de sanctions."],

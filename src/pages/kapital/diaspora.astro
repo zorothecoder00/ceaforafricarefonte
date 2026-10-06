@@ -3,6 +3,8 @@ import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { HUBS, country } from '../../data/site';
 
+export const prerender = false;
+
 const pillars = [['Choisir son pays', "Opportunités filtrées par pays d'origine."], ['Comprendre la fiscalité', 'Guides par pays de résidence (à valider avec un conseil).'], ['Rencontrer les fondateurs', 'Sessions en ligne mensuelles, adaptées aux fuseaux horaires.']];
 ---
 <KapitalLayout title="Diaspora Invest">

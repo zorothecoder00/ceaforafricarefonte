@@ -1,6 +1,8 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Page from '../components/pages/Signalement.astro';
+
+export const prerender = false;
 ---
 <BaseLayout title="Signaler un contenu ou une fraude">
   <Page lang="fr" />

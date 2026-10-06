@@ -2,6 +2,8 @@
 import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { STOCKS, fmt } from '../../data/site';
+
+export const prerender = false;
 ---
 <KapitalLayout title="Portefeuille virtuel" risk={false}>
   <PageHead title="Portefeuille virtuel" lead="10 millions de FCFA fictifs pour s'entraîner, sans aucun risque. Classement mensuel entre membres." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Portefeuille virtuel']]} />

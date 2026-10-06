@@ -26,6 +26,7 @@ export const ADMIN_NAV: [string, string, Obj][] = [
   ['/admin/parametrage', 'Paramétrage', 'parametres'],
   ['/admin/crm', 'CRM 360°', 'crm'],
   ['/admin/campagnes', 'Campagnes', 'campagnes'],
+  ['/admin/textes', 'Textes et images du site', 'contenus'],
   ['/admin/cms', 'CMS éditorial', 'contenus'],
   ['/admin/contenus', 'Contenus et voix', 'contenus'],
   ['/admin/assemblees', 'Assemblées et votes', 'journal_audit'],

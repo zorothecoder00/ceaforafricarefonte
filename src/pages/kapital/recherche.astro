@@ -4,6 +4,8 @@ import PageHead from '../../components/PageHead.astro';
 import Money from '../../components/Money.astro';
 import DocButton from '../../components/DocButton.astro';
 import { RESEARCH } from '../../data/site';
+
+export const prerender = false;
 ---
 <KapitalLayout title="Recherche et analyses">
   <PageHead title="Recherche et analyses" lead="Notes de marché, rapports sectoriels et baromètres. Méthodologie, sources et conflits d'intérêts déclarés." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Recherche']]} />

@@ -4,6 +4,8 @@ import PageHead from '../../components/PageHead.astro';
 import Wizard from '../../components/Wizard.astro';
 import { COUNTRIES, SUBS } from '../../data/site';
 
+export const prerender = false;
+
 const sectors = ['Agroalimentaire', 'Fintech', 'Énergie', 'Santé', 'Éducation', 'BTP', 'Commerce', 'Numérique'];
 const recap: [string, string][] = [['Nom', 'nom'], ['Téléphone', 'tel'], ['Entreprise', 'entreprise'], ['Secteur', 'secteur'], ['Salariés', 'salaries']];
 ---

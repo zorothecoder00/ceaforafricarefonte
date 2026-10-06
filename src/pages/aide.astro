@@ -4,6 +4,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHead from '../components/PageHead.astro';
 import { HELP, HELP_CATS } from '../data/aide';
 
+export const prerender = false;
+
 const wa = (import.meta.env.PUBLIC_WHATSAPP_NUMBER ?? '').replace(/\D/g, '');
 const index = HELP.map((h) => ({ s: h.slug, q: h.q, a: h.a.join(' '), c: HELP_CATS[h.cat] }));
 ---

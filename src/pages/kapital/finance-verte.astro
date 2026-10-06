@@ -3,6 +3,8 @@ import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { BONDS } from '../../data/site';
 
+export const prerender = false;
+
 const kinds = [['Obligations vertes', 'Financer des projets environnementaux : énergie solaire, efficacité énergétique, eau.'], ['Obligations sociales', 'Financer des projets à impact social : santé, éducation, logement abordable.'], ['Obligations durables', 'Combiner les deux, avec un cadre de reporting annuel.']];
 ---
 <KapitalLayout title="Finance verte et durable">

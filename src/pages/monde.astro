@@ -4,6 +4,8 @@ import PageHead from '../components/PageHead.astro';
 import Icon from '../components/Icon.astro';
 import { SUBS } from '../data/site';
 
+export const prerender = false;
+
 // Relais de CEA FOR AFRICA hors d'Afrique : [région, rôle, villes, actions, prochain rendez-vous]
 const C: [string, string, string[], string[], string][] = [
   ['Europe', 'Diaspora, investisseurs, universités et bailleurs', ['Paris', 'Bruxelles', 'Londres', 'Genève', 'Lisbonne'], ["Clubs d'investisseurs de la diaspora", 'Partenariats avec écoles de commerce', 'Bailleurs et fondations européens', "Accès aux marchés de l'Union européenne"], 'Diaspora Invest Day — Paris, 23 octobre 2026'],

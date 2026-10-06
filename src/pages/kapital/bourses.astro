@@ -2,6 +2,8 @@
 import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { MARKETS } from '../../data/site';
+
+export const prerender = false;
 ---
 <KapitalLayout title="Fiches des bourses">
   <PageHead title="Les bourses africaines" lead="Régulateur, ville, nombre de sociétés cotées (approximatif) et devise de cotation." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Fiches des bourses']]} />

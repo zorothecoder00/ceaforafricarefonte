@@ -4,6 +4,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHead from '../components/PageHead.astro';
 import { OPENAPI } from '../lib/openapi';
 
+export const prerender = false;
+
 const base = new URL('/api/v1', Astro.site).href;
 type Param = { name: string; in: string; description?: string; schema: { type: string; enum?: readonly string[]; default?: unknown } };
 const ops = Object.entries(OPENAPI.paths).map(([path, p]) => ({ path, ...(p as unknown as { get: { tags: string[]; summary: string; parameters: Param[] } }).get }));

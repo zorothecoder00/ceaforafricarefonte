@@ -3,6 +3,8 @@ import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import Money from '../../components/Money.astro';
 
+export const prerender = false;
+
 const weeks = [['Semaines 1-2', 'Pitch et récit'], ['Semaines 3-4', 'Modèle financier et valorisation'], ['Semaines 5-6', 'Gouvernance et juridique'], ['Semaines 7-8', 'Data room et due diligence'], ['Semaine 9', 'Négociation et term sheet'], ['Semaine 10', 'Comité et Demo Day']];
 ---
 <KapitalLayout title="Investor Ready">

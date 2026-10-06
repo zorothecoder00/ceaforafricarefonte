@@ -1,6 +1,8 @@
 ---
 import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
+
+export const prerender = false;
 ---
 <KapitalLayout title="Proposer un deal">
   <PageHead title="Proposer un deal" lead="Fondateur, business angel ou fonds : présentez une entreprise à notre équipe d'investissement." crumbs={[['/kapital', 'Kapital Invest'], ['/kapital/capital-risque', 'Capital-risque'], ['', 'Proposer un deal']]} />

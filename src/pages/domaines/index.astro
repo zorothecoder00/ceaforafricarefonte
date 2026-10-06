@@ -4,6 +4,8 @@ import PageHead from '../../components/PageHead.astro';
 import DomainCard from '../../components/DomainCard.astro';
 import { DOMAINS } from '../../data/site';
 
+export const prerender = false;
+
 // Quiz « Quel domaine pour moi ? » en 3 questions (CDC §6). Le besoin (Q2) choisit le parcours ; le stade (Q1) et le format (Q3) l'affinent.
 const Q1: [string, string][] = [['idee', "J'ai une idée"], ['jeune', 'Mon entreprise a moins de 2 ans'], ['pme', 'Je dirige une PME établie'], ['inv', 'Je veux investir']];
 const Q2: [string, string][] = [['apprendre', 'Apprendre et me former'], ['financer', 'Trouver des financements'], ['recruter', 'Recruter'], ['pairs', 'Échanger avec des pairs'], ['voix', 'Me faire entendre des décideurs'], ['capital', 'Ouvrir mon capital'], ['projet', 'Structurer un projet']];
