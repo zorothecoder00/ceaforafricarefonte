@@ -607,3 +607,11 @@ body[data-univers] .subnav a[aria-current="page"]{background:var(--u);border-col
 .audio-only video{position:static!important;height:54px!important;background:var(--navy)!important}
 .listen-btn{margin-top:4px}
 .listen-btn svg{flex:none}
+/* Accueil personnalisé d'un membre connecté */
+.perso{padding:24px 0 20px;background:var(--surface-2);border-bottom:1px solid var(--line)}
+.perso .panel h3{font-size:1rem;margin:0 0 8px}
+.perso .perso-l{list-style:none;margin:0;padding:0}
+.perso-l li{padding:6px 0;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
+.perso-l li:last-child{border-bottom:0}
+.perso-l a{font-weight:600;text-decoration:none}
+.perso-l a:hover{text-decoration:underline}

@@ -1,0 +1,104 @@
+---
+/* Accueil personnalisé d'un membre connecté (CDC §6.1) : ses prochaines échéances, ses cours en cours, des recommandations
+   (événement, offre d'emploi, cours) et les actualités de son pays. Rien n'est affiché pour un visiteur non connecté. */
+import { and, desc, eq, gt } from 'drizzle-orm';
+import { db } from '../lib/db';
+import { profile, eventTicket, mentoringSession, enrollment, job } from '../db/schema/app';
+import { allEvents, allCourses } from '../lib/catalog';
+import { publicArticles } from '../lib/cms';
+import { jobLive } from '../lib/jobs';
+import { country, dateFr } from '../data/site';
+import { lp, type Lang } from '../i18n/ui';
+
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+const en = lang === 'en';
+const w = (fr: string, e: string) => (en ? e : fr);
+const L = (p: string) => lp(lang, p);
+const me = Astro.locals.user;
+
+type Row = { label: string; meta: string; href: string; tag?: string };
+let data: { first: string; country: string | null; deadlines: Row[]; courses: Row[]; reco: Row[]; news: Row[] } | null = null;
+
+if (me) {
+  try {
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const [prof] = await db.select({ country: profile.country }).from(profile).where(eq(profile.userId, me.id));
+    const myCountry = prof?.country ?? null;
+    const [events, courses, articles, tickets, sessions, enrolls] = await Promise.all([
+      allEvents(), allCourses({ lang: en ? 'en' : 'fr' }), publicArticles(en ? 'en' : 'fr'),
+      db.select({ eventId: eventTicket.eventId }).from(eventTicket).where(and(eq(eventTicket.userId, me.id), eq(eventTicket.status, 'valide'))),
+      db.select({ at: mentoringSession.startsAt, kind: mentoringSession.kind }).from(mentoringSession).where(and(eq(mentoringSession.menteeId, me.id), gt(mentoringSession.startsAt, now))).orderBy(mentoringSession.startsAt).limit(3),
+      db.select().from(enrollment).where(eq(enrollment.userId, me.id)).orderBy(desc(enrollment.startedAt)),
+    ]);
+    const short = (d: string) => dateFr(d, { day: 'numeric', month: 'short' });
+
+    // Échéances : billets pour des événements à venir, rendez-vous de mentorat
+    const ticketed = new Set(tickets.map((t) => t.eventId));
+    const deadlines: (Row & { at: string })[] = [
+      ...events.filter((e) => ticketed.has(e.id) && e.date >= today).map((e) => ({ at: e.date, label: e.t, meta: `${short(e.date)} · ${e.city}`, href: L(`/evenements/${e.id}`), tag: w('Billet', 'Ticket') })),
+      ...sessions.map((s) => ({ at: s.at.toISOString(), label: s.kind === 'expert' ? w('Consultation avec un expert', 'Expert consultation') : w('Séance de mentorat', 'Mentoring session'), meta: s.at.toLocaleString(en ? 'en-GB' : 'fr-FR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lome' }), href: '/espace/mentorat', tag: w('Rendez-vous', 'Meeting') })),
+    ].sort((a, b) => a.at.localeCompare(b.at)).slice(0, 4);
+
+    // Cours en cours, avec l'avancement
+    const inProgress = enrolls.filter((e) => !e.completedAt).slice(0, 3).map((e) => {
+      const c = courses.find((x) => x.id === e.courseId);
+      return { label: c?.t ?? e.courseId, meta: `${Math.round((e.completedLessons.length / Math.max(1, (c?.ls.length ?? 1) - 1)) * 100)} %`, href: L(`/academie/${e.courseId}`) };
+    });
+
+    // Recommandations : un événement (mon pays d'abord), une offre d'emploi de mon pays, un cours non commencé (même thème ou gratuit)
+    const nextEv = events.filter((e) => e.date >= today && !ticketed.has(e.id)).sort((a, b) => Number(b.c === myCountry) - Number(a.c === myCountry) || a.date.localeCompare(b.date))[0];
+    const [offer] = myCountry ? await db.select({ id: job.id, title: job.title, company: job.company }).from(job).where(and(jobLive(now), eq(job.country, myCountry))).orderBy(desc(job.createdAt)).limit(1) : [];
+    const started = new Set(enrolls.map((e) => e.courseId));
+    const themes = new Set(courses.filter((c) => started.has(c.id)).map((c) => c.th));
+    const course = courses.find((c) => !started.has(c.id) && themes.has(c.th)) ?? courses.find((c) => !started.has(c.id) && !c.price);
+    const reco: Row[] = [
+      ...(nextEv ? [{ label: nextEv.t, meta: `${short(nextEv.date)} · ${nextEv.city}`, href: L(`/evenements/${nextEv.id}`), tag: w('Événement', 'Event') }] : []),
+      ...(offer ? [{ label: offer.title, meta: offer.company, href: L('/opportunites'), tag: w('Emploi', 'Job') }] : []),
+      ...(course ? [{ label: course.t, meta: `${course.th} · ${course.dur}`, href: L(`/academie/${course.id}`), tag: w('Cours', 'Course') }] : []),
+    ];
+
+    // Actualités de mon pays (puis panafricaines)
+    const pays = myCountry ? country(myCountry) : null;
+    const news = articles.filter((a) => !pays || a.c === pays || a.c === 'Panafricain').slice(0, 3).map((a) => ({ label: a.t, meta: a.cat, href: L(`/ressources/article/${a.id}`) }));
+
+    data = { first: me.name.split(' ')[0], country: pays, deadlines, courses: inProgress, reco, news };
+  } catch {
+    data = null; // en cas d'incident de base, l'accueil public reste affiché
+  }
+}
+---
+{data && (
+  <section class="perso" aria-labelledby="persoT">
+    <div class="wrap">
+      <div class="row between" style="align-items:baseline;margin-bottom:12px">
+        <h2 id="persoT" style="margin:0;font-size:1.4rem">{w('Bonjour', 'Hello')} {data.first}</h2>
+        <a class="btn btn-ghost btn-sm" href="/espace">{w('Mon espace', 'My space')}</a>
+      </div>
+      <div class="grid g4">
+        <div class="panel">
+          <h3>{w('Mes prochaines échéances', 'My upcoming dates')}</h3>
+          {data.deadlines.length ? <ul class="perso-l">{data.deadlines.map((r) => <li><a href={r.href}>{r.label}</a><span class="xs muted">{r.tag} · {r.meta}</span></li>)}</ul>
+            : <p class="small muted">{w('Rien de prévu pour l’instant.', 'Nothing planned yet.')} <a href={L('/evenements')}>{w('Voir l’agenda', 'See the calendar')}</a></p>}
+        </div>
+        <div class="panel">
+          <h3>{w('Mes cours en cours', 'My courses')}</h3>
+          {data.courses.length ? <ul class="perso-l">{data.courses.map((r) => <li><a href={r.href}>{r.label}</a><span class="xs muted">{r.meta}</span></li>)}</ul>
+            : <p class="small muted">{w('Aucun cours commencé.', 'No course started yet.')} <a href={L('/academie')}>{w('Découvrir l’Académie', 'Explore the Academy')}</a></p>}
+        </div>
+        <div class="panel">
+          <h3>{w('Recommandé pour vous', 'Recommended for you')}</h3>
+          {data.reco.length ? <ul class="perso-l">{data.reco.map((r) => <li><a href={r.href}>{r.label}</a><span class="xs muted">{r.tag} · {r.meta}</span></li>)}</ul>
+            : <p class="small muted">{w('Complétez votre profil pour des recommandations.', 'Complete your profile to get recommendations.')} <a href="/espace/profil">{w('Mon profil', 'My profile')}</a></p>}
+        </div>
+        <div class="panel">
+          <h3>{data.country ? `${w('Actualités', 'News')} — ${data.country}` : w('Actualités', 'News')}</h3>
+          {data.news.length ? <ul class="perso-l">{data.news.map((r) => <li><a href={r.href}>{r.label}</a><span class="xs muted">{r.meta}</span></li>)}</ul>
+            : <p class="small muted"><a href={L('/ressources')}>{w('Le média CEA', 'CEA media')}</a></p>}
+          {!data.country && <p class="xs muted" style="margin:6px 0 0">{w('Indiquez votre pays dans votre profil pour voir ses actualités.', 'Add your country to your profile to see its news.')}</p>}
+        </div>
+      </div>
+    </div>
+  </section>
+)}

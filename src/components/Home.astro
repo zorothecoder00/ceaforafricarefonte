@@ -11,6 +11,7 @@ import { HUBS, country } from '../data/site';
 import { tr } from '../i18n/content-en';
 import { lp, type Lang } from '../i18n/ui';
 import { programmeCatalogue } from '../lib/calls';
+import HomePerso from './HomePerso.astro';
 
 interface Props { lang: Lang }
 const { lang } = Astro.props;
@@ -31,6 +32,8 @@ const callDate = (d: Date) => d.toLocaleDateString(en ? 'en-GB' : 'fr-FR', { day
 const topics = en ? ['Funding', 'Training', 'Events', 'Kapital Invest'] : ['Financement', 'Formation', 'Événements', 'Kapital Invest'];
 ---
 <!-- Héros : texte à gauche, carte de l'Afrique à droite, puis les chiffres -->
+<!-- Accueil personnalisé (membre connecté) -->
+<HomePerso lang={lang} />
 <section class="hero">
   <div class="wrap hg">
     <div>
