@@ -75,6 +75,16 @@ export const SETTINGS = {
       english: boolean; ratesDate: string; ratesSource: string;
     },
   },
+  chiffres_accueil: {
+    label: "Chiffres de l'accueil",
+    // Bandeau de chiffres sous le héros de l'accueil : 4 chiffres et leurs libellés (FR/EN), phrase de source sous le bandeau.
+    // Liste vide = valeurs calculées par défaut (src/components/Home.astro).
+    schema: z.object({
+      items: z.array(z.object({ value: z.string().trim().min(1).max(20), fr: z.string().trim().min(1).max(60), en: z.string().trim().max(60) })).max(6),
+      noteFr: z.string().trim().max(200), noteEn: z.string().trim().max(200), methodology: z.boolean(),
+    }),
+    defaults: { items: [] as { value: string; fr: string; en: string }[], noteFr: '', noteEn: '', methodology: true },
+  },
   tutoriels: {
     label: "Tutoriels vidéo du centre d'aide",
     schema: z.object({ videos: z.record(z.string(), z.string()) }),

@@ -3,7 +3,8 @@
    POST { action: 'reset', page, kind, key, original, scope: 'page' | 'site' } → { ok, value, s } (valeur désormais affichée)
    POST { action: 'update', id, value } · { action: 'delete', id } (liste du back-office)
    POST { action: 'reseaux', linkedin: 'https://…', … } (réseaux sociaux du pied de page)
-   POST { action: 'tutoriels', <article>: 'https://…', … } (tutoriels vidéo du centre d'aide) */
+   POST { action: 'tutoriels', <article>: 'https://…', … } (tutoriels vidéo du centre d'aide)
+   POST { action: 'chiffres', v0, fr0, en0, … noteFr, noteEn, methodology } (bandeau de chiffres de l'accueil) */
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -26,6 +27,7 @@ const Body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('delete'), id: z.uuid() }),
   z.object({ action: z.literal('reseaux') }).catchall(z.string().trim().max(300)),
   z.object({ action: z.literal('tutoriels') }).catchall(z.string().trim().max(500)),
+  z.object({ action: z.literal('chiffres'), methodology: z.boolean().optional() }).catchall(z.union([z.string().trim().max(200), z.boolean()])),
 ]);
 
 // Caractères de contrôle retirés (sauf retours à la ligne, réduits par l'affichage)
@@ -57,6 +59,24 @@ export const POST: APIRoute = async ({ locals, request }) => {
     await setSetting('reseaux', links as never, u.id);
     await audit(u.id, 'site.reseaux', 'reseaux', links, ip);
     return json({ ok: true, message: 'Réseaux sociaux enregistrés.' });
+  }
+
+  if (b.action === 'chiffres') {
+    // Bandeau de chiffres de l'accueil : lignes v0/fr0/en0 … ; une ligne sans chiffre ou sans libellé est ignorée
+    const f = b as Record<string, string | boolean>;
+    const items: { value: string; fr: string; en: string }[] = [];
+    for (let i = 0; i < 6; i++) {
+      const value = String(f['v' + i] ?? '').trim(), fr = String(f['fr' + i] ?? '').trim(), en = String(f['en' + i] ?? '').trim();
+      if (!value && !fr) continue;
+      if (!value || !fr) return fail(`Ligne ${i + 1} : indiquez le chiffre et son libellé.`);
+      if (value.length > 20 || fr.length > 60 || en.length > 60) return fail(`Ligne ${i + 1} : chiffre (20 caractères) ou libellé (60 caractères) trop long.`);
+      items.push({ value, fr, en });
+    }
+    if (!items.length) return fail('Indiquez au moins un chiffre.');
+    const val = { items, noteFr: String(f.noteFr ?? '').trim().slice(0, 200), noteEn: String(f.noteEn ?? '').trim().slice(0, 200), methodology: f.methodology === true };
+    await setSetting('chiffres_accueil', val, u.id);
+    await audit(u.id, 'site.chiffres_accueil', 'accueil', val, ip);
+    return json({ ok: true, message: 'Chiffres de l’accueil enregistrés.' });
   }
 
   if (b.action === 'tutoriels') {

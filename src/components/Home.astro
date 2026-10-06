@@ -11,20 +11,25 @@ import { HUBS, country } from '../data/site';
 import { tr } from '../i18n/content-en';
 import { lp, type Lang } from '../i18n/ui';
 import { programmeCatalogue } from '../lib/calls';
+import { homeStats } from '../lib/home-stats';
 import HomePerso from './HomePerso.astro';
+import { allDomains } from '../lib/domains';
 
 interface Props { lang: Lang }
 const { lang } = Astro.props;
 const en = lang === 'en';
 const L = (p: string) => lp(lang, p);
 const c = tr(lang);
-const members = HUBS.reduce((a, h) => a + h.m, 0);
-const projects = HUBS.reduce((a, h) => a + h.p, 0);
 const nextEv = [...c.events].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3);
 const freeCourses = c.courses.filter((x) => !x.price).slice(0, 3);
 const w = (fr: string, e: string) => (en ? e : fr);
 const score: [string, number][] = [[w('Équipe', 'Team'), 5], ['Traction', 4], [w('Finances', 'Finance'), 4], [w('Gouvernance', 'Governance'), 3]];
 const partners = en ? ['Partner bank', 'Foundation', 'Donor', 'University', 'Incubator', 'Mobile operator'] : ['Banque partenaire', 'Fondation', 'Bailleur', 'Université', 'Incubateur', 'Opérateur mobile'];
+const domains = await allDomains({ lang: en ? 'en' : 'fr' });
+// Bandeau de chiffres : modifiable dans Administration système › Chiffres de l'accueil (valeurs par défaut sinon)
+const statsCfg = await homeStats();
+const stats = statsCfg.items.map((s) => ({ value: s.value, label: en && s.en ? s.en : s.fr }));
+const statNote = en && statsCfg.noteEn ? statsCfg.noteEn : statsCfg.noteFr;
 // Appel à candidatures mis en avant : l'appel ouvert qui clôt le plus tôt, sinon la prochaine ouverture (catalogue + appels du back-office)
 const catalogue = await programmeCatalogue().catch(() => []);
 const call = catalogue.find((p) => p.state === 'ouvert') ?? catalogue.find((p) => p.state === 'a_venir');
@@ -50,12 +55,9 @@ const topics = en ? ['Funding', 'Training', 'Events', 'Kapital Invest'] : ['Fina
   </div>
   <div class="stats-band">
     <div class="wrap">
-      <div class="stat"><b data-countup={members}>{members.toLocaleString('fr-FR')}</b><span>{w('membres inscrits', 'registered members')}</span></div>
-      <div class="stat"><b data-countup={projects}>{projects}</b><span>{w('projets accompagnés', 'projects supported')}</span></div>
-      <div class="stat"><b data-countup="2340">2 340</b><span>{w('emplois créés et vérifiés', 'jobs created and verified')}</span></div>
-      <div class="stat"><b data-countup={HUBS.length}>{HUBS.length}</b><span>{w('pays actifs', 'active countries')}</span></div>
+      {stats.map((s) => <div class="stat"><b data-countup={/^\d[\d\s  .]*$/.test(s.value) ? '' : undefined}>{s.value}</b><span>{s.label}</span></div>)}
     </div>
-    <div class="wrap demo-note" style="color:#8FA6BF;padding-bottom:14px">{w('Chiffres de démonstration, au 30 septembre 2026.', 'Demonstration figures, as of 30 September 2026.')} <a href={L('/impact')} style="color:#C9D6E5">{w('Méthodologie', 'Methodology')}</a></div>
+    {statNote && <div class="wrap demo-note stats-note">{statNote} {statsCfg.methodology && <a href={L('/impact')}>{w('Méthodologie', 'Methodology')}</a>}</div>}
   </div>
 </section>
 <Ticker />
@@ -96,7 +98,7 @@ const topics = en ? ['Funding', 'Training', 'Events', 'Kapital Invest'] : ['Fina
 <section class="block">
   <div class="wrap">
     <div class="row between"><h2>{w("Nos domaines d'intervention", 'Our areas of work')}</h2><a class="btn btn-ghost btn-sm" href={L('/domaines')}>{w('Tous nos domaines', 'All our areas')}</a></div>
-    <div class="grid g4" style="margin-top:18px">{c.domains.map((d) => <DomainCard d={{ ...d, to: L(d.to) }} />)}</div>
+    <div class="grid g4" style="margin-top:18px">{domains.map((d) => <DomainCard d={{ ...d, to: L(d.to) }} />)}</div>
   </div>
 </section>
 

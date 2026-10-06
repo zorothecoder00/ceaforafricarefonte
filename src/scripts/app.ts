@@ -180,11 +180,12 @@ const counters = $$('[data-countup]');  // data-count (sans « up ») sert aille
 if (counters.length) {
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches || root.classList.contains('lite');
   const run = (el: HTMLElement) => {
-    const end = Number(el.dataset.countup), suffix = el.dataset.suffix || '';
+    // Cible = le chiffre affiché par la page (modifiable dans le back-office) ; il est remis tel quel à la fin de l'animation
+    const shown = el.textContent ?? '', end = Number(shown.replace(/\D/g, '')), suffix = el.dataset.suffix || '';
+    if (!end || reduce) return;
     const out = (n: number) => (el.textContent = Math.round(n).toLocaleString(EN ? 'en-GB' : 'fr-FR') + suffix);
-    if (reduce) return out(end);
     const t0 = performance.now();
-    const step = (t: number) => { const p = Math.min(1, (t - t0) / 1400); out(end * (1 - Math.pow(1 - p, 3))); if (p < 1) requestAnimationFrame(step); };
+    const step = (t: number) => { const p = Math.min(1, (t - t0) / 1400); if (p < 1) { out(end * (1 - Math.pow(1 - p, 3))); requestAnimationFrame(step); } else el.textContent = shown; };
     requestAnimationFrame(step);
   };
   const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { run(e.target as HTMLElement); io.unobserve(e.target); } }), { threshold: 0.4 });

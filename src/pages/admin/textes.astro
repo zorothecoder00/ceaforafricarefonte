@@ -10,6 +10,7 @@ import { SUBS } from '../../data/site';
 import { canEditSite, KIND_LABEL, SITE } from '../../lib/site-text';
 import { getSetting } from '../../lib/settings';
 import { HELP, HELP_CATS } from '../../data/aide';
+import { homeStats } from '../../lib/home-stats';
 
 export const prerender = false;
 const me = Astro.locals.user!;
@@ -32,6 +33,8 @@ const editUrl = (h: string, en = false) => (en ? (h === '/' ? '/en/' : '/en' + h
 
 const links = await getSetting('reseaux');
 const tutos = (await getSetting('tutoriels')).videos;
+const hs = await homeStats();
+const rowsHs = [...hs.items, ...Array.from({ length: Math.max(0, 6 - hs.items.length) }, () => ({ value: '', fr: '', en: '' }))];
 const rows = await db.select({ t: siteText, by: user.name }).from(siteText).leftJoin(user, eq(user.id, siteText.updatedBy)).orderBy(desc(siteText.updatedAt)).catch(() => []);
 const where = (s: string) => (s === SITE ? 'Tout le site' : s);
 const fmt = (d: Date) => d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Africa/Lome' });
@@ -54,6 +57,7 @@ const tab = (k: string) => ({ class: `btn btn-sm ${vue === k ? 'btn-primary' : '
   <nav class="row" aria-label="Rubriques du site" style="gap:8px;margin-bottom:18px">
     {groups.map((g) => { const n = count(g); return <a {...tab(g.k)}>{g.h}{n > 0 && <span class="xs" style="opacity:.75"> ({n})</span>}</a>; })}
     <a {...tab('reseaux')}>Réseaux sociaux</a>
+    <a {...tab('chiffres')}>Chiffres de l'accueil</a>
     <a {...tab('tutoriels')}>Tutoriels vidéo <span class="xs" style="opacity:.75">({Object.keys(tutos).length})</span></a>
     <a {...tab('modifs')}>Toutes les modifications <span class="xs" style="opacity:.75">({rows.length})</span></a>
   </nav>
@@ -74,6 +78,25 @@ const tab = (k: string) => ({ class: `btn btn-sm ${vue === k ? 'btn-primary' : '
       </ul>
     </section>
   )}
+
+  {vue === 'chiffres' && <section class="panel" style="margin-bottom:18px">
+    <h2 style="font-size:1.15rem;margin-top:0">Chiffres de l'accueil</h2>
+    <p class="small muted" style="margin-top:0">Le bandeau blanc sous l'en-tête de la page d'accueil : jusqu'à 6 chiffres avec leur libellé (en français, et en anglais pour la version anglaise du site). Un chiffre écrit avec des chiffres seulement (ex. « 33 610 ») est animé à l'affichage ; vous pouvez aussi écrire « 9,8 Md » ou « +40 % ». Laissez une ligne vide pour la retirer.{hs.saved ? '' : ' Les valeurs ci-dessous sont celles affichées actuellement par défaut.'}</p>
+    <form data-api="/api/admin/textes" data-reload>
+      <input type="hidden" name="action" value="chiffres" />
+      <fieldset disabled={!canEdit} style="border:0;padding:0;margin:0">
+        <div class="scroll-x"><table class="t"><thead><tr><th>Chiffre</th><th>Libellé (français)</th><th>Libellé (anglais)</th></tr></thead><tbody>
+          {rowsHs.map((r, i) => <tr><td><input class="in" name={`v${i}`} maxlength="20" value={r.value} aria-label={`Chiffre ${i + 1}`} style="margin:0;min-width:110px" /></td><td><input class="in" name={`fr${i}`} maxlength="60" value={r.fr} aria-label={`Libellé français ${i + 1}`} style="margin:0;min-width:200px" /></td><td><input class="in" name={`en${i}`} maxlength="60" value={r.en} aria-label={`Libellé anglais ${i + 1}`} style="margin:0;min-width:200px" /></td></tr>)}
+        </tbody></table></div>
+        <div class="grid g2" style="gap:0 12px;margin-top:8px">
+          <div><label class="f" for="hn-fr">Phrase sous le bandeau (source, date)</label><input class="in" id="hn-fr" name="noteFr" maxlength="200" value={hs.noteFr} /></div>
+          <div><label class="f" for="hn-en">En anglais</label><input class="in" id="hn-en" name="noteEn" maxlength="200" value={hs.noteEn} /></div>
+        </div>
+        <label class="row small"><input type="checkbox" name="methodology" checked={hs.methodology} /> Afficher le lien « Méthodologie » (vers l'observatoire d'impact)</label>
+        {canEdit && <button class="btn btn-primary btn-sm" type="submit" style="margin-top:10px">Enregistrer</button>}
+      </fieldset>
+    </form>
+  </section>}
 
   {vue === 'tutoriels' && <section class="panel" style="margin-bottom:18px">
     <h2 style="font-size:1.15rem;margin-top:0">Tutoriels vidéo du centre d'aide</h2>
