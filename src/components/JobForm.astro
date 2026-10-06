@@ -1,0 +1,41 @@
+---
+/* Champs d'une offre d'emploi (back-office : saisie par l'équipe ou correction). Envoi en JSON via data-api. */
+import { jobTypeEnum } from '../db/schema/app';
+import { COUNTRIES } from '../data/site';
+import { STUDY_LEVELS } from '../data/etudes';
+
+interface Props {
+  action: 'create' | 'update';
+  j?: { id: string; title: string; company: string; country: string; type: string; remote: boolean; salary: string | null; skills: string[]; description: string | null; startDate: string | null; durationMonths: number | null; studyLevel: string | null; tutor: string | null };
+}
+const { action, j } = Astro.props;
+const k = j?.id ?? 'new';
+---
+<form data-api="/api/admin/emplois" data-reload>
+  <input type="hidden" name="action" value={action} />
+  {j && <input type="hidden" name="id" value={j.id} />}
+  <div class="grid g2" style="gap:0 12px">
+    <div><label class="f" for={`jt-${k}`}>Intitulé du poste</label><input class="in" id={`jt-${k}`} name="title" value={j?.title} required minlength="3" maxlength="140" /></div>
+    <div><label class="f" for={`jc-${k}`}>Entreprise</label><input class="in" id={`jc-${k}`} name="company" value={j?.company} required minlength="2" maxlength="140" /></div>
+    <div><label class="f" for={`jp-${k}`}>Pays</label><select class="in" id={`jp-${k}`} name="country" required>{Object.entries(COUNTRIES).map(([c, n]) => <option value={c} selected={c === (j?.country ?? 'TG')}>{n}</option>)}</select></div>
+    <div><label class="f" for={`jy-${k}`}>Contrat</label><select class="in" id={`jy-${k}`} name="type">{jobTypeEnum.enumValues.map((t) => <option selected={t === j?.type}>{t}</option>)}</select></div>
+    <div><label class="f" for={`js-${k}`}>Salaire (facultatif)</label><input class="in" id={`js-${k}`} name="salary" value={j?.salary ?? ''} maxlength="80" placeholder="ex. 350 000 FCFA / mois" /></div>
+    <div><label class="f" for={`jk-${k}`}>Compétences (séparées par des virgules)</label><input class="in" id={`jk-${k}`} name="skills" data-type="list" value={j?.skills.join(', ') ?? ''} /></div>
+    <div style="grid-column:1/-1"><label class="f" for={`jd-${k}`}>Description et missions</label><textarea class="in" id={`jd-${k}`} name="description" rows="5" maxlength="6000">{j?.description ?? ''}</textarea></div>
+  </div>
+  <label class="small row" style="gap:6px;margin:4px 0 10px"><input type="checkbox" name="remote" checked={j?.remote} /> Télétravail possible</label>
+  <details style="margin-bottom:10px" open={!!j?.startDate}>
+    <summary class="small" style="cursor:pointer">Stage ou alternance : début, durée, niveau, tuteur (obligatoires pour ces contrats)</summary>
+    <div class="grid g2" style="gap:0 12px;margin-top:6px">
+      <div><label class="f" for={`jsd-${k}`}>Date de début</label><input class="in" id={`jsd-${k}`} name="startDate" type="date" value={j?.startDate ?? ''} /></div>
+      <div><label class="f" for={`jdm-${k}`}>Durée (mois)</label><input class="in" id={`jdm-${k}`} name="durationMonths" type="number" min="1" max="36" value={j?.durationMonths ?? ''} /></div>
+      <div><label class="f" for={`jl-${k}`}>Niveau d'études visé</label><select class="in" id={`jl-${k}`} name="studyLevel"><option value="">—</option>{STUDY_LEVELS.map((l) => <option selected={l === j?.studyLevel}>{l}</option>)}</select></div>
+      <div><label class="f" for={`jtu-${k}`}>Tuteur</label><input class="in" id={`jtu-${k}`} name="tutor" value={j?.tutor ?? ''} maxlength="140" /></div>
+    </div>
+  </details>
+  {action === 'create' && (
+    <div><label class="f" for="jre">E-mail du recruteur (facultatif, compte existant)</label><input class="in" id="jre" name="recruiterEmail" type="email" placeholder="Laisser vide : les candidatures arrivent ici" />
+      <p class="xs muted" style="margin:2px 0 10px">Avec un recruteur, l'offre apparaît dans son espace et il trie lui-même les candidatures. Sans recruteur, la liste des candidats s'affiche sous l'offre, dans cette page.</p></div>
+  )}
+  <button class="btn btn-primary btn-sm" type="submit">{action === 'create' ? 'Publier l’offre' : 'Enregistrer les corrections'}</button>
+</form>

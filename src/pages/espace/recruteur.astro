@@ -78,7 +78,13 @@ const COLS: [string, string][] = [['envoyee', 'Reçues'], ['vue', 'Vues'], ['ent
     <div>
       <div class="panel">
         <h3>Mes offres</h3>
-        {jobs.length ? jobs.map((j) => <div class="list-row"><span class="small">{j.featured ? '★ ' : ''}{j.title} <span class="xs muted">· {country(j.country)}</span></span><span class="tag">{ST[j.status]}</span></div>) : <p class="small muted">Aucune offre.</p>}
+        {jobs.length ? jobs.map((j) => (
+          <div class="list-row" style="flex-wrap:wrap">
+            <span class="small">{j.featured ? '★ ' : ''}{j.title} <span class="xs muted">· {country(j.country)}{j.status === 'publiee' && j.expiresAt ? ` · visible jusqu’au ${j.expiresAt.toLocaleDateString('fr-FR', { timeZone: 'Africa/Lome' })}` : ''}</span></span>
+            <span class="tag">{ST[j.status]}</span>
+            {j.status === 'refusee' && j.moderationNote && <p class="xs" style="flex-basis:100%;margin:4px 0 0">Motif de la modération : {j.moderationNote}</p>}
+          </div>
+        )) : <p class="small muted">Aucune offre.</p>}
       </div>
       <form class="panel" data-api="/api/emplois" data-reload data-reset style="margin-top:16px">
         <h3>Déclarer une embauche</h3>

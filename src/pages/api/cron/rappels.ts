@@ -1,4 +1,5 @@
 /* Rappels de rendez-vous (CDC §10 « rappels ») : tâche planifiée quotidienne (Vercel Cron, voir vercel.json).
+   Au même passage : relances des tickets et fermeture des offres d'emploi expirées.
    Envoie un rappel unique pour chaque rendez-vous d'équipe et chaque séance de mentorat confirmée des 36 prochaines heures :
    avec un passage par jour, chaque rendez-vous est rappelé une fois, entre 12 et 36 heures avant.
    Les rappels de dernière minute sont portés par les alarmes du fichier agenda (.ics).
@@ -14,6 +15,7 @@ import { notify } from '../../../lib/notify';
 import { json, fail } from '../../../lib/session';
 import { cronAuthorized } from '../../../lib/cron';
 import { runEscalations } from '../../../lib/escalations';
+import { closeExpiredJobs } from '../../../lib/jobs';
 import { agendaKey, siteUrl } from '../../../lib/agenda';
 
 export const prerender = false;
@@ -58,5 +60,8 @@ export const GET: APIRoute = async ({ request }) => {
 
   // Workflows (CDC §12) : relances et escalades des tickets, au même passage quotidien
   const tickets = await runEscalations(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-  return json({ ok: true, sent, failed, tickets });
+
+  // Offres d'emploi arrivées à expiration : fermées, recruteurs prévenus (elles sont déjà masquées du public dès l'échéance)
+  const expiredJobs = await closeExpiredJobs(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+  return json({ ok: true, sent, failed, tickets, expiredJobs });
 };

@@ -234,6 +234,7 @@ export const job = pgTable('job', {
   featured: boolean('featured').notNull().default(false),
   publishedAt: ts('published_at'),
   expiresAt: ts('expires_at'),
+  moderationNote: text('moderation_note'), // motif du refus, communiqué au recruteur
   createdAt: ts('created_at').notNull().defaultNow(),
 }, (t) => [index('job_status_country_idx').on(t.status, t.country)]);
 

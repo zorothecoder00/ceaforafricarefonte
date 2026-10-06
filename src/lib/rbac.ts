@@ -44,9 +44,9 @@ export const MATRIX: Record<Role, Matrix> = {
   analyste: { contenus: 'L', profil: 'L*', fiche_projet: 'L', dossier_kapital: 'LM', data_room: 'L', decision_comite: 'L', documents: 'L*' },
   comite: { contenus: 'L', fiche_projet: 'L', dossier_kapital: 'L', data_room: 'L', decision_comite: 'CV', documents: 'L*' },
   conformite: { contenus: 'L', pieces_kyc: 'LMV', dossier_kapital: 'L', membres: 'L', journal_audit: 'L', documents: 'L*' },
-  editeur: { contenus: 'LCMV', moderation: 'LMV', offre_emploi: 'LMV', messages_contact: 'LM', campagnes: 'LCM', formulaires: 'LCMV', documents: 'L*' },
+  editeur: { contenus: 'LCMV', moderation: 'LMV', offre_emploi: 'LCMV', messages_contact: 'LM', campagnes: 'LCM', formulaires: 'LCMV', documents: 'L*' },
   responsable_pays: { contenus: 'LCM*', membres: 'L*', messages_contact: 'LM*', moderation: 'LM*', controle_acces: 'LV', crm: 'LCM*', campagnes: 'L', programmes: 'L', rapports: 'L*', formulaires: 'L', documents: 'L*' },
-  admin: { contenus: 'LCMV', profil: 'L', fiche_projet: 'L', candidature: 'L', dossier_kapital: 'L', decision_comite: 'L', journal_audit: 'L', membres: 'LCMV', parametres: 'LCMV', paiements: 'LCMV', messages_contact: 'LM', moderation: 'LMV', offre_emploi: 'LMV', interrupteurs: 'LMV', controle_acces: 'LV', crm: 'LCMV', campagnes: 'LCMV', programmes: 'LCMV', rapports: 'LCMV', formulaires: 'LCMV', automatisations: 'LCMV', documents: 'LCMV' },
+  admin: { contenus: 'LCMV', profil: 'L', fiche_projet: 'L', candidature: 'L', dossier_kapital: 'L', decision_comite: 'L', journal_audit: 'L', membres: 'LCMV', parametres: 'LCMV', paiements: 'LCMV', messages_contact: 'LM', moderation: 'LMV', offre_emploi: 'LCMV', interrupteurs: 'LMV', controle_acces: 'LV', crm: 'LCMV', campagnes: 'LCMV', programmes: 'LCMV', rapports: 'LCMV', formulaires: 'LCMV', automatisations: 'LCMV', documents: 'LCMV' },
   direction: { crm: 'L', campagnes: 'L', programmes: 'L', rapports: 'LC', contenus: 'L', profil: 'L', candidature: 'L', dossier_kapital: 'L', decision_comite: 'LV', journal_audit: 'L', membres: 'L', paiements: 'L', interrupteurs: 'L', formulaires: 'L', automatisations: 'L', documents: 'L*' },
 };
 

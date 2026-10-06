@@ -3,7 +3,7 @@ import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../../lib/db';
-import { contactMessage, ticketReply, ticketPriorityEnum, report, post, courseReview, job, jobAlert, programmeApplication, userRole, proposal, space, hireDeclaration, roleEnum, ticketFlowEnum, applicationStatusEnum, proposalStatusEnum, profile } from '../../db/schema/app';
+import { contactMessage, ticketReply, ticketPriorityEnum, report, post, courseReview, programmeApplication, userRole, proposal, space, hireDeclaration, roleEnum, ticketFlowEnum, applicationStatusEnum, proposalStatusEnum, profile } from '../../db/schema/app';
 import { dossier, dossierEvent, committeeDecision, kycCheck, investorProfile, featureFlag, dossierStatusEnum, verificationLevelEnum, committeeDecisionEnum, kycStatusEnum } from '../../db/schema/kapital';
 import { json, fail, audit, clientIp } from '../../lib/session';
 import { staffApi, staffApiAll, countriesFor } from '../../lib/admin';
@@ -25,7 +25,6 @@ const Body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('report.status'), id, status: z.enum(ticketFlowEnum.enumValues) }),
   z.object({ action: z.literal('post.status'), id, status: z.enum(['publie', 'masque']) }),
   z.object({ action: z.literal('review.hidden'), userId: z.string().min(1).max(64), courseId: z.string().max(20), hidden: z.boolean() }),
-  z.object({ action: z.literal('job.moderate'), id, status: z.enum(['publiee', 'refusee', 'fermee']), featured: z.boolean().optional() }),
   z.object({ action: z.literal('application.update'), id, status: z.enum(applicationStatusEnum.enumValues), score: z.coerce.number().int().min(0).max(100).nullish() }),
   z.object({ action: z.literal('dossier.status'), id, status: z.enum(dossierStatusEnum.enumValues), note: z.string().max(2000).optional() }),
   z.object({ action: z.literal('dossier.update'), id, analystId: z.string().max(64).nullish(), verification: z.enum(verificationLevelEnum.enumValues).optional(), published: z.boolean().optional() }),
@@ -114,26 +113,6 @@ export const POST: APIRoute = async ({ locals, request }) => {
       if (b.status === 'masque') await notify(pt.author, 'Une de vos publications a été masquée par la modération (charte de la communauté).', '/communaute/fil');
       await audit(u.id, 'admin.publication.' + b.status, b.id, {}, ip);
       return ok(b.status === 'publie' ? 'Publication validée.' : 'Publication masquée.');
-    }
-    case 'job.moderate': {
-      const u = guard('offre_emploi', 'V'); if (u instanceof Response) return u;
-      const [j] = await db.select().from(job).where(eq(job.id, b.id));
-      if (!j) return fail('Offre introuvable.', 404);
-      const exp = new Date(); exp.setDate(exp.getDate() + 60);
-      await db.update(job).set({ status: b.status, ...(b.featured !== undefined && { featured: b.featured }), ...(b.status === 'publiee' && !j.publishedAt && { publishedAt: new Date(), expiresAt: exp }) }).where(eq(job.id, b.id));
-      if (j.employerId) await notify(j.employerId, b.status === 'publiee' ? `Votre offre « ${j.title} » est publiée.` : b.status === 'refusee' ? `Votre offre « ${j.title} » n'a pas été validée par la modération.` : `Votre offre « ${j.title} » est fermée.`, '/espace/recruteur', { email: true });
-      // Alertes emploi correspondantes (WhatsApp) à la première publication
-      if (b.status === 'publiee' && !j.publishedAt) {
-        const alerts = await db.select().from(jobAlert);
-        const hay = `${j.title} ${j.company} ${j.skills.join(' ')}`.toLowerCase();
-        for (const a of alerts) {
-          const q = a.query as { q?: string; country?: string; type?: string; remote?: boolean };
-          if ((q.country && q.country !== j.country) || (q.type && q.type !== j.type) || (q.remote && !j.remote) || (q.q && !hay.includes(q.q.toLowerCase()))) continue;
-          await notify(a.userId, `Nouvelle offre pour votre alerte : ${j.title} — ${j.company}`, `/opportunites?q=${encodeURIComponent(j.title)}`, { whatsapp: true });
-        }
-      }
-      await audit(u.id, 'admin.emploi.' + b.status, b.id, {}, ip);
-      return ok('Offre mise à jour.');
     }
     case 'application.update': {
       const u = guard('candidature', 'V'); if (u instanceof Response) return u;

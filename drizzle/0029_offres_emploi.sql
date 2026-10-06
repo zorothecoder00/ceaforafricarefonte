@@ -1,0 +1,1 @@
+ALTER TABLE "job" ADD COLUMN "moderation_note" text;

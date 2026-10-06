@@ -1,49 +1,109 @@
 ---
-/* Modération des offres d'emploi (CDC §7.4) : validation, refus, fermeture, mise en avant ; embauches déclarées. */
+/* Offres d'emploi (CDC §7.4) : modération (publication, refus motivé, fermeture, mise en avant), saisie par l'équipe,
+   correction, prolongation ; candidats des offres saisies par l'équipe ; embauches déclarées. */
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import { desc, eq } from 'drizzle-orm';
+import { asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../../lib/db';
-import { job, hireDeclaration, jobStatusEnum } from '../../db/schema/app';
+import { job, jobApplication, hireDeclaration, jobStatusEnum } from '../../db/schema/app';
 import { user } from '../../db/schema/auth';
-import { can } from '../../lib/rbac';
+import { can, scope } from '../../lib/rbac';
 import { country } from '../../data/site';
 import AiModNote, { type ModNote } from '../../components/AiModNote.astro';
+import JobForm from '../../components/JobForm.astro';
 import { aiEnabled, latestNotes } from '../../lib/ai';
 
 export const prerender = false;
 const me = Astro.locals.user!;
+const all = (a: 'C' | 'M' | 'V') => scope(me.roles, 'offre_emploi', a) === 'all';
+const canC = all('C'), canM = all('M'), canV = all('V');
 const st = (Astro.url.searchParams.get('statut') ?? 'en_moderation') as (typeof jobStatusEnum.enumValues)[number];
-const rows = await db.select({ j: job, employer: user.email }).from(job).leftJoin(user, eq(user.id, job.employerId)).where(eq(job.status, jobStatusEnum.enumValues.includes(st) ? st : 'en_moderation')).orderBy(desc(job.createdAt)).limit(200);
+const status = jobStatusEnum.enumValues.includes(st) ? st : 'en_moderation';
+const rows = await db.select({ j: job, employer: user.email }).from(job).leftJoin(user, eq(user.id, job.employerId)).where(eq(job.status, status)).orderBy(desc(job.createdAt)).limit(200);
+const counts = Object.fromEntries((await db.select({ s: job.status, n: sql<number>`count(*)::int` }).from(job).groupBy(job.status)).map((r) => [r.s, r.n]));
 const notes = await latestNotes<ModNote>('job', rows.map((r) => r.j.id), 'moderation');
+const ids = rows.map((r) => r.j.id);
+const apps = ids.length ? await db.select({ jobId: jobApplication.jobId, status: jobApplication.status, at: jobApplication.createdAt, name: user.name, email: user.email }).from(jobApplication).innerJoin(user, eq(user.id, jobApplication.userId)).where(inArray(jobApplication.jobId, ids)).orderBy(asc(jobApplication.createdAt)) : [];
 const hires = can(me.roles, 'parametres', 'M') ? await db.select().from(hireDeclaration).orderBy(desc(hireDeclaration.hiredOn)).limit(100) : [];
 const L: Record<string, string> = { brouillon: 'Brouillons', en_moderation: 'À valider', publiee: 'Publiées', fermee: 'Fermées', refusee: 'Refusées' };
 const sixMonths = Date.now() - 182 * 864e5, year = Date.now() - 365 * 864e5;
+const now = new Date();
+const fmt = (d: Date) => d.toLocaleDateString('fr-FR', { timeZone: 'Africa/Lome' });
+const post = (body: object) => JSON.stringify(body);
 ---
-<AdminLayout title="Offres d'emploi" lead="Vérifier l'employeur, l'absence de critère discriminatoire et la réalité du poste." obj="offre_emploi">
-  <div class="filters" style="margin-top:0">{jobStatusEnum.enumValues.map((s) => <a class="chip" href={`?statut=${s}`} aria-pressed={s === st ? 'true' : 'false'}>{L[s]}</a>)}</div>
+<AdminLayout title="Offres d'emploi" lead="Vérifier l'employeur, l'absence de critère discriminatoire et la réalité du poste. Une offre reste visible 60 jours, prolongeables." obj="offre_emploi">
+  {canC && (
+    <details class="panel" style="margin-bottom:14px">
+      <summary style="cursor:pointer"><b>+ Saisir une offre</b> <span class="xs muted">(offre reçue par e-mail, offre d'un partenaire… publiée directement)</span></summary>
+      <div style="margin-top:12px"><JobForm action="create" /></div>
+    </details>
+  )}
+  <div class="filters" style="margin-top:0">{jobStatusEnum.enumValues.map((s) => <a class="chip" href={`?statut=${s}`} aria-pressed={s === status ? 'true' : 'false'}>{L[s]} ({counts[s] ?? 0})</a>)}</div>
   {rows.length === 0 && <div class="empty">Aucune offre.</div>}
-  {rows.map(({ j, employer }) => (
-    <div class="panel" style="margin-bottom:10px">
-      <div class="row between"><b>{j.featured ? '★ ' : ''}{j.title} — {j.company}</b><span class="xs muted">{country(j.country)} · {j.type}{j.remote ? ' · télétravail' : ''}</span></div>
-      <div class="xs muted">{employer ?? 'Saisie CEA'} · {j.salary ?? 'Salaire non précisé'} · {j.skills.join(', ')}</div>
-      {j.description && <details><summary class="small">Description</summary><p class="small" style="white-space:pre-wrap">{j.description}</p></details>}
-      {j.status === 'en_moderation' && <AiModNote kind="job" id={j.id} note={notes.get(j.id)} enabled={aiEnabled()} />}
-      <div class="row" style="gap:6px;margin-top:8px">
-        {j.status !== 'publiee' && <button class="btn btn-primary btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'job.moderate', id: j.id, status: 'publiee' })} data-reload>Publier</button>}
-        {j.status === 'en_moderation' && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'job.moderate', id: j.id, status: 'refusee' })} data-confirm="Refuser cette offre ?" data-reload>Refuser</button>}
-        {j.status === 'publiee' && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'job.moderate', id: j.id, status: 'fermee' })} data-reload>Fermer</button>}
-        {j.status === 'publiee' && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'job.moderate', id: j.id, status: 'publiee', featured: !j.featured })} data-reload>{j.featured ? 'Retirer la mise en avant' : 'Mettre en avant'}</button>}
+  {rows.map(({ j, employer }) => {
+    const mine = apps.filter((a) => a.jobId === j.id);
+    const expired = !!j.expiresAt && j.expiresAt <= now;
+    return (
+      <div class="panel" style="margin-bottom:10px">
+        <div class="row between" style="gap:8px"><b>{j.featured ? '★ ' : ''}{j.title} — {j.company}</b><span class="xs muted">{country(j.country)} · {j.type}{j.remote ? ' · télétravail' : ''}</span></div>
+        <div class="xs muted">{employer ?? 'Saisie par l’équipe CEA'} · {j.salary ?? 'Salaire non précisé'}{j.skills.length ? ` · ${j.skills.join(', ')}` : ''}</div>
+        <div class="xs" style="margin-top:4px">
+          {j.publishedAt && <span>Publiée le {fmt(j.publishedAt)}</span>}
+          {j.expiresAt && (j.status === 'publiee' || j.status === 'fermee') && <span class={expired ? 'tag bad' : ''} style="margin-left:8px">{expired ? `Expirée le ${fmt(j.expiresAt)}` : `Visible jusqu’au ${fmt(j.expiresAt)}`}</span>}
+          <span style="margin-left:8px">{mine.length} candidature{mine.length > 1 ? 's' : ''}</span>
+        </div>
+        {j.status === 'refusee' && j.moderationNote && <p class="small" style="margin:8px 0 0">Motif communiqué au recruteur : « {j.moderationNote} »</p>}
+        {j.description && <details><summary class="small">Description</summary><p class="small" style="white-space:pre-wrap">{j.description}</p></details>}
+        {j.status === 'en_moderation' && <AiModNote kind="job" id={j.id} note={notes.get(j.id)} enabled={aiEnabled()} />}
+
+        <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">
+          {canV && j.status !== 'publiee' && <button class="btn btn-primary btn-sm" type="button" data-post="/api/admin/emplois" data-body={post({ action: 'moderate', id: j.id, status: 'publiee' })} data-reload>Publier</button>}
+          {canV && j.status === 'publiee' && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/emplois" data-body={post({ action: 'moderate', id: j.id, status: 'fermee' })} data-confirm="Fermer cette offre ? Elle ne sera plus visible." data-reload>Fermer</button>}
+          {canV && j.status === 'publiee' && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/emplois" data-body={post({ action: 'moderate', id: j.id, status: 'publiee', featured: !j.featured })} data-reload>{j.featured ? 'Retirer la mise en avant' : 'Mettre en avant'}</button>}
+          {canM && (j.status === 'publiee' || j.status === 'fermee') && (
+            <form data-api="/api/admin/emplois" data-reload class="row" style="gap:6px">
+              <input type="hidden" name="action" value="extend" /><input type="hidden" name="id" value={j.id} />
+              <select class="in" name="days" data-type="number" aria-label="Durée de prolongation" style="margin:0;width:auto">{[30, 60, 90].map((d) => <option value={d} selected={d === 60}>+ {d} jours</option>)}</select>
+              <button class="btn btn-ghost btn-sm" type="submit">{j.status === 'fermee' ? 'Rouvrir et prolonger' : 'Prolonger'}</button>
+            </form>
+          )}
+        </div>
+
+        {canV && j.status === 'en_moderation' && (
+          <details style="margin-top:8px">
+            <summary class="small" style="cursor:pointer;font-weight:600">Refuser avec un motif</summary>
+            <form data-api="/api/admin/emplois" data-reload style="margin-top:6px">
+              <input type="hidden" name="action" value="moderate" /><input type="hidden" name="id" value={j.id} /><input type="hidden" name="status" value="refusee" />
+              <textarea class="in" name="reason" rows="2" required minlength="5" maxlength="1000" placeholder="Ex. : critère d'âge à retirer, salaire à préciser, entreprise non vérifiable…" aria-label="Motif du refus"></textarea>
+              <button class="btn btn-ghost btn-sm" type="submit">Refuser et prévenir le recruteur</button>
+            </form>
+          </details>
+        )}
+
+        {canM && (
+          <details style="margin-top:8px">
+            <summary class="small" style="cursor:pointer;font-weight:600">Corriger l'offre</summary>
+            <div style="margin-top:8px"><JobForm action="update" j={j} /></div>
+          </details>
+        )}
+
+        {!j.employerId && mine.length > 0 && (
+          <details style="margin-top:8px" open>
+            <summary class="small" style="cursor:pointer;font-weight:600">Candidats ({mine.length}) — à transmettre à l'entreprise</summary>
+            <table class="t" style="margin-top:6px"><thead><tr><th>Nom</th><th>E-mail</th><th>Reçue le</th></tr></thead>
+              <tbody>{mine.map((a) => <tr><td>{a.name}</td><td><a href={`mailto:${a.email}`}>{a.email}</a></td><td class="xs">{fmt(a.at)}</td></tr>)}</tbody></table>
+          </details>
+        )}
       </div>
-    </div>
-  ))}
+    );
+  })}
   {hires.length > 0 && (
     <>
       <h2 style="font-size:1.2rem;margin-top:26px">Embauches déclarées (observatoire d'impact)</h2>
       <div class="panel scroll-x"><table class="t"><thead><tr><th>Personne</th><th>Contrat</th><th>Embauche</th><th>6 mois</th><th>12 mois</th></tr></thead><tbody>
         {hires.map((h) => { const t = new Date(h.hiredOn).getTime(); return (
           <tr><td>{h.personName}</td><td>{h.contract}</td><td>{h.hiredOn}</td>
-            <td>{h.verified6mAt ? '✓' : t < sixMonths ? <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'hire.verify', id: h.id, months: 6 })} data-reload>Vérifier</button> : '—'}</td>
-            <td>{h.verified12mAt ? '✓' : t < year ? <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'hire.verify', id: h.id, months: 12 })} data-reload>Vérifier</button> : '—'}</td></tr>
+            <td>{h.verified6mAt ? '✓' : t < sixMonths ? <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={post({ action: 'hire.verify', id: h.id, months: 6 })} data-reload>Vérifier</button> : '—'}</td>
+            <td>{h.verified12mAt ? '✓' : t < year ? <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin" data-body={post({ action: 'hire.verify', id: h.id, months: 12 })} data-reload>Vérifier</button> : '—'}</td></tr>
         ); })}
       </tbody></table></div>
     </>
