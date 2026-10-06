@@ -2,8 +2,13 @@
 import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import Money from '../../components/Money.astro';
+import { catalogueItem } from '../../lib/calls';
 
 export const prerender = false;
+// Dates et état réels : appel du back-office s'il existe, sinon catalogue
+const prog = await catalogueItem('investor-ready');
+const open = prog?.state === 'ouvert';
+const day = (d: Date | null | undefined) => (d ? d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Lome' }) : 'date à confirmer');
 
 const weeks = [['Semaines 1-2', 'Pitch et récit'], ['Semaines 3-4', 'Modèle financier et valorisation'], ['Semaines 5-6', 'Gouvernance et juridique'], ['Semaines 7-8', 'Data room et due diligence'], ['Semaine 9', 'Négociation et term sheet'], ['Semaine 10', 'Comité et Demo Day']];
 ---
@@ -13,14 +18,16 @@ const weeks = [['Semaines 1-2', 'Pitch et récit'], ['Semaines 3-4', 'Modèle fi
     <div class="wrap split">
       <div>
         <div class="grid g2">{weeks.map(([w, t]) => <div class="panel"><span class="small muted">{w}</span><h4 style="margin:4px 0 0">{t}</h4></div>)}</div>
-        <p style="margin-top:20px">Prochaine cohorte : <b>1er décembre 2026</b> · 25 entreprises · en ligne, avec 2 jours en présentiel à Lomé.</p>
+        <p style="margin-top:20px">{open ? 'Candidatures ouvertes jusqu’au' : prog?.state === 'a_venir' ? 'Ouverture des candidatures :' : 'Prochaine cohorte :'} <b>{open ? day(prog?.closesAt) : prog?.state === 'a_venir' ? day(prog?.opensAt) : 'date à confirmer'}</b> · 25 entreprises · en ligne, avec 2 jours en présentiel à Lomé.</p>
       </div>
       <aside>
         <div class="panel">
           <h3>Tarif</h3>
           <b style="font-family:var(--display);font-size:1.6rem;color:#E7BD62"><Money xof={250000} /></b>
           <p class="small muted">Bourses disponibles pour les entreprises dirigées par des femmes et les moins de 30 ans.</p>
-          <button class="btn btn-primary" style="width:100%" type="button" data-post="/api/candidatures" data-body={JSON.stringify({ programme: 'investor-ready', data: { source: 'Page Investor Ready', cohorte: '2026-12-01' } })}>Candidater</button>
+          {open
+            ? <button class="btn btn-primary" style="width:100%" type="button" data-post="/api/candidatures" data-body={JSON.stringify({ programme: 'investor-ready', data: { source: 'Page Investor Ready', cohorte: prog?.closesAt?.toISOString().slice(0, 10) ?? '' } })}>Candidater</button>
+            : <button class="btn btn-ghost" style="width:100%" type="button" data-post="/api/demande" data-body={JSON.stringify({ type: 'alerte_programme', message: 'Prévenir à l’ouverture : Investor Ready' })}>Être prévenu de la prochaine cohorte</button>}
           <p class="xs muted" style="margin:8px 0 0">Votre candidature apparaît dans <a href="/espace/candidatures">Mes candidatures</a> ; le règlement n'est demandé qu'après admission.</p>
           <a class="small" href="/kapital/diagnostic" style="display:block;margin-top:10px">Faire d'abord le diagnostic gratuit</a>
         </div>

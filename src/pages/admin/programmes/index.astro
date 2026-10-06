@@ -7,7 +7,7 @@ import { programmeApplication } from '../../../db/schema/app';
 import { programmeCall, callJury, evaluation, cohort, cohortMember } from '../../../db/schema/programmes';
 import { can } from '../../../lib/rbac';
 import { callState, CALL_STATE_LABEL, DEFAULT_GRID, DEFAULT_FIELDS } from '../../../lib/programmes';
-import { LEGACY } from '../../../lib/calls';
+import { LEGACY, staticProgrammes } from '../../../lib/calls';
 
 export const prerender = false;
 const me = Astro.locals.user!;
@@ -24,6 +24,8 @@ const cohorts = await db.select({
   quit: sql<number>`(select count(*)::int from ${cohortMember} where ${cohortMember.cohortId} = ${cohort.id} and ${cohortMember.status} = 'abandon')`,
 }).from(cohort).orderBy(desc(cohort.createdAt));
 const legacyFree = Object.entries(LEGACY).filter(([slug]) => !calls.some(({ c }) => c.slug === slug));
+// Dates du catalogue reprises dans l'appel créé (clôture d'un programme ouvert, ouverture d'un programme annoncé)
+const catDates = new Map(staticProgrammes().map((p) => [p.slug, { opensAt: p.opensAt?.toISOString() ?? '', closesAt: p.closesAt?.toISOString() ?? '', description: `${p.description} (${p.duration}).` }]));
 const legacyApps = await db.select({ p: programmeApplication.programme, n: sql<number>`count(*)::int` }).from(programmeApplication).groupBy(programmeApplication.programme);
 const STATE_TONE: Record<string, string> = { brouillon: '', a_venir: 'gold', ouvert: 'ok', clos: 'info', archive: '' };
 ---
@@ -51,8 +53,8 @@ const STATE_TONE: Record<string, string> = { brouillon: '', a_venir: 'gold', ouv
         <button class="btn btn-primary btn-sm" type="submit">Créer l'appel</button>
       </form>
       {legacyFree.length > 0 && (
-        <p class="xs muted" style="margin:12px 0 0">Reprendre un programme historique (ses candidatures existantes lui restent rattachées) :
-          {legacyFree.map(([slug, l]) => <button class="btn btn-ghost btn-sm" type="button" style="margin:4px 4px 0 0" data-legacy={slug} data-title={l.label} data-role={l.role ?? ''}>{l.label} ({legacyApps.find((x) => x.p === slug)?.n ?? 0})</button>)}
+        <p class="xs muted" style="margin:12px 0 0">Reprendre un programme historique : il garde son formulaire actuel et ses candidatures, et gagne le jury, la grille d'évaluation et le comité. Ses dates du catalogue sont reprises ; tant que l'appel est en brouillon, le site continue d'afficher le programme comme avant. Une fois l'appel publié, c'est lui qui s'affiche.
+          {legacyFree.map(([slug, l]) => <button class="btn btn-ghost btn-sm" type="button" style="margin:4px 4px 0 0" data-legacy={slug} data-title={l.label} data-role={l.role ?? ''} data-dates={JSON.stringify(catDates.get(slug) ?? {})}>{l.label} ({legacyApps.find((x) => x.p === slug)?.n ?? 0})</button>)}
         </p>
       )}
     </details>
@@ -102,6 +104,6 @@ const STATE_TONE: Record<string, string> = { brouillon: '', a_venir: 'gold', ouv
   });
   document.querySelectorAll<HTMLButtonElement>('[data-legacy]').forEach((b) => b.addEventListener('click', () => {
     // Reprise : les programmes historiques gardent leur formulaire codé (liste de champs vide)
-    create({ title: b.dataset.title, programme: b.dataset.title, slug: b.dataset.legacy, role: b.dataset.role, fields: [] });
+    create({ title: b.dataset.title, programme: b.dataset.title, slug: b.dataset.legacy, role: b.dataset.role, fields: [], ...JSON.parse(b.dataset.dates || '{}') });
   }));
 </script>

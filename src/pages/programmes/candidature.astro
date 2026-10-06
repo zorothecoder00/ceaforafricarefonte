@@ -3,8 +3,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import Wizard from '../../components/Wizard.astro';
 import { COUNTRIES, SUBS } from '../../data/site';
+import { resolveProgramme } from '../../lib/calls';
 
 export const prerender = false;
+const prog = await resolveProgramme('accelerateur-c4');
+const open = prog?.state === 'ouvert';
 
 const sectors = ['Agroalimentaire', 'Fintech', 'Énergie', 'Santé', 'Éducation', 'BTP', 'Commerce', 'Numérique'];
 const recap: [string, string][] = [['Nom', 'nom'], ['Téléphone', 'tel'], ['Entreprise', 'entreprise'], ['Secteur', 'secteur'], ['Salariés', 'salaries']];
@@ -13,7 +16,8 @@ const recap: [string, string][] = [['Nom', 'nom'], ['Téléphone', 'tel'], ['Ent
   <PageHead title="Candidater à l'Accélérateur — Cohorte 4" lead="Environ 10 minutes. Vous pouvez interrompre et reprendre plus tard." crumbs={[['/programmes', 'Programmes'], ['', 'Candidature']]} subnav={SUBS.programmes} />
   <section class="block">
     <div class="wrap" style="max-width:740px">
-      <Wizard id="accel" prefix="CAND" api="/api/candidatures" attach="candidature" programme="accelerateur-c4" submitLabel="Envoyer ma candidature" success="Vous recevrez un message WhatsApp à chaque étape. Prochaine étape : le diagnostic de maturité.">
+      {!open && <div class="panel">{prog?.state === 'a_venir' ? 'Les candidatures ne sont pas encore ouvertes.' : 'Les candidatures de la cohorte 4 sont closes.'} <a href="/programmes">Voir les autres programmes</a></div>}
+      {open && <Wizard id="accel" prefix="CAND" api="/api/candidatures" attach="candidature" programme="accelerateur-c4" submitLabel="Envoyer ma candidature" success="Vous recevrez un message WhatsApp à chaque étape. Prochaine étape : le diagnostic de maturité.">
         <fieldset data-step="Vous" style="border:0;padding:0;margin:0">
           <label class="f" for="a1">Nom complet</label><input class="in" id="a1" name="nom" required />
           <label class="f" for="a2">Téléphone (WhatsApp)</label><input class="in" id="a2" name="tel" required placeholder="+228 90 00 00 00" inputmode="tel" />
@@ -42,7 +46,7 @@ const recap: [string, string][] = [['Nom', 'nom'], ['Téléphone', 'tel'], ['Ent
           <label class="row small" style="margin-top:14px"><input type="checkbox" required /> J'accepte que CEA traite ces données pour étudier ma candidature.</label>
           <label class="row small"><input type="checkbox" required /> J'accepte que mon dossier soit partagé avec les jurys du programme.</label>
         </fieldset>
-      </Wizard>
+      </Wizard>}
     </div>
   </section>
 </BaseLayout>

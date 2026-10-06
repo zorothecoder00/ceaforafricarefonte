@@ -4,8 +4,13 @@ import PageHead from '../../components/PageHead.astro';
 import Icon from '../../components/Icon.astro';
 import KapitalAd from '../../components/KapitalAd.astro';
 import { SUBS } from '../../data/site';
+import { catalogueItem } from '../../lib/calls';
 
 export const prerender = false;
+// Dates et état réels : appel du back-office s'il existe, sinon catalogue
+const prog = await catalogueItem('accelerateur-c4');
+const open = prog?.state === 'ouvert';
+const day = (d: Date | null | undefined) => (d ? d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Lome' }) : 'date à confirmer');
 
 const steps = [['Candidature', 'Formulaire et pièces'], ['Diagnostic de maturité', '8 dimensions, avec un analyste'], ["Plan d'accompagnement", 'Objectifs et jalons sur 6 mois'], ['Séances de mentorat', 'Toutes les 2 semaines'], ['Jalons validés', "Chiffre d'affaires, équipe, produit"], ['Demo Day', 'Devant les investisseurs de Kapital Invest']];
 const gets = ['Un mentor dédié et 12 séances', "Un accès gratuit à tous les cours de l'Académie", 'La préparation Investor Ready avec Kapital Invest', 'Une place au Demo Day du Forum 2026'];
@@ -17,12 +22,16 @@ const gets = ['Un mentor dédié et 12 séances', "Un accès gratuit à tous les
       <div>
         <h2>Le parcours</h2>
         <ol class="timeline">{steps.map(([t, d]) => <li><b>{t}</b><div class="small muted">{d}</div></li>)}</ol>
-        <a class="btn btn-primary" href="/programmes/candidature">Postuler à la cohorte 4</a>
+        {open
+          ? <a class="btn btn-primary" href="/programmes/candidature">Postuler à la cohorte 4</a>
+          : <p class="panel small">{prog?.state === 'a_venir' ? `Les candidatures ouvrent le ${day(prog.opensAt)}.` : 'Les candidatures de la cohorte 4 sont closes.'} <a href="/programmes">Voir les autres programmes</a></p>}
         <h2 style="margin-top:28px">Ce que vous recevez</h2>
         <div class="grid g2">{gets.map((x) => <div class="panel small row"><Icon name="star" /> {x}</div>)}</div>
       </div>
       <aside>
-        <div class="panel"><p class="small muted" style="margin:0 0 6px">Clôture des candidatures</p><div class="cd" data-countdown="2026-11-15T23:59:00"></div></div>
+        {open && prog?.closesAt
+          ? <div class="panel"><p class="small muted" style="margin:0 0 6px">Clôture des candidatures</p><div class="cd" data-countdown={prog.closesAt.toISOString()}></div></div>
+          : <div class="panel"><p class="small muted" style="margin:0">{prog?.state === 'a_venir' ? `Ouverture le ${day(prog.opensAt)}` : 'Candidatures closes'}</p></div>}
         <div style="margin-top:16px"><KapitalAd variant={0} /></div>
       </aside>
     </div>

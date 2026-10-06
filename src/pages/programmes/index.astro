@@ -1,47 +1,37 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
-import { PROGS, SUBS, dateFr } from '../../data/site';
-import { publicCalls, applyPath } from '../../lib/calls';
-import { CALL_STATE_LABEL } from '../../lib/programmes';
+import { SUBS } from '../../data/site';
+import { programmeCatalogue } from '../../lib/calls';
 
 export const prerender = false;
-const calls = (await publicCalls()).filter((c) => c.state !== 'clos');
-
-const progs = PROGS.map(([n, dur, d, open, date]) => ({ n: String(n), dur, d, open: !!open, date: String(date) }));
+// Catalogue unique : appels du back-office et programmes du code sans appel ; les programmes clos ne sont plus proposés
+const progs = (await programmeCatalogue()).filter((p) => p.state !== 'clos');
+const day = (d: Date | null) => (d ? d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Lome' }) : 'date à confirmer');
+const upcoming = (d: Date | null) => (d && d.getTime() < Date.now() ? null : d);
 ---
 <BaseLayout title="Programmes">
   <PageHead title="CEA Accelerator" lead="De l'idée à la levée de fonds : des parcours structurés, avec des mentors et des jalons clairs." crumbs={[['', 'CEA Accelerator']]} subnav={SUBS.programmes} />
   <section class="block">
-    {calls.length > 0 && (
-      <div class="wrap" style="margin-bottom:28px">
-        <h2 style="margin-top:0">Appels à candidatures</h2>
-        <div class="grid g3">{calls.map((c) => (
-          <div class="panel">
-            <div class="row between"><h3 style="margin:0">{c.title}</h3><span class={`tag ${c.state === 'ouvert' ? 'ok' : 'gold'}`}>{CALL_STATE_LABEL[c.state]}</span></div>
-            <p class="muted small" style="margin:8px 0">{c.programme}{c.description ? ` — ${c.description.slice(0, 140)}${c.description.length > 140 ? '…' : ''}` : ''}</p>
-            <p class="small">{c.state === 'ouvert' ? 'Clôture' : 'Ouverture'} : {(c.state === 'ouvert' ? c.closesAt : c.opensAt)?.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) ?? '—'}</p>
-            <a class={`btn btn-sm ${c.state === 'ouvert' ? 'btn-primary' : 'btn-ghost'}`} href={applyPath(c.slug)}>{c.state === 'ouvert' ? 'Postuler' : 'En savoir plus'}</a>
-          </div>
-        ))}</div>
-      </div>
-    )}
     <div class="wrap grid g3" id="sectoriels" style="scroll-margin-top:140px">
       {progs.map((p) => (
         <div class="panel">
-          <div class="row between"><h3 style="margin:0">{p.n}</h3>{p.open ? <span class="tag ok">Ouvert</span> : <span class="tag">Prochaine session</span>}</div>
-          <p class="muted" style="margin:8px 0">{p.d} · {p.dur}</p>
-          <p class="small">{p.open ? 'Clôture' : 'Ouverture'} : {dateFr(p.date)}</p>
-          {p.open
-            ? <a class="btn btn-primary btn-sm" href={p.n.startsWith('Investor') ? '/kapital/investor-ready' : '/programmes/candidature'}>Postuler</a>
-            : <button class="btn btn-ghost btn-sm" type="button" data-post="/api/demande" data-body={JSON.stringify({ type: 'alerte_programme', message: `Prévenir à l'ouverture : ${p.n}` })}>Être prévenu</button>}
+          <div class="row between"><h3 style="margin:0">{p.title}</h3>{p.state === 'ouvert' ? <span class="tag ok">Ouvert</span> : <span class="tag">Prochaine session</span>}</div>
+          <p class="muted" style="margin:8px 0">{p.description ? (p.description.length > 140 ? p.description.slice(0, 140) + '…' : p.description) : p.programme}{p.duration ? ` · ${p.duration}` : ''}</p>
+          <p class="small">{p.state === 'ouvert' ? 'Clôture' : 'Ouverture'} : {day(p.state === 'ouvert' ? p.closesAt : upcoming(p.opensAt))}</p>
+          {p.canApply
+            ? <a class="btn btn-primary btn-sm" href={p.href}>Postuler</a>
+            : p.source === 'appel'
+              ? <a class="btn btn-ghost btn-sm" href={p.href}>En savoir plus</a>
+              : <button class="btn btn-ghost btn-sm" type="button" data-post="/api/demande" data-body={JSON.stringify({ type: 'alerte_programme', message: `Prévenir à l'ouverture : ${p.title}` })}>Être prévenu</button>}
         </div>
       ))}
+      {progs.length === 0 && <div class="empty" style="grid-column:1/-1">Aucun programme ouvert ni annoncé pour le moment.</div>}
     </div>
     <div class="wrap" style="margin-top:40px">
       <h2>Comment se passe la sélection</h2>
       <div class="grid g4">
-        {['Candidature en ligne', 'Diagnostic de maturité', 'Évaluation par 3 jurys et entretien', 'Entrée en cohorte'].map((s, i) => (
+        {['Candidature en ligne', 'Diagnostic de maturité', 'Évaluation par un jury et entretien', 'Entrée en cohorte'].map((s, i) => (
           <div class="panel"><b style="font-family:var(--display);color:var(--gold-ink)">Étape {i + 1}</b><h4 style="margin-top:6px">{s}</h4></div>
         ))}
       </div>

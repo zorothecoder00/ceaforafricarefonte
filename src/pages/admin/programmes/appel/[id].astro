@@ -7,7 +7,8 @@ import { db } from '../../../../lib/db';
 import { user } from '../../../../db/schema/auth';
 import { programmeApplication } from '../../../../db/schema/app';
 import { programmeCall, callJury, evaluation, selectionCommittee } from '../../../../db/schema/programmes';
-import { can } from '../../../../lib/rbac';
+import { can, scope } from '../../../../lib/rbac';
+import { LEGACY_FIELD_LABELS } from '../../../../lib/calls';
 import { Grid, Fields, DEFAULT_GRID, aggregate, callState, CALL_STATE_LABEL } from '../../../../lib/programmes';
 
 export const prerender = false;
@@ -17,6 +18,9 @@ if (!/^[0-9a-f-]{36}$/.test(id)) return new Response('Appel introuvable', { stat
 const [c] = await db.select().from(programmeCall).where(eq(programmeCall.id, id));
 if (!c) return new Response('Appel introuvable', { status: 404 });
 const canM = can(me.roles, 'programmes', 'M'), canV = can(me.roles, 'programmes', 'V');
+// Décider en comité : droit « candidature » (V), le même que la page Candidatures programmes
+const canDecide = scope(me.roles, 'candidature', 'V') === 'all';
+const labelOf = (k: string) => fields.find((f) => f.key === k)?.label ?? LEGACY_FIELD_LABELS[k] ?? k;
 const grid = Grid.safeParse(c.grid).success ? (c.grid as Grid) : DEFAULT_GRID;
 const fields = Fields.safeParse(c.fields).success ? (c.fields as Fields) : [];
 const state = callState(c);
@@ -69,21 +73,21 @@ const state0 = { id: c.id, grid, fields };
       {rows.length > 0 && (
         <form class="panel" id="comF">
           <div class="scroll-x"><table class="t">
-            <thead><tr><th>Candidature</th><th>Évaluations</th><th>Moyenne</th><th>État</th>{canV && <th>Décision</th>}</tr></thead>
+            <thead><tr><th>Candidature</th><th>Évaluations</th><th>Moyenne</th><th>État</th>{canDecide && <th>Décision</th>}</tr></thead>
             <tbody>{rows.map(({ a, name, ev, agg }) => (
               <tr>
                 <td><b>{a.reference}</b> · {name}<details class="xs"><summary>Dossier et notes</summary>
-                  <dl style="display:grid;grid-template-columns:max-content 1fr;gap:2px 10px;margin:6px 0">{Object.entries(a.data as Record<string, unknown>).filter(([k]) => k !== 'documents').map(([k, v]) => <><dt class="muted">{fields.find((f) => f.key === k)?.label ?? k}</dt><dd style="margin:0;white-space:pre-wrap">{String(v ?? '')}</dd></>)}</dl>
+                  <dl style="display:grid;grid-template-columns:max-content 1fr;gap:2px 10px;margin:6px 0">{Object.entries(a.data as Record<string, unknown>).filter(([k]) => k !== 'documents').map(([k, v]) => <><dt class="muted">{labelOf(k)}</dt><dd style="margin:0;white-space:pre-wrap">{String(v ?? '')}</dd></>)}</dl>
                   {ev.map(({ e, who }) => <div style="border-top:1px solid var(--line);padding:4px 0"><b>{who}</b> : {e.conflict ? 'conflit d’intérêts déclaré' : e.submittedAt ? `${e.total}/100` : 'brouillon'}{!e.conflict && e.submittedAt && <span class="muted"> — {grid.map((g) => `${g.label} ${(e.scores as Record<string, number>)[g.key] ?? '–'}/5`).join(' · ')}</span>}{e.comment && <div style="white-space:pre-wrap">« {e.comment} »</div>}</div>)}
                 </details></td>
                 <td class="small">{agg.n} / {agg.wanted}{!agg.complete && <span class="xs muted"> (incomplet)</span>}</td>
                 <td class="small"><b>{agg.mean ?? '—'}</b>{agg.divergent && <span class="tag gold" title={`Écart de ${agg.spread} points entre jurés`} style="margin-left:4px">écart {agg.spread}</span>}</td>
                 <td><span class="tag">{L[a.status] ?? a.status}</span></td>
-                {canV && <td><select class="in" style="width:auto;padding:4px 6px;font-size:.85rem" data-app={a.id} aria-label={`Décision ${a.reference}`}><option value="">—</option>{['entretien', 'admise', 'liste_attente', 'refusee'].map((s) => <option value={s} selected={s === a.status}>{L[s]}</option>)}</select></td>}
+                {canDecide && <td><select class="in" style="width:auto;padding:4px 6px;font-size:.85rem" data-app={a.id} aria-label={`Décision ${a.reference}`}><option value="">—</option>{['entretien', 'admise', 'liste_attente', 'refusee'].map((s) => <option value={s} selected={s === a.status}>{L[s]}</option>)}</select></td>}
               </tr>
             ))}</tbody>
           </table></div>
-          {canV && (
+          {canDecide && (
             <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
               <h3 style="margin-top:0">Comité de sélection</h3>
               <p class="xs muted" style="margin-top:-6px">Choisissez les décisions ci-dessus, puis enregistrez la séance : chaque candidat dont le statut change est notifié, et la moyenne des jurys est retenue comme note.</p>

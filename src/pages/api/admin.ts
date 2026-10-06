@@ -1,9 +1,10 @@
 /* API du back-office CEA OS (CDC §11). POST { action, … } — chaque action vérifie son droit dans la matrice (§18) et est journalisée. */
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { db } from '../../lib/db';
 import { contactMessage, ticketReply, ticketPriorityEnum, report, post, courseReview, programmeApplication, userRole, proposal, space, hireDeclaration, roleEnum, ticketFlowEnum, applicationStatusEnum, proposalStatusEnum, profile } from '../../db/schema/app';
+import { programmeCall } from '../../db/schema/programmes';
 import { dossier, dossierEvent, committeeDecision, kycCheck, investorProfile, featureFlag, dossierStatusEnum, verificationLevelEnum, committeeDecisionEnum, kycStatusEnum } from '../../db/schema/kapital';
 import { json, fail, audit, clientIp } from '../../lib/session';
 import { staffApi, staffApiAll, countriesFor } from '../../lib/admin';
@@ -118,6 +119,9 @@ export const POST: APIRoute = async ({ locals, request }) => {
       const u = guard('candidature', 'V'); if (u instanceof Response) return u;
       const [a] = await db.select().from(programmeApplication).where(eq(programmeApplication.id, b.id));
       if (!a) return fail('Candidature introuvable.', 404);
+      // Appel avec jury (créé dans le back-office, hors brouillon) : la décision se prend en comité, sur la fiche de l'appel
+      const [call] = await db.select({ id: programmeCall.id }).from(programmeCall).where(and(eq(programmeCall.slug, a.programme), ne(programmeCall.status, 'brouillon')));
+      if (call) return fail('Cette candidature relève d’un appel avec jury : décidez-la en comité, sur la fiche de l’appel.', 409);
       await db.update(programmeApplication).set({ status: b.status, ...(b.score !== undefined && { score: b.score }), updatedAt: new Date() }).where(eq(programmeApplication.id, b.id));
       if (b.status !== a.status) {
         const MSG: Record<string, string> = { en_evaluation: 'est en cours d’évaluation', entretien: ': vous êtes invité·e à un entretien', admise: 'est acceptée. Félicitations !', liste_attente: 'est sur liste d’attente', refusee: "n'a pas été retenue cette fois" };

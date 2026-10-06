@@ -3,7 +3,7 @@
    POST { action, … } :
    - call.save { id?, … } · call.status { id, status }
    - jury.add { callId, email } · jury.remove { callId, userId }
-   - committee.save { callId, heldOn, members, minutes, decisions: [{ applicationId, status }] } → décisions notifiées, rôle attribué à l'admission
+   - committee.save { callId, heldOn, members, minutes, decisions: [{ applicationId, status }] } → droit candidature (V) ; décisions notifiées, rôle attribué à l'admission
    - cohort.save { id?, … } · cohort.admitted { cohortId } (admis de l'appel lié) · member.add { cohortId, email } · member.status { cohortId, userId, status, reason? }
    - session.save { id?, cohortId, … } · session.delete { id } · attendance.mark { sessionId, marks: [{ userId, status }] }
    - milestone.save { id?, cohortId, … } · milestone.delete { id } · progress.set { milestoneId, userId, status }
@@ -16,7 +16,7 @@ import { user } from '../../../db/schema/auth';
 import { programmeApplication, userRole } from '../../../db/schema/app';
 import { programmeCall, callJury, evaluation, selectionCommittee, cohort, cohortMember, cohortSession, attendance, milestone, milestoneProgress, alumniFollowup } from '../../../db/schema/programmes';
 import { json, fail, audit, clientIp } from '../../../lib/session';
-import { staffApi } from '../../../lib/admin';
+import { staffApi, staffApiAll } from '../../../lib/admin';
 import { notify } from '../../../lib/notify';
 import { Grid, Fields, aggregate } from '../../../lib/programmes';
 import { LEGACY } from '../../../lib/calls';
@@ -58,8 +58,11 @@ export const POST: APIRoute = async ({ locals, request }) => {
   if (!p.success) return fail('Vérifiez le formulaire : ' + p.error.issues.map((i) => `${i.path.join('.')} ${i.message}`).join(', '));
   const b = p.data;
   const ip = clientIp(request);
-  const needV = b.action === 'committee.save' || (b.action === 'call.status' && b.status !== 'brouillon');
-  const u = staffApi(locals.user, 'programmes', needV ? 'V' : b.action.endsWith('.save') && !('id' in b && b.id) ? 'C' : 'M');
+  // Décider des candidatures (comité) relève du droit « candidature » (V), comme la page Candidatures programmes (CDC §18) ;
+  // préparer et animer les appels et cohortes relève du droit « programmes »
+  const u = b.action === 'committee.save'
+    ? staffApiAll(locals.user, 'candidature', 'V')
+    : staffApi(locals.user, 'programmes', b.action === 'call.status' && b.status !== 'brouillon' ? 'V' : b.action.endsWith('.save') && !('id' in b && b.id) ? 'C' : 'M');
   if (u instanceof Response) return u;
   const ok = (message: string, extra: Record<string, unknown> = {}) => json({ ok: true, message, ...extra });
   const memberOf = async (cohortId: string, userId: string) => (await db.select({ u: cohortMember.userId }).from(cohortMember).where(and(eq(cohortMember.cohortId, cohortId), eq(cohortMember.userId, userId)))).length > 0;

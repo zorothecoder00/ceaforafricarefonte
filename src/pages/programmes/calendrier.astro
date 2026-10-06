@@ -1,13 +1,16 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
-import { PROGS, SUBS, dateFr } from '../../data/site';
-import { publicCalls, applyPath } from '../../lib/calls';
+import { SUBS } from '../../data/site';
+import { programmeCatalogue } from '../../lib/calls';
 
 export const prerender = false;
-const calls = (await publicCalls()).filter((c) => c.state !== 'clos' && (c.state === 'ouvert' ? c.closesAt : c.opensAt));
-
-const list = PROGS.map(([n, dur, , open, date], i) => ({ i, n: String(n), dur: String(dur), open: !!open, date: String(date) })).sort((a, b) => a.date.localeCompare(b.date));
+// Une ligne par programme ouvert (date de clôture) ou annoncé (date d'ouverture), du plus proche au plus lointain
+const now = Date.now();
+const list = (await programmeCatalogue()).filter((p) => p.state !== 'clos')
+  .map((p) => ({ ...p, date: p.state === 'ouvert' ? p.closesAt : p.opensAt && p.opensAt.getTime() >= now ? p.opensAt : null }))
+  .sort((a, b) => (a.date?.getTime() ?? Infinity) - (b.date?.getTime() ?? Infinity));
+const day = (d: Date | null) => (d ? d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Lome' }) : 'À confirmer');
 ---
 <BaseLayout title="Calendrier des appels">
   <PageHead title="Calendrier des appels" lead="Toutes les ouvertures et clôtures de candidature." crumbs={[['/programmes', 'Programmes'], ['', 'Calendrier']]} subnav={SUBS.programmes} />
@@ -18,14 +21,14 @@ const list = PROGS.map(([n, dur, , open, date], i) => ({ i, n: String(n), dur: S
         <table class="t">
           <thead><tr><th>Programme</th><th>Durée</th><th>Date</th><th>Statut</th><th></th></tr></thead>
           <tbody>
-            {calls.map((c) => { const d = (c.state === 'ouvert' ? c.closesAt : c.opensAt)!; return (
-              <tr><td><a href={applyPath(c.slug)}><b>{c.title}</b></a></td><td>{c.programme}</td><td>{dateFr(d.toISOString().slice(0, 10))}</td><td><span class={`tag ${c.state === 'ouvert' ? 'ok' : ''}`}>{c.state === 'ouvert' ? "Ouvert jusqu'au" : 'Ouverture le'}</span></td><td><a class="btn btn-ghost btn-sm" href={`/programmes/appels.ics?programme=${c.slug}`} download>Ajouter à mon agenda</a></td></tr>
-            ); })}
             {list.map((p) => (
-              <tr><td><b>{p.n}</b></td><td>{p.dur}</td><td>{dateFr(p.date)}</td><td><span class={`tag ${p.open ? 'ok' : ''}`}>{p.open ? "Ouvert jusqu'au" : 'Ouverture le'}</span></td><td><a class="btn btn-ghost btn-sm" href={`/programmes/appels.ics?programme=${p.i}`} download>Ajouter à mon agenda</a></td></tr>
+              <tr><td>{p.canApply || p.source === 'appel' ? <a href={p.href}><b>{p.title}</b></a> : <b>{p.title}</b>}</td><td>{p.duration ?? p.programme}</td><td>{day(p.date)}</td>
+                <td><span class={`tag ${p.state === 'ouvert' ? 'ok' : ''}`}>{p.state === 'ouvert' ? "Ouvert jusqu'au" : 'Ouverture le'}</span></td>
+                <td>{p.date && <a class="btn btn-ghost btn-sm" href={`/programmes/appels.ics?programme=${p.slug}`} download>Ajouter à mon agenda</a>}</td></tr>
             ))}
           </tbody>
         </table>
+        {list.length === 0 && <p class="small muted">Aucun appel ouvert ni annoncé pour le moment.</p>}
       </div>
     </div>
   </section>

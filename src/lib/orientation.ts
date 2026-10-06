@@ -1,7 +1,8 @@
 /* Orientation en 5 questions (CDC §11) : recommande un parcours (programme, cours, mentor, financement).
    Les recommandations sont toujours choisies dans le catalogue réel du site. Un premier choix est fait par règles
    (disponible sans IA) ; CEA Copilot peut ensuite le personnaliser et en expliquer les raisons. */
-import { COURSES, PATHS, PROGS, MENTORS, country } from '../data/site';
+import { COURSES, PATHS, MENTORS, country } from '../data/site';
+import { staticProgrammes } from './catalogue';
 
 type Opt = { v: string; fr: string; en: string };
 export const QUESTIONS: { k: 'stade' | 'besoin' | 'secteur' | 'fonds' | 'cible'; fr: string; en: string; opts: Opt[] }[] = [
@@ -64,10 +65,11 @@ const COURSE_TAGS: Record<string, string[]> = {
 /** Catalogue des recommandations possibles (identifiants stables). */
 export function catalog(): Item[] {
   return [
-    ...(PROGS as unknown as [string, string, string, boolean, string][]).map(([t, dur, d, open, date], i): Item => ({
-      id: `prog-${i}`, kind: 'programme', title: t, url: t.startsWith('Accélérateur') ? '/programmes/candidature' : t === 'Investor Ready' ? '/kapital/investor-ready' : '/programmes',
-      desc: `${d} (${dur}). ${open ? `Candidatures ouvertes jusqu'au ${date}.` : `Prochaine session : ${date}.`}`, tags: PROG_TAGS[t] ?? [],
-    })),
+    // Programmes du catalogue, état calculé d'après leurs dates ; un programme clos n'est plus recommandé
+    ...staticProgrammes().map((p, i): Item | null => p.state === 'clos' ? null : ({
+      id: `prog-${i}`, kind: 'programme', title: p.title, url: p.href,
+      desc: `${p.description} (${p.duration}). ${p.state === 'ouvert' ? `Candidatures ouvertes jusqu'au ${p.closesAt!.toISOString().slice(0, 10)}.` : `Prochaine session : ${p.opensAt!.toISOString().slice(0, 10)}.`}`, tags: PROG_TAGS[p.title] ?? [],
+    })).filter((x): x is Item => x !== null),
     ...COURSES.filter((c) => c.th !== 'Actionnariat').map((c): Item => ({ id: `cours-${c.id}`, kind: 'cours', title: c.t, url: `/academie/${c.id}`, desc: `Cours ${c.lv.toLowerCase()}, ${c.dur}${c.price ? '' : ', gratuit'} — thème ${c.th}.`, tags: [...(COURSE_TAGS[c.th] ?? []), 'former', ...(c.price ? [] : ['gratuit'])] })),
     ...PATHS.map((p): Item => ({ id: `parcours-${p.id}`, kind: 'cours', title: p.t, url: '/academie', desc: p.d, tags: p.id === 'pa2' ? ['financer', 'croissance', 'moyen', 'grand', 'former'] : p.id === 'pa1' ? ['apprendre', 'idee', 'lance', 'structurer', 'former'] : [] })),
     ...MENTORS.map((m, i): Item => ({ id: `mentor-${i}`, kind: 'mentor', title: m.n, url: '/communaute/mentorat', desc: `Mentor (${country(m.c)}) : ${m.x}. Langues : ${m.lang}.`, tags: ['reseau', ...(/lev|financ/i.test(m.x) ? ['financer', 'moyen', 'grand'] : []), ...(/pitch|commun/i.test(m.x) ? ['clients', 'financer'] : []), ...(/croissance|saas/i.test(m.x) ? ['croissance', 'numerique'] : []), ...(/bourse|gouvernance/i.test(m.x) ? ['grand', 'croissance'] : [])] })),

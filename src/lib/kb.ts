@@ -2,7 +2,8 @@
    Seuls les contenus publiés sur le site y figurent : aide, programmes, cours, parcours, événements, articles, glossaire, pages.
    Chaque fiche porte un lien vers sa page : CEA Copilot cite ces fiches comme sources. */
 import { HELP, HELP_CATS } from '../data/aide';
-import { COURSES, PATHS, EVENTS, ARTICLES, PROGS, GLOSS, JOBS, OPPS, allMenuLinks, country, money } from '../data/site';
+import { COURSES, PATHS, EVENTS, ARTICLES, GLOSS, JOBS, OPPS, allMenuLinks, country, money } from '../data/site';
+import { staticProgrammes } from './catalogue';
 import { score } from './fuzzy';
 
 export type KbDoc = { id: string; kind: string; title: string; url: string; text: string };
@@ -13,7 +14,7 @@ export function knowledgeBase(): KbDoc[] {
   if (cache) return cache;
   const docs: KbDoc[] = [
     ...HELP.map((h) => ({ id: `aide:${h.slug}`, kind: `Aide — ${HELP_CATS[h.cat] ?? h.cat}`, title: h.q, url: `/aide/${h.slug}`, text: h.a.join('\n') + (h.links?.length ? `\nPages utiles : ${h.links.map(([u, l]) => `${l} (${u})`).join(', ')}` : '') })),
-    ...(PROGS as unknown as [string, string, string, boolean, string][]).map((p, i) => ({ id: `prog:${i}`, kind: 'Programme', title: p[0], url: '/programmes', text: `Programme « ${p[0]} » : ${p[2]}. Durée : ${p[1]}. ${p[3] ? 'Candidatures ouvertes' : 'Prochaine session'} — date limite ou de démarrage : ${p[4]}.` })),
+    ...staticProgrammes().map((p, i) => ({ id: `prog:${i}`, kind: 'Programme', title: p.title, url: p.href, text: `Programme « ${p.title} » : ${p.description}. Durée : ${p.duration}. ${p.state === 'ouvert' ? `Candidatures ouvertes jusqu'au ${p.closesAt!.toISOString().slice(0, 10)}` : p.state === 'clos' ? 'Candidatures closes' : `Prochaine session : ${p.opensAt!.toISOString().slice(0, 10)}`}.` })),
     ...COURSES.map((c) => ({ id: `cours:${c.id}`, kind: 'Cours de l\'Académie', title: c.t, url: `/academie/${c.id}`, text: `Cours « ${c.t} » (thème ${c.th}, niveau ${c.lv}, durée ${c.dur}, ${money(c.price)}), par ${c.by}. Leçons : ${c.ls.join(' ; ')}.` })),
     ...PATHS.map((p) => ({ id: `parcours:${p.id}`, kind: 'Parcours de l\'Académie', title: p.t, url: '/academie', text: `${p.t} : ${p.d} Cours inclus : ${p.c.map((id) => COURSES.find((c) => c.id === id)?.t ?? id).join(', ')}.` })),
     ...EVENTS.map((e) => ({ id: `evt:${e.id}`, kind: 'Événement', title: e.t, url: `/evenements/${e.id}`, text: `${e.t} — ${e.date}, ${e.city} (${country(e.c)}), format ${e.fmt}. ${e.d} Billets : ${e.tk.map((t) => `${t.n} ${money(t.p)}`).join(', ')}.` })),
