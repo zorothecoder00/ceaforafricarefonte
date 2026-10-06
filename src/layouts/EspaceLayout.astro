@@ -50,7 +50,7 @@ const tabs: [string, string, string][] = [
 ];
 ---
 <BaseLayout title={title}>
-  <div class="wrap dash">
+  <div class="dash">
     <nav class="side" id="sideNav" aria-label="Mon espace">
       <button class="side-toggle" type="button" data-side-toggle aria-controls="sideNav" aria-pressed="false"><span class="st-open">‹ Réduire le menu</span><span class="st-closed" aria-hidden="true">›</span></button>
       <div class="side-body" id="sideBody">
@@ -64,7 +64,7 @@ const tabs: [string, string, string][] = [
         <button class="side-logout" type="button" data-logout title="Se déconnecter"><Icon name="logout" size={18} /><span class="sl">Se déconnecter</span></button>
       </div>
     </nav>
-    <div>
+    <div class="dash-main">
       {tfaMissing && !path.startsWith('/espace/securite') && (
         <div class="panel staff-cta" role="status">
           <div>

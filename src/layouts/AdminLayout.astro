@@ -14,7 +14,7 @@ const path = Astro.url.pathname.replace(/\/$/, '');
 const allowed = can(me.roles, obj, 'L');
 ---
 <BaseLayout title={`${title} — CEA OS`}>
-  <div class="wrap dash">
+  <div class="dash">
     <nav class="side" id="sideNav" aria-label="Back-office">
       <button class="side-toggle" type="button" data-side-toggle aria-controls="sideNav" aria-pressed="false"><span class="st-open">‹ Réduire le menu</span><span class="st-closed" aria-hidden="true">›</span></button>
       <div class="side-body" id="sideBody">
@@ -24,7 +24,7 @@ const allowed = can(me.roles, obj, 'L');
         <a href="/espace" title="Mon espace" style="margin-top:12px"><Icon name="back" size={18} /><span class="sl">Mon espace</span></a>
       </div>
     </nav>
-    <div style="min-width:0">
+    <div class="dash-main">
       <h1 style="font-size:2rem">{title}</h1>
       {lead && <p class="muted">{lead}</p>}
       {allowed && <RightsHint objs={hints} />}
