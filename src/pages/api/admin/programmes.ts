@@ -10,6 +10,7 @@
    - followup.save { cohortId, userId, monthsAfter, … } */
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
+import { FOLLOWUP_MONTHS } from '../../../lib/followups';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import { db } from '../../../lib/db';
 import { user } from '../../../db/schema/auth';
@@ -49,7 +50,7 @@ const Body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('milestone.save'), id: id.optional(), cohortId: id, title: z.string().trim().min(2).max(160), description: z.string().trim().max(1000).nullish(), dueOn: optDay, position: z.coerce.number().int().min(0).max(100).default(0) }),
   z.object({ action: z.literal('milestone.delete'), id }),
   z.object({ action: z.literal('progress.set'), milestoneId: id, userId: z.string().max(64), status: z.enum(['a_faire', 'declare', 'atteint', 'non_atteint']) }),
-  z.object({ action: z.literal('followup.save'), cohortId: id, userId: z.string().max(64), monthsAfter: z.coerce.number().int().refine((m) => [6, 12, 24, 36].includes(m)), revenueXof: optInt(1e13), employees: optInt(100000), fundsRaisedXof: optInt(1e13), stillActive: z.boolean().nullish(), notes: z.string().trim().max(2000).nullish() }),
+  z.object({ action: z.literal('followup.save'), cohortId: id, userId: z.string().max(64), monthsAfter: z.coerce.number().int().refine((m) => (FOLLOWUP_MONTHS as readonly number[]).includes(m)), revenueXof: optInt(1e13), employees: optInt(100000), fundsRaisedXof: optInt(1e13), stillActive: z.boolean().nullish(), notes: z.string().trim().max(2000).nullish() }),
 ]);
 
 

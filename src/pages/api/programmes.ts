@@ -5,6 +5,7 @@
    - followup.declare { cohortId, monthsAfter, … }                        → suivi après programme déclaré par l'ancien participant */
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
+import { FOLLOWUP_MONTHS } from '../../lib/followups';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../../lib/db';
 import { programmeApplication } from '../../db/schema/app';
@@ -18,7 +19,7 @@ const optInt = (max: number) => z.preprocess((v) => (v === '' || v === null ? nu
 const Body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('evaluation.save'), applicationId: z.uuid(), scores: z.record(z.string(), z.coerce.number().int().min(0).max(5)).default({}), comment: z.string().trim().max(3000).nullish(), conflict: z.boolean().default(false), submit: z.boolean().default(false) }),
   z.object({ action: z.literal('milestone.declare'), milestoneId: z.uuid(), evidence: z.string().trim().min(5).max(2000) }),
-  z.object({ action: z.literal('followup.declare'), cohortId: z.uuid(), monthsAfter: z.coerce.number().int().refine((m) => [6, 12, 24, 36].includes(m)), revenueXof: optInt(1e13), employees: optInt(100000), fundsRaisedXof: optInt(1e13), stillActive: z.boolean().nullish(), notes: z.string().trim().max(2000).nullish() }),
+  z.object({ action: z.literal('followup.declare'), cohortId: z.uuid(), monthsAfter: z.coerce.number().int().refine((m) => (FOLLOWUP_MONTHS as readonly number[]).includes(m)), revenueXof: optInt(1e13), employees: optInt(100000), fundsRaisedXof: optInt(1e13), stillActive: z.boolean().nullish(), notes: z.string().trim().max(2000).nullish() }),
 ]);
 const DECIDED = ['admise', 'refusee', 'retiree', 'liste_attente'];
 

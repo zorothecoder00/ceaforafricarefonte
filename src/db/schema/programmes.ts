@@ -136,3 +136,13 @@ export const alumniFollowup = pgTable('alumni_followup', {
   recordedBy: text('recorded_by').references(() => user.id, { onDelete: 'set null' }),
   recordedAt: ts('recorded_at').notNull().defaultNow(),
 }, (t) => [uniqueIndex('alumni_followup_unique').on(t.cohortId, t.userId, t.monthsAfter)]);
+
+/* Questionnaires de suivi envoyés automatiquement à 3, 6 et 12 mois après la fin d'une cohorte (CDC §7.6, §7.9) :
+   un envoi et une relance au plus par point de suivi ; la réponse est enregistrée dans alumni_followup. */
+export const followupRequest = pgTable('followup_request', {
+  cohortId: uuid('cohort_id').notNull().references(() => cohort.id, { onDelete: 'cascade' }),
+  userId: userRef('user_id').notNull(),
+  monthsAfter: integer('months_after').notNull(),
+  sentAt: ts('sent_at').notNull().defaultNow(),
+  remindedAt: ts('reminded_at'),
+}, (t) => [primaryKey({ columns: [t.cohortId, t.userId, t.monthsAfter] })]);

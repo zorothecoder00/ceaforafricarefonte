@@ -9,6 +9,7 @@ import { user } from '../../../../db/schema/auth';
 import { programmeCall, cohort, cohortMember, cohortSession, attendance, milestone, milestoneProgress, alumniFollowup } from '../../../../db/schema/programmes';
 import { can } from '../../../../lib/rbac';
 import { rate, MEMBER_STATUS_LABEL, MILESTONE_LABEL, SESSION_KIND_LABEL } from '../../../../lib/programmes';
+import { FOLLOWUP_MONTHS } from '../../../../lib/followups';
 
 export const prerender = false;
 const me = Astro.locals.user!;
@@ -147,7 +148,7 @@ const fmt = (d: Date) => d.toLocaleString('fr-FR', { dateStyle: 'short', timeSty
         <input type="hidden" name="action" value="followup.save" /><input type="hidden" name="cohortId" value={co.id} />
         <div class="grid g2" style="gap:0 12px">
           <div><label class="f" for="fu">Participant</label><select class="in" id="fu" name="userId">{members.map(({ m, name }) => <option value={m.userId}>{name}</option>)}</select></div>
-          <div><label class="f" for="fm">Après</label><select class="in" id="fm" name="monthsAfter">{[6, 12, 24, 36].map((n) => <option value={n}>{n} mois</option>)}</select></div>
+          <div><label class="f" for="fm">Après</label><select class="in" id="fm" name="monthsAfter">{FOLLOWUP_MONTHS.map((n) => <option value={n}>{n} mois</option>)}</select></div>
           <div><label class="f" for="fr">Chiffre d'affaires annuel (FCFA)</label><input class="in" id="fr" name="revenueXof" type="number" min="0" /></div>
           <div><label class="f" for="fe">Emplois</label><input class="in" id="fe" name="employees" type="number" min="0" /></div>
           <div><label class="f" for="ff">Fonds levés (FCFA)</label><input class="in" id="ff" name="fundsRaisedXof" type="number" min="0" /></div>

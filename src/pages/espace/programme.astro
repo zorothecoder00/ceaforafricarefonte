@@ -1,12 +1,13 @@
 ---
 /* Mon programme (CDC §12) : pour chaque cohorte suivie — séances à venir et passées avec ma présence, jalons (déclaration d'un jalon
-   atteint, validé par l'équipe), et suivi après programme (indicateurs déclarés à 6, 12, 24, 36 mois). */
+   atteint, validé par l'équipe), et suivi après programme (indicateurs déclarés à 3, 6, 12, 24, 36 mois ; questionnaires automatiques à 3, 6 et 12 mois). */
 import EspaceLayout from '../../layouts/EspaceLayout.astro';
 import Money from '../../components/Money.astro';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { db } from '../../lib/db';
 import { cohort, cohortMember, cohortSession, attendance, milestone, milestoneProgress, alumniFollowup } from '../../db/schema/programmes';
 import { rate, MEMBER_STATUS_LABEL, MILESTONE_LABEL, SESSION_KIND_LABEL } from '../../lib/programmes';
+import { FOLLOWUP_MONTHS, pendingFollowups } from '../../lib/followups';
 
 export const prerender = false;
 const me = Astro.locals.user!;
@@ -18,6 +19,9 @@ const stones = ids.length ? await db.select().from(milestone).where(inArray(mile
 const prog = stones.length ? await db.select().from(milestoneProgress).where(and(eq(milestoneProgress.userId, me.id), inArray(milestoneProgress.milestoneId, stones.map((m) => m.id)))) : [];
 const follow = ids.length ? await db.select().from(alumniFollowup).where(and(eq(alumniFollowup.userId, me.id), inArray(alumniFollowup.cohortId, ids))) : [];
 const now = new Date();
+// Questionnaires de suivi envoyés automatiquement (3, 6, 12 mois) et pas encore remplis ; ?suivi=<cohorte>-<mois> présélectionne le point demandé
+const pending = await pendingFollowups(me.id, ids);
+const [askC, askM] = (Astro.url.searchParams.get('suivi') ?? '').split(/-(?=\d+$)/);
 const fmt = (d: Date) => d.toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const MARK: Record<string, string> = { present: 'Présent·e', absent: 'Absent·e', excuse: 'Excusé·e' };
 const TONE: Record<string, string> = { a_faire: '', declare: 'gold', atteint: 'ok', non_atteint: 'bad' };
@@ -63,13 +67,14 @@ const TONE: Record<string, string> = { a_faire: '', declare: 'gold', atteint: 'o
         </div>
         {canFollow && (
           <div class="panel" style="margin-top:14px">
-            <h3>Suivi après le programme</h3>
-            <p class="small muted" style="margin-top:-6px">Quelques chiffres à 6, 12, 24 et 36 mois aident CEA à mesurer l'impact de ses programmes (données confidentielles, publiées seulement en agrégé).</p>
+            <h3 id="suivi">Suivi après le programme</h3>
+            {pending.filter((p) => p.cohortId === co.id).map((p) => <p class="small" style="border-left:4px solid var(--gold);padding:6px 10px;background:var(--gold-soft);border-radius:6px"><b>Questionnaire à {p.monthsAfter} mois attendu</b> — deux minutes pour nous dire où en est votre entreprise.</p>)}
+            <p class="small muted" style="margin-top:-6px">Quelques chiffres à 3, 6 et 12 mois (puis 24 et 36) aident CEA à mesurer l'impact de ses programmes (données confidentielles, publiées seulement en agrégé). Un questionnaire vous est envoyé automatiquement à 3, 6 et 12 mois.</p>
             {follow.filter((f) => f.cohortId === co.id).sort((a, b) => a.monthsAfter - b.monthsAfter).map((f) => <div class="row between xs" style="padding:3px 0"><span>{f.monthsAfter} mois</span><span>{f.employees ?? '—'} emplois · CA {f.revenueXof != null ? <Money xof={f.revenueXof} /> : '—'} · levée {f.fundsRaisedXof != null ? <Money xof={f.fundsRaisedXof} /> : '—'}</span></div>)}
             <form data-api="/api/programmes" data-reload style="margin-top:8px">
               <input type="hidden" name="action" value="followup.declare" /><input type="hidden" name="cohortId" value={co.id} />
               <div class="grid g2" style="gap:0 12px">
-                <div><label class="f" for={`fm-${co.id}`}>Où en êtes-vous ?</label><select class="in" id={`fm-${co.id}`} name="monthsAfter">{[6, 12, 24, 36].map((n) => <option value={n}>{n} mois après le programme</option>)}</select></div>
+                <div><label class="f" for={`fm-${co.id}`}>Où en êtes-vous ?</label><select class="in" id={`fm-${co.id}`} name="monthsAfter">{FOLLOWUP_MONTHS.map((n) => <option value={n} selected={(askC === co.id && Number(askM) === n) || (!askC && pending.find((p) => p.cohortId === co.id)?.monthsAfter === n)}>{n} mois après le programme</option>)}</select></div>
                 <div><label class="f" for={`fe-${co.id}`}>Emplois</label><input class="in" id={`fe-${co.id}`} name="employees" type="number" min="0" /></div>
                 <div><label class="f" for={`fr-${co.id}`}>Chiffre d'affaires annuel (FCFA)</label><input class="in" id={`fr-${co.id}`} name="revenueXof" type="number" min="0" /></div>
                 <div><label class="f" for={`ff-${co.id}`}>Fonds levés depuis (FCFA)</label><input class="in" id={`ff-${co.id}`} name="fundsRaisedXof" type="number" min="0" /></div>
