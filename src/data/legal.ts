@@ -61,6 +61,42 @@ export const LEGAL: Record<string, LegalDoc> = {
       ['Droit applicable', ['Droit togolais et Actes uniformes OHADA. À défaut d’accord amiable, compétence des juridictions de Lomé, sous réserve des règles protectrices du pays de résidence du membre.']],
     ],
   },
+  'code-de-conduite': {
+    title: 'Code de conduite',
+    updated: '2026-10-06',
+    intro: 'CEA FOR AFRICA réunit des entrepreneurs, des investisseurs, des mentors et des partenaires de tout le continent. Ce code fixe les règles de comportement attendues de chaque membre, sur la plateforme comme lors des événements CEA.',
+    sections: [
+      ['Respect', ['Échangez avec courtoisie, quels que soient le pays, la langue, le genre, l’âge, la religion, l’origine ou les opinions de vos interlocuteurs.', 'Le harcèlement, les menaces, les propos discriminatoires, haineux ou à caractère sexuel ne sont jamais tolérés.']],
+      ['Honnêteté', ['Présentez-vous sous votre véritable identité ; un compte est personnel et ne se partage pas.', 'Les informations publiées sur vous, votre entreprise ou votre projet doivent être exactes ; les chiffres non vérifiés sont présentés comme déclaratifs.', 'Aucune promesse de rendement garanti, aucune demande de paiement préalable en échange d’un financement, d’un emploi ou d’une mise en relation.']],
+      ['Confidentialité', ['Ce qui est partagé dans un cercle Mastermind, une data room, une séance de mentorat ou une messagerie privée reste confidentiel.', 'Ne diffusez pas les coordonnées ou documents d’autres membres sans leur accord.']],
+      ['Neutralité', ['CEA FOR AFRICA est non partisane : pas de propagande politique ni de prosélytisme religieux dans les espaces de la communauté.', 'Déclarez vos conflits d’intérêts lorsque vous évaluez un dossier, une candidature ou une proposition.']],
+      ['Usage commercial', ['La prospection de masse et la publicité non sollicitée sont interdites. Les offres d’emploi, de mission et d’affaires se publient dans les rubriques prévues.']],
+      ['Manquements', ['Tout membre peut signaler un comportement contraire à ce code via la page Signalement ou le lien « Signaler » présent sur chaque contenu.', 'Selon la gravité : avertissement, masquage du contenu, suspension temporaire ou exclusion, après examen par l’équipe de modération (voir la charte de modération). La personne concernée est informée et peut contester la décision (voir la procédure de réclamation).']],
+    ],
+  },
+  'charte-de-moderation': {
+    title: 'Charte de modération',
+    updated: '2026-10-06',
+    intro: 'Cette charte explique comment CEA FOR AFRICA modère les publications, commentaires, avis, offres d’emploi et messages de sa communauté, dans le respect de la neutralité politique et de la liberté d’expression.',
+    sections: [
+      ['Ce qui est modéré', ['Les publications du fil d’actualité et des espaces, les commentaires, les avis sur les cours, les offres d’emploi et de mission, les propositions et commentaires de Voix des Entrepreneurs, les profils publics.']],
+      ['Comment', ['Avant publication : un filtre automatique retient les contenus contenant des expressions typiques d’escroquerie (paiement préalable, rendement garanti, contacts externes…) ; ils sont examinés par l’équipe avant d’être publiés. Les offres d’emploi sont toujours relues avant publication.', 'Après publication : tout membre peut signaler un contenu. L’équipe examine chaque signalement dans un délai cible de 24 heures.', 'Une assistance par intelligence artificielle peut proposer un avis à l’équipe ; la décision est toujours prise par une personne.']],
+      ['Décisions possibles', ['Validation, masquage du contenu, demande de correction, avertissement, suspension ou exclusion du compte en cas de manquements graves ou répétés au code de conduite.', 'Les décisions sont motivées, notifiées à l’auteur et inscrites au journal d’audit.']],
+      ['Neutralité', ['La modération ne porte jamais sur une opinion en tant que telle, mais sur le respect du code de conduite, de la loi et des droits des personnes. Les positions officielles de CEA sont validées par ses instances statutaires.']],
+      ['Contester une décision', ['L’auteur peut demander le réexamen d’une décision via la procédure de réclamation. Le réexamen est confié à une autre personne que celle qui a pris la décision initiale.']],
+    ],
+  },
+  reclamations: {
+    title: 'Procédure de réclamation',
+    updated: '2026-10-06',
+    intro: 'Vous n’êtes pas satisfait d’un service, d’une décision ou d’un paiement ? Voici comment déposer une réclamation et comment elle est traitée.',
+    sections: [
+      ['Déposer une réclamation', ['Depuis le formulaire de contact, motif « Réclamation » (/contact?motif=Réclamation), en indiquant le service concerné, les faits et, si possible, la référence (numéro de dossier, de paiement, de billet ou de ticket).', 'Pour CEA Kapital Invest : depuis la page dédiée /kapital/reclamations.', 'Pour un contenu ou un comportement : depuis la page Signalement.']],
+      ['Délais', ['Accusé de réception avec un numéro de suivi sous 48 heures ouvrées.', 'Réponse motivée sous 15 jours ouvrés ; si l’examen demande plus de temps, vous êtes informé du nouveau délai.', 'Suivez l’avancement à tout moment depuis la page /aide/suivi, avec votre numéro.']],
+      ['Examen', ['La réclamation est examinée par une personne qui n’a pas pris part à la décision contestée. Pour une décision de modération, l’auteur peut demander un réexamen complet.', 'Paiements : un remboursement accordé est effectué par le même moyen de paiement, via le prestataire de paiement.']],
+      ['Si la réponse ne vous satisfait pas', ['Vous pouvez demander que votre réclamation soit portée à la Direction générale, en répondant au message de réponse.', `Recours externes : ${TODO} (médiateur ou autorité compétente selon le pays et le service concerné ; pour les données personnelles, l’autorité de protection des données de votre pays — au Togo, l’IPDCP).`]],
+    ],
+  },
   accessibilite: {
     title: "Déclaration d'accessibilité",
     updated: '2026-10-02',

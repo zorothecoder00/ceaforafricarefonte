@@ -20,6 +20,8 @@ export const TEAMS: Record<string, string> = {
   'Presse et médias': 'Communication',
   'Assistance technique': 'Support',
   Adhésion: 'Vie associative',
+  Réclamation: 'Qualité et réclamations',
+  Accessibilité: 'Support',
 };
 
 const Body = z.object({

@@ -18,6 +18,8 @@ const motifs: Record<string, string> = {
   'Presse et médias': 'Communication',
   'Assistance technique': 'Support',
   Adhésion: 'Vie associative',
+  Réclamation: 'Qualité et réclamations',
+  Accessibilité: 'Support',
 };
 ---
 <BaseLayout title="Contact">
@@ -27,7 +29,7 @@ const motifs: Record<string, string> = {
       <form class="panel" id="cform" data-api="/api/contact" data-reset style="position:relative">
         <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px" />
         <label class="f" for="cm">Motif</label>
-        <select class="in" id="cm" name="motif">{Object.entries(motifs).map(([m, team]) => <option data-team={team}>{m}</option>)}</select>
+        <select class="in" id="cm" name="motif" data-from-query="motif">{Object.entries(motifs).map(([m, team]) => <option data-team={team}>{m}</option>)}</select>
         <p class="small" id="route" style="margin-top:-6px"></p>
         <label class="f" for="cp">Pays</label>
         <select class="in" id="cp" name="country" data-from-query="pays">{Object.entries(COUNTRIES).map(([k, v]) => <option value={k}>{v}</option>)}</select>
@@ -123,4 +125,8 @@ const motifs: Record<string, string> = {
   const qp = new URLSearchParams(location.search).get('pays')?.toUpperCase();
   const paysSel = document.querySelector<HTMLSelectElement>('select[data-from-query="pays"]');
   if (qp && paysSel && [...paysSel.options].some((o) => o.value === qp)) paysSel.value = qp;
+  // Motif présélectionné (/contact?motif=Réclamation), puis mise à jour de l'équipe destinataire affichée
+  const qm = new URLSearchParams(location.search).get('motif');
+  const motifSel = document.querySelector<HTMLSelectElement>('select[data-from-query="motif"]');
+  if (qm && motifSel && [...motifSel.options].some((o) => o.value === qm)) { motifSel.value = qm; motifSel.dispatchEvent(new Event('change')); }
 </script>

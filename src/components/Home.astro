@@ -10,6 +10,7 @@ import VoteBox from './VoteBox.astro';
 import { HUBS, country } from '../data/site';
 import { tr } from '../i18n/content-en';
 import { lp, type Lang } from '../i18n/ui';
+import { programmeCatalogue } from '../lib/calls';
 
 interface Props { lang: Lang }
 const { lang } = Astro.props;
@@ -23,6 +24,10 @@ const freeCourses = c.courses.filter((x) => !x.price).slice(0, 3);
 const w = (fr: string, e: string) => (en ? e : fr);
 const score: [string, number][] = [[w('Équipe', 'Team'), 5], ['Traction', 4], [w('Finances', 'Finance'), 4], [w('Gouvernance', 'Governance'), 3]];
 const partners = en ? ['Partner bank', 'Foundation', 'Donor', 'University', 'Incubator', 'Mobile operator'] : ['Banque partenaire', 'Fondation', 'Bailleur', 'Université', 'Incubateur', 'Opérateur mobile'];
+// Appel à candidatures mis en avant : l'appel ouvert qui clôt le plus tôt, sinon la prochaine ouverture (catalogue + appels du back-office)
+const catalogue = await programmeCatalogue().catch(() => []);
+const call = catalogue.find((p) => p.state === 'ouvert') ?? catalogue.find((p) => p.state === 'a_venir');
+const callDate = (d: Date) => d.toLocaleDateString(en ? 'en-GB' : 'fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 const topics = en ? ['Funding', 'Training', 'Events', 'Kapital Invest'] : ['Financement', 'Formation', 'Événements', 'Kapital Invest'];
 ---
 <!-- Héros : texte à gauche, carte de l'Afrique à droite, puis les chiffres -->
@@ -92,20 +97,23 @@ const topics = en ? ['Funding', 'Training', 'Events', 'Kapital Invest'] : ['Fina
   </div>
 </section>
 
-<!-- Appel à candidatures -->
+<!-- Appel à candidatures : le vrai appel ouvert (ou la prochaine ouverture), masqué s'il n'y en a aucun -->
+{call && (
 <section class="block" style="padding-top:0">
   <div class="wrap">
     <div class="call">
       <div>
-        <span class="tag gold">{w('Appel à candidatures ouvert', 'Call for applications open')}</span>
-        <h2 style="margin-top:10px">{w('Accélérateur CEA — Cohorte 4', 'CEA Accelerator — Cohort 4')}</h2>
-        <p>{w("Six mois d'accompagnement, un mentor dédié, l'accès au Demo Day de CEA Kapital Invest devant 40 investisseurs. Pour les entreprises de 1 à 5 ans, dans les 16 pays CEA.", 'Six months of support, a dedicated mentor, access to the CEA Kapital Invest Demo Day in front of 40 investors. For companies aged 1 to 5 years, in the 16 CEA countries.')}</p>
-        <a class="btn btn-primary" href={L('/programmes/candidature')}>{w('Postuler', 'Apply')}</a>
+        <span class="tag gold">{call.state === 'ouvert' ? w('Appel à candidatures ouvert', 'Call for applications open') : w('Prochain appel à candidatures', 'Next call for applications')}</span>
+        <h2 style="margin-top:10px">{call.title}</h2>
+        <p>{call.description}</p>
+        {call.canApply ? <a class="btn btn-primary" href={L(call.href)}>{w('Postuler', 'Apply')}</a> : <a class="btn btn-primary" href={L('/programmes')}>{w('Voir les programmes', 'See programmes')}</a>}
       </div>
-      <div><p class="small muted" style="margin-bottom:6px">{w('Clôture le 15 novembre 2026', 'Closes on 15 November 2026')}</p><div class="cd" data-countdown="2026-11-15T23:59:00"></div></div>
+      {call.state === 'ouvert' && call.closesAt && <div><p class="small muted" style="margin-bottom:6px">{w('Clôture le ', 'Closes on ')}{callDate(call.closesAt)}</p><div class="cd" data-countdown={call.closesAt.toISOString()}></div></div>}
+      {call.state === 'a_venir' && call.opensAt && <div><p class="small muted" style="margin-bottom:6px">{w('Ouverture le ', 'Opens on ')}{callDate(call.opensAt)}</p><div class="cd" data-countdown={call.opensAt.toISOString()}></div></div>}
     </div>
   </div>
 </section>
+)}
 
 <!-- Histoires d'entrepreneurs -->
 <section class="block" style="padding-top:0">
@@ -146,6 +154,7 @@ const topics = en ? ['Funding', 'Training', 'Events', 'Kapital Invest'] : ['Fina
         <p class="small muted">{w('Choisissez vos sujets et votre pays.', 'Choose your topics and your country.')}</p>
         <div class="row" style="margin-bottom:10px">{topics.map((x, i) => <label class="chip"><input type="checkbox" name="topics" value={x} checked={i === 3} /> {x}</label>)}</div>
         <input type="hidden" name="lang" value={lang} />
+        <select class="in" name="country" aria-label={w('Pays', 'Country')} style="margin:0 0 10px;max-width:320px"><option value="">{w('Tous les pays', 'All countries')}</option>{HUBS.map((h) => <option value={h.c}>{country(h.c)}</option>)}</select>
         <div class="row"><input class="in" name="email" type="email" required placeholder={w('votre@email.com', 'your@email.com')} aria-label="E-mail" style="flex:1;margin:0;min-width:200px" /><button class="btn btn-primary" type="submit">{w("S'abonner", 'Subscribe')}</button></div>
       </form>
     </div>
