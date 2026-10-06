@@ -572,3 +572,9 @@ fieldset{min-width:0}  /* par défaut un fieldset refuse de se contracter sous l
 @media (max-width:1100px){.cal-pop{position:static;min-width:0;max-width:340px}}
 /* En-tête connecté entre 1341 et 1500 px : menu complet affiché, le bouton de déconnexion passe en icône seule pour tenir sur la ligne */
 @media (min-width:1341px) and (max-width:1500px){.top-logout .lo-txt{display:none}.top-logout{padding:6px 9px}}
+/* Ligne d'événement : date, titre, prix côte à côte ; sur téléphone le prix passe sous le titre pour lui laisser la largeur */
+.ev-row{display:flex;gap:16px;text-decoration:none;margin-top:12px;align-items:center}
+@media (max-width:520px){.ev-row{display:grid;grid-template-columns:56px minmax(0,1fr);gap:4px 14px}.ev-row>.tag{grid-column:2;justify-self:start}}
+/* Case à cocher suivie de son texte : la case reste à gauche du texte au lieu de rester seule sur sa ligne */
+label.row:has(> input[type=checkbox]:first-child){flex-wrap:nowrap;align-items:flex-start}
+label.row > input[type=checkbox]:first-child{flex-shrink:0;margin-top:.25em}
