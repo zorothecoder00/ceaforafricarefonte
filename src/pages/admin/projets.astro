@@ -1,21 +1,70 @@
 ---
-/* Projets du Project Studio (CDC §7.2) vus par les chargés de programme : maturité, statut, accès à l'espace de travail pour la revue. */
+/* Projets du Project Studio (CDC §7.2) : liste filtrable, création pour un porteur, accès à la fiche de gestion
+   (statut, chargé de programme, informations) et à l'espace de travail pour la revue. */
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { db } from '../../lib/db';
-import { project } from '../../db/schema/app';
+import { project, projectStatusEnum } from '../../db/schema/app';
 import { user } from '../../db/schema/auth';
-import { maturityScore } from '../../lib/projects';
-import { country } from '../../data/site';
+import { maturityScore, PROJECT_SECTORS, PROJECT_STAGES, PROJECT_STATUS } from '../../lib/projects';
+import { scope } from '../../lib/rbac';
+import { COUNTRIES, country } from '../../data/site';
 
 export const prerender = false;
-const rows = await db.select({ p: project, owner: user.name }).from(project).innerJoin(user, eq(user.id, project.ownerId)).orderBy(desc(project.updatedAt)).limit(300);
-const ST: Record<string, string> = { brouillon: 'Brouillon', soumis: 'Soumis', en_structuration: 'En structuration', pret_investissement: "Prêt pour l'investissement", transmis_kapital: 'Transmis à Kapital', finance: 'Financé', archive: 'Archivé' };
+const me = Astro.locals.user!;
+const canC = scope(me.roles, 'fiche_projet', 'C') === 'all';
+const sp = Astro.url.searchParams;
+const q = (sp.get('q') ?? '').trim(), st = sp.get('statut') ?? '', pays = sp.get('pays') ?? '', mine = sp.get('suivi') === 'moi';
+const officer = alias(user, 'officer');
+const rows = await db.select({ p: project, owner: user.name, ownerEmail: user.email, officer: officer.name }).from(project)
+  .innerJoin(user, eq(user.id, project.ownerId)).leftJoin(officer, eq(officer.id, project.officerId))
+  .where(and(
+    q ? or(ilike(project.name, `%${q}%`), ilike(user.name, `%${q}%`), ilike(user.email, `%${q}%`)) : undefined,
+    st && (projectStatusEnum.enumValues as readonly string[]).includes(st) ? sql`${project.status} = ${st}` : undefined,
+    pays ? eq(project.country, pays) : undefined,
+    mine ? eq(project.officerId, me.id) : undefined,
+  )).orderBy(desc(project.updatedAt)).limit(300);
 ---
-<AdminLayout title="Projets" lead="Ouvrez un projet pour commenter sa fiche (revue d'expert)." obj="fiche_projet">
+<AdminLayout title="Projets" lead="Ouvrez la fiche d'un projet pour changer son statut, lui affecter un chargé de programme ou corriger ses informations ; l'espace de travail sert à la revue d'expert." obj="fiche_projet">
+  {canC && (
+    <details class="panel" style="margin-bottom:14px">
+      <summary style="cursor:pointer"><b>+ Créer un projet pour un porteur</b></summary>
+      <form data-api="/api/admin/projets" style="margin-top:12px">
+        <input type="hidden" name="action" value="create" />
+        <div class="grid g2" style="gap:0 12px">
+          <div><label class="f" for="np-o">E-mail du porteur (compte existant)</label><input class="in" id="np-o" name="ownerEmail" type="email" required /></div>
+          <div><label class="f" for="np-n">Nom du projet</label><input class="in" id="np-n" name="name" required minlength="2" maxlength="140" /></div>
+          <div><label class="f" for="np-s">Secteur</label><select class="in" id="np-s" name="sector"><option value="">—</option>{PROJECT_SECTORS.map((s) => <option>{s}</option>)}</select></div>
+          <div><label class="f" for="np-c">Pays</label><select class="in" id="np-c" name="country"><option value="">—</option>{Object.entries(COUNTRIES).map(([k, v]) => <option value={k}>{v}</option>)}</select></div>
+          <div><label class="f" for="np-st">Stade</label><select class="in" id="np-st" name="stage"><option value="">—</option>{PROJECT_STAGES.map((s) => <option>{s}</option>)}</select></div>
+        </div>
+        <p class="xs muted" style="margin:6px 0 10px">Le porteur est prévenu et retrouve le projet dans Mon espace › Mes projets. Si la personne n'a pas encore de compte, créez-le dans Membres et rôles.</p>
+        <button class="btn btn-primary btn-sm" type="submit">Créer le projet</button>
+      </form>
+    </details>
+  )}
+  <form class="filters" method="get" style="margin-top:0">
+    <input class="in" name="q" value={q} placeholder="Projet, porteur ou e-mail" aria-label="Rechercher" style="flex:1;min-width:200px" />
+    <select class="in" name="statut" aria-label="Statut"><option value="">Tous les statuts</option>{projectStatusEnum.enumValues.map((s) => <option value={s} selected={s === st}>{PROJECT_STATUS[s]}</option>)}</select>
+    <select class="in" name="pays" aria-label="Pays"><option value="">Tous les pays</option>{Object.entries(COUNTRIES).map(([k, v]) => <option value={k} selected={k === pays}>{v}</option>)}</select>
+    <label class="small row" style="gap:4px"><input type="checkbox" name="suivi" value="moi" checked={mine} /> Mes projets suivis</label>
+    <button class="btn btn-primary btn-sm" type="submit">Filtrer</button>
+  </form>
   <div class="panel scroll-x">
-    <table class="t"><thead><tr><th>Projet</th><th>Porteur</th><th>Pays</th><th>Statut</th><th>Maturité</th><th>Public</th></tr></thead>
-      <tbody>{rows.map(({ p, owner }) => <tr><td><a href={`/espace/projets/${p.id}`}>{p.name}</a></td><td>{owner}</td><td>{p.country ? country(p.country) : '—'}</td><td>{ST[p.status]}</td><td class="num">{maturityScore(p.maturity as Record<string, number>)}</td><td>{p.public ? 'Oui' : 'Non'}</td></tr>)}</tbody>
+    <table class="t"><thead><tr><th>Projet</th><th>Porteur</th><th>Pays</th><th>Statut</th><th>Maturité</th><th>Chargé de programme</th><th>Public</th><th></th></tr></thead>
+      <tbody>{rows.map(({ p, owner, ownerEmail, officer: off }) => (
+        <tr>
+          <td><a href={`/admin/projets/${p.id}`}><b>{p.name}</b></a>{p.sector && <div class="xs muted">{p.sector}{p.stage ? ` · ${p.stage}` : ''}</div>}</td>
+          <td>{owner}<div class="xs muted">{ownerEmail}</div></td>
+          <td>{p.country ? country(p.country) : '—'}</td>
+          <td><span class="tag">{PROJECT_STATUS[p.status]}</span></td>
+          <td class="num">{maturityScore(p.maturity as Record<string, number>)}</td>
+          <td class="small">{off ?? <span class="muted">—</span>}</td>
+          <td>{p.public ? 'Oui' : 'Non'}</td>
+          <td class="row" style="gap:4px;flex-wrap:nowrap"><a class="btn btn-ghost btn-sm" href={`/admin/projets/${p.id}`}>Gérer</a><a class="btn btn-ghost btn-sm" href={`/espace/projets/${p.id}`}>Espace</a></td>
+        </tr>
+      ))}</tbody>
     </table>
     {rows.length === 0 && <p class="small muted">Aucun projet.</p>}
   </div>

@@ -1,34 +1,136 @@
 ---
-/* Matrice complète des droits (CDC §18, livrable du lot 0) : générée depuis src/lib/rbac.ts, la source appliquée par le code,
-   et vérifiée par les tests automatisés (tests/rbac.test.ts, tests/droits.e2e.test.ts). */
+/* Matrice complète des droits (CDC §18, livrable du lot 0) : valeurs par défaut dans src/lib/rbac.ts (vérifiées par
+   tests/rbac.test.ts et tests/droits.e2e.test.ts), écarts modifiables ici par l'administrateur (table role_right). */
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import { MATRIX, ROLES, ROLE_LABEL, SENSITIVE, type Obj } from '../../lib/rbac';
+import { desc, eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { roleRight } from '../../db/schema/app';
+import { user } from '../../db/schema/auth';
+import { MATRIX, OBJS, OBJ_LABEL, ROLES, ROLE_LABEL, SENSITIVE, lockReason, rightsOf, scope } from '../../lib/rbac';
 
 export const prerender = false;
-const OBJ_LABEL: Record<Obj, string> = {
-  contenus: 'Contenus publics', profil: 'Profil personnel', fiche_projet: 'Fiche projet', candidature: 'Candidature programme',
-  notes_mentorat: 'Notes de mentorat', dossier_kapital: 'Dossier Kapital', data_room: 'Data room', decision_comite: 'Décision de comité',
-  pieces_kyc: 'Pièces KYC', journal_audit: "Journal d'audit", offre_emploi: "Offre d'emploi", moderation: 'Modération',
-  membres: 'Membres et rôles', parametres: 'Paramétrage', paiements: 'Paiements', messages_contact: 'Messages de contact', interrupteurs: 'Interrupteurs par pays', controle_acces: "Contrôle d'accès aux événements",
-  crm: 'CRM (contacts, organisations, pipeline)', campagnes: 'Campagnes (e-mail, SMS, WhatsApp, push)', programmes: 'Appels, jurys, cohortes et suivi', rapports: 'Rapports et exports', formulaires: 'Formulaires sans code', automatisations: 'Workflows et automatisations', documents: 'Gestion documentaire (droits par dossier)',
-};
-const objs = Object.keys(OBJ_LABEL) as Obj[];
+const me = Astro.locals.user!;
+const canM = scope(me.roles, 'parametres', 'M') === 'all';
+const canV = scope(me.roles, 'parametres', 'V') === 'all';
+const changes = await db.select({ r: roleRight, by: user.name }).from(roleRight).leftJoin(user, eq(user.id, roleRight.updatedBy)).orderBy(desc(roleRight.updatedAt)).catch(() => []);
+const show = (v: string) => v || '—';
 ---
 <AdminLayout title="Matrice des droits" lead="L = lecture · C = création · M = modification · V = validation · * = limité aux éléments propres, partagés ou assignés · — = aucun accès. Cette matrice est celle qu'applique la plateforme." obj="contenus">
+  {canM && (
+    <div class="panel small" style="margin-bottom:14px;border-left:4px solid var(--gold)">
+      <b>Modifier un droit :</b> cliquez sur une case. Les cases <span style="background:#FFF3D6;padding:0 4px;border-radius:4px">surlignées</span> s'écartent du cahier des charges ; 🔒 = case verrouillée. Les rôles restent ceux du cahier des charges ; seuls leurs droits changent. La modification s'applique en moins d'une minute sur tout le site et est inscrite au journal d'audit.
+    </div>
+  )}
   <div class="panel scroll-x">
-    <table class="t">
+    <table class="t droits">
       <thead><tr><th>Objet</th>{ROLES.map((r) => <th class="xs" style="writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap">{ROLE_LABEL[r]}{SENSITIVE.includes(r) ? ' 🔐' : ''}</th>)}</tr></thead>
-      <tbody>{objs.map((o) => <tr><th class="small" style="text-align:left">{OBJ_LABEL[o]}</th>{ROLES.map((r) => { const v = MATRIX[r][o]; return <td class="xs" style={`text-align:center;${v ? 'font-weight:600' : 'color:var(--muted)'}`}>{v ?? '—'}</td>; })}</tr>)}</tbody>
+      <tbody>{OBJS.map((o) => (
+        <tr><th class="small" style="text-align:left">{OBJ_LABEL[o]}</th>{ROLES.map((r) => {
+          const v = rightsOf(r, o), def = MATRIX[r][o] ?? '', lock = lockReason(r, o), diff = v !== def;
+          return (
+            <td class="xs" style={`text-align:center;padding:0;${diff ? 'background:#FFF3D6;' : ''}`}>
+              {canM && !lock
+                ? <button type="button" class="cell" data-role={r} data-obj={o} data-v={v} data-def={def} data-label={`${ROLE_LABEL[r]} · ${OBJ_LABEL[o]}`} title={diff ? `Cahier des charges : ${show(def)}` : 'Modifier'} style={v ? 'font-weight:600' : 'color:var(--muted)'}>{show(v)}</button>
+                : <span class="cell" title={lock ?? undefined} style={v ? 'font-weight:600' : 'color:var(--muted)'}>{show(v)}{canM && lock ? ' 🔒' : ''}</span>}
+            </td>
+          );
+        })}</tr>
+      ))}</tbody>
     </table>
   </div>
+
+  {canM && (
+    <dialog id="rightDlg" class="panel" style="max-width:380px;border:0;border-radius:14px">
+      <form method="dialog" id="rightForm">
+        <h3 style="margin-top:0" id="rightTitle"></h3>
+        <div class="row" style="gap:14px;flex-wrap:wrap">
+          {[['L', 'Lecture'], ['C', 'Création'], ['M', 'Modification'], ['V', 'Validation']].map(([k, l]) => <label class="small row" style="gap:4px"><input type="checkbox" name="r" value={k} /> {k} — {l}</label>)}
+        </div>
+        <label class="small row" style="gap:4px;margin-top:10px"><input type="checkbox" name="own" /> Limité aux éléments propres, partagés ou assignés (*)</label>
+        <p class="xs muted" id="rightDef" style="margin:10px 0"></p>
+        <p class="xs" id="rightMsg" role="status" style="color:var(--bad, #B4401F);min-height:1em"></p>
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" type="submit" value="save">Enregistrer</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="rightReset">Valeur du cahier des charges</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="rightCancel">Annuler</button>
+        </div>
+      </form>
+    </dialog>
+  )}
+
+  {changes.length > 0 && (
+    <section class="panel" style="margin-top:14px">
+      <div class="row between"><h3 style="margin:0">Écarts au cahier des charges ({changes.length})</h3>
+        {canV && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/droits" data-body={JSON.stringify({ action: 'reset_all' })} data-confirm="Rétablir toute la matrice du cahier des charges ?" data-reload>Tout rétablir</button>}</div>
+      <table class="t" style="margin-top:8px"><thead><tr><th>Rôle</th><th>Objet</th><th>Cahier des charges</th><th>Appliqué</th><th>Par</th></tr></thead>
+        <tbody>{changes.map(({ r, by }) => <tr><td>{ROLE_LABEL[r.role as keyof typeof ROLE_LABEL] ?? r.role}</td><td>{OBJ_LABEL[r.obj as keyof typeof OBJ_LABEL] ?? r.obj}</td><td>{show(MATRIX[r.role as keyof typeof MATRIX]?.[r.obj as keyof typeof OBJ_LABEL] ?? '')}</td><td><b>{show(r.rights)}</b></td><td class="xs">{by ?? '—'} · {r.updatedAt.toLocaleDateString('fr-FR')}</td></tr>)}</tbody>
+      </table>
+    </section>
+  )}
+
   <div class="panel" style="margin-top:14px">
     <h3>Règles complémentaires</h3>
     <ul class="small">
       <li>🔐 Rôles sensibles : double authentification obligatoire pour accéder au back-office et à son API.</li>
-      <li>Les pièces KYC ne sont lisibles que par le responsable conformité.</li>
+      <li>Les pièces KYC ne sont lisibles que par le responsable conformité (case verrouillée).</li>
+      <li>L'administrateur garde toujours la gestion des membres et du paramétrage (cases verrouillées), pour qu'on ne puisse pas bloquer le back-office.</li>
       <li>Le responsable pays n'agit que sur les contenus, membres et messages de son pays.</li>
       <li>Le journal d'audit est en ajout seul : personne ne peut le modifier ni l'effacer.</li>
       <li>Un visiteur non connecté n'accède qu'aux contenus publics, à l'inscription et aux formulaires publics.</li>
     </ul>
   </div>
 </AdminLayout>
+
+<style>
+  .droits .cell{display:block;width:100%;min-width:38px;padding:6px 4px;background:none;border:0;font:inherit;color:inherit;cursor:default}
+  .droits button.cell{cursor:pointer}
+  .droits button.cell:hover,.droits button.cell:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+  dialog::backdrop{background:rgba(8,43,76,.35)}
+</style>
+
+<script>
+  const dlg = document.getElementById('rightDlg') as HTMLDialogElement | null;
+  if (dlg) {
+    const form = document.getElementById('rightForm') as HTMLFormElement;
+    const msg = document.getElementById('rightMsg')!;
+    let cell: HTMLButtonElement | null = null;
+    const send = async (body: object) => {
+      const r = await fetch('/api/admin/droits', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const d = await r.json().catch(() => ({ ok: false, error: 'Erreur ' + r.status }));
+      if (!d.ok) throw new Error(d.error || 'Enregistrement impossible.');
+      return d as { rights: string; changed: boolean };
+    };
+    const update = (d: { rights: string; changed: boolean }) => {
+      if (!cell) return;
+      cell.dataset.v = d.rights;
+      cell.textContent = d.rights || '—';
+      cell.style.fontWeight = d.rights ? '600' : '';
+      cell.style.color = d.rights ? '' : 'var(--muted)';
+      cell.parentElement!.style.background = d.changed ? '#FFF3D6' : '';
+      cell.title = d.changed ? `Cahier des charges : ${cell.dataset.def || '—'}` : 'Modifier';
+      dlg.close();
+    };
+    document.querySelectorAll<HTMLButtonElement>('button.cell').forEach((b) => b.addEventListener('click', () => {
+      cell = b;
+      const v = b.dataset.v ?? '';
+      document.getElementById('rightTitle')!.textContent = b.dataset.label ?? '';
+      document.getElementById('rightDef')!.textContent = `Cahier des charges : ${b.dataset.def || 'aucun accès'}`;
+      form.querySelectorAll<HTMLInputElement>('input[name=r]').forEach((i) => (i.checked = v.includes(i.value)));
+      (form.querySelector('input[name=own]') as HTMLInputElement).checked = v.endsWith('*');
+      msg.textContent = '';
+      dlg.showModal();
+    }));
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!cell) return;
+      const letters = [...form.querySelectorAll<HTMLInputElement>('input[name=r]:checked')].map((i) => i.value).join('');
+      const own = (form.querySelector('input[name=own]') as HTMLInputElement).checked && letters ? '*' : '';
+      try { update(await send({ action: 'set', role: cell.dataset.role, obj: cell.dataset.obj, rights: letters + own })); } catch (err) { msg.textContent = (err as Error).message; }
+    });
+    document.getElementById('rightReset')!.addEventListener('click', async () => {
+      if (!cell) return;
+      try { update(await send({ action: 'reset', role: cell.dataset.role, obj: cell.dataset.obj })); } catch (err) { msg.textContent = (err as Error).message; }
+    });
+    document.getElementById('rightCancel')!.addEventListener('click', () => dlg.close());
+  }
+</script>

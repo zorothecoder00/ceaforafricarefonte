@@ -1,0 +1,110 @@
+---
+/* Fiche de gestion d'un projet (CDC §7.2) : informations, statut (le porteur est prévenu), chargé de programme,
+   retrait du portefeuille public, suppression ; historique des actions de l'équipe. */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { and, desc, eq, like, or } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { auditLog, project, projectStatusEnum, userRole } from '../../../db/schema/app';
+import { user } from '../../../db/schema/auth';
+import { maturityScore, PROJECT_SECTORS, PROJECT_STAGES, PROJECT_STATUS, SHEET_FIELDS } from '../../../lib/projects';
+import { scope } from '../../../lib/rbac';
+import { COUNTRIES, country } from '../../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const all = (a: 'M' | 'V') => scope(me.roles, 'fiche_projet', a) === 'all';
+const canM = all('M'), canV = all('V');
+const id = Astro.params.id ?? '';
+const [row] = /^[0-9a-f-]{36}$/i.test(id) ? await db.select({ p: project, owner: user.name, ownerEmail: user.email }).from(project).innerJoin(user, eq(user.id, project.ownerId)).where(eq(project.id, id)) : [];
+if (!row) return Astro.rewrite('/404');
+const { p } = row;
+const officers = await db.select({ id: user.id, name: user.name }).from(userRole).innerJoin(user, eq(user.id, userRole.userId)).where(eq(userRole.role, 'charge_programme')).orderBy(user.name);
+const history = await db.select({ a: auditLog, by: user.name }).from(auditLog).leftJoin(user, eq(user.id, auditLog.actorId))
+  .where(and(eq(auditLog.target, p.id), or(like(auditLog.action, 'admin.projet.%'), like(auditLog.action, 'projet.%')))).orderBy(desc(auditLog.at)).limit(30);
+const sheet = p.sheet as Record<string, string>;
+const ACT: Record<string, string> = { 'admin.projet.creation': 'Création par l’équipe', 'admin.projet.modification': 'Informations modifiées', 'admin.projet.affectation': 'Chargé de programme', 'admin.projet.retrait_portefeuille': 'Retrait du portefeuille', 'admin.projet.statut': 'Statut', 'projet.creation': 'Création par le porteur' };
+---
+<AdminLayout title={p.name} lead={`Porteur : ${row.owner} (${row.ownerEmail}) · ${PROJECT_STATUS[p.status]} · maturité ${maturityScore(p.maturity as Record<string, number>)}/100`} obj="fiche_projet">
+  <div class="row" style="gap:8px;margin-bottom:14px;flex-wrap:wrap"><a class="btn btn-ghost btn-sm" href="/admin/projets">← Tous les projets</a><a class="btn btn-ghost btn-sm" href={`/espace/projets/${p.id}`}>Ouvrir l'espace de travail</a></div>
+  <div class="split">
+    <div>
+      <section class="panel">
+        <h2 style="font-size:1.1rem;margin-top:0">Statut</h2>
+        <form data-api="/api/admin/projets" data-reload>
+          <input type="hidden" name="action" value="status" /><input type="hidden" name="id" value={p.id} />
+          <fieldset disabled={!canV} style="border:0;padding:0;margin:0">
+            <select class="in" name="status" aria-label="Statut">{projectStatusEnum.enumValues.map((s) => <option value={s} selected={s === p.status}>{PROJECT_STATUS[s]}</option>)}</select>
+            <textarea class="in" name="note" rows="2" maxlength="1000" placeholder="Message au porteur (facultatif)" aria-label="Message au porteur"></textarea>
+            {canV && <button class="btn btn-primary btn-sm" type="submit">Changer le statut</button>}
+          </fieldset>
+          {!canV && <p class="xs muted">Le changement de statut demande le droit de validation (V) sur les fiches projet.</p>}
+        </form>
+      </section>
+
+      <section class="panel" style="margin-top:14px">
+        <h2 style="font-size:1.1rem;margin-top:0">Informations</h2>
+        <form data-api="/api/admin/projets" data-reload>
+          <input type="hidden" name="action" value="update" /><input type="hidden" name="id" value={p.id} />
+          <fieldset disabled={!canM} style="border:0;padding:0;margin:0">
+            <div class="grid g2" style="gap:0 12px">
+              <div style="grid-column:1/-1"><label class="f" for="pn">Nom du projet</label><input class="in" id="pn" name="name" value={p.name} required minlength="2" maxlength="140" /></div>
+              <div><label class="f" for="ps">Secteur</label><select class="in" id="ps" name="sector"><option value="">—</option>{[...new Set([...PROJECT_SECTORS, ...(p.sector ? [p.sector] : [])])].map((s) => <option selected={s === p.sector}>{s}</option>)}</select></div>
+              <div><label class="f" for="pc">Pays</label><select class="in" id="pc" name="country"><option value="">—</option>{Object.entries(COUNTRIES).map(([k, v]) => <option value={k} selected={k === p.country}>{v}</option>)}</select></div>
+              <div><label class="f" for="pst">Stade</label><select class="in" id="pst" name="stage"><option value="">—</option>{[...new Set([...PROJECT_STAGES, ...(p.stage ? [p.stage] : [])])].map((s) => <option selected={s === p.stage}>{s}</option>)}</select></div>
+            </div>
+            {canM && <button class="btn btn-primary btn-sm" type="submit">Enregistrer</button>}
+          </fieldset>
+        </form>
+        <p class="xs muted" style="margin-bottom:0">La fiche détaillée (problème, solution, marché…) appartient au porteur : elle se modifie dans l'espace de travail.</p>
+      </section>
+
+      <section class="panel" style="margin-top:14px">
+        <h2 style="font-size:1.1rem;margin-top:0">Fiche du porteur</h2>
+        {SHEET_FIELDS.filter(([k]) => sheet[k]).map(([k, l]) => <div style="margin-bottom:10px"><b class="small">{l}</b><p class="small" style="margin:2px 0 0;white-space:pre-wrap">{sheet[k]}</p></div>)}
+        {!SHEET_FIELDS.some(([k]) => sheet[k]) && <p class="small muted" style="margin:0">Fiche pas encore remplie.</p>}
+      </section>
+    </div>
+
+    <aside>
+      <section class="panel">
+        <h3 style="margin-top:0">Chargé de programme</h3>
+        <form data-api="/api/admin/projets" data-reload>
+          <input type="hidden" name="action" value="assign" /><input type="hidden" name="id" value={p.id} />
+          <fieldset disabled={!canM} style="border:0;padding:0;margin:0">
+            <select class="in" name="officerId" aria-label="Chargé de programme"><option value="">Aucun</option>{officers.map((o) => <option value={o.id} selected={o.id === p.officerId}>{o.name}</option>)}</select>
+            {canM && <button class="btn btn-primary btn-sm" type="submit">Affecter</button>}
+          </fieldset>
+        </form>
+        {officers.length === 0 && <p class="xs muted">Aucun membre n'a le rôle « Chargé de programme » : attribuez-le dans Membres et rôles.</p>}
+      </section>
+
+      <section class="panel" style="margin-top:14px">
+        <h3 style="margin-top:0">Portefeuille public</h3>
+        <p class="small" style="margin-top:0">{p.public ? 'Publié au portefeuille, avec l’accord du porteur.' : 'Non publié. Seul le porteur peut publier son projet.'}</p>
+        {p.public && canM && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/projets" data-body={JSON.stringify({ action: 'unpublish', id: p.id })} data-confirm="Retirer ce projet du portefeuille public ? Le porteur sera prévenu." data-reload>Retirer du portefeuille</button>}
+      </section>
+
+      {canV && (
+        <section class="panel" style="margin-top:14px">
+          <h3 style="margin-top:0">Supprimer</h3>
+          <p class="xs muted" style="margin-top:0">Irréversible : fiche, canevas, tâches, documents et commentaires sont effacés. Pour garder une trace, préférez le statut « Archivé ».</p>
+          <form data-api="/api/admin/projets">
+            <input type="hidden" name="action" value="delete" /><input type="hidden" name="id" value={p.id} />
+            <input class="in" name="confirm" placeholder="Saisir le nom du projet" aria-label="Confirmer avec le nom du projet" required />
+            <button class="btn btn-ghost btn-sm" type="submit" style="color:var(--bad, #B4401F)">Supprimer le projet</button>
+          </form>
+        </section>
+      )}
+
+      <section class="panel" style="margin-top:14px">
+        <h3 style="margin-top:0">Historique</h3>
+        {history.map(({ a, by }) => {
+          const m = a.meta as Record<string, unknown>;
+          return <p class="xs" style="margin:0 0 6px"><b>{ACT[a.action] ?? a.action}</b>{a.action === 'admin.projet.statut' ? ` : ${PROJECT_STATUS[String(m.avant)] ?? m.avant} → ${PROJECT_STATUS[String(m.apres)] ?? m.apres}` : ''}<br /><span class="muted">{a.at.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Africa/Lome' })}{by ? ` · ${by}` : ''}</span></p>;
+        })}
+        {history.length === 0 && <p class="xs muted" style="margin:0">Aucune action enregistrée.</p>}
+        <p class="xs muted" style="margin:8px 0 0">Créé le {p.createdAt.toLocaleDateString('fr-FR')}{p.country ? ` · ${country(p.country)}` : ''}</p>
+      </section>
+    </aside>
+  </div>
+</AdminLayout>

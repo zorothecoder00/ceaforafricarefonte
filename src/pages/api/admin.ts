@@ -13,6 +13,8 @@ import { notify } from '../../lib/notify';
 import { sendEmail } from '../../lib/messaging';
 import { siteUrl, trackPath } from '../../lib/support';
 
+import { isLastAdmin } from '../../lib/members';
+
 export const prerender = false;
 
 const id = z.uuid();
@@ -214,6 +216,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       const u = guard('membres', 'M'); if (u instanceof Response) return u;
       if (b.userId === u.id && b.role === 'admin') return fail('Vous ne pouvez pas retirer votre propre rôle administrateur.');
       if (b.role === 'membre') return fail('Le rôle membre est permanent ; supprimez le compte si nécessaire.');
+      if (b.role === 'admin' && await isLastAdmin(b.userId)) return fail('C’est le dernier administrateur : nommez-en un autre avant de lui retirer ce rôle.');
       await db.delete(userRole).where(and(eq(userRole.userId, b.userId), eq(userRole.role, b.role)));
       await audit(u.id, 'admin.role.retrait', b.userId, { role: b.role }, ip);
       return ok('Rôle retiré.');

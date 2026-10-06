@@ -52,12 +52,50 @@ export const MATRIX: Record<Role, Matrix> = {
 
 export type Action = 'L' | 'C' | 'M' | 'V';
 export type Scope = 'all' | 'own';
+export const OBJ_LABEL: Record<Obj, string> = {
+  contenus: 'Contenus publics', profil: 'Profil personnel', fiche_projet: 'Fiche projet', candidature: 'Candidature programme',
+  notes_mentorat: 'Notes de mentorat', dossier_kapital: 'Dossier Kapital', data_room: 'Data room', decision_comite: 'Décision de comité',
+  pieces_kyc: 'Pièces KYC', journal_audit: "Journal d'audit", offre_emploi: "Offre d'emploi", moderation: 'Modération',
+  membres: 'Membres et rôles', parametres: 'Paramétrage', paiements: 'Paiements', messages_contact: 'Messages de contact', interrupteurs: 'Interrupteurs par pays', controle_acces: "Contrôle d'accès aux événements",
+  crm: 'CRM (contacts, organisations, pipeline)', campagnes: 'Campagnes (e-mail, SMS, WhatsApp, push)', programmes: 'Appels, jurys, cohortes et suivi', rapports: 'Rapports et exports', formulaires: 'Formulaires sans code', automatisations: 'Workflows et automatisations', documents: 'Gestion documentaire (droits par dossier)',
+};
+export const OBJS = Object.keys(OBJ_LABEL) as Obj[];
+
+/* ===== Matrice modifiable (back-office › Matrice des droits) =====
+   La matrice ci-dessus est la valeur par défaut (cahier des charges) ; les écarts enregistrés en base sont chargés par le
+   middleware (src/lib/rights.ts) et appliqués ici. Certaines cases restent verrouillées. */
+export type RightsOverrides = Partial<Record<Role, Partial<Record<Obj, string>>>>;
+let OVERRIDES: RightsOverrides = {};
+export const setRightsOverrides = (o: RightsOverrides) => { OVERRIDES = o; };
+
+/** Droits effectifs d'un rôle sur un objet (« » = aucun accès). */
+export function rightsOf(role: Role, obj: Obj): string {
+  if (lockReason(role, obj)) return MATRIX[role]?.[obj] ?? '';
+  const o = OVERRIDES[role];
+  return o && obj in o ? o[obj]! : MATRIX[role]?.[obj] ?? '';
+}
+
+/** Cases non modifiables : garde-fous du cahier des charges et protection contre le blocage du back-office. */
+export function lockReason(role: Role, obj: Obj): string | null {
+  if (role === 'admin' && (obj === 'membres' || obj === 'parametres')) return "L'administrateur garde la gestion des membres et du paramétrage (évite de bloquer le back-office).";
+  if (obj === 'pieces_kyc') return 'Les pièces KYC ne sont lisibles que par le responsable conformité (CDC §18).';
+  if (obj === 'journal_audit') return "Le journal d'audit est en ajout seul : seule la lecture peut être accordée, par le code.";
+  return null;
+}
+
+/** Valeur de droits valide : lettres dans l'ordre L, C, M, V, « * » facultatif ; normalisée. */
+export function normRights(v: string): string | null {
+  const m = /^([LCMV]*)(\*?)$/.exec(v.toUpperCase().replace(/\s/g, ''));
+  if (!m) return null;
+  const letters = 'LCMV'.split('').filter((c) => m[1].includes(c)).join('');
+  return letters ? letters + m[2] : '';
+}
 
 /** Portée accordée pour (rôles, objet, action) : 'all', 'own' (éléments propres/assignés) ou null (refus). */
 export function scope(roles: readonly string[], obj: Obj, action: Action): Scope | null {
   let best: Scope | null = null;
   for (const r of roles) {
-    const rights = MATRIX[r as Role]?.[obj];
+    const rights = (ROLES as readonly string[]).includes(r) ? rightsOf(r as Role, obj) : '';
     if (!rights || !rights.includes(action)) continue;
     if (!rights.endsWith('*')) return 'all';
     best = 'own';

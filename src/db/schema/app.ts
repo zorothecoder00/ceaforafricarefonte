@@ -46,6 +46,10 @@ export const profile = pgTable('profile', {
   availableUntil: date('available_until'),
   // Préférences de notification (CDC §10) : canaux par catégorie et heures de silence — voir src/lib/notify.ts
   notifPrefs: jsonb('notif_prefs').notNull().default({}),
+  // Suspension par l'équipe (back-office › Membres) : connexion refusée et sessions fermées tant qu'elle dure
+  suspendedAt: ts('suspended_at'),
+  suspendedReason: text('suspended_reason'),
+  suspendedBy: text('suspended_by').references(() => user.id, { onDelete: 'set null' }),
   updatedAt: ts('updated_at').notNull().defaultNow(),
 });
 
@@ -550,6 +554,7 @@ export const project = pgTable('project', {
   status: projectStatusEnum('status').notNull().default('brouillon'),
   public: boolean('public').notNull().default(false), // publication au portefeuille : accord explicite du porteur
   dossierId: uuid('dossier_id'), // passerelle vers Kapital Invest
+  officerId: text('officer_id').references(() => user.id, { onDelete: 'set null' }), // chargé de programme qui suit le projet
   createdAt: ts('created_at').notNull().defaultNow(),
   updatedAt: ts('updated_at').notNull().defaultNow(),
 }, (t) => [index('project_owner_idx').on(t.ownerId)]);
@@ -748,3 +753,13 @@ export const siteText = pgTable('site_text', {
   updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
   updatedAt: ts('updated_at').notNull().defaultNow(),
 }, (t) => [uniqueIndex('site_text_scope_key_idx').on(t.scope, t.key)]);
+
+/* Matrice des droits modifiable (CDC §18) : écarts par rapport à la matrice par défaut de src/lib/rbac.ts.
+   rights = sous-ensemble de « LCMV », suffixe « * » pour les éléments propres ou assignés, chaîne vide = aucun accès. */
+export const roleRight = pgTable('role_right', {
+  role: text('role').notNull(),
+  obj: text('obj').notNull(),
+  rights: text('rights').notNull(),
+  updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.role, t.obj] })]);

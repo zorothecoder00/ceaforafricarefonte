@@ -16,6 +16,10 @@ export const SHEET_FIELDS: [string, string, string][] = [
   ['impact', 'Impact', 'Emplois, environnement, inclusion : indicateurs suivis.'],
 ];
 
+export const PROJECT_SECTORS = ['Agriculture', 'Agro-industrie', 'Énergie', 'Santé', 'Éducation', 'Numérique', 'Fintech', 'BTP', 'Industrie', 'Commerce', 'Autre'];
+export const PROJECT_STAGES = ['Idée', 'Pré-amorçage', 'Amorçage', 'Croissance', 'Série A'];
+export const PROJECT_STATUS: Record<string, string> = { brouillon: 'Brouillon', soumis: 'Soumis', en_structuration: 'En structuration', pret_investissement: "Prêt pour l'investissement", transmis_kapital: 'Transmis à Kapital', finance: 'Financé', archive: 'Archivé' };
+
 export const DIMENSIONS: [string, string][] = [
   ['equipe', 'Équipe'], ['marche', 'Marché'], ['produit', 'Produit'], ['traction', 'Traction'],
   ['modele', 'Modèle'], ['finances', 'Finances'], ['gouvernance', 'Gouvernance'], ['impact', 'Impact'],

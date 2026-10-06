@@ -1,55 +1,158 @@
 ---
-/* Membres et rôles (CDC §11, §18) : recherche, attribution et retrait de rôles (tracés), export. Responsable pays : ses pays uniquement. */
+/* Membres et rôles (CDC §11, §18) : recherche, création de comptes avec invitation, modification, suspension, suppression,
+   attribution et retrait de rôles (tracés), export. Responsable pays : ses pays uniquement, en lecture. */
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { db } from '../../lib/db';
 import { profile, userRole, membership, roleEnum } from '../../db/schema/app';
 import { user } from '../../db/schema/auth';
-import { can, ROLE_LABEL, type Role } from '../../lib/rbac';
+import { ROLE_LABEL, hasRole, scope, type Role } from '../../lib/rbac';
 import { countriesFor } from '../../lib/admin';
+import { INVITE_DAYS } from '../../lib/members';
 import { COUNTRIES, country } from '../../data/site';
 
 export const prerender = false;
 const me = Astro.locals.user!;
-const edit = can(me.roles, 'membres', 'M');
+const all = (a: 'C' | 'M' | 'V') => scope(me.roles, 'membres', a) === 'all';
+const canC = all('C'), edit = all('M'), canDel = all('V');
+const isAdmin = hasRole(me.roles, 'admin');
 const cs = await countriesFor(me, 'membres');
 const q = (Astro.url.searchParams.get('q') ?? '').trim();
 const roleF = Astro.url.searchParams.get('role') ?? '';
+const etat = Astro.url.searchParams.get('etat') ?? '';
 const rows = await db.select({
-  id: user.id, name: user.name, email: user.email, created: user.createdAt, tfa: user.twoFactorEnabled, c: profile.country,
+  id: user.id, name: user.name, email: user.email, phone: user.phoneNumber, created: user.createdAt, tfa: user.twoFactorEnabled, c: profile.country,
+  suspendedAt: profile.suspendedAt, suspendedReason: profile.suspendedReason,
   roles: sql<{ role: string; country: string | null }[]>`coalesce((select json_agg(json_build_object('role', ${userRole.role}, 'country', ${userRole.country})) from ${userRole} where ${userRole.userId} = ${user.id}), '[]')`,
   plan: sql<string | null>`(select ${membership.plan}::text from ${membership} where ${membership.userId} = ${user.id} and ${membership.status} = 'active' limit 1)`,
+  pending: sql<boolean>`not exists(select 1 from account a where a.user_id = ${user.id}) and coalesce(${user.phoneNumberVerified}, false) = false`, // compte créé par l'équipe, mot de passe pas encore choisi
 }).from(user).leftJoin(profile, eq(profile.userId, user.id)).where(and(
-  q ? or(ilike(user.name, `%${q}%`), ilike(user.email, `%${q}%`)) : undefined,
+  q ? or(ilike(user.name, `%${q}%`), ilike(user.email, `%${q}%`), ilike(user.phoneNumber, `%${q}%`)) : undefined,
   roleF && (roleEnum.enumValues as readonly string[]).includes(roleF) ? sql`exists(select 1 from ${userRole} where ${userRole.userId} = ${user.id} and ${userRole.role} = ${roleF})` : undefined,
+  etat === 'suspendu' ? isNotNull(profile.suspendedAt) : etat === 'actif' ? isNull(profile.suspendedAt) : undefined,
   cs ? inArray(profile.country, cs.length ? cs : ['--']) : undefined,
 )).orderBy(desc(user.createdAt)).limit(100);
+const grantable = (have: string[]) => roleEnum.enumValues.filter((r) => !have.includes(r) && (isAdmin || !['admin', 'direction'].includes(r)));
+const isProtected = (roles: { role: string }[]) => roles.some((r) => r.role === 'admin' || r.role === 'direction');
+const countryOpts = Object.entries(COUNTRIES);
 ---
-<AdminLayout title="Membres et rôles" lead="L'attribution d'un rôle sensible impose la double authentification à la personne concernée." obj="membres">
+<AdminLayout title="Membres et rôles" lead="L'attribution d'un rôle sensible impose la double authentification à la personne concernée. Chaque action est inscrite au journal d'audit." obj="membres">
+  {canC && (
+    <details class="panel" style="margin-bottom:14px">
+      <summary class="row between" style="cursor:pointer"><b>+ Créer un compte</b><span class="xs muted">invitation par e-mail, valable {INVITE_DAYS} jours</span></summary>
+      <form class="mform" data-members style="margin-top:12px">
+        <input type="hidden" name="action" value="create" />
+        <div class="grid g2" style="gap:0 12px">
+          <div><label class="f" for="n-name">Nom complet</label><input class="in" id="n-name" name="name" required minlength="2" maxlength="120" /></div>
+          <div><label class="f" for="n-email">Adresse e-mail</label><input class="in" id="n-email" name="email" type="email" required maxlength="160" /></div>
+          <div><label class="f" for="n-phone">Téléphone (facultatif)</label><input class="in" id="n-phone" name="phone" placeholder="+228XXXXXXXX" pattern="\+\d{8,15}" /></div>
+          <div><label class="f" for="n-country">Pays</label><select class="in" id="n-country" name="country"><option value="">—</option>{countryOpts.map(([k, v]) => <option value={k}>{v}</option>)}</select></div>
+          <div><label class="f" for="n-role">Rôle (en plus de « Membre »)</label><select class="in" id="n-role" name="role"><option value="">Membre uniquement</option>{grantable(['membre']).map((r) => <option value={r}>{ROLE_LABEL[r as Role]}</option>)}</select></div>
+          <div><label class="f" for="n-rc">Pays du responsable (si responsable pays)</label><select class="in" id="n-rc" name="roleCountry"><option value="">—</option>{countryOpts.map(([k, v]) => <option value={k}>{v}</option>)}</select></div>
+        </div>
+        <p class="xs muted" style="margin:6px 0 10px">La personne reçoit un lien pour choisir son mot de passe. Si l'e-mail ne peut pas partir, le lien s'affiche ici pour que vous le lui transmettiez (WhatsApp, SMS…).</p>
+        <button class="btn btn-primary btn-sm" type="submit">Créer le compte</button>
+        <div class="mout" hidden></div>
+      </form>
+    </details>
+  )}
+
   <form class="filters" method="get" style="margin-top:0">
-    <input class="in" name="q" value={q} placeholder="Nom ou e-mail" aria-label="Rechercher" style="flex:1;min-width:200px" />
+    <input class="in" name="q" value={q} placeholder="Nom, e-mail ou téléphone" aria-label="Rechercher" style="flex:1;min-width:200px" />
     <select class="in" name="role" aria-label="Rôle"><option value="">Tous les rôles</option>{roleEnum.enumValues.map((r) => <option value={r} selected={r === roleF}>{ROLE_LABEL[r as Role]}</option>)}</select>
+    <select class="in" name="etat" aria-label="État"><option value="">Tous les comptes</option><option value="actif" selected={etat === 'actif'}>Actifs</option><option value="suspendu" selected={etat === 'suspendu'}>Suspendus</option></select>
     <button class="btn btn-primary btn-sm" type="submit">Rechercher</button>
     <a class="btn btn-ghost btn-sm" href="/api/admin/export?type=membres">Exporter (CSV)</a>
   </form>
-  {rows.map((m) => (
-    <details class="panel" style="margin-bottom:8px">
-      <summary class="row between" style="cursor:pointer"><span><b>{m.name}</b> <span class="xs muted">{m.email}</span></span><span class="xs">{m.c ? country(m.c) : ''}{m.plan ? ` · ${m.plan}` : ''}{m.tfa ? ' · 2FA ✓' : ''}</span></summary>
-      <div class="row" style="gap:6px;margin:10px 0">{m.roles.map((r) => (
-        <span class="tag">{ROLE_LABEL[r.role as Role] ?? r.role}{r.country ? ` (${r.country})` : ''}
-          {edit && r.role !== 'membre' && <button type="button" class="btn btn-ghost btn-sm" style="padding:0 4px;margin-left:4px" aria-label={`Retirer le rôle ${r.role}`} data-post="/api/admin" data-body={JSON.stringify({ action: 'role.revoke', userId: m.id, role: r.role })} data-confirm={`Retirer le rôle « ${ROLE_LABEL[r.role as Role]} » ?`} data-reload>✕</button>}
-        </span>
-      ))}</div>
-      {edit && (
-        <form data-api="/api/admin" data-reload class="row" style="gap:6px">
-          <input type="hidden" name="action" value="role.grant" /><input type="hidden" name="userId" value={m.id} />
-          <select class="in" name="role" aria-label="Rôle à attribuer" style="margin:0;width:auto">{roleEnum.enumValues.filter((r) => !m.roles.some((x) => x.role === r)).map((r) => <option value={r}>{ROLE_LABEL[r as Role]}</option>)}</select>
-          <select class="in" name="country" aria-label="Pays (responsable pays)" style="margin:0;width:auto"><option value="">— pays —</option>{Object.entries(COUNTRIES).map(([k, v]) => <option value={k}>{v}</option>)}</select>
-          <button class="btn btn-primary btn-sm" type="submit">Attribuer</button>
-        </form>
-      )}
-      <p class="xs muted" style="margin:8px 0 0">Inscrit le {m.created.toLocaleDateString('fr-FR')}</p>
-    </details>
-  ))}
+  {rows.map((m) => {
+    const locked = isProtected(m.roles) && !isAdmin;
+    return (
+      <details class="panel" style="margin-bottom:8px">
+        <summary class="row between" style="cursor:pointer;gap:8px">
+          <span><b>{m.name}</b> <span class="xs muted">{m.email}</span></span>
+          <span class="xs">{m.suspendedAt && <span class="tag bad">Suspendu</span>} {m.pending && <span class="tag info">Invitation en attente</span>} {m.c ? country(m.c) : ''}{m.plan ? ` · ${m.plan}` : ''}{m.tfa ? ' · 2FA ✓' : ''}</span>
+        </summary>
+        {m.suspendedAt && <p class="small" style="margin:10px 0 0;color:var(--bad, #B4401F)">Suspendu le {m.suspendedAt.toLocaleDateString('fr-FR')} : {m.suspendedReason}</p>}
+        <div class="row" style="gap:6px;margin:10px 0">{m.roles.map((r) => (
+          <span class="tag">{ROLE_LABEL[r.role as Role] ?? r.role}{r.country ? ` (${r.country})` : ''}
+            {edit && !locked && r.role !== 'membre' && <button type="button" class="btn btn-ghost btn-sm" style="padding:0 4px;margin-left:4px" aria-label={`Retirer le rôle ${r.role}`} data-post="/api/admin" data-body={JSON.stringify({ action: 'role.revoke', userId: m.id, role: r.role })} data-confirm={`Retirer le rôle « ${ROLE_LABEL[r.role as Role]} » ?`} data-reload>✕</button>}
+          </span>
+        ))}</div>
+        {edit && !locked && (
+          <form data-api="/api/admin" data-reload class="row" style="gap:6px;flex-wrap:wrap">
+            <input type="hidden" name="action" value="role.grant" /><input type="hidden" name="userId" value={m.id} />
+            <select class="in" name="role" aria-label="Rôle à attribuer" style="margin:0;width:auto">{grantable(m.roles.map((x) => x.role)).map((r) => <option value={r}>{ROLE_LABEL[r as Role]}</option>)}</select>
+            <select class="in" name="country" aria-label="Pays (responsable pays)" style="margin:0;width:auto"><option value="">— pays —</option>{countryOpts.map(([k, v]) => <option value={k}>{v}</option>)}</select>
+            <button class="btn btn-primary btn-sm" type="submit">Attribuer</button>
+          </form>
+        )}
+        {edit && !locked && (
+          <details style="margin-top:12px">
+            <summary class="small" style="cursor:pointer;font-weight:600">Modifier le compte</summary>
+            <form class="mform" data-members data-reload style="margin-top:8px">
+              <input type="hidden" name="action" value="update" /><input type="hidden" name="userId" value={m.id} />
+              <div class="grid g2" style="gap:0 12px">
+                <div><label class="f" for={`e-n-${m.id}`}>Nom complet</label><input class="in" id={`e-n-${m.id}`} name="name" value={m.name} required minlength="2" maxlength="120" /></div>
+                <div><label class="f" for={`e-e-${m.id}`}>Adresse e-mail</label><input class="in" id={`e-e-${m.id}`} name="email" type="email" value={m.email} required /></div>
+                <div><label class="f" for={`e-p-${m.id}`}>Téléphone</label><input class="in" id={`e-p-${m.id}`} name="phone" value={m.phone ?? ''} placeholder="+228XXXXXXXX" pattern="\+\d{8,15}" /></div>
+                <div><label class="f" for={`e-c-${m.id}`}>Pays</label><select class="in" id={`e-c-${m.id}`} name="country"><option value="">—</option>{countryOpts.map(([k, v]) => <option value={k} selected={k === m.c}>{v}</option>)}</select></div>
+              </div>
+              <button class="btn btn-primary btn-sm" type="submit">Enregistrer</button>
+              <div class="mout" hidden></div>
+            </form>
+          </details>
+        )}
+        {edit && (
+          <div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap;align-items:flex-start">
+            <form class="mform" data-members><input type="hidden" name="action" value="invite" /><input type="hidden" name="userId" value={m.id} /><button class="btn btn-ghost btn-sm" type="submit">{m.pending ? 'Renvoyer l’invitation' : 'Envoyer un lien de mot de passe'}</button><div class="mout" hidden></div></form>
+            {!locked && m.id !== me.id && (m.suspendedAt
+              ? <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/membres" data-body={JSON.stringify({ action: 'reactivate', userId: m.id })} data-confirm="Réactiver ce compte ?" data-reload>Réactiver</button>
+              : <form class="mform row" data-members data-reload style="gap:6px"><input type="hidden" name="action" value="suspend" /><input type="hidden" name="userId" value={m.id} /><input class="in" name="reason" placeholder="Motif de la suspension" aria-label="Motif de la suspension" required minlength="3" style="margin:0;width:220px" /><button class="btn btn-ghost btn-sm" type="submit">Suspendre</button><div class="mout" hidden></div></form>)}
+            {canDel && !locked && m.id !== me.id && (
+              <form class="mform row" data-members data-reload data-confirm={`Supprimer définitivement le compte de ${m.name} et ses données personnelles ? Cette action est irréversible.`} style="gap:6px">
+                <input type="hidden" name="action" value="delete" /><input type="hidden" name="userId" value={m.id} />
+                <input class="in" name="confirm" placeholder="Saisir l’e-mail pour confirmer" aria-label="Confirmer avec l’adresse e-mail" required style="margin:0;width:230px" />
+                <button class="btn btn-ghost btn-sm" type="submit" style="color:var(--bad, #B4401F)">Supprimer</button><div class="mout" hidden></div>
+              </form>
+            )}
+          </div>
+        )}
+        <p class="xs muted" style="margin:8px 0 0">Inscrit le {m.created.toLocaleDateString('fr-FR')}{m.phone ? ` · ${m.phone}` : ''}</p>
+      </details>
+    );
+  })}
   {rows.length === 0 && <div class="empty">Aucun membre trouvé.</div>}
 </AdminLayout>
+
+<script>
+  // Formulaires « membres » : affichent le lien d'invitation quand l'API en renvoie un (à copier si l'e-mail n'est pas parti)
+  document.querySelectorAll<HTMLFormElement>('form[data-members]').forEach((f) => f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (f.dataset.confirm && !confirm(f.dataset.confirm)) return;
+    const out = f.querySelector<HTMLElement>('.mout')!;
+    const btn = f.querySelector<HTMLButtonElement>('[type=submit]');
+    const body: Record<string, string> = {};
+    new FormData(f).forEach((v, k) => (body[k] = String(v).trim()));
+    if (btn) btn.disabled = true;
+    out.hidden = false; out.className = 'mout xs'; out.textContent = 'Envoi…';
+    try {
+      const r = await fetch('/api/admin/membres', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const d = await r.json().catch(() => ({ ok: false, error: 'Erreur ' + r.status }));
+      if (!d.ok) { out.className = 'mout xs bad-msg'; out.textContent = d.error || 'Action impossible.'; return; }
+      out.textContent = d.message;
+      if (d.url) {
+        const box = document.createElement('div'); box.className = 'row'; box.style.cssText = 'gap:6px;margin-top:6px';
+        const inp = document.createElement('input'); inp.className = 'in'; inp.readOnly = true; inp.value = d.url; inp.style.cssText = 'margin:0;flex:1;min-width:220px'; inp.setAttribute('aria-label', 'Lien d’invitation');
+        const cp = document.createElement('button'); cp.type = 'button'; cp.className = 'btn btn-ghost btn-sm'; cp.textContent = 'Copier';
+        cp.onclick = () => { navigator.clipboard?.writeText(d.url).then(() => (cp.textContent = 'Copié ✓')); inp.select(); };
+        box.append(inp, cp); out.append(box);
+        if (body.action === 'create') f.reset();
+      } else if (f.hasAttribute('data-reload')) setTimeout(() => location.reload(), 800);
+    } catch { out.textContent = 'Erreur réseau.'; } finally { if (btn) btn.disabled = false; }
+  }));
+</script>
+
+<style>
+  .mout{margin-top:8px;flex-basis:100%}
+  .bad-msg{color:var(--bad, #B4401F)}
+</style>

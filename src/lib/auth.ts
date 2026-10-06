@@ -56,6 +56,15 @@ export const auth = betterAuth({
   rateLimit: { enabled: true, window: 60, max: 30 },
   // À la création d'un compte : profil, rôle « membre », consentement au compte, trace d'audit
   databaseHooks: {
+    // Compte suspendu par l'équipe : aucune nouvelle session
+    session: {
+      create: {
+        before: async (sess) => {
+          const [p] = await db.select({ at: profile.suspendedAt }).from(profile).where(eq(profile.userId, sess.userId));
+          if (p?.at) throw new APIError('FORBIDDEN', { message: 'Ce compte est suspendu. Contactez l’équipe CEA FOR AFRICA pour en savoir plus.' });
+        },
+      },
+    },
     user: {
       create: {
         after: async (u) => {

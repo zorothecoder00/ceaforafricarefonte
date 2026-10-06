@@ -4,6 +4,7 @@ import { defineMiddleware } from 'astro:middleware';
 import { getCurrentUser } from './lib/session';
 import { isStaff, needs2fa } from './lib/rbac';
 import { findRedirect } from './lib/redirects';
+import { loadRights } from './lib/rights';
 import { applySiteText, canEditSite, loadOverrides, pageScope, SITE } from './lib/site-text';
 import type { CurrentUser } from './lib/session';
 
@@ -24,6 +25,7 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   }
 
   const path = ctx.url.pathname.replace(/^\/en(?=\/|$)/, '') || '/';
+  await loadRights(); // matrice des droits modifiée depuis le back-office
   ctx.locals.user = await getCurrentUser(ctx.request.headers).catch(() => null);
   const user = ctx.locals.user;
   const login = (reason: string) => ctx.redirect(`/connexion?retour=${encodeURIComponent(ctx.url.pathname + ctx.url.search)}&motif=${reason}`);

@@ -2,7 +2,7 @@
 import { eq } from 'drizzle-orm';
 import { auth } from './auth';
 import { db } from './db';
-import { userRole, auditLog } from '../db/schema/app';
+import { userRole, auditLog, profile } from '../db/schema/app';
 import { can, scope, type Obj, type Action } from './rbac';
 
 export type CurrentUser = { id: string; name: string; email: string; phoneNumber?: string | null; twoFactorEnabled?: boolean | null; roles: string[] };
@@ -10,7 +10,12 @@ export type CurrentUser = { id: string; name: string; email: string; phoneNumber
 export async function getCurrentUser(headers: Headers): Promise<CurrentUser | null> {
   const s = await auth.api.getSession({ headers });
   if (!s) return null;
-  const roles = (await db.select({ role: userRole.role }).from(userRole).where(eq(userRole.userId, s.user.id))).map((r) => r.role as string);
+  const [roleRows, [p]] = await Promise.all([
+    db.select({ role: userRole.role }).from(userRole).where(eq(userRole.userId, s.user.id)),
+    db.select({ suspendedAt: profile.suspendedAt }).from(profile).where(eq(profile.userId, s.user.id)),
+  ]);
+  if (p?.suspendedAt) return null; // compte suspendu : traité comme déconnecté
+  const roles = roleRows.map((r) => r.role as string);
   const u = s.user as typeof s.user & { phoneNumber?: string | null; twoFactorEnabled?: boolean | null };
   return { id: u.id, name: u.name, email: u.email, phoneNumber: u.phoneNumber, twoFactorEnabled: u.twoFactorEnabled, roles };
 }

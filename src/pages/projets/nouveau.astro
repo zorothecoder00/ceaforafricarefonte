@@ -4,7 +4,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import Wizard from '../../components/Wizard.astro';
 import { COUNTRIES, SUBS } from '../../data/site';
-import { SHEET_FIELDS } from '../../lib/projects';
+import { SHEET_FIELDS, PROJECT_SECTORS, PROJECT_STAGES } from '../../lib/projects';
 
 export const prerender = false;
 
@@ -20,9 +20,9 @@ const field = (k: string) => SHEET_FIELDS.find(([f]) => f === k)!;
         <fieldset data-step="Le projet" style={fs}>
           <label class="f" for="p1">Nom du projet</label><input class="in" id="p1" name="nom" required minlength="2" />
           <div class="grid g3" style="gap:0 12px">
-            <div><label class="f" for="p2">Secteur</label><select class="in" id="p2" name="secteur">{['Agriculture', 'Agro-industrie', 'Énergie', 'Santé', 'Éducation', 'Numérique', 'Fintech', 'BTP', 'Industrie', 'Commerce', 'Autre'].map((s) => <option>{s}</option>)}</select></div>
+            <div><label class="f" for="p2">Secteur</label><select class="in" id="p2" name="secteur">{PROJECT_SECTORS.map((s) => <option>{s}</option>)}</select></div>
             <div><label class="f" for="p3">Pays</label><select class="in" id="p3" name="pays">{Object.entries(COUNTRIES).map(([k, v]) => <option value={k}>{v}</option>)}</select></div>
-            <div><label class="f" for="p4">Stade</label><select class="in" id="p4" name="stade">{['Idée', 'Pré-amorçage', 'Amorçage', 'Croissance', 'Série A'].map((s) => <option>{s}</option>)}</select></div>
+            <div><label class="f" for="p4">Stade</label><select class="in" id="p4" name="stade">{PROJECT_STAGES.map((s) => <option>{s}</option>)}</select></div>
           </div>
         </fieldset>
         {steps.map(([title, keys]) => (
