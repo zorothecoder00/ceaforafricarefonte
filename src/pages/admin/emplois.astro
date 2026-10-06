@@ -11,6 +11,7 @@ import { country } from '../../data/site';
 import AiModNote, { type ModNote } from '../../components/AiModNote.astro';
 import JobForm from '../../components/JobForm.astro';
 import { aiEnabled, latestNotes } from '../../lib/ai';
+import { jobReasons } from '../../lib/fraud';
 
 export const prerender = false;
 const me = Astro.locals.user!;
@@ -18,9 +19,11 @@ const all = (a: 'C' | 'M' | 'V') => scope(me.roles, 'offre_emploi', a) === 'all'
 const canC = all('C'), canM = all('M'), canV = all('V');
 const st = (Astro.url.searchParams.get('statut') ?? 'en_moderation') as (typeof jobStatusEnum.enumValues)[number];
 const status = jobStatusEnum.enumValues.includes(st) ? st : 'en_moderation';
-const rows = await db.select({ j: job, employer: user.email }).from(job).leftJoin(user, eq(user.id, job.employerId)).where(eq(job.status, status)).orderBy(desc(job.createdAt)).limit(200);
+const rows = await db.select({ j: job, employer: user.email, employerSince: user.createdAt }).from(job).leftJoin(user, eq(user.id, job.employerId)).where(eq(job.status, status)).orderBy(desc(job.createdAt)).limit(200);
 const counts = Object.fromEntries((await db.select({ s: job.status, n: sql<number>`count(*)::int` }).from(job).groupBy(job.status)).map((r) => [r.s, r.n]));
 const notes = await latestNotes<ModNote>('job', rows.map((r) => r.j.id), 'moderation');
+// Signaux de fraude de chaque annonce (règles explicables, src/lib/fraud.ts) : aide à la décision, jamais de refus automatique
+const fraud = new Map(await Promise.all(rows.map(async (r) => [r.j.id, await jobReasons(r.j, { email: r.employer, createdAt: r.employerSince })] as const)));
 const ids = rows.map((r) => r.j.id);
 const apps = ids.length ? await db.select({ jobId: jobApplication.jobId, status: jobApplication.status, at: jobApplication.createdAt, name: user.name, email: user.email }).from(jobApplication).innerJoin(user, eq(user.id, jobApplication.userId)).where(inArray(jobApplication.jobId, ids)).orderBy(asc(jobApplication.createdAt)) : [];
 const hires = can(me.roles, 'parametres', 'M') ? await db.select().from(hireDeclaration).orderBy(desc(hireDeclaration.hiredOn)).limit(100) : [];
@@ -52,6 +55,7 @@ const post = (body: object) => JSON.stringify(body);
           <span style="margin-left:8px">{mine.length} candidature{mine.length > 1 ? 's' : ''}</span>
         </div>
         {j.status === 'refusee' && j.moderationNote && <p class="small" style="margin:8px 0 0">Motif communiqué au recruteur : « {j.moderationNote} »</p>}
+        {(fraud.get(j.id) ?? []).length > 0 && <div class="small" style="margin:8px 0;padding:8px 10px;border-left:4px solid var(--bad);background:var(--bad-soft);border-radius:6px"><b>Signaux de fraude</b><ul style="margin:4px 0 0;padding-left:18px">{fraud.get(j.id)!.map((x) => <li>{x}</li>)}</ul></div>}
         {j.description && <details><summary class="small">Description</summary><p class="small" style="white-space:pre-wrap">{j.description}</p></details>}
         {j.status === 'en_moderation' && <AiModNote kind="job" id={j.id} note={notes.get(j.id)} enabled={aiEnabled()} />}
 

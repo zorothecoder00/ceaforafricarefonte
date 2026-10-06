@@ -1,5 +1,6 @@
 ---
-/* Modération de la communauté (CDC §7.3, §11) : publications retenues par les filtres ou signalées, publications masquées, avis de cours,
+/* Modération de la communauté (CDC §7.3, §11, §14) : publications retenues par les filtres ou signalées, publications masquées, avis de cours,
+   signaux de fraude (faux comptes, paiements suspects, annonces frauduleuses — src/lib/fraud.ts),
    et filtres de modération (expressions qui retiennent une publication) modifiables par l'équipe. */
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { and, desc, eq, inArray } from 'drizzle-orm';
@@ -12,27 +13,48 @@ import AiModNote, { type ModNote } from '../../components/AiModNote.astro';
 import { aiEnabled, latestNotes } from '../../lib/ai';
 import { getSetting } from '../../lib/settings';
 import { can } from '../../lib/rbac';
+import { fraudSignals } from '../../lib/fraud';
 
 export const prerender = false;
 const COURSES = await allCourses({ hidden: true });
 const me = Astro.locals.user!;
 const cs = await countriesFor(me, 'moderation');
 const v = Astro.url.searchParams.get('vue');
-const view = v === 'masque' ? 'masque' : v === 'avis' ? 'avis' : v === 'filtres' ? 'filtres' : 'en_moderation';
+const view = v === 'masque' ? 'masque' : v === 'avis' ? 'avis' : v === 'filtres' ? 'filtres' : v === 'fraude' ? 'fraude' : 'en_moderation';
 // Filtres : lisibles par tout modérateur ; modifiables par un modérateur (M) sans restriction de pays, car la liste vaut pour tous les pays
 const filters = await getSetting('moderation');
+// Signaux de fraude (comptes, paiements, annonces) ; ceux des paiements seulement pour qui voit les paiements
+const signals = (await fraudSignals().catch(() => [])).filter((s) => s.kind !== 'paiement' || can(me.roles, 'paiements', 'L'));
+const canFraud = can(me.roles, 'moderation', 'M');
+const FRAUD_KIND = { compte: 'Compte', paiement: 'Paiement', annonce: 'Annonce d’emploi' } as const;
 const canFilters = can(me.roles, 'moderation', 'M') && !(await countriesFor(me, 'moderation', 'M'));
 const countryFilter = cs ? inArray(profile.country, cs.length ? cs : ['--']) : undefined;
 // Avis de cours : d'abord ceux retenus (lien) ou masqués, puis les plus récents
 const reviews = view === 'avis' ? await db.select({ r: courseReview, name: user.name }).from(courseReview).innerJoin(user, eq(user.id, courseReview.userId)).leftJoin(profile, eq(profile.userId, courseReview.userId))
   .where(countryFilter).orderBy(desc(courseReview.hidden), desc(courseReview.at)).limit(200) : [];
 const courseTitle = (id: string) => COURSES.find((c) => c.id === id)?.t ?? id;
-const rows = view === 'avis' || view === 'filtres' ? [] : await db.select({ p: post, name: user.name, c: profile.country, space: space.name }).from(post).innerJoin(user, eq(user.id, post.authorId)).leftJoin(profile, eq(profile.userId, post.authorId)).leftJoin(space, eq(space.id, post.spaceId))
+const rows = view === 'avis' || view === 'filtres' || view === 'fraude' ? [] : await db.select({ p: post, name: user.name, c: profile.country, space: space.name }).from(post).innerJoin(user, eq(user.id, post.authorId)).leftJoin(profile, eq(profile.userId, post.authorId)).leftJoin(space, eq(space.id, post.spaceId))
   .where(and(eq(post.status, view === 'masque' ? 'masque' : 'en_moderation'), countryFilter)).orderBy(desc(post.createdAt)).limit(200);
 const notes = await latestNotes<ModNote>('post', rows.map((r) => r.p.id), 'moderation');
 ---
 <AdminLayout title="Modération" lead="Délai cible : 24 heures. Les décisions sont notifiées à l'auteur et tracées." obj="moderation">
-  <nav class="subnav" style="margin:0 0 12px"><a href="?vue=en_moderation" aria-current={view === 'en_moderation' ? 'page' : undefined}>À examiner</a><a href="?vue=masque" aria-current={view === 'masque' ? 'page' : undefined}>Masquées</a><a href="?vue=avis" aria-current={view === 'avis' ? 'page' : undefined}>Avis de cours</a><a href="/admin/messages?onglet=signalements">Signalements</a><a href="?vue=filtres" aria-current={view === 'filtres' ? 'page' : undefined}>Filtres</a></nav>
+  <nav class="subnav" style="margin:0 0 12px"><a href="?vue=en_moderation" aria-current={view === 'en_moderation' ? 'page' : undefined}>À examiner</a><a href="?vue=masque" aria-current={view === 'masque' ? 'page' : undefined}>Masquées</a><a href="?vue=avis" aria-current={view === 'avis' ? 'page' : undefined}>Avis de cours</a><a href="/admin/messages?onglet=signalements">Signalements</a><a href="?vue=filtres" aria-current={view === 'filtres' ? 'page' : undefined}>Filtres</a><a href="?vue=fraude" aria-current={view === 'fraude' ? 'page' : undefined}>Fraude{signals.length ? ` (${signals.length})` : ''}</a></nav>
+  {view === 'fraude' && (
+    <>
+      <p class="small muted" style="margin:0 0 12px">Signaux détectés automatiquement sur les 30 derniers jours : faux comptes probables, paiements suspects, annonces d'emploi frauduleuses ou trompeuses. Aucun n'entraîne d'action automatique : examinez chaque cas, puis agissez (suspendre le compte, refuser l'annonce) ou écartez le signal en indiquant pourquoi.</p>
+      {signals.length === 0 && <div class="empty">Aucun signal de fraude en cours.</div>}
+      {signals.map((s) => (
+        <div class="panel" style="margin-bottom:10px">
+          <div class="row between" style="gap:8px"><span class="small"><span class={`tag ${s.kind === 'paiement' ? 'warn' : 'gold'}`}>{FRAUD_KIND[s.kind]}</span> <b>{s.subject}</b></span><span class="xs muted">{s.at.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Africa/Lome' })}</span></div>
+          <ul class="small" style="margin:8px 0">{s.reasons.map((r) => <li>{r}</li>)}</ul>
+          <div class="row" style="gap:6px">
+            <a class="btn btn-primary btn-sm" href={s.link}>Examiner</a>
+            {canFraud && <form class="row" data-api="/api/admin" data-reload style="gap:6px;flex:1;min-width:220px"><input type="hidden" name="action" value="fraude.ecarte" /><input type="hidden" name="key" value={s.key} /><input class="in" name="motif" required minlength="3" maxlength="500" placeholder="Motif (ex. vérifié par téléphone)" aria-label="Motif pour écarter le signal" style="flex:1;margin:0" /><button class="btn btn-ghost btn-sm" type="submit">Écarter le signal</button></form>}
+          </div>
+        </div>
+      ))}
+    </>
+  )}
   {view === 'en_moderation' && <p class="small muted" style="margin:0 0 12px">Une publication de la communauté arrive ici, au lieu d'être publiée, quand elle contient une expression des <a href="?vue=filtres">filtres</a>. Validez-la pour la publier, ou masquez-la.</p>}
   {view === 'filtres' && (
     <form class="panel" data-api="/api/admin" data-reload>

@@ -27,6 +27,7 @@ const Body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('contact.update'), id, priority: z.enum(ticketPriorityEnum.enumValues).optional(), assignee: z.enum(['moi', 'personne']).optional() }),
   z.object({ action: z.literal('report.status'), id, status: z.enum(ticketFlowEnum.enumValues) }),
   z.object({ action: z.literal('post.status'), id, status: z.enum(['publie', 'masque']) }),
+  z.object({ action: z.literal('fraude.ecarte'), key: z.string().regex(/^(compte|paiement|annonce):[\w-]{1,64}$/), motif: z.string().trim().min(3).max(500) }),
   z.object({ action: z.literal('moderation.filtres'), words: z.string().max(10000), whatsapp: z.boolean(), reviewLinks: z.boolean() }),
   z.object({ action: z.literal('review.hidden'), userId: z.string().min(1).max(64), courseId: z.string().max(20), hidden: z.boolean() }),
   z.object({ action: z.literal('application.update'), id, status: z.enum(['recue', 'en_evaluation', 'entretien', 'admise', 'liste_attente', 'refusee', 'retiree']) /* pas de retour au brouillon */, score: z.coerce.number().int().min(0).max(100).nullish() }),
@@ -117,6 +118,12 @@ export const POST: APIRoute = async ({ locals, request }) => {
       if (b.status === 'masque') await notify(pt.author, 'Une de vos publications a été masquée par la modération (charte de la communauté).', '/communaute/fil');
       await audit(u.id, 'admin.publication.' + b.status, b.id, {}, ip);
       return ok(b.status === 'publie' ? 'Publication validée.' : 'Publication masquée.');
+    }
+    case 'fraude.ecarte': {
+      // Signal de fraude examiné et jugé sans suite : mémorisé dans le journal d'audit, il ne réapparaît plus
+      const u = guard('moderation', 'M'); if (u instanceof Response) return u;
+      await audit(u.id, 'fraude.ecarte', b.key, { motif: b.motif }, ip);
+      return ok('Signal écarté : il est inscrit au journal d’audit avec votre motif.');
     }
     case 'moderation.filtres': {
       // Liste commune à tous les pays : réservée aux modérateurs sans restriction de pays
