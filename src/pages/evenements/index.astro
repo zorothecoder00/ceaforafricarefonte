@@ -49,7 +49,7 @@ const gcal = `https://calendar.google.com/calendar/render?cid=${encodeURICompone
         <select class="in" id="fP" aria-label="Prix"><option value="">Gratuit et payant</option><option value="1">Accès gratuit</option><option value="0">Payant</option></select>
         <details style="position:relative">
           <summary class="btn btn-ghost btn-sm">S'abonner au calendrier</summary>
-          <div class="panel" style="position:absolute;z-index:5;right:0;min-width:280px;margin-top:6px">
+          <div class="panel cal-pop">
             <p class="small" style="margin:0 0 8px">Les nouveaux événements apparaîtront automatiquement dans votre agenda.</p>
             <a class="btn btn-primary btn-sm" id="webcal" href="/evenements.ics" style="margin-bottom:8px">Ouvrir dans mon agenda</a>
             <a class="small" href={gcal} target="_blank" rel="noopener" style="display:block">Ajouter à Google Agenda</a>

@@ -18,7 +18,7 @@ const role = q.get('role') ?? '';
 const visible = me ? inArray(profile.visibility, ['public', 'membres']) : eq(profile.visibility, 'public');
 const like = `%${term}%`;
 const rows = await db
-  .select({ id: user.id, name: user.name, p: profile, roles: sql<string[]>`coalesce(array_agg(${userRole.role}) filter (where ${userRole.role} is not null), '{}')` })
+  .select({ id: user.id, name: user.name, p: profile, roles: sql<string[]>`coalesce(array_agg(${userRole.role}::text) filter (where ${userRole.role} is not null), '{}')` }) // ::text : un tableau d'énumération arrive en texte brut avec node-pg
   .from(profile)
   .innerJoin(user, eq(user.id, profile.userId))
   .leftJoin(userRole, eq(userRole.userId, user.id))
