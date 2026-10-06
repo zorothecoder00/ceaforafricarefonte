@@ -1,23 +1,27 @@
 /* API publique de l'Observatoire d'impact (CDC §7.9, §13) : lecture seule, sans authentification, appelable depuis n'importe quel site.
-   GET /api/ouvert/impact            → indicateurs, emplois par trimestre, données par pays
-   GET /api/ouvert/impact?pays=TG    → filtrage des données par pays (code ISO 3166-1 alpha-2) */
+   GET /api/ouvert/impact                         → indicateurs, emplois par trimestre, membres par pays
+   GET /api/ouvert/impact?pays=TG&annee=2026      → mêmes données filtrées (pays ISO 3166-1 alpha-2, année, secteur, genre)
+   Valeurs calculées à partir des données de la plateforme ; « null » = moins de 10 personnes (non publié). */
 import type { APIRoute } from 'astro';
-import { KPIS, JOBS_BY_QUARTER, BY_COUNTRY, IMPACT_ASOF, IMPACT_LICENSE } from '../../../data/impact';
+import { computeImpact, readFilters, MIN_CELL } from '../../../lib/impact';
 
 export const prerender = false;
 
-const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=3600' };
+const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=600' };
 
-export const GET: APIRoute = ({ url }) => {
-  const pays = url.searchParams.get('pays')?.toUpperCase();
-  if (pays && !/^[A-Z]{2}$/.test(pays)) return new Response(JSON.stringify({ error: 'Paramètre « pays » invalide (code ISO à 2 lettres).' }), { status: 400, headers });
+export const GET: APIRoute = async ({ url }) => {
+  const pays = url.searchParams.get('pays');
+  if (pays && !/^[A-Za-z]{2}$/.test(pays)) return new Response(JSON.stringify({ error: 'Paramètre « pays » invalide (code ISO à 2 lettres).' }), { status: 400, headers });
+  const d = await computeImpact(readFilters(url.searchParams));
   const body = {
     source: 'CEA FOR AFRICA — Observatoire d’impact',
-    licence: IMPACT_LICENSE,
-    date_arrete: IMPACT_ASOF,
-    indicateurs: KPIS.map(({ id, label, value, unit, definition, source, asOf }) => ({ id, libelle: label, valeur: value, unite: unit, definition, source, date_arrete: asOf })),
-    emplois_par_trimestre: JOBS_BY_QUARTER.map(([trimestre, emplois]) => ({ trimestre, emplois })),
-    pays: pays ? BY_COUNTRY.filter((c) => c.code === pays) : BY_COUNTRY,
+    licence: 'CC BY 4.0',
+    date_arrete: d.asOf,
+    filtres: d.filters,
+    regle_publication: `Valeur null : moins de ${MIN_CELL} personnes concernées (non publiée).`,
+    indicateurs: d.kpis.map((k) => ({ id: k.id, libelle: k.label, valeur: k.value, unite: k.unit, definition: k.definition, source: k.source, ...(k.note ? { remarque: k.note } : {}) })),
+    emplois_par_trimestre: d.jobsByQuarter.map(([trimestre, emplois]) => ({ trimestre, emplois })),
+    pays: d.byCountry,
   };
   return new Response(JSON.stringify(body), { headers });
 };

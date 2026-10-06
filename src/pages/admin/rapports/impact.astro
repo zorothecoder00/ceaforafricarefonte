@@ -1,0 +1,63 @@
+---
+/* Rapports d'impact par programme et par partenaire (CDC §7.9) : générés à la demande à partir des données de la plateforme,
+   imprimables ou enregistrables en PDF (impression du navigateur). Droit : rapports (L). */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Money from '../../../components/Money.astro';
+import { eq } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { crmOrg, crmDeal } from '../../../db/schema/crm';
+import { programmeNames, programmeReport, partnerReport } from '../../../lib/impact-reports';
+import { country } from '../../../data/site';
+import { DEAL_KIND_LABEL } from '../../../lib/crm';
+import ProgReport from '../../../components/ImpactProgrammeReport.astro';
+
+export const prerender = false;
+const prog = Astro.url.searchParams.get('programme') ?? '';
+const partner = Astro.url.searchParams.get('partenaire') ?? '';
+const [names, partners] = await Promise.all([
+  programmeNames(),
+  db.selectDistinct({ id: crmOrg.id, name: crmOrg.name }).from(crmOrg).innerJoin(crmDeal, eq(crmDeal.orgId, crmOrg.id)).where(eq(crmDeal.stage, 'gagne')).orderBy(crmOrg.name),
+]);
+const pr = prog ? await programmeReport(prog) : null;
+const pa = !pr && /^[0-9a-f-]{36}$/.test(partner) ? await partnerReport(partner) : null;
+const day = (d: Date) => d.toLocaleDateString('fr-FR', { dateStyle: 'long', timeZone: 'Africa/Lome' });
+const dd = (s: string | null) => (s ? new Date(s).toLocaleDateString('fr-FR', { timeZone: 'UTC' }) : '—');
+---
+<AdminLayout title="Rapports d'impact" lead="Rapport d'un programme ou d'un partenaire, calculé à partir des données de la plateforme. Imprimez-le ou enregistrez-le en PDF pour l'envoyer." obj="rapports" hints={[]}>
+  <form class="filters noprint" method="get" style="margin-top:0">
+    <select class="in" name="programme" aria-label="Programme"><option value="">Rapport d'un programme…</option>{names.map((n) => <option selected={n === prog}>{n}</option>)}</select>
+    <button class="btn btn-primary btn-sm" type="submit">Générer</button>
+  </form>
+  <form class="filters noprint" method="get">
+    <select class="in" name="partenaire" aria-label="Partenaire"><option value="">Rapport d'un partenaire…</option>{partners.map((o) => <option value={o.id} selected={o.id === partner}>{o.name}</option>)}</select>
+    <button class="btn btn-primary btn-sm" type="submit">Générer</button>
+  </form>
+  {!partners.length && <p class="xs muted noprint">Un partenaire apparaît ici dès qu'une de ses opportunités est « gagnée » dans le CRM ; indiquez-y le programme cofinancé ou l'événement sponsorisé.</p>}
+
+  {(pr || pa) && <p class="noprint" style="margin:12px 0"><button class="btn btn-ghost btn-sm" type="button" onclick="print()">Imprimer ou enregistrer en PDF</button></p>}
+
+  {pr && <ProgReport r={pr} />}
+  {pa && (
+    <article class="panel report">
+      <p class="xs muted" style="margin:0">CEA FOR AFRICA · Rapport partenaire · généré le {day(pa.generatedAt)}</p>
+      <h2 style="margin:6px 0 2px">{pa.org.name}</h2>
+      <p class="small muted" style="margin:0">{pa.org.country ? country(pa.org.country) : ''}</p>
+      <h3>Engagements</h3>
+      <table class="t"><thead><tr><th>Convention</th><th>Nature</th><th>Objet</th><th class="num">Montant</th></tr></thead>
+        <tbody>{pa.deals.map((d) => <tr><td>{d.title}</td><td>{DEAL_KIND_LABEL[d.kind] ?? d.kind}</td><td>{d.programme ? `Programme ${d.programme}` : d.event ? `Événement : ${d.event}` : '—'}</td><td class="num">{d.amountXof ? <Money xof={d.amountXof} /> : '—'}</td></tr>)}</tbody>
+      </table>
+      <p class="small"><b>Total engagé :</b> <Money xof={pa.committed} /></p>
+      {pa.events.length > 0 && <>
+        <h3>Événements soutenus</h3>
+        <table class="t"><thead><tr><th>Événement</th><th>Date</th><th class="num">Billets</th><th class="num">Présents</th></tr></thead>
+          <tbody>{pa.events.map((e) => <tr><td>{e.title} · {e.city}</td><td>{dd(e.date)}</td><td class="num">{e.tickets}</td><td class="num">{e.attendees}</td></tr>)}</tbody>
+        </table>
+      </>}
+      {pa.programmes.map((r) => <ProgReport r={r} nested />)}
+      {!pa.programmes.length && !pa.events.length && <p class="small muted">Aucun programme cofinancé ni événement sponsorisé n'est indiqué sur ses conventions gagnées (champ « Programme cofinancé » ou « Événement » de l'opportunité, dans le CRM).</p>}
+    </article>
+  )}
+  {partner && !pa && !pr && <div class="empty">Partenaire introuvable.</div>}
+  <style>{`@media print{.noprint,nav.side,header,footer,.fab,.chat,.page-head .subnav{display:none!important}.dash{display:block}.report{border:0;box-shadow:none}}`}</style>
+</AdminLayout>
+

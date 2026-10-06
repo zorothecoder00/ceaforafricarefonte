@@ -10,6 +10,7 @@ import { can } from '../../../../lib/rbac';
 import { countriesFor } from '../../../../lib/admin';
 import { STAGES, STAGE_LABEL, ORG_KIND_LABEL, INTERACTION_LABEL, DEAL_KIND_LABEL } from '../../../../lib/crm';
 import { allEvents } from '../../../../lib/catalog';
+import { programmeNames } from '../../../../lib/impact-reports';
 import { COUNTRIES, country } from '../../../../data/site';
 
 export const prerender = false;
@@ -25,6 +26,7 @@ const contacts = await db.select().from(crmContact).where(eq(crmContact.orgId, i
 const deals = await db.select().from(crmDeal).where(eq(crmDeal.orgId, id)).orderBy(desc(crmDeal.updatedAt));
 const interactions = await db.select({ i: crmInteraction, who: user.name }).from(crmInteraction).leftJoin(user, eq(user.id, crmInteraction.authorId)).where(eq(crmInteraction.orgId, id)).orderBy(desc(crmInteraction.at)).limit(100);
 const events = await allEvents({ hidden: true });
+const programmes = await programmeNames();
 const countryList = Object.entries(COUNTRIES).filter(([c]) => !scope || scope.includes(c));
 const fmt = (d: Date) => d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
 const won = deals.filter((d) => d.stage === 'gagne').reduce((n, d) => n + (d.amountXof ?? 0), 0);
@@ -53,10 +55,11 @@ const won = deals.filter((d) => d.stage === 'gagne').reduce((n, d) => n + (d.amo
       <div class="panel">{contacts.length ? contacts.map((c) => <div class="list-row"><span class="small"><a href={`/admin/crm/personne/c-${c.id}`}><b>{c.name}</b></a>{c.role && <span class="muted"> · {c.role}</span>}</span><span class="xs muted">{c.email ?? c.phone ?? ''}{c.marketingConsent ? ' · ✓ marketing' : ''}</span></div>) : <p class="small muted" style="margin:0">Aucun contact. Créez-en un depuis <a href="/admin/crm">l'onglet Contacts</a> en choisissant cette organisation.</p>}</div>
 
       <h2 style="font-size:1.1rem;margin-top:20px">Opportunités {won > 0 && <span class="small muted">· gagné : <Money xof={won} /></span>}</h2>
+      {won > 0 && <p class="small" style="margin:-4px 0 8px"><a href={`/admin/rapports/impact?partenaire=${o.id}`}>Rapport d'impact de ce partenaire</a></p>}
       <div class="panel">
         {deals.map((d) => (
           <div class="list-row" style="align-items:flex-start">
-            <span class="small"><b>{d.title}</b><div class="xs muted">{DEAL_KIND_LABEL[d.kind] ?? d.kind}{d.amountXof ? <> · <Money xof={d.amountXof} /></> : ''}{d.eventId ? ` · ${events.find((e) => e.id === d.eventId)?.t ?? d.eventId}` : ''}{d.expectedOn ? ` · échéance ${new Date(d.expectedOn).toLocaleDateString('fr-FR')}` : ''}</div></span>
+            <span class="small"><b>{d.title}</b><div class="xs muted">{DEAL_KIND_LABEL[d.kind] ?? d.kind}{d.amountXof ? <> · <Money xof={d.amountXof} /></> : ''}{d.eventId ? ` · ${events.find((e) => e.id === d.eventId)?.t ?? d.eventId}` : ''}{d.programme ? ` · programme ${d.programme}` : ''}{d.expectedOn ? ` · échéance ${new Date(d.expectedOn).toLocaleDateString('fr-FR')}` : ''}</div></span>
             {canM ? <select class="in" style="width:auto;padding:4px 6px;font-size:.85rem" aria-label="Étape" data-deal={d.id}>{STAGES.map((s) => <option value={s} selected={s === d.stage}>{STAGE_LABEL[s]}</option>)}</select> : <span class="tag">{STAGE_LABEL[d.stage]}</span>}
           </div>
         ))}
@@ -70,6 +73,7 @@ const won = deals.filter((d) => d.stage === 'gagne').reduce((n, d) => n + (d.amo
                 <div><label class="f" for="dk">Nature</label><select class="in" id="dk" name="kind">{Object.entries(DEAL_KIND_LABEL).map(([k, l]) => <option value={k}>{l}</option>)}</select></div>
                 <div><label class="f" for="da">Montant (FCFA)</label><input class="in" id="da" name="amountXof" type="number" min="0" /></div>
                 <div><label class="f" for="de">Événement</label><select class="in" id="de" name="eventId"><option value="">—</option>{events.map((e) => <option value={e.id}>{e.t}</option>)}</select></div>
+                <div><label class="f" for="dp">Programme cofinancé</label><select class="in" id="dp" name="programme"><option value="">—</option>{programmes.map((p) => <option>{p}</option>)}</select></div>
                 <div><label class="f" for="dx">Échéance</label><input class="in" id="dx" name="expectedOn" type="date" /></div>
               </div>
               <button class="btn btn-primary btn-sm" type="submit" style="margin-top:8px">Créer</button>

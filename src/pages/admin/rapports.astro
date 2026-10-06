@@ -31,6 +31,7 @@ const qs = spec?.success ? new URLSearchParams(Object.entries(spec.data).filter(
 const additive = spec?.success && /^(nombre|montant|recettes|ttc)$/.test(spec.data.measure);
 ---
 <AdminLayout title="Rapports" lead={scope ? `Données limitées à vos pays : ${scope.map(country).join(', ')}.` : 'Construisez un rapport, enregistrez-le, exportez-le. Chaque export est inscrit au journal d’audit.'} obj="rapports">
+  <p class="noprint" style="margin:0 0 12px"><a class="btn btn-ghost btn-sm" href="/admin/rapports/impact">Rapports d'impact par programme et par partenaire</a></p>
   {!d && <div class="empty">Aucun jeu de données n'est accessible avec vos droits.</div>}
   {d && spec && (
     <form class="panel row noprint" method="get" style="gap:8px;flex-wrap:wrap;align-items:flex-end">

@@ -1,10 +1,11 @@
-/* Données ouvertes de l'Observatoire d'impact au format CSV (CDC §7.9). */
-import type { APIRoute, GetStaticPaths } from 'astro';
-import { DATASETS } from '../../../data/impact';
+/* Données ouvertes de l'Observatoire d'impact au format CSV (CDC §7.9), calculées à la demande (mêmes règles que la page). */
+import type { APIRoute } from 'astro';
+import { computeImpact, DATASETS } from '../../../lib/impact';
 
-export const getStaticPaths: GetStaticPaths = () => DATASETS.map((d) => ({ params: { id: d.id } }));
+export const prerender = false;
 
-export const GET: APIRoute = ({ params }) => {
-  const d = DATASETS.find((x) => x.id === params.id)!;
-  return new Response(d.csv(), { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="cea-impact-${d.id}.csv"` } });
+export const GET: APIRoute = async ({ params }) => {
+  const d = DATASETS.find((x) => x.id === params.id);
+  if (!d) return new Response('Jeu de données inconnu.', { status: 404 });
+  return new Response(d.csv(await computeImpact()), { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="cea-impact-${d.id}.csv"`, 'Cache-Control': 'public, max-age=600' } });
 };

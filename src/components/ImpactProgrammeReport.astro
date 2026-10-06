@@ -1,0 +1,42 @@
+---
+/* Rapport d'impact d'un programme (CDC §7.9), seul ou intégré au rapport d'un partenaire qui le cofinance. */
+import Money from './Money.astro';
+import { MIN_CELL } from '../lib/impact';
+import type { ProgrammeReport } from '../lib/impact-reports';
+
+interface Props { r: ProgrammeReport; nested?: boolean }
+const { r, nested = false } = Astro.props;
+const day = (d: Date) => d.toLocaleDateString('fr-FR', { dateStyle: 'long', timeZone: 'Africa/Lome' });
+const dd = (s: string | null) => (s ? new Date(s).toLocaleDateString('fr-FR', { timeZone: 'UTC' }) : '—');
+const pct = (v: number | null, what = 'réponses') => (v == null ? `moins de ${MIN_CELL} ${what}` : `${v} %`);
+const STATUS: Record<string, string> = { a_venir: 'À venir', en_cours: 'En cours', terminee: 'Terminée' };
+const hidden = `moins de ${MIN_CELL} anciens`;
+---
+<article class={nested ? 'report-sub' : 'panel report'}>
+  {!nested && <p class="xs muted" style="margin:0">CEA FOR AFRICA · Rapport d'impact de programme · généré le {day(r.generatedAt)}</p>}
+  <h2 style={nested ? 'font-size:1.15rem;margin:18px 0 4px' : 'margin:6px 0 4px'}>Programme {r.name}</h2>
+  <div class="kpis" style="margin:12px 0">
+    <div class="kpi"><b>{r.applications}</b><span>candidatures reçues</span></div>
+    <div class="kpi"><b>{r.participants}</b><span>participants (hors abandons)</span></div>
+    <div class="kpi"><b>{r.graduated}</b><span>diplômés</span></div>
+    <div class="kpi"><b>{r.retention == null ? '—' : `${r.retention} %`}</b><span>taux de maintien</span></div>
+    <div class="kpi"><b>{r.attendance == null ? '—' : `${r.attendance} %`}</b><span>présence aux séances</span></div>
+    <div class="kpi"><b>{r.womenPct == null ? '—' : `${r.womenPct} %`}</b><span>part de femmes{r.womenPct == null ? ` (${pct(null, 'déclarations')})` : ''}</span></div>
+  </div>
+  <h3>Cohortes</h3>
+  {r.cohorts.length ? (
+    <table class="t"><thead><tr><th>Cohorte</th><th>Début</th><th>Fin</th><th>Statut</th><th class="num">Participants</th></tr></thead>
+      <tbody>{r.cohorts.map((c) => <tr><td>{c.name}</td><td>{dd(c.startsOn)}</td><td>{dd(c.endsOn)}</td><td>{STATUS[c.status] ?? c.status}</td><td class="num">{c.members}</td></tr>)}</tbody>
+    </table>
+  ) : <p class="small muted">Aucune cohorte pour ce programme.</p>}
+  <p class="small">Jalons atteints : <b>{r.milestones.reached}</b>{r.milestones.total ? ` sur ${r.milestones.total} attendus` : ''}.</p>
+  <h3>Après le programme</h3>
+  <p class="small" style="margin-top:0">Questionnaires de suivi reçus : {r.followups.filter((f) => f.answers).map((f) => `${f.answers} à ${f.months} mois`).join(' · ') || 'aucun pour l’instant'} ({r.alumniReporting} ancien{r.alumniReporting > 1 ? 's' : ''} au dernier point de suivi).</p>
+  <table class="t"><tbody>
+    <tr><td>Emplois dans les entreprises des anciens</td><td class="num">{r.employees == null ? hidden : r.employees}</td></tr>
+    <tr><td>Fonds levés déclarés</td><td class="num">{r.fundsRaised == null ? hidden : <Money xof={r.fundsRaised} />}</td></tr>
+    <tr><td>Chiffre d'affaires annuel cumulé</td><td class="num">{r.revenue == null ? hidden : <Money xof={r.revenue} />}</td></tr>
+    <tr><td>Entreprises toujours actives</td><td class="num">{pct(r.stillActivePct, 'anciens')}</td></tr>
+  </tbody></table>
+  <p class="xs muted">Sources : cohortes, présences et jalons du back-office ; questionnaires de suivi à 3, 6 et 12 mois (déclarations des anciens ou saisies par l'équipe). Montants et pourcentages donnés à partir de {MIN_CELL} personnes.</p>
+</article>

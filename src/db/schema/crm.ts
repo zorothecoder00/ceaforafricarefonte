@@ -64,6 +64,7 @@ export const crmDeal = pgTable('crm_deal', {
   stage: crmDealStageEnum('stage').notNull().default('prospect'),
   amountXof: bigint('amount_xof', { mode: 'number' }),
   eventId: text('event_id'), // sponsoring d'un événement
+  programme: text('programme'), // programme cofinancé (identifiant du programme, comme cohort.programme) : rapport d'impact du partenaire
   expectedOn: date('expected_on'),
   ownerId: text('owner_id').references(() => user.id, { onDelete: 'set null' }),
   notes: text('notes'),

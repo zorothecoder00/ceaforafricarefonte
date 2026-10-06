@@ -1,0 +1,1 @@
+ALTER TABLE "crm_deal" ADD COLUMN "programme" text;

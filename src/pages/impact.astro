@@ -1,66 +1,84 @@
 ---
+/* Observatoire d'impact (CDC §7.9) : indicateurs calculés à partir des données de la plateforme, filtrables par année, pays,
+   secteur et genre ; aucune cellule de moins de 10 personnes n'est publiée ; données ouvertes CSV et API. */
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHead from '../components/PageHead.astro';
 import AfricaMap from '../components/AfricaMap.astro';
 import { HUBS, SUBS, country, fmt, dateFr } from '../data/site';
-import { KPIS, JOBS_BY_QUARTER, DATASETS, IMPACT_ASOF, IMPACT_LICENSE } from '../data/impact';
+import { computeImpact, impactFilterOptions, readFilters, DATASETS, HIDDEN, MIN_CELL } from '../lib/impact';
 
 export const prerender = false;
-
-const kpis = KPIS;
-const top = [...HUBS].sort((a, b) => b.m - a.m).slice(0, 8);
-const maxM = top[0].m;
-const jobs: [string, number][] = JOBS_BY_QUARTER.map(([q, n]) => [`${q.slice(5)} ${q.slice(2, 4)}`, n]);
-const W = 320, H = 160, maxJ = 650;
-const pts = jobs.map(([, v], i) => [20 + (i * (W - 40)) / (jobs.length - 1), H - 20 - (v / maxJ) * (H - 40)]);
+const LICENSE = 'CC BY 4.0';
+const f = readFilters(Astro.url.searchParams);
+const [d, opts] = await Promise.all([computeImpact(f), impactFilterOptions()]);
+const filtered = Object.keys(f).length > 0;
+const shown = d.byCountry.slice(0, 10);
+const maxM = Math.max(1, ...shown.map((c) => c.membres ?? 0));
+const jobs = d.jobsByQuarter.filter((x): x is [string, number] => x[1] != null);
+const W = 320, H = 160, maxJ = Math.max(1, ...jobs.map(([, v]) => v));
+const pts = jobs.map(([, v], i) => [20 + (jobs.length > 1 ? (i * (W - 40)) / (jobs.length - 1) : (W - 40) / 2), H - 20 - (v / maxJ) * (H - 40)]);
 const line = pts.map((p) => p.join(',')).join(' ');
 const area = `20,${H - 20} ${line} ${W - 20},${H - 20}`;
 ---
 <BaseLayout title="Observatoire d'impact">
-  <PageHead title="CEA Impact Lab — observatoire d'impact" lead="Des chiffres agrégés, définis, sourcés et datés. Données de démonstration au 30 septembre 2026." crumbs={[['', 'CEA Impact Lab']]} subnav={SUBS.ressources} />
+  <PageHead title="CEA Impact Lab — observatoire d'impact" lead={`Des chiffres agrégés, définis, sourcés et datés, calculés à partir des données de la plateforme au ${dateFr(d.asOf)}.`} crumbs={[['', 'CEA Impact Lab']]} subnav={SUBS.ressources} />
   <section class="block" style="padding-top:28px">
     <div class="wrap">
-      <div class="grid g4">
-        {kpis.map((k) => (
+      <form class="filters impact-f" method="get" aria-label="Filtrer les indicateurs">
+        <select class="in" name="annee" aria-label="Année"><option value="">Toutes les années</option>{opts.years.map((y) => <option value={y} selected={f.year === y}>{y}</option>)}</select>
+        <select class="in" name="pays" aria-label="Pays"><option value="">Tous les pays</option>{HUBS.map((h) => <option value={h.c} selected={f.country === h.c}>{country(h.c)}</option>)}</select>
+        <select class="in" name="secteur" aria-label="Secteur"><option value="">Tous les secteurs</option>{opts.sectors.map((s) => <option selected={f.sector?.toLowerCase() === s.toLowerCase()}>{s}</option>)}</select>
+        <select class="in" name="genre" aria-label="Genre"><option value="">Femmes et hommes</option><option value="Femme" selected={f.gender === 'Femme'}>Femmes</option><option value="Homme" selected={f.gender === 'Homme'}>Hommes</option></select>
+        <button class="btn btn-primary btn-sm" type="submit">Filtrer</button>
+        {filtered && <a class="btn btn-ghost btn-sm" href="/impact">Réinitialiser</a>}
+      </form>
+      <p class="xs muted" style="margin:6px 0 16px">« {HIDDEN} » : valeur masquée parce qu'elle concerne moins de {MIN_CELL} personnes (protection contre la réidentification). Le genre provient de la déclaration volontaire dans les candidatures aux programmes.</p>
+
+      <div class="grid g3">
+        {d.kpis.map((k) => (
           <div class="panel">
             <div class="small muted">{k.label}</div>
-            <b style="font-family:var(--display);font-size:1.9rem;color:var(--navy)">{k.display}</b>
-            <details class="xs" style="margin-top:6px"><summary class="muted" style="cursor:pointer">Définition et source</summary><p style="margin:6px 0 0">{k.definition}</p><p class="muted" style="margin:4px 0 0">Source : {k.source} · arrêté au {dateFr(k.asOf)}</p></details>
+            <b class={`impact-v${k.value == null ? ' hidden-v' : ''}`}>{k.display}</b>
+            {k.note && <div class="xs muted">{k.note}</div>}
+            <details class="xs" style="margin-top:6px"><summary class="muted" style="cursor:pointer">Définition et source</summary><p style="margin:6px 0 0">{k.definition}</p><p class="muted" style="margin:4px 0 0">Source : {k.source} · calculé le {dateFr(d.asOf)}</p></details>
           </div>
         ))}
       </div>
       <div class="grid g2" style="margin-top:20px">
-        <div class="panel" style="background:#082B4C;border:0"><h3 style="color:#fff">Carte de l'impact</h3><AfricaMap /></div>
+        <div class="panel" style="background:#082B4C;border:0"><h3 style="color:#fff">Présence de CEA en Afrique</h3><AfricaMap /></div>
         <div class="grid">
           <div class="panel">
             <h3>Membres par pays</h3>
-            {top.map((h) => (
+            {shown.length ? shown.map((c) => (
               <div class="row" style="gap:10px;margin-bottom:6px;flex-wrap:nowrap">
-                <span class="small" style="width:110px;flex-shrink:0">{country(h.c)}</span>
-                <div class="progress" style="flex:1;height:14px"><span style={`width:${(h.m / maxM) * 100}%`}></span></div>
-                <b class="small num" style="width:50px;text-align:right">{fmt(h.m)}</b>
+                <span class="small" style="width:110px;flex-shrink:0">{c.pays}</span>
+                <div class="progress" style="flex:1;height:14px"><span style={`width:${((c.membres ?? 0) / maxM) * 100}%`}></span></div>
+                <b class="small num" style="min-width:50px;text-align:right;white-space:nowrap">{c.membres == null ? HIDDEN : fmt(c.membres)}</b>
               </div>
-            ))}
+            )) : <p class="small muted">Aucun membre pour ces critères.</p>}
           </div>
           <div class="panel">
             <h3>Emplois créés par trimestre</h3>
-            <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Emplois créés par trimestre, de 120 au T1 2025 à 610 au T3 2026" style="width:100%;height:auto">
-              <polygon points={area} fill="rgba(43,108,176,.15)" />
-              <polyline points={line} fill="none" stroke="#2B6CB0" stroke-width="2.5" />
-              {pts.map(([x, y], i) => <><circle cx={x} cy={y} r="3.5" fill="#2B6CB0" /><text x={x} y={H - 4} font-size="9" text-anchor="middle" fill="currentColor" opacity=".7">{jobs[i][0]}</text><text x={x} y={y - 8} font-size="9" text-anchor="middle" fill="currentColor">{jobs[i][1]}</text></>)}
-            </svg>
+            {f.gender ? <p class="small muted">Les emplois déclarés par les employeurs ne sont pas ventilés par genre.</p>
+              : jobs.length ? (
+                <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Emplois créés par trimestre : ${jobs.map(([q, n]) => `${q} ${n}`).join(', ')}`} style="width:100%;height:auto">
+                  <polygon points={area} fill="rgba(43,108,176,.15)" />
+                  <polyline points={line} fill="none" stroke="#2B6CB0" stroke-width="2.5" />
+                  {pts.map(([x, y], i) => <><circle cx={x} cy={y} r="3.5" fill="#2B6CB0" /><text x={x} y={H - 4} font-size="9" text-anchor="middle" fill="currentColor" opacity=".7">{jobs[i][0]}</text><text x={x} y={y - 8} font-size="9" text-anchor="middle" fill="currentColor">{jobs[i][1]}</text></>)}
+                </svg>
+              ) : <p class="small muted">Pas encore assez d'emplois vérifiés pour publier une série ({MIN_CELL} par trimestre au minimum).</p>}
           </div>
         </div>
       </div>
       <div class="grid g3" style="margin-top:20px">
         <div class="panel"><h3>Alignement</h3><p class="small" style="margin:0">Objectifs de développement durable 1, 5, 8 et 9 ; Agenda 2063 de l'Union africaine.</p></div>
-        <div class="panel"><h3>Méthodologie</h3><p class="small" style="margin:0">Un emploi est compté comme « créé » s'il existe depuis au moins 6 mois, prouvé par un contrat ou une déclaration sociale, vérifié par échantillonnage. Aucune cellule de moins de 10 personnes n'est publiée.</p></div>
+        <div class="panel"><h3>Méthodologie</h3><p class="small" style="margin:0">Les indicateurs sont calculés automatiquement à partir des modules de la plateforme (Académie, programmes, CEA Talents, Kapital Invest, événements) et des questionnaires de suivi à 3, 6 et 12 mois. Un emploi est compté comme « créé » s'il existe depuis au moins 6 mois et a été vérifié par l'équipe. Aucune cellule de moins de {MIN_CELL} personnes n'est publiée.</p></div>
         <div class="panel"><h3>Données ouvertes</h3>
-          <p class="small">Jeux de données agrégés et anonymisés, arrêtés au {dateFr(IMPACT_ASOF)}, sous licence {IMPACT_LICENSE} : réutilisation libre en citant la source.</p>
-          {DATASETS.map((d) => <a class="small" href={d.file} download style="display:block;margin-bottom:4px">⬇ {d.title} (CSV)</a>)}
+          <p class="small">Jeux de données agrégés et anonymisés, mis à jour en continu, sous licence {LICENSE} : réutilisation libre en citant la source.</p>
+          {DATASETS.map((x) => <a class="small" href={x.file} download style="display:block;margin-bottom:4px">⬇ {x.title} (CSV)</a>)}
           <p class="small" style="margin:10px 0 4px"><b>API publique</b> (lecture seule, sans clé) :</p>
           <code class="xs" style="display:block;overflow-wrap:anywhere">GET /api/ouvert/impact</code>
-          <code class="xs" style="display:block;overflow-wrap:anywhere">GET /api/ouvert/impact?pays=TG</code>
+          <code class="xs" style="display:block;overflow-wrap:anywhere">GET /api/ouvert/impact?pays=TG&amp;annee=2026</code>
           <a class="small" href="/api/ouvert/impact" target="_blank" rel="noopener">Voir la réponse JSON</a>
         </div>
       </div>

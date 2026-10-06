@@ -4,7 +4,7 @@
    - contact.delete { id }                 → effacement (droit V ; demande d'effacement RGPD)
    - org.save { id?, …fiche } / org.delete → organisations
    - interaction.add { userId? | contactId? | orgId?, dealId?, kind, summary, at? }
-   - deal.save { id?, …fiche } / deal.stage { id, stage } → pipeline partenaires et sponsors (chaque changement d'étape est historisé)
+   - deal.save { id?, …fiche, programme? } / deal.stage { id, stage } → pipeline partenaires et sponsors (chaque changement d'étape est historisé ; programme = programme cofinancé)
    - segment.save { id?, name, description?, rules } / segment.delete { id } / segment.preview { rules } */
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
@@ -35,7 +35,7 @@ const Body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('org.save'), id: id.optional(), name: z.string().trim().min(2).max(160), kind: z.enum(crmOrgKindEnum.enumValues), country: Country, sector: opt(60), website: z.url().max(200).nullish().or(z.literal('')).transform((v) => v || null), notes: opt(3000) }),
   z.object({ action: z.literal('org.delete'), id }),
   z.object({ action: z.literal('interaction.add'), userId: z.string().max(64).nullish(), contactId: z.uuid().nullish(), orgId: z.uuid().nullish(), dealId: z.uuid().nullish(), kind: z.enum(['appel', 'reunion', 'email', 'note', 'evenement']), summary: z.string().trim().min(2).max(3000), at: z.iso.date().nullish() }),
-  z.object({ action: z.literal('deal.save'), id: id.optional(), orgId: id, title: z.string().trim().min(2).max(160), kind: z.enum(['partenariat', 'sponsoring', 'subvention']), stage: z.enum(crmDealStageEnum.enumValues).default('prospect'), amountXof: z.preprocess((v) => (v === '' ? null : v), z.coerce.number().int().min(0).nullish()), eventId: opt(10), expectedOn: z.iso.date().nullish().or(z.literal('')).transform((v) => v || null), notes: opt(3000) }),
+  z.object({ action: z.literal('deal.save'), id: id.optional(), orgId: id, title: z.string().trim().min(2).max(160), kind: z.enum(['partenariat', 'sponsoring', 'subvention']), stage: z.enum(crmDealStageEnum.enumValues).default('prospect'), amountXof: z.preprocess((v) => (v === '' ? null : v), z.coerce.number().int().min(0).nullish()), eventId: opt(10), programme: opt(80), expectedOn: z.iso.date().nullish().or(z.literal('')).transform((v) => v || null), notes: opt(3000) }),
   z.object({ action: z.literal('deal.stage'), id, stage: z.enum(crmDealStageEnum.enumValues) }),
   z.object({ action: z.literal('segment.save'), id: id.optional(), name: z.string().trim().min(2).max(120), description: opt(400), rules: Rules }),
   z.object({ action: z.literal('segment.delete'), id }),
