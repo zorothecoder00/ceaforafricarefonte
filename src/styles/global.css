@@ -551,6 +551,7 @@ body{overflow-wrap:break-word}
 input.in,select.in,textarea.in{max-width:100%;min-width:0}
 .filters .in{min-width:min(150px,100%)}
 img,video,iframe{max-width:100%}
+fieldset{min-width:0}  /* par défaut un fieldset refuse de se contracter sous la largeur de son contenu */
 .btn{max-width:100%}
 @media (max-width:900px){
   .btn{white-space:normal;text-align:center}  /* un long libellé passe à la ligne au lieu de sortir de l'écran */
