@@ -321,7 +321,7 @@ html.side-min .side-toggle .st-open{display:none}
 html.side-min .side-toggle .st-closed{display:inline}
 .side a[aria-current="page"]{background:var(--surface);color:var(--navy);box-shadow:inset 3px 0 0 var(--gold)}
 .side h5{font-family:var(--display);font-size:.75rem;color:var(--muted);margin:16px 12px 4px}
-@media (max-width:860px){.dash,html.side-min .dash{grid-template-columns:1fr}.side{position:static;max-height:none;overflow:visible;padding-right:0}.side-toggle{display:none}.side-body,html.side-min .side-body{display:flex;overflow-x:auto;gap:4px}.side a{white-space:nowrap}html.side-min .side a{padding:9px 12px}html.side-min .side .sl{display:inline}html.side-min .side-body > div{display:block}.side h5{display:none}}
+@media (max-width:860px){.dash,html.side-min .dash{grid-template-columns:minmax(0,1fr)}.side{position:static;max-height:none;overflow:visible;padding-right:0}.side-toggle{display:none}.side-body,html.side-min .side-body{display:flex;overflow-x:auto;gap:4px}.side a{white-space:nowrap}html.side-min .side a{padding:9px 12px}html.side-min .side .sl{display:inline}html.side-min .side-body > div{display:block}.side h5{display:none}}
 .kanban{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:12px;overflow-x:auto}
 .kanban.k4{grid-template-columns:repeat(4,minmax(200px,1fr))}
 .col{background:var(--surface-2);border-radius:var(--r-m);padding:10px;min-height:220px}
@@ -569,3 +569,5 @@ img,video,iframe{max-width:100%}
 /* Événements : menu « S'abonner au calendrier » (flottant sur grand écran, sous le bouton ailleurs pour ne pas sortir de l'écran) */
 .cal-pop{position:absolute;z-index:5;right:0;min-width:280px;margin-top:6px}
 @media (max-width:1100px){.cal-pop{position:static;min-width:0;max-width:340px}}
+/* En-tête connecté entre 1341 et 1500 px : menu complet affiché, le bouton de déconnexion passe en icône seule pour tenir sur la ligne */
+@media (min-width:1341px) and (max-width:1500px){.top-logout .lo-txt{display:none}.top-logout{padding:6px 9px}}
