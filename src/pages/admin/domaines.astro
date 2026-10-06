@@ -1,0 +1,67 @@
+---
+/* Domaines d'intervention (back-office) : créer un domaine, modifier un domaine existant (même ceux du code), le masquer
+   ou le supprimer. Les domaines alimentent l'accueil, le méga-menu « Domaines », /domaines, l'inscription des entrepreneurs,
+   la gouvernance et l'annuaire. Droit : Paramétrage (C pour créer, M pour modifier). */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Icon from '../../components/Icon.astro';
+import { allDomains } from '../../lib/domains';
+import { can } from '../../lib/rbac';
+import { ICON } from '../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const canC = can(me.roles, 'parametres', 'C'), canM = can(me.roles, 'parametres', 'M');
+const list = await allDomains({ all: true });
+const editId = Astro.url.searchParams.get('id');
+const isNew = Astro.url.searchParams.has('nouveau');
+const cur = editId ? list.find((d) => d.id === editId) : undefined;
+const showForm = (isNew && canC) || (cur && canM);
+const f = cur ?? { id: '', ic: 'info', n: '', dom: '', d: '', k: '', to: '', pub: '', met: [], liv: [], active: true, position: (list.length + 1) * 10, source: 'cree' as const };
+const SOURCE = { code: 'D’origine', modifie: 'Modifié', cree: 'Créé par l’équipe' };
+const icons = Object.keys(ICON).sort();
+---
+<AdminLayout title="Domaines d'intervention" lead="Les domaines apparaissent sur l'accueil, dans le menu « Domaines », sur la page Nos domaines, dans le formulaire d'inscription des entrepreneurs, la gouvernance et l'annuaire. Chaque modification est inscrite au journal d'audit." obj="parametres">
+  {canC && !showForm && <p style="margin:0 0 14px"><a class="btn btn-primary btn-sm" href="?nouveau">+ Créer un domaine</a></p>}
+
+  {showForm && (
+    <form class="panel" data-api="/api/admin/domaines" style="margin-bottom:18px">
+      <h2 style="font-size:1.15rem;margin-top:0">{cur ? `Modifier « ${cur.dom} »` : 'Nouveau domaine'}</h2>
+      {cur?.source === 'code' && <p class="small muted" style="margin-top:0">Domaine d'origine : vos modifications le remplacent partout sur le site ; « Rétablir l'original » les annule.</p>}
+      <input type="hidden" name="action" value="save" /><input type="hidden" name="isNew" value={cur ? '' : '1'} />
+      <div class="grid g2" style="gap:0 12px">
+        <div><label class="f" for="d-dom">Intitulé du domaine</label><input class="in" id="d-dom" name="dom" required minlength="2" maxlength="80" value={f.dom} placeholder="Ex. Économie numérique" /></div>
+        <div><label class="f" for="d-n">Nom du service</label><input class="in" id="d-n" name="name" required minlength="2" maxlength="80" value={f.n} placeholder="Ex. CEA Digital" /></div>
+        <div><label class="f" for="d-id">Identifiant d'adresse (/domaines/…)</label><input class="in" id="d-id" name="id" required pattern="[a-z0-9][a-z0-9-]{1,40}" value={f.id} readonly={!!cur} placeholder="ex. numerique" /></div>
+        <div><label class="f" for="d-ic">Icône</label><select class="in" id="d-ic" name="icon">{icons.map((i) => <option selected={i === f.ic}>{i}</option>)}</select></div>
+        <div style="grid-column:1/-1"><label class="f" for="d-d">Phrase courte (cartes et menu)</label><input class="in" id="d-d" name="summary" required minlength="10" maxlength="220" value={f.d} /></div>
+        <div><label class="f" for="d-k">Accroche en bas de carte</label><input class="in" id="d-k" name="highlight" maxlength="80" value={f.k} placeholder="Ex. 12 programmes ouverts" /></div>
+        <div><label class="f" for="d-to">Lien du parcours (facultatif)</label><input class="in" id="d-to" name="link" maxlength="200" value={cur && f.to !== `/domaines/${f.id}` ? f.to : ''} placeholder="/programmes ou https://… (sinon la page du domaine)" /></div>
+        <div style="grid-column:1/-1"><label class="f" for="d-pub">Pour qui</label><input class="in" id="d-pub" name="audience" maxlength="300" value={f.pub} /></div>
+        <div><label class="f" for="d-met">Notre méthode (une étape par ligne)</label><textarea class="in" id="d-met" name="method" rows="5">{f.met.join('\n')}</textarea></div>
+        <div><label class="f" for="d-liv">Ce que vous obtenez (un élément par ligne)</label><textarea class="in" id="d-liv" name="deliverables" rows="5">{f.liv.join('\n')}</textarea></div>
+        <div><label class="f" for="d-pos">Ordre d'affichage</label><input class="in" id="d-pos" name="position" type="number" min="0" max="999" value={f.position} data-type="number" /></div>
+      </div>
+      <label class="row small" style="margin-top:6px"><input type="checkbox" name="active" checked={f.active} /> Afficher sur le site</label>
+      <div class="row" style="gap:8px;margin-top:10px"><button class="btn btn-primary btn-sm" type="submit">{cur ? 'Enregistrer' : 'Créer le domaine'}</button><a class="btn btn-ghost btn-sm" href="/admin/domaines">Annuler</a></div>
+    </form>
+  )}
+
+  <div class="panel scroll-x">
+    <table class="t">
+      <thead><tr><th>Ordre</th><th>Domaine</th><th>Origine</th><th>Statut</th><th></th></tr></thead>
+      <tbody>{list.map((d) => (
+        <tr>
+          <td class="num small">{d.position}</td>
+          <td><span class="row" style="gap:8px;flex-wrap:nowrap"><Icon name={d.ic} size={18} /><span><b>{d.dom}</b><span class="xs muted" style="display:block">{d.n} · <a href={`/domaines/${d.id}`} target="_blank" rel="noopener">/domaines/{d.id}</a></span></span></span></td>
+          <td><span class={`tag ${d.source === 'cree' ? 'gold' : d.source === 'modifie' ? 'info' : ''}`}>{SOURCE[d.source]}</span></td>
+          <td><span class={`tag ${d.active ? 'ok' : ''}`}>{d.active ? 'Affiché' : 'Masqué'}</span></td>
+          <td>{canM && <span class="row" style="gap:6px;justify-content:flex-end">
+            <a class="btn btn-ghost btn-sm" href={`?id=${d.id}`}>Modifier</a>
+            <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/domaines" data-body={JSON.stringify({ action: 'toggle', id: d.id, active: !d.active })} data-reload>{d.active ? 'Masquer' : 'Afficher'}</button>
+            {d.source !== 'code' && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/domaines" data-body={JSON.stringify({ action: 'delete', id: d.id })} data-confirm={d.source === 'cree' ? `Supprimer le domaine « ${d.dom} » ?` : `Annuler vos modifications et rétablir « ${d.dom} » d'origine ?`} data-reload>{d.source === 'cree' ? 'Supprimer' : 'Rétablir l’original'}</button>}
+          </span>}</td>
+        </tr>
+      ))}</tbody>
+    </table>
+  </div>
+</AdminLayout>

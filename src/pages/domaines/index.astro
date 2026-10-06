@@ -2,7 +2,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import DomainCard from '../../components/DomainCard.astro';
-import { DOMAINS } from '../../data/site';
+import { allDomains } from '../../lib/domains';
 
 export const prerender = false;
 
@@ -41,7 +41,7 @@ const RESULTS: Record<string, [string, string, string]> = {
         <button class="btn btn-primary" type="submit">Voir mon parcours</button>
         <div id="quizRes" class="call" style="margin-top:16px" hidden></div>
       </form>
-      <div class="grid g4">{DOMAINS.map((d) => <DomainCard d={d} href={`/domaines/${d.id}`} />)}</div>
+      <div class="grid g4">{(await allDomains()).map((d) => <DomainCard d={d} href={`/domaines/${d.id}`} />)}</div>
     </div>
   </section>
 </BaseLayout>

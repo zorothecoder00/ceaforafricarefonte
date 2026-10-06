@@ -9,7 +9,8 @@ import { contactMessage } from '../../db/schema/app';
 import { json, fail, reference, audit, clientIp } from '../../lib/session';
 import { rateLimit, isBot, readJson } from '../../lib/guard';
 import { acknowledge, dueFrom } from '../../lib/support';
-import { COUNTRIES, DOMAINS, HUBS, NEEDS } from '../../data/site';
+import { COUNTRIES, HUBS, NEEDS } from '../../data/site';
+import { allDomains } from '../../lib/domains';
 
 export const prerender = false;
 
@@ -31,7 +32,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const p = Body.safeParse(raw);
   if (!p.success) return fail('Indiquez votre prénom, votre nom, votre téléphone, votre pays et le nom de votre entreprise.');
   const d = p.data;
-  const doms = DOMAINS.filter((x) => raw?.['dom_' + x.id] === true).map((x) => x.dom);
+  const doms = (await allDomains()).filter((x) => raw?.['dom_' + x.id] === true).map((x) => x.dom);
   if (!doms.length) return fail("Choisissez au moins un domaine d'intervention.");
   const needs = NEEDS.filter((_, i) => raw?.['need_' + i] === true);
   const name = `${d.prenom} ${d.nom}`;

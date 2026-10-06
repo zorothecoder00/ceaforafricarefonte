@@ -2,7 +2,9 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHead from '../components/PageHead.astro';
 import Wizard from '../components/Wizard.astro';
-import { COUNTRIES, DOMAINS, HUBS, NEEDS, SUBS, fmt } from '../data/site';
+import { COUNTRIES, HUBS, NEEDS, SUBS, fmt } from '../data/site';
+import { allDomains } from '../lib/domains';
+const DOMAINS = await allDomains();
 
 export const prerender = false;
 

@@ -22,7 +22,7 @@ export const PAGE_ACTIONS: Partial<Record<Obj, Partial<Record<Exclude<Action, 'L
   rapports: { C: 'enregistrer un rapport' },
   formulaires: { C: 'créer un formulaire', M: 'modifier un formulaire', V: 'publier, fermer ou supprimer un formulaire' },
   automatisations: { M: 'tester une automatisation', V: 'créer, modifier, activer ou supprimer une automatisation' },
-  parametres: { M: 'modifier le paramétrage, les modèles de messages, les redirections et la matrice des droits', V: 'rétablir toute la matrice des droits' },
+  parametres: { C: 'créer des domaines d’intervention', M: 'modifier le paramétrage, les domaines d’intervention, les modèles de messages, les redirections et la matrice des droits', V: 'rétablir toute la matrice des droits' },
   crm: { C: 'créer un contact, une organisation ou une opportunité', M: 'les modifier', V: 'effacer un contact (droit à l’effacement)' },
   campagnes: { C: 'créer une campagne', M: 'modifier une campagne ou un modèle', V: 'programmer, envoyer ou annuler une campagne' },
 };

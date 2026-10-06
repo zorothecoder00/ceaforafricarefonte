@@ -2,9 +2,11 @@
 /* Registre des entrepreneurs membres par pays et par domaine d'intervention (prototype « Membres par pays »). */
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHead from '../components/PageHead.astro';
-import { DOMAINS, HUBS, MEMBERS, SUBS, country, fmt, initials } from '../data/site';
+import { HUBS, MEMBERS, SUBS, country, fmt, initials } from '../data/site';
+import { allDomains } from '../lib/domains';
 
 export const prerender = false;
+const DOMAINS = await allDomains();
 const c = Astro.url.searchParams.get('c') ?? '';
 const dm = Astro.url.searchParams.get('d') ?? '';
 // Effectifs de démonstration par pays et par domaine (même calcul que l'inscription)

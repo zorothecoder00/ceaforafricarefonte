@@ -239,6 +239,13 @@
       "when": 1791306830000,
       "tag": "0033_audit_conservation",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1791312050604,
+      "tag": "0034_domaines",
+      "breakpoints": true
     }
   ]
 }

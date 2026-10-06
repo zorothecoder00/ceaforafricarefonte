@@ -4,6 +4,7 @@ import LocalePicker from './LocalePicker.astro';
 import { MEGA, megaOf } from '../data/nav';
 import { tr } from '../i18n/content-en';
 import { getLang, lp, stripLang, useT } from '../i18n/ui';
+import { allDomains } from '../lib/domains';
 
 const lang = getLang(Astro.currentLocale);
 const t = useT(lang);
@@ -11,7 +12,7 @@ const L = (p: string) => lp(lang, p);
 const cur = megaOf(stripLang(Astro.url.pathname));
 const en = lang === 'en';
 const path = stripLang(Astro.url.pathname);
-const DOMAINS = tr(lang).domains;
+const DOMAINS = await allDomains({ lang: lang === 'en' ? 'en' : 'fr' });
 
 // Barre de navigation sur une seule ligne, dans l'ordre du prototype
 const NAV: [string, string, string, string][] = [

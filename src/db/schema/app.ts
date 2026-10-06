@@ -249,6 +249,25 @@ export const jobApplication = pgTable('job_application', {
   updatedAt: ts('updated_at').notNull().defaultNow(),
 }, (t) => [uniqueIndex('job_application_unique').on(t.jobId, t.userId)]);
 
+/* Domaines d'intervention gérés par l'équipe (back-office › Domaines d'intervention) : ils s'ajoutent à ceux du code ;
+   une ligne de même identifiant qu'un domaine du code le remplace (modification d'un domaine existant). */
+export const domain = pgTable('domain', {
+  id: text('id').primaryKey(), // identifiant d'adresse : /domaines/<id>
+  icon: text('icon').notNull().default('info'),
+  name: text('name').notNull(), // nom du service, ex. « CEA Events »
+  dom: text('dom').notNull(), // intitulé du domaine, ex. « Événements »
+  summary: text('summary').notNull(), // phrase courte des cartes et du méga-menu
+  highlight: text('highlight').notNull().default(''), // chiffre ou accroche en bas de carte
+  link: text('link'), // page du parcours ; à défaut, la page du domaine
+  audience: text('audience').notNull().default(''),
+  method: text('method').array().notNull().default([]),
+  deliverables: text('deliverables').array().notNull().default([]),
+  position: integer('position').notNull().default(100),
+  active: boolean('active').notNull().default(true),
+  updatedBy: text('updated_by').references(() => user.id, { onDelete: 'set null' }),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+});
+
 /* Outils du recruteur (CDC §7.4) : équipe de recrutement d'une offre, notes d'équipe sur un candidat, entretiens planifiés,
    réponses types personnelles. Le candidat ne voit jamais les notes ; il voit ses entretiens. */
 export const jobRecruiter = pgTable('job_recruiter', {

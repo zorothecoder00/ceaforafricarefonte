@@ -10,6 +10,7 @@ export const ADMIN_NAV: [string, string, Obj][] = [
   ['/admin/messages', 'Messages et signalements', 'messages_contact'],
   ['/admin/moderation', 'Modération', 'moderation'],
   ['/admin/textes', 'Administration système', 'contenus'],
+  ['/admin/domaines', "Domaines d'intervention", 'parametres'],
   ['/admin/emplois', "Offres d'emploi", 'offre_emploi'],
   ['/admin/programmes', 'Programmes et cohortes', 'programmes'],
   ['/admin/candidatures', 'Candidatures programmes', 'candidature'],
@@ -40,7 +41,7 @@ export const ADMIN_ICON: Record<string, string> = {
   '/admin/candidatures': 'check', '/admin/projets': 'proj', '/admin/kapital': 'fund', '/admin/conformite': 'lock', '/admin/membres': 'users',
   '/admin/droits': 'key', '/admin/interrupteurs': 'toggle', '/admin/paiements': 'bank', '/admin/finance': 'invoice', '/admin/rapports': 'chart',
   '/admin/formulaires': 'form', '/admin/automatisations': 'bolt', '/admin/documents': 'folder', '/admin/parametrage': 'gear', '/admin/crm': 'circle',
-  '/admin/campagnes': 'megaphone', '/admin/textes': 'edit', '/admin/cms': 'press', '/admin/contenus': 'voice', '/admin/assemblees': 'gov', '/admin/audit': 'list',
+  '/admin/campagnes': 'megaphone', '/admin/textes': 'edit', '/admin/domaines': 'cap', '/admin/cms': 'press', '/admin/contenus': 'voice', '/admin/assemblees': 'gov', '/admin/audit': 'list',
 };
 
 /** Garde d'API du back-office : droit (objet, action) + double authentification pour les rôles sensibles. */

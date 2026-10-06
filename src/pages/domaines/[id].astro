@@ -2,11 +2,11 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import KapitalAd from '../../components/KapitalAd.astro';
-import { DOMAINS } from '../../data/site';
+import { findDomain } from '../../lib/domains';
 
 export const prerender = false;
 
-const d = DOMAINS.find((x) => x.id === Astro.params.id);
+const d = await findDomain(Astro.params.id ?? '');
 if (!d) return Astro.rewrite('/404');
 ---
 <BaseLayout title={d.n} description={d.d}>
