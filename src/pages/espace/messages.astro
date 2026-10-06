@@ -38,7 +38,7 @@ const cur = convs.find((c) => c.id === current);
           <b>{cur?.title}</b>
           {cur?.otherId && <div class="row"><button class="btn btn-ghost btn-sm" type="button" data-post="/api/blocages" data-body={JSON.stringify({ userId: cur.otherId, block: true })} data-confirm="Bloquer ce membre ? Il ne pourra plus vous écrire.">Bloquer</button><a class="btn btn-ghost btn-sm" href="/signalement">Signaler</a></div>}
         </div>
-        <div class="msgs" id="msgs"><p class="small muted">Chargement…</p></div>
+        <div class="msgs" id="msgs"><span class="skel w80" aria-hidden="true"></span><span class="skel w60" aria-hidden="true"></span><span class="skel w80" aria-hidden="true"></span><span class="sr">Chargement…</span></div>
         <form class="chat-f" id="mf"><input id="mi" placeholder="Votre message" aria-label="Votre message" autocomplete="off" maxlength="4000" /><button class="btn btn-primary btn-sm" type="submit">Envoyer</button></form>
       </div>
     </div>

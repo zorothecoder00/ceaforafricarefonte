@@ -47,10 +47,10 @@ const topics = en ? ['Funding', 'Training', 'Events', 'Kapital Invest'] : ['Fina
   </div>
   <div class="stats-band">
     <div class="wrap">
-      <div class="stat"><b data-count={members}>{members.toLocaleString('fr-FR')}</b><span>{w('membres inscrits', 'registered members')}</span></div>
-      <div class="stat"><b data-count={projects}>{projects}</b><span>{w('projets accompagnés', 'projects supported')}</span></div>
-      <div class="stat"><b data-count="2340">2 340</b><span>{w('emplois créés et vérifiés', 'jobs created and verified')}</span></div>
-      <div class="stat"><b data-count={HUBS.length}>{HUBS.length}</b><span>{w('pays actifs', 'active countries')}</span></div>
+      <div class="stat"><b data-countup={members}>{members.toLocaleString('fr-FR')}</b><span>{w('membres inscrits', 'registered members')}</span></div>
+      <div class="stat"><b data-countup={projects}>{projects}</b><span>{w('projets accompagnés', 'projects supported')}</span></div>
+      <div class="stat"><b data-countup="2340">2 340</b><span>{w('emplois créés et vérifiés', 'jobs created and verified')}</span></div>
+      <div class="stat"><b data-countup={HUBS.length}>{HUBS.length}</b><span>{w('pays actifs', 'active countries')}</span></div>
     </div>
     <div class="wrap demo-note" style="color:#8FA6BF;padding-bottom:14px">{w('Chiffres de démonstration, au 30 septembre 2026.', 'Demonstration figures, as of 30 September 2026.')} <a href={L('/impact')} style="color:#C9D6E5">{w('Méthodologie', 'Methodology')}</a></div>
   </div>

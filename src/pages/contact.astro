@@ -52,7 +52,7 @@ const motifs: Record<string, string> = {
           <label class="f" for="rt">Équipe</label>
           <select class="in" id="rt" name="team">{teams.map((t) => <option>{t}</option>)}</select>
           <p class="f" id="rsl">Créneau (heure de Lomé, GMT)</p>
-          <div class="row" data-slots id="rslots" role="radiogroup" aria-labelledby="rsl"><span class="small muted">Chargement…</span></div>
+          <div class="row" data-slots id="rslots" role="radiogroup" aria-labelledby="rsl"><span class="skel h40" style="width:130px" aria-hidden="true"></span><span class="skel h40" style="width:130px;margin-top:0" aria-hidden="true"></span><span class="sr">Chargement…</span></div>
           <label class="f" for="rn">Nom</label><input class="in" id="rn" name="name" required minlength="2" autocomplete="name" />
           <label class="f" for="re">E-mail (pour recevoir le lien de visio)</label><input class="in" id="re" name="contact" type="email" required autocomplete="email" />
           <label class="f" for="rs">Sujet (facultatif)</label><input class="in" id="rs" name="topic" maxlength="1000" />
@@ -79,7 +79,7 @@ const motifs: Record<string, string> = {
   let chosen = '';
   async function loadSlots() {
     chosen = '';
-    box.innerHTML = '<span class="small muted">Chargement…</span>';
+    box.innerHTML = '<span class="skel h40" style="width:130px" aria-hidden="true"></span><span class="skel h40" style="width:130px;margin-top:0" aria-hidden="true"></span><span class="sr">Chargement…</span>';
     const d = await fetch('/api/rendez-vous?team=' + encodeURIComponent(rt.value)).then((r) => r.json()).catch(() => null);
     if (!d?.ok) { box.innerHTML = '<span class="small muted">Créneaux indisponibles hors connexion.</span>'; return; }
     box.innerHTML = '';

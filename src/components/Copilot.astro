@@ -1,7 +1,12 @@
 ---
+/* Bouton d'assistance flottant (CDC §5.3) : CEA Copilot, avec accès direct au centre d'aide, à WhatsApp (si le numéro est
+   renseigné dans Administration système › Réseaux sociaux) et au formulaire de contact. */
 import { getLang, useT } from '../i18n/ui';
+import { getSetting } from '../lib/settings';
 const lang = getLang(Astro.currentLocale);
 const t = useT(lang);
+const en = lang === 'en';
+const whatsapp = (await getSetting('reseaux').catch(() => null))?.whatsapp ?? '';
 ---
 <button class="fab" id="fab" type="button" aria-expanded="false" aria-controls="chat"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>CEA Copilot</button>
 <section class="chat" id="chat" aria-label="CEA Copilot" data-lang={lang}>
@@ -9,6 +14,11 @@ const t = useT(lang);
     <div><b style="font-family:var(--display)">CEA Copilot</b><div class="small muted">{t('copSub')}</div></div>
     <button class="icon-btn" id="chatClose" type="button" aria-label={t('close')}>✕</button>
   </div>
+  <nav class="chat-alt" aria-label={en ? 'Other ways to get help' : "Autres moyens d'obtenir de l'aide"}>
+    <a href={en ? '/en/aide' : '/aide'}>{en ? 'Help centre' : "Centre d'aide"}</a>
+    {whatsapp && <a href={whatsapp} target="_blank" rel="noopener">WhatsApp</a>}
+    <a href={en ? '/en/contact' : '/contact'}>{en ? 'Contact the team' : "Écrire à l'équipe"}</a>
+  </nav>
   <div class="chat-b" id="chatBody" aria-live="polite"><div class="msg a">{t('copHello')}</div></div>
   <div class="sugg" id="sugg">{t('sugg').split('|').map((s) => <button type="button">{s}</button>)}</div>
   <form class="chat-f" id="chatForm">

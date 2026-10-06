@@ -176,11 +176,11 @@ $$('[data-map]').forEach((map) => {
 });
 
 /* ===== compteurs animés (respectent « moins d'animations » et le mode Lite) ===== */
-const counters = $$('[data-count]');
+const counters = $$('[data-countup]');  // data-count (sans « up ») sert ailleurs aux compteurs de caractères et de résultats
 if (counters.length) {
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches || root.classList.contains('lite');
   const run = (el: HTMLElement) => {
-    const end = Number(el.dataset.count), suffix = el.dataset.suffix || '';
+    const end = Number(el.dataset.countup), suffix = el.dataset.suffix || '';
     const out = (n: number) => (el.textContent = Math.round(n).toLocaleString(EN ? 'en-GB' : 'fr-FR') + suffix);
     if (reduce) return out(end);
     const t0 = performance.now();
@@ -382,7 +382,8 @@ async function answer(q: string) {
   history.push({ role: 'user', content: q });
   const wait = document.createElement('div');
   wait.className = 'msg a';
-  wait.textContent = '…';
+  wait.style.minWidth = '60%';
+  wait.innerHTML = `<span class="skel w80" aria-hidden="true"></span><span class="skel w60" aria-hidden="true"></span><span class="sr">${EN ? 'Writing the answer…' : 'Réponse en cours…'}</span>`;
   body?.appendChild(wait);
   let reply = '', sources: Source[] | undefined;
   try {

@@ -20,6 +20,9 @@ const fullTitle = title ? `${title} — CEA FOR AFRICA` : `CEA FOR AFRICA — ${
 // Chemin français de la page (sur les pages anglaises de repli, Astro fournit déjà le chemin français).
 const frPath = (stripLang(Astro.url.pathname).replace(/\/$/, '') || '/');
 const translated = lang === 'fr' || TRANSLATED.has(frPath);
+// Univers de la page (CDC §5.2) : couleur secondaire d'orientation pour l'Académie, Talents et Events (Kapital a son propre thème)
+const section = frPath.split('/')[1] ?? '';
+const univers = ({ academie: 'academie', programmes: 'academie', opportunites: 'talents', evenements: 'events' } as Record<string, string>)[section];
 const alt = (l: 'fr' | 'en') => new URL(lp(l, frPath === '/' ? '/' : frPath + '/'), Astro.site).href;
 
 // Contenu de la page : en anglais, les liens internes sont réécrits vers /en/…
@@ -68,7 +71,7 @@ const searchIndex = ([
       } catch (e) {}
     </script>
   </head>
-  <body>
+  <body data-univers={univers}>
     <a class="sr" href="#app">{t('skip')}</a>
     <Header />
     {!translated && <div class="i18n-note">{t('notTranslated')} <a href={alt('fr')} hreflang="fr">Version française</a></div>}

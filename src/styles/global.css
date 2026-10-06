@@ -582,3 +582,18 @@ fieldset{min-width:0}  /* par défaut un fieldset refuse de se contracter sous l
 /* Case à cocher suivie de son texte : la case reste à gauche du texte au lieu de rester seule sur sa ligne */
 label.row:has(> input[type=checkbox]:first-child){flex-wrap:nowrap;align-items:flex-start}
 label.row > input[type=checkbox]:first-child{flex-shrink:0;margin-top:.25em}
+/* Couleur secondaire par univers (CDC §5.2) : filet en haut de l'en-tête de page et onglet actif ; contrastes AA avec le texte blanc */
+body[data-univers="academie"]{--u:#0E7C6B}
+body[data-univers="talents"]{--u:#6B3FA0}
+body[data-univers="events"]{--u:#B4492D}
+body[data-univers] .page-head{border-top:4px solid var(--u)}
+body[data-univers] .subnav a[aria-current="page"]{background:var(--u);border-color:var(--u);color:#fff}
+/* Squelettes de chargement (CDC §5.2) : blocs gris animés pendant qu'un contenu arrive */
+.skel{display:block;border-radius:8px;background:linear-gradient(90deg,var(--surface-2) 25%,var(--line) 50%,var(--surface-2) 75%);background-size:200% 100%;min-height:12px}
+.skel + .skel{margin-top:8px}
+.skel.w60{width:60%}.skel.w80{width:80%}.skel.h40{height:40px}
+@media (prefers-reduced-motion:no-preference){.skel{animation:skel 1.2s ease-in-out infinite}@keyframes skel{from{background-position:200% 0}to{background-position:-200% 0}}}
+/* Bouton d'assistance : autres canaux sous l'en-tête de CEA Copilot */
+.chat-alt{display:flex;gap:6px;flex-wrap:wrap;padding:8px 16px;border-bottom:1px solid var(--line);font-size:.82rem}
+.chat-alt a{padding:4px 10px;border:1px solid var(--line);border-radius:999px;text-decoration:none;font-weight:600}
+.chat-alt a:hover{border-color:var(--navy)}
