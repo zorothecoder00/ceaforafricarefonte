@@ -1,7 +1,7 @@
 /* Avis sur les cours (CDC §7.6).
    GET ?course=c1 → moyenne, nombre et derniers avis visibles (prénom et pays seulement) + l'avis de l'utilisateur.
    POST { courseId, rating, comment? } → réservé aux inscrits ; un avis par personne, modifiable.
-   Un commentaire contenant un lien est retenu pour modération avant publication. */
+   Un commentaire contenant un lien est retenu pour modération avant publication (règle désactivable dans Modération › Filtres). */
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { and, avg, count, desc, eq } from 'drizzle-orm';
@@ -9,6 +9,7 @@ import { db } from '../../../lib/db';
 import { courseReview, enrollment, profile } from '../../../db/schema/app';
 import { user } from '../../../db/schema/auth';
 import { findCourse } from '../../../lib/catalog';
+import { reviewHeld } from '../../../lib/moderation';
 import { json, fail, requireUser, audit } from '../../../lib/session';
 import { rateLimit } from '../../../lib/guard';
 
@@ -50,7 +51,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const comment = p.data.comment || null;
   const [e] = await db.select({ id: enrollment.courseId }).from(enrollment).where(and(eq(enrollment.userId, u.id), eq(enrollment.courseId, courseId)));
   if (!e) return fail('Seuls les inscrits peuvent donner leur avis sur ce cours.', 403);
-  const hidden = !!comment && /https?:\/\/|www\./i.test(comment);
+  const hidden = await reviewHeld(comment);
   await db.insert(courseReview).values({ userId: u.id, courseId, rating, comment, hidden })
     .onConflictDoUpdate({ target: [courseReview.userId, courseReview.courseId], set: { rating, comment, hidden, at: new Date() } });
   await audit(u.id, 'academie.avis', courseId, { rating, hidden });

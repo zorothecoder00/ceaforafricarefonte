@@ -1,5 +1,6 @@
 ---
-/* Modération de la communauté (CDC §7.3, §11) : publications retenues par le filtre ou signalées, publications masquées. */
+/* Modération de la communauté (CDC §7.3, §11) : publications retenues par les filtres ou signalées, publications masquées, avis de cours,
+   et filtres de modération (expressions qui retiennent une publication) modifiables par l'équipe. */
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '../../lib/db';
@@ -9,24 +10,45 @@ import { user } from '../../db/schema/auth';
 import { countriesFor } from '../../lib/admin';
 import AiModNote, { type ModNote } from '../../components/AiModNote.astro';
 import { aiEnabled, latestNotes } from '../../lib/ai';
+import { getSetting } from '../../lib/settings';
+import { can } from '../../lib/rbac';
 
 export const prerender = false;
 const COURSES = await allCourses({ hidden: true });
 const me = Astro.locals.user!;
 const cs = await countriesFor(me, 'moderation');
 const v = Astro.url.searchParams.get('vue');
-const view = v === 'masque' ? 'masque' : v === 'avis' ? 'avis' : 'en_moderation';
+const view = v === 'masque' ? 'masque' : v === 'avis' ? 'avis' : v === 'filtres' ? 'filtres' : 'en_moderation';
+// Filtres : lisibles par tout modérateur ; modifiables par un modérateur (M) sans restriction de pays, car la liste vaut pour tous les pays
+const filters = await getSetting('moderation');
+const canFilters = can(me.roles, 'moderation', 'M') && !(await countriesFor(me, 'moderation', 'M'));
 const countryFilter = cs ? inArray(profile.country, cs.length ? cs : ['--']) : undefined;
 // Avis de cours : d'abord ceux retenus (lien) ou masqués, puis les plus récents
 const reviews = view === 'avis' ? await db.select({ r: courseReview, name: user.name }).from(courseReview).innerJoin(user, eq(user.id, courseReview.userId)).leftJoin(profile, eq(profile.userId, courseReview.userId))
   .where(countryFilter).orderBy(desc(courseReview.hidden), desc(courseReview.at)).limit(200) : [];
 const courseTitle = (id: string) => COURSES.find((c) => c.id === id)?.t ?? id;
-const rows = view === 'avis' ? [] : await db.select({ p: post, name: user.name, c: profile.country, space: space.name }).from(post).innerJoin(user, eq(user.id, post.authorId)).leftJoin(profile, eq(profile.userId, post.authorId)).leftJoin(space, eq(space.id, post.spaceId))
+const rows = view === 'avis' || view === 'filtres' ? [] : await db.select({ p: post, name: user.name, c: profile.country, space: space.name }).from(post).innerJoin(user, eq(user.id, post.authorId)).leftJoin(profile, eq(profile.userId, post.authorId)).leftJoin(space, eq(space.id, post.spaceId))
   .where(and(eq(post.status, view === 'masque' ? 'masque' : 'en_moderation'), countryFilter)).orderBy(desc(post.createdAt)).limit(200);
 const notes = await latestNotes<ModNote>('post', rows.map((r) => r.p.id), 'moderation');
 ---
 <AdminLayout title="Modération" lead="Délai cible : 24 heures. Les décisions sont notifiées à l'auteur et tracées." obj="moderation">
-  <nav class="subnav" style="margin:0 0 12px"><a href="?vue=en_moderation" aria-current={view === 'en_moderation' ? 'page' : undefined}>À examiner</a><a href="?vue=masque" aria-current={view === 'masque' ? 'page' : undefined}>Masquées</a><a href="?vue=avis" aria-current={view === 'avis' ? 'page' : undefined}>Avis de cours</a><a href="/admin/messages?onglet=signalements">Signalements</a></nav>
+  <nav class="subnav" style="margin:0 0 12px"><a href="?vue=en_moderation" aria-current={view === 'en_moderation' ? 'page' : undefined}>À examiner</a><a href="?vue=masque" aria-current={view === 'masque' ? 'page' : undefined}>Masquées</a><a href="?vue=avis" aria-current={view === 'avis' ? 'page' : undefined}>Avis de cours</a><a href="/admin/messages?onglet=signalements">Signalements</a><a href="?vue=filtres" aria-current={view === 'filtres' ? 'page' : undefined}>Filtres</a></nav>
+  {view === 'en_moderation' && <p class="small muted" style="margin:0 0 12px">Une publication de la communauté arrive ici, au lieu d'être publiée, quand elle contient une expression des <a href="?vue=filtres">filtres</a>. Validez-la pour la publier, ou masquez-la.</p>}
+  {view === 'filtres' && (
+    <form class="panel" data-api="/api/admin" data-reload>
+      <input type="hidden" name="action" value="moderation.filtres" />
+      <h2 style="font-size:1.15rem;margin-top:0">Filtres de modération</h2>
+      <p class="small muted" style="margin-top:0">Une publication de la communauté qui contient l'une de ces expressions n'est pas publiée : elle attend votre décision dans « À examiner ». Les majuscules et les accents ne comptent pas. Utilisez <code>*</code> pour « quelques mots quelconques » : <code>crypto*doubl</code> retient « crypto, je double votre mise ». Les changements s'appliquent aux prochaines publications et sont inscrits au journal d'audit.</p>
+      {!canFilters && <p class="small" style="border-left:4px solid var(--gold);padding-left:10px">Consultation seule : la liste vaut pour tous les pays, sa modification est réservée aux modérateurs sans restriction de pays.</p>}
+      <fieldset disabled={!canFilters} style="border:0;padding:0;margin:0">
+        <label class="f" for="mWords">Expressions retenues (une par ligne)</label>
+        <textarea class="in" id="mWords" name="words" rows="10" style="font-family:inherit">{filters.words.join('\n')}</textarea>
+        <label class="row small" style="margin-top:12px"><input type="checkbox" name="whatsapp" checked={filters.whatsapp} /> Retenir aussi les publications qui donnent un numéro WhatsApp (« WhatsApp +228 90 00 00 00 »)</label>
+        <label class="row small" style="margin-top:6px"><input type="checkbox" name="reviewLinks" checked={filters.reviewLinks} /> Retenir les avis de cours qui contiennent un lien internet</label>
+        {canFilters && <button class="btn btn-primary btn-sm" type="submit" style="margin-top:12px">Enregistrer les filtres</button>}
+      </fieldset>
+    </form>
+  )}
   {view === 'avis' && reviews.length === 0 && <div class="empty">Aucun avis.</div>}
   {reviews.map(({ r, name }) => (
     <div class="panel" style="margin-bottom:10px">
@@ -35,7 +57,7 @@ const notes = await latestNotes<ModNote>('post', rows.map((r) => r.p.id), 'moder
       <button class={`btn btn-sm ${r.hidden ? 'btn-primary' : 'btn-ghost'}`} type="button" data-post="/api/admin" data-body={JSON.stringify({ action: 'review.hidden', userId: r.userId, courseId: r.courseId, hidden: !r.hidden })} data-reload>{r.hidden ? 'Publier' : 'Masquer'}</button>
     </div>
   ))}
-  {view !== 'avis' && rows.length === 0 && <div class="empty">Aucune publication dans cette file.</div>}
+  {(view === 'en_moderation' || view === 'masque') && rows.length === 0 && <div class="empty">Aucune publication dans cette file.</div>}
   {rows.map(({ p, name, space: sp }) => (
     <div class="panel" style="margin-bottom:10px">
       <div class="xs muted">{name}{sp ? ` · ${sp}` : ''} · {p.createdAt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</div>

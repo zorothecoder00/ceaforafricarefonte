@@ -1,5 +1,5 @@
 /* Fil d'actualité (CDC §7.8) : POST { body, spaceId? } publie ; POST { like: postId } aime / n'aime plus.
-   Modération : les messages contenant des motifs suspects (paiement préalable, contact externe…) passent en modération. */
+   Modération : les messages contenant une expression des filtres choisis par l'équipe (back-office › Modération › Filtres) passent en modération. */
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
@@ -7,10 +7,9 @@ import { db } from '../../lib/db';
 import { post, postLike, space } from '../../db/schema/app';
 import { json, fail, requireUser, audit } from '../../lib/session';
 import { rateLimit } from '../../lib/guard';
+import { suspectReason } from '../../lib/moderation';
 
 export const prerender = false;
-
-const SUSPECT = /(western union|moneygram|frais de dossier|payez d'abord|investissement garanti|rendement garanti|crypto.{0,20}doubl|whatsapp\s*\+?\d{8,})/i;
 
 const Body = z.union([
   z.object({ body: z.string().trim().min(3).max(3000), spaceId: z.string().max(60).optional().nullable() }),
@@ -32,7 +31,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const limited = rateLimit(request, 'post:' + u.id, 10, 3600);
   if (limited) return limited;
   if (p.data.spaceId && !(await db.select({ id: space.id }).from(space).where(eq(space.id, p.data.spaceId))).length) return fail('Espace inconnu.');
-  const moderate = SUSPECT.test(p.data.body);
+  const moderate = !!(await suspectReason(p.data.body));
   const [row] = await db.insert(post).values({ authorId: u.id, body: p.data.body, spaceId: p.data.spaceId || null, status: moderate ? 'en_moderation' : 'publie' }).returning();
   if (moderate) await audit(u.id, 'publication.moderation_auto', row.id);
   return json({ ok: true, message: moderate ? 'Publication envoyée en modération (contenu à vérifier).' : 'Publication en ligne.' });

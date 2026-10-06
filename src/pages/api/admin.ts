@@ -14,6 +14,7 @@ import { notify } from '../../lib/notify';
 import { sendEmail } from '../../lib/messaging';
 import { siteUrl, trackPath } from '../../lib/support';
 import { message } from '../../lib/templates';
+import { getSetting, setSetting } from '../../lib/settings';
 
 import { isLastAdmin } from '../../lib/members';
 
@@ -26,6 +27,7 @@ const Body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('contact.update'), id, priority: z.enum(ticketPriorityEnum.enumValues).optional(), assignee: z.enum(['moi', 'personne']).optional() }),
   z.object({ action: z.literal('report.status'), id, status: z.enum(ticketFlowEnum.enumValues) }),
   z.object({ action: z.literal('post.status'), id, status: z.enum(['publie', 'masque']) }),
+  z.object({ action: z.literal('moderation.filtres'), words: z.string().max(10000), whatsapp: z.boolean(), reviewLinks: z.boolean() }),
   z.object({ action: z.literal('review.hidden'), userId: z.string().min(1).max(64), courseId: z.string().max(20), hidden: z.boolean() }),
   z.object({ action: z.literal('application.update'), id, status: z.enum(['recue', 'en_evaluation', 'entretien', 'admise', 'liste_attente', 'refusee', 'retiree']) /* pas de retour au brouillon */, score: z.coerce.number().int().min(0).max(100).nullish() }),
   z.object({ action: z.literal('dossier.status'), id, status: z.enum(dossierStatusEnum.enumValues), note: z.string().max(2000).optional() }),
@@ -115,6 +117,21 @@ export const POST: APIRoute = async ({ locals, request }) => {
       if (b.status === 'masque') await notify(pt.author, 'Une de vos publications a été masquée par la modération (charte de la communauté).', '/communaute/fil');
       await audit(u.id, 'admin.publication.' + b.status, b.id, {}, ip);
       return ok(b.status === 'publie' ? 'Publication validée.' : 'Publication masquée.');
+    }
+    case 'moderation.filtres': {
+      // Liste commune à tous les pays : réservée aux modérateurs sans restriction de pays
+      const u = guard('moderation', 'M'); if (u instanceof Response) return u;
+      if (await countriesFor(u, 'moderation', 'M')) return fail('Les filtres valent pour tous les pays : leur modification est réservée aux modérateurs sans restriction de pays.', 403);
+      const words = [...new Set(b.words.split('\n').map((w) => w.trim().toLowerCase()).filter(Boolean))];
+      const bad = words.find((w) => w.length < 2 || w.length > 80 || /^\**$/.test(w.replace(/\s/g, '')));
+      if (bad) return fail(`Expression refusée : « ${bad} » (2 à 80 caractères, pas seulement des *).`);
+      if (words.length > 200) return fail('200 expressions au maximum.');
+      const before = await getSetting('moderation');
+      await setSetting('moderation', { words, whatsapp: b.whatsapp, reviewLinks: b.reviewLinks }, u.id);
+      await audit(u.id, 'admin.moderation.filtres', 'moderation', {
+        ajoutees: words.filter((w) => !before.words.includes(w)), retirees: before.words.filter((w) => !words.includes(w)), whatsapp: b.whatsapp, reviewLinks: b.reviewLinks,
+      }, ip);
+      return ok('Filtres enregistrés : ils s’appliquent aux prochaines publications.');
     }
     case 'application.update': {
       const u = guard('candidature', 'V'); if (u instanceof Response) return u;

@@ -38,6 +38,15 @@ export const SETTINGS = {
     // Relance du responsable N heures avant l'échéance ; escalade N heures après le dépassement, vers un rôle (et une adresse facultative)
     defaults: { remindHours: 24, escalateHours: 24, role: 'admin', email: '' },
   },
+  moderation: {
+    label: 'Filtres de modération',
+    schema: z.object({ words: z.array(z.string().trim().min(2).max(80)).max(200), whatsapp: z.boolean(), reviewLinks: z.boolean() }),
+    // Expressions qui retiennent une publication (« * » = quelques mots quelconques), numéro WhatsApp dans le texte, liens dans les avis de cours
+    defaults: {
+      words: ['western union', 'moneygram', 'frais de dossier', "payez d'abord", 'investissement garanti', 'rendement garanti', 'crypto*doubl'],
+      whatsapp: true, reviewLinks: true,
+    },
+  },
   reseaux: {
     label: 'Réseaux sociaux (pied de page)',
     schema: z.object({ linkedin: z.string(), facebook: z.string(), x: z.string(), youtube: z.string(), instagram: z.string(), tiktok: z.string(), whatsapp: z.string() }),
