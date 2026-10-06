@@ -22,7 +22,7 @@ const a = cms
 const others = (await publicArticles(lang)).filter((x) => x.id !== id).slice(0, 2);
 ---
 <BaseLayout title={cms?.seoTitle || a.t} description={cms?.seoDescription || a.x} image={cms?.coverId ? mediaUrl(cms.coverId) : undefined}>
-  <PageHead title={a.t} lead={`${a.cat} · ${a.c} · ${dateFr(a.d)} · ${a.r} de lecture`} crumbs={[['/ressources', 'Ressources'], ['', a.cat]]} />
+  <PageHead listen="article.prose, #app article" title={a.t} lead={`${a.cat} · ${a.c} · ${dateFr(a.d)} · ${a.r} de lecture`} crumbs={[['/ressources', 'Ressources'], ['', a.cat]]} />
   <section class="block">
     <div class="wrap split">
       <article>

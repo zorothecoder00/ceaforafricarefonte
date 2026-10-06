@@ -1,8 +1,9 @@
 ---
 import type { Link } from '../data/site';
 import { stripLang } from '../i18n/ui';
-interface Props { title: string; lead?: string; crumbs?: [string, string][]; subnav?: Link[]; lang?: 'fr' | 'en' }
-const { title, lead, crumbs = [], subnav, lang = 'fr' } = Astro.props;
+/* listen : sélecteur CSS du contenu à lire à voix haute (CDC §5.1, lecture audio des contenus clés) ; le bouton n'apparaît que si le navigateur sait lire. */
+interface Props { title: string; lead?: string; crumbs?: [string, string][]; subnav?: Link[]; lang?: 'fr' | 'en'; listen?: string }
+const { title, lead, crumbs = [], subnav, lang = 'fr', listen } = Astro.props;
 const path = stripLang(Astro.url.pathname).replace(/\/$/, '') || '/';
 ---
 <div class="page-head">
@@ -12,6 +13,7 @@ const path = stripLang(Astro.url.pathname).replace(/\/$/, '') || '/';
     </div>
     <h1>{title}</h1>
     {lead && <p>{lead}</p>}
+    {listen && <button class="btn btn-ghost btn-sm listen-btn" type="button" data-listen={listen} hidden aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14" /></svg><span data-listen-label>{lang === 'en' ? 'Listen' : 'Écouter'}</span></button>}
     {subnav && (
       <nav class="subnav" aria-label="Sous-navigation">
         {subnav.map(([h, l]) => <a href={h} aria-current={h === path ? 'page' : undefined}>{l}</a>)}

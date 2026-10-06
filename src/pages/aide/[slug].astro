@@ -13,7 +13,7 @@ const related = HELP.filter((x) => x.cat === h.cat && x.slug !== h.slug).slice(0
 const embed = h.video && /youtube\.com|youtu\.be|vimeo\.com/.test(h.video);
 ---
 <BaseLayout title={h.q} description={h.a[0]}>
-  <PageHead title={h.q} crumbs={[['/aide', "Centre d'aide"], ['', HELP_CATS[h.cat]]]} />
+  <PageHead listen="#app article, .prose" title={h.q} crumbs={[['/aide', "Centre d'aide"], ['', HELP_CATS[h.cat]]]} />
   <section class="block">
     <div class="wrap split">
       <article class="panel">

@@ -566,3 +566,83 @@ $$<HTMLButtonElement>('[data-post]').forEach((b) => b.addEventListener('click', 
   if (d.redirect) setTimeout(() => (location.href = d.redirect), 600);
   else if (b.hasAttribute('data-reload')) setTimeout(() => location.reload(), 600);
 }));
+
+/* ===== Lecture audio des contenus clés (CDC §5.1) : <button data-listen="sélecteur"> lit le contenu avec la synthèse vocale du navigateur ===== */
+$$<HTMLButtonElement>('[data-listen]').forEach((b) => {
+  if (!('speechSynthesis' in window)) return;
+  b.hidden = false;
+  const label = $('[data-listen-label]', b);
+  const idle = EN ? 'Listen' : 'Écouter', busy = EN ? 'Stop' : 'Arrêter';
+  const stop = () => { speechSynthesis.cancel(); b.setAttribute('aria-pressed', 'false'); if (label) label.textContent = idle; };
+  b.addEventListener('click', () => {
+    if (b.getAttribute('aria-pressed') === 'true') return stop();
+    const el = b.dataset.listen!.split(',').map((s) => $(s.trim())).find(Boolean);
+    // Texte lisible : on écarte formulaires, boutons et zones techniques
+    const clone = el?.cloneNode(true) as HTMLElement | undefined;
+    clone?.querySelectorAll('form, button, textarea, input, select, script, style, [aria-hidden="true"], .tutor').forEach((x) => x.remove());
+    const text = [b.closest('.page-head')?.querySelector('h1')?.textContent, clone?.innerText || clone?.textContent].filter(Boolean).join('. ').replace(/\s+/g, ' ').trim();
+    if (!text) return;
+    speechSynthesis.cancel();
+    // Lecture par morceaux : certains navigateurs coupent les textes longs
+    const parts = text.match(/[^.!?]{1,220}[.!?]?/g) ?? [text];
+    const lang = document.querySelector('main')?.getAttribute('lang') === 'en' || EN ? 'en-GB' : 'fr-FR';
+    parts.forEach((p, i) => {
+      const u = new SpeechSynthesisUtterance(p);
+      u.lang = lang;
+      if (i === parts.length - 1) u.onend = stop;
+      speechSynthesis.speak(u);
+    });
+    b.setAttribute('aria-pressed', 'true');
+    if (label) label.textContent = busy;
+  });
+  addEventListener('pagehide', stop);
+});
+
+/* ===== Outils du lecteur vidéo (CDC §7.6) : vitesse de lecture, mode audio seul, notes horodatées (enregistrées sur l'appareil) ===== */
+$$<HTMLVideoElement>('video').forEach((v, n) => {
+  if (v.dataset.tools === 'off' || !v.controls) return; // caméra du scanner, vidéos décoratives
+  const key = 'cea-vnotes:' + (v.currentSrc || v.querySelector('source')?.getAttribute('src') || v.getAttribute('src') || location.pathname + '#' + n);
+  const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  const bar = document.createElement('div');
+  bar.className = 'vtools';
+  bar.innerHTML = `
+    <label class="xs">${EN ? 'Speed' : 'Vitesse'} <select class="in" data-speed aria-label="${EN ? 'Playback speed' : 'Vitesse de lecture'}">${[0.75, 1, 1.25, 1.5, 2].map((x) => `<option value="${x}"${x === 1 ? ' selected' : ''}>${String(x).replace('.', EN ? '.' : ',')}×</option>`).join('')}</select></label>
+    <button class="btn btn-ghost btn-sm" type="button" data-audio aria-pressed="false">${EN ? 'Audio only' : 'Audio seul'}</button>
+    <button class="btn btn-ghost btn-sm" type="button" data-addnote>${EN ? 'Add a note here' : 'Noter à ce moment'}</button>
+    <ul class="vnotes" data-notes></ul>`;
+  // Le lecteur est parfois positionné en absolu dans un cadre : la barre se place après ce cadre
+  const host = v.closest('.player') ?? v;
+  host.after(bar);
+  const speed = $<HTMLSelectElement>('[data-speed]', bar)!;
+  speed.addEventListener('change', () => { v.playbackRate = Number(speed.value); });
+  const audio = $<HTMLButtonElement>('[data-audio]', bar)!;
+  audio.addEventListener('click', () => {
+    const on = audio.getAttribute('aria-pressed') !== 'true';
+    audio.setAttribute('aria-pressed', String(on));
+    host.classList.toggle('audio-only', on);
+  });
+  type Note = { t: number; text: string };
+  const read = (): Note[] => { try { return JSON.parse(store(key) || '[]'); } catch { return []; } };
+  const list = $('[data-notes]', bar)!;
+  const render = () => {
+    list.innerHTML = '';
+    read().sort((a, b) => a.t - b.t).forEach((x, i, all) => {
+      const li = document.createElement('li');
+      const go = document.createElement('button'); go.type = 'button'; go.className = 'linkbtn'; go.textContent = fmt(x.t);
+      go.addEventListener('click', () => { v.currentTime = x.t; v.play().catch(() => {}); });
+      const del = document.createElement('button'); del.type = 'button'; del.className = 'linkbtn xs'; del.textContent = '✕'; del.setAttribute('aria-label', EN ? 'Delete note' : 'Supprimer la note');
+      del.addEventListener('click', () => { store(key, JSON.stringify(all.filter((_, j) => j !== i))); render(); });
+      li.append(go, document.createTextNode(' ' + x.text + ' '), del);
+      list.append(li);
+    });
+  };
+  $('[data-addnote]', bar)!.addEventListener('click', () => {
+    const t = v.currentTime;
+    v.pause();
+    const text = prompt((EN ? 'Note at ' : 'Note à ') + fmt(t));
+    if (!text?.trim()) return;
+    store(key, JSON.stringify([...read(), { t, text: text.trim().slice(0, 500) }]));
+    render();
+  });
+  render();
+});

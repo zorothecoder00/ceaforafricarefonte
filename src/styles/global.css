@@ -597,3 +597,13 @@ body[data-univers] .subnav a[aria-current="page"]{background:var(--u);border-col
 .chat-alt{display:flex;gap:6px;flex-wrap:wrap;padding:8px 16px;border-bottom:1px solid var(--line);font-size:.82rem}
 .chat-alt a{padding:4px 10px;border:1px solid var(--line);border-radius:999px;text-decoration:none;font-weight:600}
 .chat-alt a:hover{border-color:var(--navy)}
+/* Lecteur vidéo : barre d'outils sous la vidéo, mode audio seul (image masquée, commandes conservées), notes horodatées */
+.vtools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 0}
+.vtools select.in{width:auto;padding:4px 8px;margin:0 0 0 4px}
+.vtools .vnotes{flex-basis:100%;list-style:none;margin:4px 0 0;padding:0;font-size:.9rem}
+.vtools .vnotes li{padding:3px 0;border-bottom:1px solid var(--line)}
+.linkbtn{background:none;border:0;padding:0 2px;color:var(--navy);font:inherit;font-weight:700;text-decoration:underline;cursor:pointer}
+.audio-only{aspect-ratio:auto!important;min-height:0!important}
+.audio-only video{position:static!important;height:54px!important;background:var(--navy)!important}
+.listen-btn{margin-top:4px}
+.listen-btn svg{flex:none}

@@ -22,7 +22,7 @@ const last = c.ls.length - 1;
 const related = COURSES.filter((x) => x.id !== c.id && (x.th === c.th || x.lv === c.lv)).slice(0, 3);
 ---
 <BaseLayout title={c.t}>
-  <PageHead title={c.t} lead={`${c.th} · ${c.lv} · ${c.dur} · ${meta?.langs.join(', ') ?? 'Français'} · par ${c.by}`} crumbs={[['/academie', 'Académie'], ['', c.th]]} />
+  <PageHead listen=".lesson:not([hidden])" title={c.t} lead={`${c.th} · ${c.lv} · ${c.dur} · ${meta?.langs.join(', ') ?? 'Français'} · par ${c.by}`} crumbs={[['/academie', 'Académie'], ['', c.th]]} />
   <section class="block" style="padding-top:28px">
     <div class="wrap split" id="course" data-course={c.id} data-last={last}>
       <div>

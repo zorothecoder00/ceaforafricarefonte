@@ -12,7 +12,7 @@ if (!doc) return Astro.rewrite('/404');
 const others = Object.entries(LEGAL).filter(([k]) => k !== Astro.params.slug);
 ---
 <BaseLayout title={doc.title}>
-  <PageHead title={doc.title} lead={`Mise à jour le ${dateFr(doc.updated)}`} crumbs={[['', doc.title]]} />
+  <PageHead listen=".prose" title={doc.title} lead={`Mise à jour le ${dateFr(doc.updated)}`} crumbs={[['', doc.title]]} />
   <section class="block">
     <div class="wrap split">
       <article class="panel prose">

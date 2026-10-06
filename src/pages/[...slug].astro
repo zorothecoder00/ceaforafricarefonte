@@ -37,7 +37,7 @@ const seo = { title: page?.seoTitle || title, description: page?.seoDescription 
 ---
 {kapital ? (
   <KapitalLayout title={seo.title} description={seo.description} risk={false}>
-    <PageHead title={title} lead={lead} crumbs={crumbs} />
+    <PageHead listen=".prose, #app article" title={title} lead={lead} crumbs={crumbs} />
     <section class="block"><div class="wrap">
       {page ? <div style="max-width:820px"><CmsBody blocks={page.blocks as Block[]} coverId={page.coverId} /></div>
         : <div class="empty"><b>Bientôt disponible.</b> Cette section de CEA Kapital Invest est en cours de construction. <a href="/kapital">Retour à l'accueil Kapital</a></div>}
@@ -45,7 +45,7 @@ const seo = { title: page?.seoTitle || title, description: page?.seoDescription 
   </KapitalLayout>
 ) : (
   <BaseLayout title={seo.title} description={seo.description} image={seo.image}>
-    <PageHead title={title} lead={lead} crumbs={crumbs} />
+    <PageHead listen=".prose, #app article" title={title} lead={lead} crumbs={crumbs} />
     <section class="block">
       <div class="wrap split">
         {page ? <article><CmsBody blocks={page.blocks as Block[]} coverId={page.coverId} /></article>

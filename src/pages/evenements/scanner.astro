@@ -27,7 +27,7 @@ const current = events.find((e) => e.date >= today) ?? events[events.length - 1]
           <label class="f" for="ev">Événement</label>
           <select class="in" id="ev">{events.map((e) => <option value={e.id} selected={e.id === current.id}>{e.t} — {dateFr(e.date)}</option>)}</select>
           <div class="player" id="cam" style="aspect-ratio:4/3;background:#000;margin-top:12px">
-            <video id="vid" playsinline muted style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" hidden></video>
+            <video id="vid" data-tools="off" playsinline muted style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" hidden></video>
             <button class="btn btn-gold btn-sm" type="button" id="camOn" style="position:relative;z-index:1">Activer la caméra</button>
             <div class="cap" id="camCap" style="text-align:center"></div>
           </div>
