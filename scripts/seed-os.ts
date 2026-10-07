@@ -18,7 +18,7 @@ const { and, eq, sql, inArray } = await import('drizzle-orm');
 const { PDOM, DOM, BANDS, gradeOf, profOf, pn, DK } = await import('../src/lib/os/ref');
 
 if (process.argv.includes('--reset')) {
-  await db.execute(sql`truncate os_ledger, os_closing, os_treasury, os_receipt, os_po, os_stock_move, os_stock_item, os_supplier, os_contract, os_okr, os_risk, os_audit, os_review_item, os_review, os_interview, os_flow, os_country, os_message, os_channel_seen, os_channel, os_meeting, os_task, os_decision, os_request, os_delegation, os_timesheet, os_budget, staff restart identity cascade`);
+  await db.execute(sql`truncate os_candidate, os_recruit, os_payroll, os_ledger, os_closing, os_treasury, os_receipt, os_po, os_stock_move, os_stock_item, os_supplier, os_contract, os_okr, os_risk, os_audit, os_review_item, os_review, os_interview, os_flow, os_country, os_message, os_channel_seen, os_channel, os_meeting, os_task, os_decision, os_request, os_delegation, os_timesheet, os_budget, staff restart identity cascade`);
   console.log('• Tables de CEA OS vidées.');
 }
 const [any] = await db.select({ id: s.staff.id }).from(s.staff).limit(1);
@@ -158,5 +158,11 @@ await db.delete(s.invoice).where(and(eq(s.invoice.purpose, 'autre'), inArray(sql
 for (const [name, label, amount, domain, country, due] of CLIENTS) await issue({ kind: 'facture', buyer: { name }, purpose: 'autre', lines: [{ label, qty: 1, unitXof: amount }], totalHtXof: amount, taxRate: 0, taxXof: 0, totalXof: amount, status: 'a_payer', dueOn: ago(-due).toISOString().slice(0, 10), country, domain });
 const [inv1] = await db.select({ n: s.invoice.number }).from(s.invoice).where(eq(s.invoice.totalXof, 1800000));
 await db.insert(s.osReceipt).values([{ source: 'Orange Money', amount: 1800000, ref: `Paiement ${inv1?.n ?? ''}` }, { source: 'Wave', amount: 4500000, ref: 'MINCOM FORMATION' }, { source: 'Virement', amount: 350000, ref: 'VIR 0045' }]);
+// Recrutement : un poste publié avec deux candidatures (contenus du prototype)
+await db.insert(s.osRecruit).values({ id: 'REC-21', poste: 'D4', country: 'TG', byStaff: fin, status: 'Publiée', salary: 1000000, why: 'Renfort du contrôle de gestion avant la clôture annuelle.', createdAt: ago(20) });
+await db.insert(s.osCandidate).values([
+  { recruitId: 'REC-21', name: 'Afi Kodjo', email: 'afi.kodjo@exemple.africa', source: 'Site web', at: ago(12) },
+  { recruitId: 'REC-21', name: 'Koffi Mensah', email: 'koffi.mensah@exemple.africa', source: 'Cooptation', at: ago(9), status: 'Entretien', scores: { exp: 3, tech: 4, ent: 3, integ: 4, coop: 3, lang: 3 } },
+]);
 console.log(`✓ ${rows.length} collaborateurs, budgets ${year} de ${DK.length} domaines. Comptes rattachés : admin@cea.demo (DG), analyste@cea.demo, editeur@cea.demo.`);
 process.exit(0);

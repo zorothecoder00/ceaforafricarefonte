@@ -8,7 +8,8 @@
 import { and, desc, eq, gt, lte, sql } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import { db } from '../db';
-import { osRequest, osDelegation, osBudget, osPo, osContract, staff, type Step } from '../../db/schema/os';
+import { osRequest, osDelegation, osBudget, osPo, osContract, osRecruit, osCandidate, staff, type Step } from '../../db/schema/os';
+import { hire } from './rh';
 import { post } from './ledger';
 import { getSetting } from '../settings';
 import { notify } from '../notify';
@@ -146,6 +147,8 @@ export async function decide(id: string, me: Person, ok: boolean, com = ''): Pro
   if (!ok) {
     await db.update(osRequest).set({ steps, hist, status: 'Rejetée', updatedAt: new Date() }).where(eq(osRequest.id, id));
     if (r.type === 'dep') await engageBudget(r.domain, -r.amount); // dépense engagée dès la soumission
+    if (r.type === 'recrut' && r.data.rec) await db.update(osRecruit).set({ status: 'Refusée' }).where(eq(osRecruit.id, String(r.data.rec)));
+    if (r.type === 'offre' && r.data.cand) await db.update(osCandidate).set({ status: 'Entretien' }).where(eq(osCandidate.id, String(r.data.cand)));
     await notifyStaff([r.byStaff], `${label(r)} rejetée : ${com}`, '/admin/moi', people);
     await audit(me.userId, 'os.demande.rejet', r.id, { niveau: lvl, motif: com });
     return null;
@@ -191,6 +194,15 @@ async function finalize(r: Req, people: Person[]) {
     status = 'Approuvé';
     const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(osContract);
     await db.insert(osContract).values({ id: `CTR-${30 + n}`, title: r.title, party: String(r.data.party ?? ''), type: String(r.data.ctype ?? 'Prestation'), domain: r.domain, country: r.country, amount: r.amount, end: r.data.end ? new Date(String(r.data.end)) : new Date(Date.now() + 365 * 864e5), owner: r.byStaff, requestId: r.id });
+  }
+  if (r.type === 'recrut' && r.data.rec) {
+    await db.update(osRecruit).set({ status: 'Validée' }).where(eq(osRecruit.id, String(r.data.rec)));
+    await notifyStaff(people.filter((p) => p.prof === 'rh' && p.active).map((p) => p.id), `Recrutement validé : ${r.title} — à publier`, '/admin/recrutement', people);
+  }
+  if (r.type === 'offre' && r.data.rec && r.data.cand) {
+    const [x] = await db.select().from(osRecruit).where(eq(osRecruit.id, String(r.data.rec)));
+    const [c] = await db.select().from(osCandidate).where(eq(osCandidate.id, String(r.data.cand)));
+    if (x && c && x.status !== 'Pourvu') await hire(x, c, r.amount, people, null, '');
   }
   await db.update(osRequest).set({ status, updatedAt: new Date() }).where(eq(osRequest.id, r.id));
   await notifyStaff([r.byStaff], `${label(r)} : ${status.toLowerCase()}`, '/admin/moi', people);

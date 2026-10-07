@@ -1,0 +1,117 @@
+---
+/* CEA OS — Recrutement (prototype › pRecrut), profils dg, rh, ops : du besoin à l'arrivée — demande, validation, annonce,
+   candidatures, entretiens notés (grille pondérée), offre (DG si hors fourchette), embauche avec compte CEA OS. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Dlg from '../../components/os/Dlg.astro';
+import Fiche from '../../components/os/Fiche.astro';
+import RecruitDialog from '../../components/os/RecruitDialog.astro';
+import { asc, desc, eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { osRecruit, osCandidate } from '../../db/schema/os';
+import { osContext, allStaff, canUse, MANAGERS } from '../../lib/os/core';
+import { WEIGHTS, scoreOf, eligible } from '../../lib/os/rh';
+import { BANDS, gradeOf, pn, refT, fcfa, dstr } from '../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const isRH = ['dg', 'rh'].includes(os.prof ?? '') || os.superuser;
+const people = await allStaff();
+const name = (id: string | null) => people.find((s) => s.id === id)?.name ?? '—';
+const id = Astro.url.searchParams.get('id');
+const list = await db.select().from(osRecruit).orderBy(desc(osRecruit.createdAt));
+const x = id ? list.find((r) => r.id === id) : null;
+const cands = x ? await db.select().from(osCandidate).where(eq(osCandidate.recruitId, x.id)).orderBy(asc(osCandidate.at)) : [];
+const g = x ? gradeOf(x.poste) : 'Cadre';
+const bd = BANDS[g];
+const ST: Record<string, [string, string]> = { Demande: ['warn', 'Demande'], Validée: ['ok', 'Validée'], Publiée: ['ok', 'Publiée'], Pourvu: ['', 'Pourvu'], Refusée: ['bad', 'Refusée'] };
+---
+<AdminLayout title={x ? `${x.poste} — ${refT(x.poste)}` : 'Recrutement'} lead={x ? `${pn(x.country)} · demandé par ${name(x.byStaff)} · grade ${g} · ${ST[x.status]?.[1] ?? x.status}` : "Du besoin à l'arrivée : demande, validation, annonce, entretiens notés, offre, compte CEA OS"} crumbs={x ? [['Recrutement', '/admin/recrutement'], [x.id]] : undefined}>
+  <Fragment slot="actions">
+    {!x && canUse(MANAGERS, os) && os.me && <button class="btn" type="button" data-dlg="dlg-recruit">Demander un recrutement</button>}
+    {x && isRH && x.status === 'Validée' && <button class="btn" type="button" data-post="/api/admin/os/rh" data-body={JSON.stringify({ action: 'recruit.publish', id: x.id })} data-reload>Publier l'annonce</button>}
+    {x && isRH && x.status === 'Publiée' && <><button class="btn" type="button" data-dlg="dlg-cand">Ajouter une candidature</button><button class="btn ghost" type="button" data-post="/api/admin/os/rh" data-body={JSON.stringify({ action: 'recruit.close', id: x.id })} data-reload>Clôturer l'annonce</button></>}
+  </Fragment>
+  {x ? (
+    <div class="split">
+      <div>
+        <h2>Candidatures ({cands.length})</h2>
+        <div class="tw">
+          <table class="t">
+            <thead><tr><th>Candidat·e</th><th>Source</th><th>Reçue</th><th>Note pondérée</th><th>Statut</th><th></th></tr></thead>
+            <tbody>
+              {cands.map((k) => { const s = scoreOf(k.scores); return (
+                <tr>
+                  <td><b>{k.name}</b><div class="xs muted">{k.email}{k.cv && <> · <a href={`/api/admin/os/cv?id=${k.id}`} target="_blank" rel="noopener">CV</a></>}</div></td>
+                  <td>{k.source === 'Site web' ? 'Candidature en ligne' : k.source}</td><td class="small">{dstr(k.at)}</td>
+                  <td>{s === null ? '—' : <><b>{s.toFixed(2)}</b>/4 {eligible(k.scores) ? <span class="tag ok">Recrutable</span> : <span class="tag bad">Sous le seuil</span>}</>}</td>
+                  <td>{k.status}</td>
+                  <td style="white-space:nowrap">{isRH && k.status !== 'Embauché·e' && x.status !== 'Pourvu' && <><button class="btn ghost sm" type="button" data-dlg={`ev-${k.id}`}>Évaluer</button>{eligible(k.scores) && k.status !== 'Offre en approbation' && <> <button class="btn ok sm" type="button" data-dlg="dlg-offer" data-set-id={k.id} data-set-salary={String(x.salary)} data-set-label={k.name}>Faire une offre</button></>}</>}</td>
+                </tr>
+              ); })}
+              {!cands.length && <tr><td colspan="6" class="muted">{x.status === 'Publiée' ? 'Aucune candidature pour l’instant : ajoutez-les avec « Ajouter une candidature ».' : 'Publiez l’annonce pour recevoir des candidatures.'}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <p class="xs muted" style="margin-top:6px">Seuil : note pondérée ≥ 3 sur 4 et aucune note de 1 en intégrité. Mêmes critères pour tous les candidats.</p>
+        {x.why && <div class="card" style="margin-top:14px"><h3>Justification de la demande</h3><p class="small" style="white-space:pre-wrap">{x.why}</p></div>}
+      </div>
+      <aside><Fiche code={x.poste} /></aside>
+    </div>
+  ) : (
+    <div class="tw">
+      <table class="t">
+        <thead><tr><th>Référence</th><th>Poste</th><th>Pays</th><th>Demandeur</th><th>Statut</th><th></th></tr></thead>
+        <tbody>
+          {list.map((r) => <tr><td class="small">{r.id}<br />{dstr(r.createdAt)}</td><td><span class="tag gold">{r.poste}</span> <b class="small">{refT(r.poste)}</b></td><td>{pn(r.country)}</td><td class="small">{name(r.byStaff)}</td><td><span class={`tag ${ST[r.status]?.[0] ?? ''}`}>{ST[r.status]?.[1] ?? r.status}</span></td><td><a class="btn ghost sm" href={`/admin/recrutement?id=${r.id}`}>Ouvrir</a></td></tr>)}
+          {!list.length && <tr><td colspan="6" class="muted">Aucun recrutement.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  )}
+  {!x && <RecruitDialog me={os.me} people={people} />}
+  {x && (
+    <>
+      <Dlg id="dlg-cand" title="Ajouter une candidature" upload="/api/admin/os/rh" submit="Ajouter" wide>
+        <input type="hidden" name="action" value="candidate.add" /><input type="hidden" name="recruitId" value={x.id} />
+        <div class="fg">
+          <div><label class="f" for="acn">Nom complet</label><input class="in" id="acn" name="name" required /></div>
+          <div><label class="f" for="acm">E-mail</label><input class="in" id="acm" name="email" type="email" required /></div>
+          <div><label class="f" for="acs">Source</label><select class="in" id="acs" name="source">{['Candidature spontanée', 'Cabinet', 'Cooptation', 'Réseau CEA', 'Mobilité interne'].map((s) => <option>{s}</option>)}</select></div>
+          <div><label class="f" for="acv">CV</label><input class="in" type="file" id="acv" name="file" accept="application/pdf,.docx" /></div>
+        </div>
+      </Dlg>
+      {cands.map((k) => (
+        <Dlg id={`ev-${k.id}`} title={`Grille d'entretien — ${k.name}`} api="/api/admin/os/rh" wide>
+          <input type="hidden" name="action" value="candidate.score" /><input type="hidden" name="id" value={k.id} />
+          <p class="small muted">Notez de 1 (insuffisant) à 4 (excellent). Déclarez tout conflit d'intérêts avant l'entretien.</p>
+          <div class="fg">{WEIGHTS.map(([key, l, w]) => <div><label class="f" for={`w${k.id}${key}`}>{l} ({Math.round(w * 100)} %)</label><select class="in" id={`w${k.id}${key}`} name={key} data-w={w} data-k={key}>{[1, 2, 3, 4].map((n) => <option selected={(k.scores?.[key] ?? 3) === n}>{n}</option>)}</select></div>)}</div>
+          <label class="row small" style="margin-top:10px"><input type="checkbox" name="coi" /> Je déclare n'avoir aucun conflit d'intérêts avec ce candidat</label>
+          <div class="watch" style="margin-top:10px" data-score></div>
+        </Dlg>
+      ))}
+      <Dlg id="dlg-offer" title="Faire une offre" api="/api/admin/os/rh" submit="Valider l'offre">
+        <input type="hidden" name="action" value="candidate.offer" /><input type="hidden" name="id" value="" />
+        <p class="small">Offre à <b data-text="label"></b></p>
+        <label class="f" for="os">Salaire brut mensuel (FCFA)</label><input class="in" type="number" id="os" name="salary" min="1" required style="width:100%" data-offer={JSON.stringify(bd)} />
+        <div class="watch" style="margin-top:10px" data-offerw></div>
+      </Dlg>
+    </>
+  )}
+</AdminLayout>
+<script>
+  // Note pondérée en direct dans chaque grille d'entretien
+  document.querySelectorAll<HTMLElement>('dialog').forEach((d) => {
+    const sel = d.querySelectorAll<HTMLSelectElement>('[data-w]'), out = d.querySelector<HTMLElement>('[data-score]');
+    if (!sel.length || !out) return;
+    const upd = () => { let s = 0, integ = 0; sel.forEach((x) => { s += Number(x.value) * Number(x.dataset.w); if (x.dataset.k === 'integ') integ = Number(x.value); }); out.innerHTML = `Note pondérée : <b>${s.toFixed(2)}</b>/4 — ${s >= 3 && integ !== 1 ? 'recrutable' : 'sous le seuil' + (integ === 1 ? ' (intégrité = 1)' : '')}`; };
+    sel.forEach((x) => x.addEventListener('change', upd)); upd();
+  });
+  // Offre : dans la fourchette = embauche immédiate, sinon approbation de la Direction générale
+  const o = document.querySelector<HTMLInputElement>('[data-offer]'), ow = document.querySelector<HTMLElement>('[data-offerw]');
+  if (o && ow) {
+    const [lo, hi] = JSON.parse(o.dataset.offer!);
+    const f = (n: number) => Math.round(n).toLocaleString('fr-FR') + ' FCFA';
+    const upd = () => { const v = Number(o.value); const inb = v >= lo && v <= hi; ow.innerHTML = `Fourchette du grade : ${f(lo)} à ${hi > 9e9 ? '—' : f(hi)}. ${inb ? 'Dans la fourchette : embauche immédiate, compte CEA OS créé avec le profil du poste.' : '<b>Hors fourchette : approbation de la Direction générale requise.</b>'}`; };
+    o.addEventListener('input', upd); document.querySelectorAll('[data-dlg="dlg-offer"]').forEach((b) => b.addEventListener('click', () => setTimeout(upd, 0)));
+  }
+</script>

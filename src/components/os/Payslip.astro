@@ -1,0 +1,22 @@
+---
+/* Bulletin de paie (prototype › slipHTML). */
+import type { PayLine } from '../../db/schema/os';
+import type { Person } from '../../lib/os/core';
+import { fcfa, pn, refT } from '../../lib/os/ref';
+interface Props { s: Person; month: string; l: PayLine }
+const { s, month, l } = Astro.props;
+const label = new Date(`${month}-01T12:00:00`).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+---
+<div class="slip">
+  <div class="row between"><div><b style="font-family:var(--display)">CEA FOR AFRICA</b><div class="xs muted">Bulletin de paie — {label}</div></div><img src="/logo.png" alt="" style="height:36px" /></div>
+  <hr style="border:0;border-top:1px solid var(--line)" />
+  <p class="small"><b>{s.name}</b> · {refT(s.poste)} · matricule {s.id} · {pn(l.country)}</p>
+  <table class="t"><tbody>
+    <tr><td>Salaire de base brut</td><td class="num">{fcfa(l.brut)}</td></tr>
+    <tr><td>Cotisations sociales salariales</td><td class="num">− {fcfa(l.cs)}</td></tr>
+    <tr><td>Impôt retenu à la source</td><td class="num">− {fcfa(l.imp)}</td></tr>
+    <tr><td><b>Net à payer</b></td><td class="num"><b>{fcfa(l.net)}</b></td></tr>
+    <tr><td class="muted">Charges patronales</td><td class="num muted">{fcfa(l.cp)}</td></tr>
+  </tbody></table>
+  <p class="xs muted" style="margin-top:8px">Taux définis dans le paramétrage de la paie (à valider par pays avec les barèmes locaux).</p>
+</div>

@@ -1,0 +1,34 @@
+---
+/* Dialogue « Demande de recrutement » (prototype › newRecruit) : poste du référentiel (vacants signalés), pays, salaire
+   proposé, justification ; grade, fourchette et circuit affichés en direct. */
+import Dlg from './Dlg.astro';
+import type { Person } from '../../lib/os/core';
+import { BANDS, PK, REF, gradeOf, pn } from '../../lib/os/ref';
+interface Props { me: Person | null; people: Person[] }
+const { me, people } = Astro.props;
+const vacant = new Set(REF.filter((r) => !people.some((s) => s.active && s.poste === r.c)).map((r) => r.c));
+---
+<Dlg id="dlg-recruit" title="Demande de recrutement" api="/api/admin/os/rh" submit="Soumettre" wide>
+  <input type="hidden" name="action" value="recruit.request" />
+  <div class="fg">
+    <div class="full"><label class="f" for="rp">Poste du référentiel</label><select class="in" id="rp" name="poste" data-recp>{REF.map((r) => <option value={r.c} data-g={gradeOf(r.c)}>{r.c} — {r.t}{vacant.has(r.c) ? ' (vacant)' : ''}</option>)}</select></div>
+    <div><label class="f" for="rpa">Pays</label><select class="in" id="rpa" name="country">{PK.map((p) => <option value={p} selected={p === me?.country}>{pn(p)}</option>)}</select></div>
+    <div><label class="f" for="rs">Salaire brut mensuel proposé</label><input class="in" type="number" id="rs" name="salary" min="0" data-recs /></div>
+    <div class="full"><label class="f" for="rj">Justification</label><textarea class="in" id="rj" name="why" required></textarea></div>
+  </div>
+  <div class="watch" style="margin-top:10px" data-recw></div>
+  <script type="application/json" id="recBands" set:html={JSON.stringify(BANDS)} />
+</Dlg>
+<script>
+  const B = JSON.parse(document.getElementById('recBands')?.textContent || '{}');
+  const p = document.querySelector<HTMLSelectElement>('[data-recp]'), s = document.querySelector<HTMLInputElement>('[data-recs]'), w = document.querySelector<HTMLElement>('[data-recw]');
+  const f = (n: number) => Math.round(n).toLocaleString('fr-FR') + ' FCFA';
+  const upd = () => {
+    if (!p || !s || !w) return;
+    const g = p.selectedOptions[0]?.dataset.g ?? 'Cadre', b = B[g] ?? [0, 0];
+    if (!s.dataset.m) s.value = String(b[0]);
+    const agent = g === 'Agent' || g === 'Agent de maîtrise';
+    w.innerHTML = `Grade <b>${g}</b> · fourchette ${f(b[0])} à ${b[1] > 9e9 ? '—' : f(b[1])} · circuit : <b>${agent ? 'Directeur régional' : 'Direction générale'} → Ressources humaines</b>`;
+  };
+  p?.addEventListener('change', upd); s?.addEventListener('input', () => { if (s) s.dataset.m = '1'; }); upd();
+</script>

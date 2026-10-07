@@ -1,0 +1,16 @@
+---
+/* CEA OS — Mes bulletins de paie (prototype › pPaie) : disponibles dès que la paie du mois est validée par les RH. */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Payslip from '../../../components/os/Payslip.astro';
+import { desc } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { osPayroll } from '../../../db/schema/os';
+import { osContext } from '../../../lib/os/core';
+
+export const prerender = false;
+const me = (await osContext(Astro.locals.user!)).me;
+const months = me ? (await db.select().from(osPayroll).orderBy(desc(osPayroll.month))).map((p) => ({ m: p.month, l: p.lines.find((x) => x.id === me.id) })).filter((x) => x.l) : [];
+---
+<AdminLayout title="Mes bulletins de paie" lead="Disponibles dès que la paie du mois est validée par les ressources humaines">
+  {me && months.length ? <div class="grid g2">{months.map((x) => <Payslip s={me} month={x.m} l={x.l!} />)}</div> : <div class="empty">Aucun bulletin pour l'instant. Les RH lancent la paie depuis « Ressources humaines et paie ».</div>}
+</AdminLayout>

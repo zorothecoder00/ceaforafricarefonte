@@ -5,6 +5,7 @@
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import Dlg from '../../components/os/Dlg.astro';
 import Onboarding from '../../components/os/Onboarding.astro';
+import RecruitDialog from '../../components/os/RecruitDialog.astro';
 import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { db } from '../../lib/db';
 import { osRequest, osTask, osReviewItem, osInterview } from '../../db/schema/os';
@@ -32,6 +33,7 @@ const kp = await Promise.all(tm.map(async (s) => [s.id, await kpisOf(s, people)]
 const kpOf = (id: string) => kp.find((x) => x[0] === id)?.[1] ?? [];
 ---
 <AdminLayout title="Mon équipe" lead={`${tm.length} collaborateur(s) directement rattaché(s) · revue des droits ${review.quarter}`}>
+  <Fragment slot="actions">{me && <button class="btn" type="button" data-dlg="dlg-recruit">Demander un recrutement</button>}</Fragment>
   {tm.length ? (
     <div class="tw">
       <table class="t">
@@ -73,6 +75,7 @@ const kpOf = (id: string) => kp.find((x) => x[0] === id)?.[1] ?? [];
       </Dlg>
     </>
   ); })}
+  <RecruitDialog me={me} people={people} />
 </AdminLayout>
 <script>
   // Plusieurs listes « competences » : envoyées en tableau ordonné (le formulaire générique ne garde que la dernière)

@@ -1,20 +1,31 @@
 ---
 /* CEA OS — Ressources humaines (prototype › pRH), profils dg et rh : effectifs (création des fiches et des comptes CEA OS,
-   départs), congés et absences, temps passés par domaine. La paie, le recrutement et les entretiens annuels arrivent
-   avec leurs modules. */
+   départs), congés et absences, temps passés par domaine, paie mensuelle (taux par devise, bulletins, livre de paie,
+   écriture de paie), recrutement (module dédié), entretiens annuels. */
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import Dlg from '../../components/os/Dlg.astro';
 import Steps from '../../components/os/Steps.astro';
 import Tags from '../../components/os/Tags.astro';
 import { desc, eq, sql } from 'drizzle-orm';
 import { db } from '../../lib/db';
-import { osRequest, osTimesheet } from '../../db/schema/os';
+import { osRequest, osTimesheet, osPayroll, osInterview } from '../../db/schema/os';
+import { getSetting } from '../../lib/settings';
+import { COMPS } from '../../lib/os/pilotage';
 import { allStaff } from '../../lib/os/core';
 import { DK, GRADES, PK, REF, pn, refT, dstr, fcfa, mfcfa, fmt, gradeOf, BANDS } from '../../lib/os/ref';
 
 export const prerender = false;
 const tab = Astro.url.searchParams.get('t') ?? 'eff';
-const T: [string, string][] = [['eff', 'Effectifs'], ['abs', 'Congés et absences'], ['temps', 'Temps passés']];
+const T: [string, string][] = [['eff', 'Effectifs'], ['abs', 'Congés et absences'], ['temps', 'Temps passés'], ['paie', 'Paie'], ['rec', 'Recrutement'], ['ent', 'Entretiens annuels']];
+const monthAgo = (i: number) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i); return d.toISOString().slice(0, 7); };
+const mParam = Astro.url.searchParams.get('m') ?? '';
+const month = /^\d{4}-\d{2}$/.test(mParam) ? mParam : monthAgo(1);
+const [pay] = tab === 'paie' ? await db.select().from(osPayroll).where(eq(osPayroll.month, month)) : [];
+const rates = tab === 'paie' ? (await getSetting('paie')).rates : {};
+const interviews = tab === 'ent' ? await db.select().from(osInterview).orderBy(desc(osInterview.at)) : [];
+const year = new Date().getFullYear();
+const sumP = (k: 'brut' | 'net' | 'cp') => (pay?.lines ?? []).reduce((a, l) => a + l[k], 0);
+const pct = (x: number) => (x * 100).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
 const people = await allStaff();
 const name = (id: string | null) => people.find((s) => s.id === id)?.name ?? '—';
 const leaves = tab === 'abs' ? await db.select().from(osRequest).where(eq(osRequest.type, 'conge')).orderBy(desc(osRequest.createdAt)) : [];
@@ -104,6 +115,63 @@ const totH = byDom.reduce((a, x) => a + x.h, 0);
         </table>
       </div>
       <aside><div class="card"><h3>Utilité</h3><p class="small">Le temps passé par domaine et par projet sert à facturer les bailleurs (coûts de personnel éligibles) et à calculer le coût complet de chaque activité.</p></div></aside>
+    </div>
+  )}
+  {tab === 'paie' && (
+    <>
+      <div class="toolbar">
+        <label class="f" for="pm" style="margin:0">Mois</label>
+        <select class="in" id="pm" data-go>{Array.from({ length: 12 }, (_, i) => monthAgo(i)).map((m) => <option value={`/admin/rh?t=paie&m=${m}`} selected={m === month}>{m}</option>)}</select>
+        {pay
+          ? <><button class="btn" type="button" disabled>Paie déjà calculée</button><a class="btn ghost" href={`/api/admin/os/export?quoi=paie&m=${month}`}>Exporter le livre de paie</a></>
+          : <button class="btn" type="button" data-post="/api/admin/os/rh" data-body={JSON.stringify({ action: 'payroll.run', month })} data-confirm={`Calculer et valider la paie de ${month} pour ${people.filter((s) => s.active).length} collaborateurs ?`} data-reload>Calculer et valider la paie</button>}
+      </div>
+      {pay ? (
+        <>
+          <div class="grid g4">
+            <div class="card kpi"><div class="l">Masse salariale brute</div><div class="v num">{mfcfa(sumP('brut'))}</div></div>
+            <div class="card kpi"><div class="l">Net versé</div><div class="v num">{mfcfa(sumP('net'))}</div></div>
+            <div class="card kpi"><div class="l">Charges patronales</div><div class="v num">{mfcfa(sumP('cp'))}</div></div>
+            <div class="card kpi"><div class="l">Bulletins</div><div class="v num">{pay.lines.length}</div></div>
+          </div>
+          <div class="tw" style="margin-top:12px">
+            <table class="t">
+              <thead><tr><th>Collaborateur</th><th>Pays</th><th>Brut</th><th>Cotisations</th><th>Impôt</th><th>Net</th><th>Patronal</th></tr></thead>
+              <tbody>{pay.lines.map((l) => <tr><td>{name(l.id)}</td><td>{pn(l.country)}</td><td class="num">{fmt(l.brut)}</td><td class="num">{fmt(l.cs)}</td><td class="num">{fmt(l.imp)}</td><td class="num"><b>{fmt(l.net)}</b></td><td class="num">{fmt(l.cp)}</td></tr>)}</tbody>
+            </table>
+          </div>
+        </>
+      ) : <div class="empty">Paie non calculée pour {month}. Le calcul applique les taux de la devise du pays de chaque collaborateur, publie les bulletins (visibles dans « Mes bulletins de paie ») et génère l'écriture de paie.</div>}
+      <h3 style="margin-top:18px">Taux par devise</h3>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Devise</th><th>Cotisations salariales</th><th>Charges patronales</th><th>Impôt retenu</th><th></th></tr></thead>
+          <tbody>{Object.entries(rates).map(([cur, r]) => <tr><td><b>{cur}</b></td><td class="num">{pct(r[0])} %</td><td class="num">{pct(r[1])} %</td><td class="num">{pct(r[2])} %</td><td><button class="btn ghost sm" type="button" data-dlg="dlg-rate" data-set-currency={cur} data-set-cs={String(+(r[0] * 100).toFixed(2))} data-set-cp={String(+(r[1] * 100).toFixed(2))} data-set-imp={String(+(r[2] * 100).toFixed(2))} data-set-label={cur}>Modifier</button></td></tr>)}</tbody>
+        </table>
+      </div>
+      <p class="xs muted" style="margin-top:8px">Taux de démonstration repris du prototype : à remplacer par les barèmes validés dans chaque pays (ou un connecteur de paie locale).</p>
+      <Dlg id="dlg-rate" title="Taux de paie" api="/api/admin/os/rh">
+        <input type="hidden" name="action" value="payroll.rates" /><input type="hidden" name="currency" value="" />
+        <p class="small">Devise <b data-text="label"></b> (en % du brut)</p>
+        <div class="fg">
+          <div><label class="f" for="rcs">Cotisations salariales</label><input class="in" type="number" step="0.01" id="rcs" name="cs" /></div>
+          <div><label class="f" for="rcp">Charges patronales</label><input class="in" type="number" step="0.01" id="rcp" name="cp" /></div>
+          <div><label class="f" for="rim">Impôt retenu</label><input class="in" type="number" step="0.01" id="rim" name="imp" /></div>
+        </div>
+      </Dlg>
+    </>
+  )}
+  {tab === 'rec' && <div class="watch">Le recrutement dispose de son propre module, relié au référentiel des postes. <a href="/admin/recrutement">Ouvrir le recrutement</a></div>}
+  {tab === 'ent' && (
+    <div class="tw">
+      <table class="t">
+        <thead><tr><th>Collaborateur</th><th>Responsable</th><th>Dernier entretien</th><th>Compétences (moyenne)</th><th>Statut {year}</th></tr></thead>
+        <tbody>{people.filter((s) => s.active && s.prof !== 'dg').map((s) => {
+          const i = interviews.find((x) => x.staffId === s.id);
+          const avg = i ? i.competences.reduce((a, b) => a + b, 0) / COMPS.length : null;
+          return <tr><td>{s.name}</td><td class="small">{name(s.managerId)}</td><td class="small">{i ? dstr(i.at) : '—'}</td><td>{avg !== null ? <><div class="bar" style="max-width:140px"><span style={`width:${(avg / 4) * 100}%`}></span></div><span class="xs">{avg.toFixed(1)}/4</span></> : '—'}</td><td>{i && i.at.getFullYear() === year ? <span class="tag ok">Réalisé</span> : <span class="tag warn">À planifier</span>}</td></tr>;
+        })}</tbody>
+      </table>
     </div>
   )}
 </AdminLayout>

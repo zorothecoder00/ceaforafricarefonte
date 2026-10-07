@@ -98,6 +98,13 @@ export const SETTINGS = {
     schema: z.object({ pays: z.number().int().positive(), reg: z.number().int().positive(), contrat: z.number().int().positive() }),
     defaults: { pays: 500000, reg: 5000000, contrat: 10000000 },
   },
+  paie: {
+    label: 'Taux de paie par devise (CEA OS)',
+    // [cotisations salariales, charges patronales, impôt retenu à la source] en fraction du brut — taux de démonstration
+    // du prototype, à remplacer par les barèmes validés localement (ou un connecteur de paie par pays)
+    schema: z.object({ rates: z.record(z.string().regex(/^[A-Z]{3}$/), z.tuple([z.number().min(0).max(1), z.number().min(0).max(1), z.number().min(0).max(1)])) }),
+    defaults: { rates: { XOF: [0.036, 0.165, 0.1], XAF: [0.042, 0.16, 0.1], NGN: [0.08, 0.1, 0.12], GHS: [0.055, 0.13, 0.12], KES: [0.06, 0.06, 0.14], RWF: [0.06, 0.08, 0.12], ETB: [0.07, 0.11, 0.12], ZAR: [0.01, 0.02, 0.18], MAD: [0.0674, 0.21, 0.15], EGP: [0.11, 0.1875, 0.12], CDF: [0.05, 0.13, 0.1] } as Record<string, [number, number, number]> },
+  },
   reseaux: {
     label: 'Réseaux sociaux (pied de page)',
     schema: z.object({ linkedin: z.string(), facebook: z.string(), x: z.string(), youtube: z.string(), instagram: z.string(), tiktok: z.string(), whatsapp: z.string() }),

@@ -332,3 +332,39 @@ export const osContract = pgTable('os_contract', {
   requestId: text('request_id'),
   createdAt: ts('created_at').notNull().defaultNow(),
 });
+
+/* ===== Lot 5 : ressources humaines (paie, recrutement) ===== */
+
+/* Paie mensuelle validée : une ligne par collaborateur (brut, cotisations salariales, impôt, net, charges patronales). */
+export type PayLine = { id: string; brut: number; cs: number; imp: number; net: number; cp: number; country: string };
+export const osPayroll = pgTable('os_payroll', {
+  month: text('month').primaryKey(), // 2026-09
+  lines: jsonb('lines').$type<PayLine[]>().notNull(),
+  by: text('by'),
+  at: ts('at').notNull().defaultNow(),
+});
+
+/* Recrutements : demande (circuit région ou DG puis RH), validation, annonce, candidatures, offre, embauche. */
+export const osRecruit = pgTable('os_recruit', {
+  id: text('id').primaryKey(), // REC-21
+  poste: text('poste').notNull(),
+  country: text('country').notNull(),
+  byStaff: text('by_staff').references(() => staff.id, { onDelete: 'set null' }),
+  status: text('status').notNull().default('Demande'), // Demande | Validée | Publiée | Pourvu | Refusée
+  salary: bigint('salary', { mode: 'number' }).notNull().default(0),
+  why: text('why').notNull().default(''),
+  requestId: text('request_id'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+export const osCandidate = pgTable('os_candidate', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  recruitId: text('recruit_id').notNull().references(() => osRecruit.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  email: text('email').notNull(),
+  source: text('source').notNull().default('Candidature spontanée'),
+  status: text('status').notNull().default('Nouvelle'), // Nouvelle | Entretien | Offre en approbation | Embauché·e | Non retenue
+  scores: jsonb('scores').$type<Record<string, number>>(),
+  evaluator: text('evaluator'),
+  cv: jsonb('cv').$type<{ key: string; name: string }>(),
+  at: ts('at').notNull().defaultNow(),
+});
