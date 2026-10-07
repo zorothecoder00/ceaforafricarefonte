@@ -20,8 +20,8 @@ import '../styles/os.css';
 
 /* obj : droit du site qui garde la page (pages historiques) ; sans obj, l'accès suit l'entrée du menu (profil du poste).
    crumbs : fil d'Ariane [libellé, lien?][] ; hints : objets dont les droits manquants sont expliqués (par défaut obj). */
-interface Props { title: string; lead?: string; obj?: Obj; hints?: Obj[]; crumbs?: [string, string?][] }
-const { title, lead, obj, crumbs } = Astro.props;
+interface Props { title: string; lead?: string; obj?: Obj; hints?: Obj[]; crumbs?: [string, string?][]; dot?: string }
+const { title, lead, obj, crumbs, dot } = Astro.props;
 const hints = Astro.props.hints ?? (obj ? [obj] : []);
 const me = Astro.locals.user!;
 const os = await osContext(me);
@@ -90,7 +90,7 @@ const roleLine = me.roles.filter((r) => r !== 'membre').map((r) => ROLE_LABEL[r 
         {crumbs && <div class="crumbs">{crumbs.map(([l, h], i) => <>{i > 0 && ' / '}{h ? <a href={h}>{l}</a> : l}</>)}</div>}
         <div class="ph">
           <div>
-            <h1>{title}</h1>
+            <h1>{dot && <span style={`display:inline-block;width:12px;height:12px;border-radius:3px;background:${dot};margin-right:8px;vertical-align:middle`}></span>}{title}</h1>
             {lead && <p>{lead}</p>}
           </div>
           <div class="row"><slot name="actions" /></div>

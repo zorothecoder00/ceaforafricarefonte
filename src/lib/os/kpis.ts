@@ -3,7 +3,9 @@
    n : score sur 100 comparé à la cible (goal) pour la pastille verte / orange / rouge. */
 import { and, eq, gte, inArray, sql } from 'drizzle-orm';
 import { db } from '../db';
-import { osRequest, osTask, osReviewItem, osClosing, osContract, osInscription, osReport } from '../../db/schema/os';
+import { osRequest, osTask, osReviewItem, osClosing, osContract, osInscription, osReport, osSite, osSiteLot, osSiteHse } from '../../db/schema/os';
+import { hireDeclaration } from '../../db/schema/app';
+import { marge } from './domaines';
 import { reportPeriod } from './relations';
 import { PK, regOf } from './ref';
 import { CLOSING, closingPeriod } from './ledger';
@@ -50,6 +52,26 @@ const KF: Record<string, (u: Person, c: Ctx) => Promise<Omit<Kpi, 'k' | 'l'> | n
     const ps = PK.filter((p) => inU(u, p));
     const sub = (await db.select({ c: osReport.country }).from(osReport).where(and(eq(osReport.period, reportPeriod()), eq(osReport.status, 'Soumis')))).filter((x) => ps.includes(x.c)).length;
     return { v: sub + '/' + ps.length, n: pct(sub, ps.length), goal: 100 };
+  },
+  marge: async (u) => {
+    const sites = (await db.select().from(osSite)).filter((x) => inU(u, x.country));
+    if (!sites.length) return null;
+    const lots = await db.select().from(osSiteLot);
+    const m = sites.reduce((a, x) => a + marge(x.amount, lots.filter((l) => l.siteId === x.id)).pct, 0) / sites.length;
+    return { v: m.toFixed(1) + ' %', n: m >= 12 ? 100 : Math.max(0, Math.round((m / 12) * 100)), goal: 100, sub: sites.length + ' chantier(s)' };
+  },
+  hse: async (u) => {
+    const n = (await db.select({ c: osSite.country }).from(osSiteHse).innerJoin(osSite, eq(osSite.id, osSiteHse.siteId)).where(sql`${osSiteHse.status} <> 'Clôturé'`)).filter((x) => inU(u, x.c)).length;
+    return { v: String(n), n: n ? 0 : 100, goal: 100, sub: 'incident(s) ouvert(s)' };
+  },
+  kap: async () => {
+    const [r] = (await db.execute(sql`select count(*) filter (where status not in ('finance','cloture'))::int a, count(*) filter (where status = 'comite')::int c from kapital.dossier`)).rows as { a: number; c: number }[];
+    return { v: r.a + ' actifs', n: null, sub: r.c + ' en comité' };
+  },
+  emplois: async (u) => {
+    const l = (await db.select({ c: hireDeclaration.country, v: hireDeclaration.verified6mAt }).from(hireDeclaration)).filter((x) => !x.c || inU(u, x.c));
+    const p = pct(l.filter((x) => x.v).length, l.length);
+    return { v: p === null ? '—' : p + ' %', n: p === null ? null : Math.min(100, Math.round((p / 60) * 100)), goal: 100, sub: 'vérifiés / déclarés' };
   },
   rappro: async () => {
     const [r] = (await db.execute(sql`select count(*) filter (where status = 'Rapproché')::int as ok, count(*)::int as t from os_receipt`)).rows as { ok: number; t: number }[];

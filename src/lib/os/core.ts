@@ -7,7 +7,8 @@ import { asc, eq } from 'drizzle-orm';
 import type { AstroCookies } from 'astro';
 import { db } from '../db';
 import { staff, osCountry } from '../../db/schema/os';
-import { PAYS, PK, REGIONS, DOM, regOf, pn, profOf, type Prof, type Region, type Dom } from './ref';
+import { PAYS, PK, REGIONS, DOM, DK, regOf, pn, profOf, type Prof, type Region, type Dom } from './ref';
+import { domSpec } from './domaines';
 import type { CurrentUser } from '../session';
 import type { Obj } from '../rbac';
 
@@ -91,13 +92,7 @@ export const MODS: [string, NavItem[]][] = [
     { href: '/admin/campagnes', label: 'Campagnes et contenus', obj: 'campagnes' },
     { href: '/admin/messages', label: 'Messages et signalements', obj: 'messages_contact' },
   ]],
-  ["Domaines d'intervention", [
-    { href: '/admin/kapital', label: DOM.kap.n, obj: 'dossier_kapital', dom: 'kap' },
-    { href: '/admin/projets', label: DOM.prj.n, obj: 'fiche_projet', dom: 'prj' },
-    { href: '/admin/emplois', label: DOM.tal.n, obj: 'offre_emploi', dom: 'tal' },
-    { href: '/admin/programmes', label: DOM.aca.n, obj: 'programmes', dom: 'aca' },
-    { href: '/admin/candidatures', label: 'Candidatures aux programmes', obj: 'candidature', dom: 'aca' },
-  ]],
+  ["Domaines d'intervention", DK.map((d) => ({ href: `/admin/dom/${d}`, label: DOM[d].n, spec: domSpec(d), dom: d }))],
   ['Gestion', [
     { href: '/admin/tresorerie', label: 'Finance et trésorerie', spec: 'dg fin dirreg rep chef' },
     { href: '/admin/compta', label: 'Comptabilité', spec: 'dg fin' },
@@ -118,7 +113,12 @@ export const MODS: [string, NavItem[]][] = [
     { href: '/admin/audit', label: "Journal d'audit", obj: 'journal_audit' },
     { href: '/admin/parametrage', label: 'Paramétrage', obj: 'parametres' },
   ]],
-  ['Site et communauté', [
+  ['Outils du site', [
+    { href: '/admin/kapital', label: 'Dossiers Kapital (fiches)', obj: 'dossier_kapital' },
+    { href: '/admin/projets', label: 'Projets des entrepreneurs', obj: 'fiche_projet' },
+    { href: '/admin/emplois', label: "Offres d'emploi (modération)", obj: 'offre_emploi' },
+    { href: '/admin/programmes', label: 'Programmes et cohortes', obj: 'programmes' },
+    { href: '/admin/candidatures', label: 'Candidatures aux programmes', obj: 'candidature' },
     { href: '/admin/cms', label: 'CMS éditorial', obj: 'contenus' },
     { href: '/admin/textes', label: 'Textes du site', obj: 'contenus' },
     { href: '/admin/domaines', label: "Domaines d'intervention (site)", obj: 'parametres' },

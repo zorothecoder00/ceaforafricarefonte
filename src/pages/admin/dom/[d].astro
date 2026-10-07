@@ -1,0 +1,428 @@
+---
+/* CEA OS — pages « Domaines d'intervention » (prototype › pAct, pKap, pPrj, pEvt, pTal, pMM, pAca, pVoix, pBTP).
+   Chaque domaine s'appuie sur les données réelles de la plateforme quand elles existent (dossiers Kapital, billetterie,
+   emplois, cercles Mastermind, candidatures aux programmes, Voix des Entrepreneurs) et sur les tables de CEA OS sinon
+   (actionnariat, portefeuille de projets, budgets d'événements, chantiers BTP). Accès : profil du domaine (domSpec). */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Dlg from '../../../components/os/Dlg.astro';
+import Tags from '../../../components/os/Tags.astro';
+import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { dossier } from '../../../db/schema/kapital';
+import { eventTicket, hireDeclaration, job, jobApplication, circle, circleMember, circleSession, payment, programmeApplication, membership, profile, proposal, consultationVote, contactMessage } from '../../../db/schema/app';
+import { programmeCall, evaluation } from '../../../db/schema/programmes';
+import { user } from '../../../db/schema/auth';
+import { osCapital, osProject, osEventFin, osSite, osSiteLot, osSiteHse, osTender } from '../../../db/schema/os';
+import { osContext, allStaff, scopeState } from '../../../lib/os/core';
+import { allEvents } from '../../../lib/catalog';
+import { statusLabel } from '../../../lib/kapital';
+import { CONSULTS } from '../../../data/proto';
+import { marge, KAP_STEPS, ACT_STAGES, TENDER_ST } from '../../../lib/os/domaines';
+import { DOM, PK, isDom, pn, fmt, mfcfa, dstr, type Dom } from '../../../lib/os/ref';
+
+export const prerender = false;
+const d = Astro.params.d ?? '';
+if (!isDom(d)) return Astro.redirect('/admin');
+const D = DOM[d as Dom];
+const os = await osContext(Astro.locals.user!);
+const sc = scopeState(os, Astro.cookies);
+const tab = Astro.url.searchParams.get('t') ?? '';
+const people = await allStaff();
+const name = (id: string | null) => people.find((s) => s.id === id)?.name ?? '—';
+const inS = (country: string | null) => sc.inScope({ country });
+const today = new Date();
+
+/* ----- données par domaine ----- */
+const caps = d === 'act' ? (await db.select().from(osCapital).orderBy(desc(osCapital.createdAt))).filter((x) => inS(x.country)) : [];
+const kaps = d === 'kap' ? (await db.select().from(dossier).where(ne(dossier.status, 'cloture')).orderBy(desc(dossier.updatedAt))).filter((x) => inS(x.country)) : [];
+const projs = d === 'prj' ? (await db.select().from(osProject).orderBy(asc(osProject.next))).filter((x) => inS(x.country)) : [];
+const evts = d === 'evt' ? await (async () => {
+  const [list, tk, fin] = await Promise.all([allEvents({ hidden: true }), db.select({ e: eventTicket.eventId, n: sql<number>`count(*)::int`, p: sql<number>`count(${eventTicket.checkedInAt})::int`, r: sql<number>`coalesce(sum(${eventTicket.priceXof}),0)::float` }).from(eventTicket).where(eq(eventTicket.status, 'valide')).groupBy(eventTicket.eventId), db.select().from(osEventFin)]);
+  return list.filter((e) => inS(e.c)).map((e) => { const t = tk.find((x) => x.e === e.id); const f = fin.find((x) => x.eventId === e.id); const rec = (t?.r ?? 0) + (f?.sponsorship ?? 0); return { e, ins: t?.n ?? 0, pres: t?.p ?? 0, rec, bud: f?.budget ?? 0, spons: f?.sponsors ?? 0 }; });
+})() : [];
+const tal = d === 'tal' ? await (async () => {
+  const [hires, jobs, apps] = await Promise.all([
+    db.select({ h: hireDeclaration, emp: user.name }).from(hireDeclaration).leftJoin(user, eq(user.id, hireDeclaration.employerId)).orderBy(desc(hireDeclaration.hiredOn)),
+    db.select().from(job).where(inArray(job.status, ['publiee', 'en_moderation', 'fermee'])).orderBy(desc(job.createdAt)).limit(200),
+    db.select({ a: jobApplication, who: user.name, jobId: jobApplication.jobId }).from(jobApplication).leftJoin(user, eq(user.id, jobApplication.userId)).orderBy(desc(jobApplication.createdAt)).limit(200),
+  ]);
+  return { hires: hires.filter((x) => inS(x.h.country)), jobs: jobs.filter((j) => inS(j.country)), apps };
+})() : null;
+const circles = d === 'mm' ? await (async () => {
+  const [cs, members, sessions, paid] = await Promise.all([
+    db.select({ c: circle, fac: user.name }).from(circle).leftJoin(user, eq(user.id, circle.facilitatorId)),
+    db.select().from(circleMember),
+    db.select().from(circleSession).orderBy(asc(circleSession.startsAt)),
+    db.select({ u: payment.userId }).from(payment).where(and(eq(payment.purpose, 'mastermind'), eq(payment.status, 'reussi'), sql`${payment.paidAt} > now() - interval '1 year'`)),
+  ]);
+  const ok = new Set(paid.map((x) => x.u));
+  return cs.map(({ c, fac }) => {
+    const mem = members.filter((m) => m.circleId === c.id), ses = sessions.filter((s) => s.circleId === c.id);
+    const past = ses.filter((s) => s.startsAt < today);
+    const rated = past.reduce((a, s) => a + Object.keys((s.ratings ?? {}) as object).length, 0);
+    return { c, fac, mem: mem.length, cot: mem.filter((m) => ok.has(m.userId)).length, pres: past.length && mem.length ? Math.round((rated / (past.length * mem.length)) * 100) : null, next: ses.find((s) => s.startsAt >= today)?.startsAt ?? null };
+  });
+})() : [];
+const aca = d === 'aca' ? await (async () => {
+  const calls = await db.select().from(programmeCall).where(inArray(programmeCall.status, ['ouvert', 'clos'])).catch(() => []);
+  const apps = await db.select({ a: programmeApplication, who: user.name, country: profile.country }).from(programmeApplication).leftJoin(user, eq(user.id, programmeApplication.userId)).leftJoin(profile, eq(profile.userId, programmeApplication.userId)).where(ne(programmeApplication.status, 'brouillon')).orderBy(desc(programmeApplication.submittedAt)).limit(300);
+  const ev = apps.length ? await db.select().from(evaluation).where(inArray(evaluation.applicationId, apps.map((x) => x.a.id))) : [];
+  const withJury = new Set(calls.filter((c) => c.status !== 'brouillon').map((c) => c.slug));
+  return apps.filter((x) => inS(x.country)).map((x) => { const e = ev.filter((v) => v.applicationId === x.a.id && !v.conflict && v.total !== null); return { ...x, evals: e.map((v) => v.total!), avg: e.length ? e.reduce((s, v) => s + v.total!, 0) / e.length : null, jury: withJury.has(x.a.programme) }; })
+    .sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1));
+})() : [];
+const voix = d === 'voix' ? await (async () => {
+  const [adh, votes, props, ticks] = await Promise.all([
+    db.select({ c: profile.country, st: membership.status, n: sql<number>`count(*)::int` }).from(membership).leftJoin(profile, eq(profile.userId, membership.userId)).groupBy(profile.country, membership.status),
+    db.select({ id: consultationVote.consultationId, n: sql<number>`count(*)::int` }).from(consultationVote).groupBy(consultationVote.consultationId),
+    db.select().from(proposal).orderBy(desc(proposal.createdAt)).limit(10),
+    db.select().from(contactMessage).where(sql`${contactMessage.routedTeam} ilike '%voix%' or ${contactMessage.motif} ilike '%assistance%'`).orderBy(desc(contactMessage.createdAt)).limit(8),
+  ]);
+  const adhS = adh.filter((x) => inS(x.c));
+  const active = adhS.filter((x) => x.st === 'active').reduce((a, x) => a + x.n, 0), all = adhS.reduce((a, x) => a + x.n, 0);
+  return { active, ren: all ? Math.round((active / all) * 100) : 0, votes, props: props.filter((p) => inS(p.country)), ticks: ticks.filter((t) => inS(t.country)) };
+})() : null;
+const btp = d === 'btp' ? await (async () => {
+  const [sites, lots, hse, tenders, sts] = await Promise.all([db.select().from(osSite).orderBy(asc(osSite.createdAt)), db.select().from(osSiteLot), db.select().from(osSiteHse).where(ne(osSiteHse.status, 'Clôturé')), db.select().from(osTender).orderBy(asc(osTender.deadline)), db.execute(sql`select site_id, coalesce(sum(amount),0)::float s from os_site_statement group by 1`)]);
+  const billed = new Map((sts.rows as { site_id: string; s: number }[]).map((r) => [r.site_id, r.s]));
+  return { sites: sites.filter((s) => inS(s.country)).map((s) => { const l = lots.filter((x) => x.siteId === s.id); return { s, m: marge(s.amount, l), ca: billed.get(s.id) ?? 0, hse: hse.filter((h) => h.siteId === s.id).length, over: l.some((x) => x.progress > 0 && x.cost > ((x.budget * x.progress) / 100) * 1.05) }; }), tenders: tenders.filter((t) => inS(t.country)) };
+})() : null;
+const SUB: Record<Dom, string> = {
+  act: "PME accompagnées dans l'ouverture de leur capital", kap: 'Pipeline des dossiers · espace cloisonné, chaque consultation est journalisée', prj: 'Portefeuille de projets',
+  evt: 'Événements, budgets, billetterie et sponsors', tal: 'Offres, candidatures et registre des emplois', mm: 'Cercles de dirigeants · seules les métadonnées sont stockées (confidentialité)',
+  aca: 'Candidatures aux programmes : évaluation par les jurys et décisions', voix: 'Adhérents, consultations, plaidoyer et assistance', btp: "Chantiers, appels d'offres, sous-traitance et marges",
+};
+const kapCol = (st: string) => (st === 'incomplet' || st === 'preselectionne' ? 'recu' : st);
+const KCOLS = KAP_STEPS.filter((s) => !['incomplet', 'preselectionne'].includes(s));
+---
+<AdminLayout title={D.n} dot={D.c} lead={`${SUB[d as Dom]} · ${sc.label}`} crumbs={[["Domaines d'intervention"], [D.d]]}>
+  <Fragment slot="actions">
+    {d === 'act' && <button class="btn" type="button" data-dlg="dlg-act">Nouvelle PME</button>}
+    {d === 'kap' && <a class="btn" href="/admin/kapital">Dossiers détaillés</a>}
+    {d === 'prj' && <button class="btn" type="button" data-dlg="dlg-prj">Nouveau projet</button>}
+    {d === 'tal' && <a class="btn ghost" href="/admin/emplois">Modérer les offres</a>}
+    {d === 'aca' && <a class="btn ghost" href="/admin/programmes">Appels et cohortes</a>}
+    {d === 'btp' && <button class="btn" type="button" data-dlg="dlg-site">Nouveau chantier</button>}
+  </Fragment>
+
+  {d === 'act' && (
+    <>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>PME</th><th>Pays</th><th>Étape</th><th>Valorisation</th><th>Part ouverte</th><th>Montant visé</th><th></th></tr></thead>
+          <tbody>
+            {caps.map((a) => <tr>
+              <td><b>{a.name}</b></td><td>{pn(a.country)}</td>
+              <td>{a.stage === 'Transférée à Kapital' ? <span class="tag gold">Transférée à Kapital</span> : <select class="in xs" aria-label="Étape" data-act={a.id}>{ACT_STAGES.map((s) => <option selected={s === a.stage}>{s}</option>)}</select>}</td>
+              <td class="num">{mfcfa(a.valuation)}</td><td>{a.share} %</td><td class="num">{mfcfa((a.valuation * a.share) / 100)}</td>
+              <td>{a.stage === "Recherche d'investisseurs" && <button class="btn gold sm" type="button" data-post="/api/admin/os/domaines" data-body={JSON.stringify({ action: 'act.transfer', id: a.id })} data-reload>Transférer à Kapital Invest</button>}</td>
+            </tr>)}
+            {!caps.length && <tr><td colspan="7" class="muted">Aucune PME accompagnée.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <Dlg id="dlg-act" title="Nouvelle PME" api="/api/admin/os/domaines" wide>
+        <input type="hidden" name="action" value="act.create" />
+        <div class="fg">
+          <div><label class="f" for="an">PME</label><input class="in" id="an" name="name" required /></div>
+          <div><label class="f" for="ac">Pays</label><select class="in" id="ac" name="country">{PK.filter(inS).map((p) => <option value={p}>{pn(p)}</option>)}</select></div>
+          <div><label class="f" for="av">Valorisation (FCFA)</label><input class="in" type="number" id="av" name="valuation" min="0" value="0" /></div>
+          <div><label class="f" for="as">Part ouverte (%)</label><input class="in" type="number" id="as" name="share" min="0" max="100" value="20" /></div>
+        </div>
+      </Dlg>
+    </>
+  )}
+
+  {d === 'kap' && (
+    <>
+      <div class="grid g4" style="margin-bottom:14px">
+        <div class="card kpi"><div class="l">Dossiers actifs</div><div class="v num">{kaps.filter((k) => k.status !== 'finance').length}</div></div>
+        <div class="card kpi"><div class="l">En comité</div><div class="v num">{kaps.filter((k) => k.status === 'comite').length}</div></div>
+        <div class="card kpi"><div class="l">Montant recherché</div><div class="v num">{mfcfa(kaps.filter((k) => k.status !== 'finance').reduce((a, k) => a + (k.amountXof ?? 0), 0))}</div></div>
+        <div class="card kpi"><div class="l">Financés</div><div class="v num">{mfcfa(kaps.filter((k) => k.status === 'finance').reduce((a, k) => a + (k.amountXof ?? 0), 0))}</div></div>
+      </div>
+      <div class="kanban">
+        {KCOLS.map((s) => { const l = kaps.filter((k) => kapCol(k.status) === s); return (
+          <div class="col" data-st={s}>
+            <h4><span>{statusLabel(s)}</span><span class="tag">{l.length}</span></h4>
+            {l.map((k) => <div class="kc" draggable="true" data-id={k.id}>
+              <a href={`/admin/kapital/${k.id}`} style="text-decoration:none"><b>{k.companyName}</b></a>
+              <div class="xs muted">{k.sector ?? '—'} · {pn(k.country)}</div>
+              <div class="row between xs" style="margin-top:6px"><span class="num">{mfcfa(k.amountXof ?? 0)}</span>{k.investorReadyScore !== null && <span class={`tag ${k.investorReadyScore >= 70 ? 'ok' : k.investorReadyScore >= 50 ? 'warn' : 'bad'}`}>{k.investorReadyScore}/100</span>}</div>
+              <div class="xs muted" style="margin-top:4px">{k.reference}</div>
+            </div>)}
+          </div>
+        ); })}
+      </div>
+      <p class="xs muted" style="margin-top:8px">Glissez une carte pour changer d'étape : l'entreprise est notifiée. La fiche complète (diligence, data room, comité) s'ouvre en cliquant sur le nom.</p>
+    </>
+  )}
+
+  {d === 'prj' && (
+    <>
+      <div class="grid g4" style="margin-bottom:14px">
+        <div class="card kpi"><div class="l">Projets</div><div class="v num">{projs.length}</div></div>
+        <div class="card kpi"><div class="l">En difficulté</div><div class="v num">{projs.filter((p) => p.health === 'bad').length}</div></div>
+        <div class="card kpi"><div class="l">Budget total</div><div class="v num">{mfcfa(projs.reduce((a, p) => a + p.budget, 0))}</div></div>
+        <div class="card kpi"><div class="l">Consommé</div><div class="v num">{mfcfa(projs.reduce((a, p) => a + p.spent, 0))}</div></div>
+      </div>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Santé</th><th>Projet</th><th>Pays</th><th>Bailleur</th><th>Avancement</th><th>Budget / réalisé</th><th>Jalons</th><th>Prochaine échéance</th><th></th></tr></thead>
+          <tbody>
+            {projs.map((p) => <tr>
+              <td><span class="health" style={`background:var(--${p.health})`} title={p.health === 'ok' ? 'Bonne' : p.health === 'warn' ? 'À surveiller' : 'En difficulté'}></span></td>
+              <td><b>{p.name}</b></td><td>{pn(p.country)}</td><td class="small">{p.funder}</td>
+              <td style="min-width:100px"><div class="bar"><span style={`width:${p.progress}%`}></span></div><span class="xs">{p.progress} %</span></td>
+              <td class="num small">{mfcfa(p.budget)}<br />{mfcfa(p.spent)} ({p.budget ? Math.round((p.spent / p.budget) * 100) : 0} %)</td>
+              <td class="xs">{p.milestones.map((m, i) => <><button type="button" class={`tag ${m[1] ? 'ok' : ''}`} style="border:0;cursor:pointer" data-post="/api/admin/os/domaines" data-body={JSON.stringify({ action: 'prj.milestone', id: p.id, i, done: !m[1] })} data-reload title={m[1] ? 'Rouvrir' : 'Marquer atteint'}>{m[0]}</button> </>)}</td>
+              <td class="small">{dstr(p.next)}</td>
+              <td style="white-space:nowrap"><button class="btn ghost sm" type="button" data-dlg="dlg-prju" data-set-id={p.id} data-set-progress={String(p.progress)} data-set-spent={String(p.spent)} data-set-health={p.health} data-set-label={p.name}>Mettre à jour</button> <button class="btn ghost sm" type="button" onclick="openChat()">Rapport bailleur</button></td>
+            </tr>)}
+            {!projs.length && <tr><td colspan="9" class="muted">Aucun projet dans le portefeuille.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <Dlg id="dlg-prj" title="Nouveau projet" api="/api/admin/os/domaines" wide>
+        <input type="hidden" name="action" value="prj.create" />
+        <div class="fg">
+          <div class="full"><label class="f" for="pn">Projet</label><input class="in" id="pn" name="name" required /></div>
+          <div><label class="f" for="pc">Pays</label><select class="in" id="pc" name="country">{PK.filter(inS).map((x) => <option value={x}>{pn(x)}</option>)}</select></div>
+          <div><label class="f" for="pf">Bailleur</label><input class="in" id="pf" name="funder" /></div>
+          <div><label class="f" for="pb">Budget (FCFA)</label><input class="in" type="number" id="pb" name="budget" min="0" value="0" /></div>
+          <div><label class="f" for="px">Prochaine échéance</label><input class="in" type="date" id="px" name="next" /></div>
+          <div class="full"><label class="f" for="pm">Jalons (un par ligne)</label><textarea class="in" id="pm" name="milestones"></textarea></div>
+        </div>
+      </Dlg>
+      <Dlg id="dlg-prju" title="Suivi du projet" api="/api/admin/os/domaines">
+        <input type="hidden" name="action" value="prj.update" /><input type="hidden" name="id" value="" />
+        <p class="small"><b data-text="label"></b></p>
+        <div class="fg">
+          <div><label class="f" for="up">Avancement (%)</label><input class="in" type="number" id="up" name="progress" min="0" max="100" /></div>
+          <div><label class="f" for="us">Réalisé (FCFA)</label><input class="in" type="number" id="us" name="spent" min="0" /></div>
+          <div><label class="f" for="uh">Santé</label><select class="in" id="uh" name="health"><option value="ok">Bonne</option><option value="warn">À surveiller</option><option value="bad">En difficulté</option></select></div>
+        </div>
+      </Dlg>
+    </>
+  )}
+
+  {d === 'evt' && (
+    <>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Événement</th><th>Pays</th><th>Date</th><th>Inscrits</th><th>Présents</th><th>Sponsors</th><th>Budget</th><th>Recettes</th><th>Marge</th><th></th></tr></thead>
+          <tbody>
+            {evts.map(({ e, ins, pres, rec, bud, spons }) => { const mg = rec - bud; return <tr>
+              <td><b>{e.t}</b></td><td>{pn(e.c)}</td><td class="small">{dstr(e.date)}</td><td class="num">{fmt(ins)}</td>
+              <td class="num">{pres ? `${fmt(pres)} (${Math.round((pres / Math.max(1, ins)) * 100)} %)` : '—'}</td><td class="num">{spons}</td>
+              <td class="num">{mfcfa(bud)}</td><td class="num">{mfcfa(rec)}</td><td class:list={['num', mg < 0 ? 'down' : 'up']}>{mfcfa(mg)}</td>
+              <td><button class="btn ghost sm" type="button" data-dlg="dlg-evb" data-set-event-id={e.id} data-set-budget={String(bud)} data-set-sponsors={String(spons)} data-set-label={e.t}>Budget</button></td>
+            </tr>; })}
+          </tbody>
+        </table>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <h2>Contrôle des billets à l'entrée</h2>
+        <p class="small muted">Saisissez ou scannez le code du billet ; un billet ne peut servir qu'une fois. Le scanner caméra reste disponible dans l'espace de l'organisateur.</p>
+        <form class="row" data-api="/api/admin/os/domaines" data-reset><input type="hidden" name="action" value="evt.checkin" /><input class="in" name="code" placeholder="Code du billet" aria-label="Code du billet" required /><button class="btn" type="submit">Valider l'entrée</button></form>
+      </div>
+      <Dlg id="dlg-evb" title="Budget de l'événement" api="/api/admin/os/domaines">
+        <input type="hidden" name="action" value="evt.budget" /><input type="hidden" name="eventId" value="" />
+        <p class="small"><b data-text="label"></b></p>
+        <div class="fg">
+          <div><label class="f" for="eb">Budget (FCFA)</label><input class="in" type="number" id="eb" name="budget" min="0" /></div>
+          <div><label class="f" for="es">Sponsors</label><input class="in" type="number" id="es" name="sponsors" min="0" /></div>
+          <div><label class="f" for="ep">Recettes de sponsoring (FCFA)</label><input class="in" type="number" id="ep" name="sponsorship" min="0" value="0" /></div>
+        </div>
+      </Dlg>
+    </>
+  )}
+
+  {d === 'tal' && tal && (
+    <>
+      <div class="tabs">
+        <a href="/admin/dom/tal" aria-selected={!tab || tab === 'emp' ? 'true' : 'false'}>Registre des emplois</a>
+        <a href="/admin/dom/tal?t=off" aria-selected={tab === 'off' ? 'true' : 'false'}>Offres ({tal.jobs.length})</a>
+        <a href="/admin/dom/tal?t=app" aria-selected={tab === 'app' ? 'true' : 'false'}>Candidatures ({tal.apps.length})</a>
+      </div>
+      {(!tab || tab === 'emp') && (
+        <>
+          <div class="grid g4" style="margin-bottom:14px">
+            <div class="card kpi"><div class="l">Emplois déclarés</div><div class="v num">{tal.hires.length}</div></div>
+            <div class="card kpi"><div class="l">Vérifiés</div><div class="v num">{tal.hires.filter((x) => x.h.verified6mAt).length}</div></div>
+            <div class="card kpi"><div class="l">CDI</div><div class="v num">{tal.hires.filter((x) => x.h.contract === 'CDI').length}</div></div>
+          </div>
+          <div class="toolbar"><button class="btn ghost" type="button" data-post="/api/admin/os/domaines" data-body='{"action":"tal.sample"}'>Tirer un échantillon de contrôle</button></div>
+          <div class="tw">
+            <table class="t">
+              <thead><tr><th>Personne</th><th>Employeur</th><th>Pays</th><th>Contrat</th><th>Embauche</th><th>Statut</th><th></th></tr></thead>
+              <tbody>
+                {tal.hires.map(({ h, emp }) => <tr><td>{h.personName}</td><td>{emp ?? '—'}</td><td>{h.country ? pn(h.country) : '—'}</td><td>{h.contract}</td><td class="small">{dstr(h.hiredOn)}</td><td><Tags st={h.verified6mAt ? 'Vérifié' : 'Déclaré'} /></td><td>{!h.verified6mAt && <button class="btn ok sm" type="button" data-post="/api/admin/os/domaines" data-body={JSON.stringify({ action: 'tal.verify', id: h.id })} data-reload>Preuve reçue</button>}</td></tr>)}
+                {!tal.hires.length && <tr><td colspan="7" class="muted">Aucun emploi déclaré.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      {tab === 'off' && (
+        <div class="tw">
+          <table class="t">
+            <thead><tr><th>Offre</th><th>Entreprise</th><th>Pays</th><th>Contrat</th><th>Candidatures</th><th>Statut</th></tr></thead>
+            <tbody>{tal.jobs.map((j) => <tr><td><b>{j.title}</b></td><td>{j.company}</td><td>{pn(j.country)}</td><td>{j.type}</td><td class="num">{tal.apps.filter((a) => a.jobId === j.id).length}</td><td><Tags st={j.status === 'publiee' ? 'Publié' : j.status === 'en_moderation' ? 'En relecture' : 'Terminé'} label={j.status === 'publiee' ? 'Publiée' : j.status === 'en_moderation' ? 'En modération' : 'Fermée'} /></td></tr>)}</tbody>
+          </table>
+        </div>
+      )}
+      {tab === 'app' && (
+        <div class="tw">
+          <table class="t">
+            <thead><tr><th>Reçue le</th><th>Candidat·e</th><th>Offre</th><th>Étape</th></tr></thead>
+            <tbody>
+              {tal.apps.map((a) => <tr><td class="small">{dstr(a.a.createdAt)}</td><td><b>{a.who ?? '—'}</b></td><td class="small">{tal.jobs.find((j) => j.id === a.jobId)?.title ?? '—'}</td><td>{({ envoyee: 'Nouvelle', vue: 'Présélection', entretien: 'Entretien', offre: 'Offre', refus: 'Non retenue', retiree: 'Retirée' } as Record<string, string>)[a.a.status]}</td></tr>)}
+              {!tal.apps.length && <tr><td colspan="4" class="muted">Aucune candidature enregistrée.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  )}
+
+  {d === 'mm' && (
+    <div class="tw">
+      <table class="t">
+        <thead><tr><th>Cercle</th><th>Étape</th><th>Membres</th><th>Présence</th><th>Cotisations à jour</th><th>Facilitateur</th><th>Prochaine séance</th><th></th></tr></thead>
+        <tbody>
+          {circles.map((m) => <tr><td><b>{m.c.name}</b></td><td class="small">{m.c.stage}</td><td class="num">{m.mem}</td><td>{m.pres === null ? '—' : `${m.pres} %`}</td><td>{m.cot}/{m.mem}</td><td>{m.fac ?? '—'}</td><td class="small">{dstr(m.next)}</td><td>{m.cot < m.mem && <button class="btn ghost sm" type="button" data-post="/api/admin/os/domaines" data-body={JSON.stringify({ action: 'mm.remind', circleId: m.c.id })}>Relancer les cotisations</button>}</td></tr>)}
+          {!circles.length && <tr><td colspan="8" class="muted">Aucun cercle Mastermind.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  )}
+
+  {d === 'aca' && (
+    <>
+      <div class="grid g4" style="margin-bottom:14px">
+        <div class="card kpi"><div class="l">Candidatures</div><div class="v num">{aca.length}</div></div>
+        <div class="card kpi"><div class="l">Évaluées par le jury</div><div class="v num">{aca.filter((x) => x.evals.length).length}</div></div>
+        <div class="card kpi"><div class="l">Admises</div><div class="v num">{aca.filter((x) => x.a.status === 'admise').length}</div></div>
+      </div>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Rang</th><th>Candidature</th><th>Programme</th><th>Pays</th><th>Notes du jury</th><th>Moyenne</th><th>Décision</th></tr></thead>
+          <tbody>
+            {aca.map((x, i) => <tr>
+              <td class="num">{i + 1}</td><td><b>{x.who ?? '—'}</b><div class="xs muted">{x.a.reference}</div></td><td class="small">{x.a.programme}</td><td>{x.country ? pn(x.country) : '—'}</td>
+              <td class="small">{x.evals.length ? x.evals.map((v) => `${v}/100`).join(' · ') : '—'}</td><td class="num"><b>{x.avg === null ? '—' : x.avg.toFixed(0)}</b></td>
+              <td>{x.jury ? <a class="small" href="/admin/programmes">Décision en comité</a> : <select class="in xs" aria-label="Décision" data-aca={x.a.id}>{[['en_evaluation', 'En évaluation'], ['admise', 'Admis'], ['liste_attente', "Liste d'attente"], ['refusee', 'Refusé']].map(([v, l]) => <option value={v} selected={v === x.a.status}>{l}</option>)}</select>}</td>
+            </tr>)}
+            {!aca.length && <tr><td colspan="7" class="muted">Aucune candidature.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <p class="small muted" style="margin-top:8px">Un juré qui déclare un conflit d'intérêts est automatiquement exclu de la candidature concernée.</p>
+    </>
+  )}
+
+  {d === 'voix' && voix && (
+    <>
+      <div class="grid g4" style="margin-bottom:14px">
+        <div class="card kpi"><div class="l">Adhérents</div><div class="v num">{fmt(voix.active)}</div></div>
+        <div class="card kpi"><div class="l">Taux de renouvellement</div><div class="v num">{voix.ren} %</div></div>
+        <div class="card kpi"><div class="l">Consultations ouvertes</div><div class="v num">{CONSULTS.filter((c) => c.close >= today.toISOString().slice(0, 10)).length}</div></div>
+        <div class="card kpi"><div class="l">Demandes d'assistance ouvertes</div><div class="v num">{voix.ticks.filter((t) => t.status !== 'traite' && t.status !== 'clos').length}</div></div>
+      </div>
+      <div class="grid g2">
+        <div class="card">
+          <h2>Consultations</h2>
+          {CONSULTS.map((c) => { const open = c.close >= today.toISOString().slice(0, 10); return <div class="row between small" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>{c.t}</span><span>{fmt(voix.votes.find((v) => v.id === c.id)?.n ?? 0)} réponses <Tags st={open ? 'En cours' : 'Terminé'} /></span></div>; })}
+          <button class="btn ghost sm" type="button" onclick="openChat()" style="margin-top:10px">Analyser les réponses ouvertes</button>
+        </div>
+        <div class="card">
+          <h2>Propositions de plaidoyer</h2>
+          {voix.props.map((p) => <div class="row between small" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>{p.title}{p.country && ` · ${pn(p.country)}`}</span><span class={`tag ${p.status === 'adoptee' ? 'ok' : p.status === 'rejetee' ? 'bad' : 'info'}`}>{({ deposee: 'Déposée', en_discussion: 'En discussion', adoptee: 'Adoptée', rejetee: 'Rejetée' } as Record<string, string>)[p.status]}</span></div>)}
+          {!voix.props.length && <p class="small muted">Aucune proposition.</p>}
+          <h3 style="margin-top:12px">Assistance aux membres</h3>
+          {voix.ticks.map((t) => <div class="row between small" style="padding:5px 0"><span>{t.motif} · {t.country ? pn(t.country) : '—'}</span><Tags st={t.status === 'traite' || t.status === 'clos' ? 'Résolu' : t.status === 'en_cours' ? 'En cours' : 'Ouvert'} /></div>)}
+          {!voix.ticks.length && <p class="small muted">Aucune demande d'assistance.</p>}
+        </div>
+      </div>
+    </>
+  )}
+
+  {d === 'btp' && btp && (
+    <>
+      <div class="grid g4">
+        <div class="card kpi"><div class="l">Chantiers actifs</div><div class="v num">{btp.sites.length}</div></div>
+        <div class="card kpi"><div class="l">Carnet de commandes restant</div><div class="v num">{mfcfa(btp.sites.reduce((a, x) => a + x.s.amount - x.ca, 0))}</div></div>
+        <div class="card kpi"><div class="l">Facturé (situations)</div><div class="v num">{mfcfa(btp.sites.reduce((a, x) => a + x.ca, 0))}</div></div>
+        <div class="card kpi"><div class="l">Marge moyenne à terminaison</div><div class="v num">{(btp.sites.reduce((a, x) => a + x.m.pct, 0) / Math.max(1, btp.sites.length)).toFixed(1)} %</div></div>
+      </div>
+      <h2 style="margin-top:18px">Chantiers</h2>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Chantier</th><th>Maître d'ouvrage</th><th>Pays</th><th>Marché</th><th>Avancement</th><th>Marge à terminaison</th><th>Fin prévue</th><th>Alertes</th></tr></thead>
+          <tbody>
+            {btp.sites.map(({ s, m, hse, over }) => <tr class="click" onclick={`location.href='/admin/dom/btp/${s.id}'`}>
+              <td><b>{s.name}</b><div class="xs muted">{s.id} · {name(s.manager)}</div></td><td class="small">{s.client}</td><td>{pn(s.country)}</td><td class="num">{mfcfa(s.amount)}</td>
+              <td style="min-width:120px"><div class="bar"><span style={`width:${m.av}%`}></span></div><span class="xs">{m.av.toFixed(0)} %</span></td>
+              <td class:list={['num', m.pct < 8 ? 'down' : 'up']}>{mfcfa(m.m)} ({m.pct.toFixed(1)} %)</td><td class="small">{dstr(s.end)}</td>
+              <td>{hse > 0 && <span class="tag bad">HSE</span>}{over && <> <span class="tag warn">Dépassement</span></>}</td>
+            </tr>)}
+            {!btp.sites.length && <tr><td colspan="8" class="muted">Aucun chantier.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <div class="row between" style="margin-top:18px"><h2 style="margin:0">Appels d'offres</h2><button class="btn ghost sm" type="button" data-dlg="dlg-ao">Nouvel appel d'offres</button></div>
+      <div class="tw" style="margin-top:8px">
+        <table class="t">
+          <thead><tr><th>Référence</th><th>Objet</th><th>Maître d'ouvrage</th><th>Pays</th><th>Montant</th><th>Date limite</th><th>Probabilité</th><th>Décision</th></tr></thead>
+          <tbody>
+            {btp.tenders.map((t) => { const dl = Math.round((t.deadline.getTime() - today.getTime()) / 864e5); return <tr>
+              <td class="small">{t.id}</td><td>{t.object}</td><td class="small">{t.client}</td><td>{pn(t.country)}</td><td class="num">{mfcfa(t.amount)}</td><td><span class={dl <= 7 ? 'down' : ''}>{dl >= 0 ? `J-${dl}` : 'Échue'}</span></td><td>{t.probability} %</td>
+              <td><select class="in xs" aria-label="Décision" data-ao={t.id}>{TENDER_ST.map((s) => <option selected={s === t.status}>{s}</option>)}</select></td>
+            </tr>; })}
+            {!btp.tenders.length && <tr><td colspan="8" class="muted">Aucun appel d'offres en veille.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <Dlg id="dlg-site" title="Nouveau chantier" api="/api/admin/os/domaines">
+        <input type="hidden" name="action" value="btp.site" />
+        <div class="fg">
+          <div><label class="f" for="cn">Nom du chantier</label><input class="in" id="cn" name="name" required /></div>
+          <div><label class="f" for="cm">Maître d'ouvrage</label><input class="in" id="cm" name="client" /></div>
+          <div><label class="f" for="cp">Pays</label><select class="in" id="cp" name="country">{PK.filter(inS).map((x) => <option value={x}>{pn(x)}</option>)}</select></div>
+          <div><label class="f" for="ca">Montant du marché (FCFA)</label><input class="in" type="number" id="ca" name="amount" min="1" required /></div>
+        </div>
+      </Dlg>
+      <Dlg id="dlg-ao" title="Nouvel appel d'offres" api="/api/admin/os/domaines" wide>
+        <input type="hidden" name="action" value="btp.tender" />
+        <div class="fg">
+          <div class="full"><label class="f" for="ao">Objet</label><input class="in" id="ao" name="object" required /></div>
+          <div><label class="f" for="am">Maître d'ouvrage</label><input class="in" id="am" name="client" /></div>
+          <div><label class="f" for="ap">Pays</label><select class="in" id="ap" name="country">{PK.filter(inS).map((x) => <option value={x}>{pn(x)}</option>)}</select></div>
+          <div><label class="f" for="aa">Montant (FCFA)</label><input class="in" type="number" id="aa" name="amount" min="0" value="0" /></div>
+          <div><label class="f" for="ad">Date limite</label><input class="in" type="date" id="ad" name="deadline" required /></div>
+          <div><label class="f" for="ar">Probabilité (%)</label><input class="in" type="number" id="ar" name="probability" min="0" max="100" value="30" /></div>
+        </div>
+      </Dlg>
+    </>
+  )}
+</AdminLayout>
+<script>
+  const post = async (body: Record<string, unknown>, reload = true) => {
+    const r = await fetch('/api/admin/os/domaines', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    (window as unknown as { toast: (t: string) => void }).toast(r?.ok ? d.message : d.error || 'Une erreur est survenue.');
+    if (r?.ok && d.redirect) setTimeout(() => (location.href = d.redirect), 600);
+    else if (r?.ok && reload) setTimeout(() => location.reload(), 600);
+  };
+  document.querySelectorAll<HTMLSelectElement>('[data-act]').forEach((s) => s.addEventListener('change', () => post({ action: 'act.stage', id: s.dataset.act, stage: s.value })));
+  document.querySelectorAll<HTMLSelectElement>('[data-aca]').forEach((s) => s.addEventListener('change', () => post({ action: 'aca.decide', id: s.dataset.aca, status: s.value }, false)));
+  document.querySelectorAll<HTMLSelectElement>('[data-ao]').forEach((s) => s.addEventListener('change', () => post({ action: 'btp.tenderstatus', id: s.dataset.ao, status: s.value }, s.value === 'Gagné')));
+  // Kanban Kapital : glisser une carte d'une étape à l'autre
+  document.querySelectorAll<HTMLElement>('.kc[data-id]').forEach((c) => c.addEventListener('dragstart', (e) => e.dataTransfer?.setData('text', c.dataset.id!)));
+  document.querySelectorAll<HTMLElement>('.col[data-st]').forEach((c) => {
+    c.addEventListener('dragover', (e) => { e.preventDefault(); c.classList.add('over'); });
+    c.addEventListener('dragleave', () => c.classList.remove('over'));
+    c.addEventListener('drop', (e) => { e.preventDefault(); c.classList.remove('over'); const id = e.dataTransfer?.getData('text'); if (id) post({ action: 'kap.status', id, status: c.dataset.st }); });
+  });
+</script>

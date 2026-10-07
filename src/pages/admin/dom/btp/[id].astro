@@ -1,0 +1,153 @@
+---
+/* CEA OS — fiche chantier BTP (prototype › pChantier) : lots et avancement (marge à terminaison recalculée, alerte au-delà
+   de 5 % de dépassement), journal de chantier (photo), situations de travaux (calcul automatique, facture en finance),
+   sous-traitants (demande de paiement), sécurité (HSE). */
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import Dlg from '../../../../components/os/Dlg.astro';
+import Tags from '../../../../components/os/Tags.astro';
+import { asc, desc, eq } from 'drizzle-orm';
+import { db } from '../../../../lib/db';
+import { osSite, osSiteLot, osSiteLog, osSiteStatement, osSiteSub, osSiteHse } from '../../../../db/schema/os';
+import { osContext, allStaff, scopeState } from '../../../../lib/os/core';
+import { marge } from '../../../../lib/os/domaines';
+import { DOM, pn, fcfa, mfcfa, dstr } from '../../../../lib/os/ref';
+
+export const prerender = false;
+const id = Astro.params.id ?? '';
+const os = await osContext(Astro.locals.user!);
+const sc = scopeState(os, Astro.cookies);
+const [s] = await db.select().from(osSite).where(eq(osSite.id, id));
+if (!s || !sc.inScope({ country: s.country })) return Astro.redirect('/admin/dom/btp');
+const tab = Astro.url.searchParams.get('t') ?? 'lots';
+const T: [string, string][] = [['lots', 'Lots et avancement'], ['jr', 'Journal de chantier'], ['sit', 'Situations de travaux'], ['sst', 'Sous-traitants'], ['hse', 'Sécurité (HSE)']];
+const people = await allStaff();
+const name = (x: string | null) => people.find((p) => p.id === x)?.name ?? '—';
+const [lots, logs, sits, subs, hse] = await Promise.all([
+  db.select().from(osSiteLot).where(eq(osSiteLot.siteId, id)).orderBy(asc(osSiteLot.position)),
+  db.select().from(osSiteLog).where(eq(osSiteLog.siteId, id)).orderBy(desc(osSiteLog.at)),
+  db.select().from(osSiteStatement).where(eq(osSiteStatement.siteId, id)).orderBy(asc(osSiteStatement.no)),
+  db.select().from(osSiteSub).where(eq(osSiteSub.siteId, id)),
+  db.select().from(osSiteHse).where(eq(osSiteHse.siteId, id)).orderBy(desc(osSiteHse.at)),
+]);
+const m = marge(s.amount, lots);
+const cum = sits.reduce((a, x) => a + x.amount, 0);
+const pcCum = sits.at(-1)?.progress ?? 0, pcNow = Math.round(m.av);
+const newMt = Math.round((s.amount * (pcNow - pcCum)) / 100), ret = Math.round((newMt * s.retention) / 100);
+const days = Math.round((Date.now() - s.start.getTime()) / 864e5);
+---
+<AdminLayout title={s.name} lead={`${s.client} · ${pn(s.country)} · conducteur de travaux : ${name(s.manager)}`} crumbs={[[DOM.btp.n, '/admin/dom/btp'], [s.id]]}>
+  <div class="grid g4">
+    <div class="card kpi"><div class="l">Montant du marché</div><div class="v num">{mfcfa(s.amount)}</div></div>
+    <div class="card kpi"><div class="l">Avancement physique</div><div class="v num">{m.av.toFixed(1)} %</div></div>
+    <div class="card kpi"><div class="l">Coûts réels à date</div><div class="v num">{mfcfa(m.cost)}</div></div>
+    <div class="card kpi"><div class="l">Marge à terminaison</div><div class="v num">{mfcfa(m.m)}</div><div class:list={['d', m.pct < 8 ? 'down' : 'up']}>{m.pct.toFixed(1)} % du marché</div></div>
+  </div>
+  <div class="tabs" style="margin-top:16px">{T.map(([k, l]) => <a href={`/admin/dom/btp/${id}?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
+  {tab === 'lots' && (
+    <>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Lot</th><th>Budget</th><th>Avancement</th><th>Coût réel</th><th>Coût prévu à date</th><th>Écart</th></tr></thead>
+          <tbody>{lots.map((l) => { const prev = (l.budget * l.progress) / 100; const ec = l.cost - prev; return (
+            <tr><td><b>{l.name}</b></td><td class="num">{mfcfa(l.budget)}</td>
+              <td style="min-width:200px"><input type="range" min="0" max="100" value={l.progress} data-lot={l.id} data-k="progress" style="width:130px;accent-color:var(--gold)" aria-label={`Avancement ${l.name}`} /> <b class="num">{l.progress} %</b></td>
+              <td><input class="in num" type="number" value={l.cost} data-lot={l.id} data-k="cost" style="width:140px" aria-label={`Coût réel ${l.name}`} /></td>
+              <td class="num">{mfcfa(prev)}</td><td class:list={['num', { down: ec > prev * 0.05 && l.progress > 0 }]}>{ec > 0 ? '+' : ''}{mfcfa(ec)}</td></tr>
+          ); })}</tbody>
+        </table>
+      </div>
+      <p class="small muted" style="margin-top:8px">La marge à terminaison est recalculée à chaque saisie : coût réel ÷ avancement pour chaque lot. Un dépassement de plus de 5 % alerte le chef de département.</p>
+    </>
+  )}
+  {tab === 'jr' && (
+    <div class="split">
+      <div>
+        {logs.map((j) => <div class="card" style="margin-bottom:10px"><div class="row between"><b>{dstr(j.at)}</b><span class="small muted">{j.weather} · {j.workforce} personnes</span></div><p class="small" style="margin:6px 0;white-space:pre-wrap">{j.text}</p>{j.by && <div class="xs muted">Saisi par {name(j.by)}</div>}{j.photo && <div class="xs">Photo : {j.photo.name}</div>}</div>)}
+        {!logs.length && <div class="empty">Aucune entrée.</div>}
+      </div>
+      <aside>
+        <form class="card" data-upload="/api/admin/os/domaines">
+          <h3>Nouvelle entrée</h3>
+          <input type="hidden" name="action" value="btp.log" /><input type="hidden" name="siteId" value={id} />
+          <label class="f" for="jm">Météo</label><select class="in" id="jm" name="weather" style="width:100%"><option>Ensoleillé</option><option>Nuageux</option><option>Pluie</option><option>Orage — arrêt de chantier</option></select>
+          <label class="f" for="je" style="margin-top:8px">Effectif présent</label><input class="in" type="number" id="je" name="workforce" value="30" style="width:100%" />
+          <label class="f" for="jt" style="margin-top:8px">Travaux réalisés, livraisons, incidents</label><textarea class="in" id="jt" name="text" required></textarea>
+          <label class="f" for="jp" style="margin-top:8px">Photo</label><input class="in" type="file" accept="image/*" id="jp" name="file" style="width:100%" />
+          <button class="btn" type="submit" style="margin-top:10px;width:100%">Enregistrer la journée</button>
+        </form>
+      </aside>
+    </div>
+  )}
+  {tab === 'sit' && (
+    <>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Situation</th><th>Date</th><th>Avancement cumulé</th><th>Montant HT</th><th>Retenue de garantie ({s.retention} %)</th><th>Net à facturer</th><th>Facture</th></tr></thead>
+          <tbody>
+            {sits.map((x) => <tr><td>n°{x.no}</td><td>{dstr(x.at)}</td><td>{x.progress} %</td><td class="num">{fcfa(x.amount)}</td><td class="num">{fcfa((x.amount * s.retention) / 100)}</td><td class="num">{fcfa(x.amount * (1 - s.retention / 100))}</td><td class="small">{x.invoiceNumber ?? '—'}</td></tr>)}
+            <tr><td colspan="3"><b>Cumul facturé</b></td><td class="num"><b>{fcfa(cum)}</b></td><td class="num">{fcfa((cum * s.retention) / 100)}</td><td colspan="2"></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <h3>Situation n°{sits.length + 1} — calcul automatique</h3>
+        {pcNow > pcCum
+          ? <><p class="small">Avancement cumulé : <b>{pcNow} %</b> (précédent : {pcCum} %). Montant de la période : <b>{fcfa(newMt)}</b>, retenue de garantie : {fcfa(ret)}, net à facturer : <b>{fcfa(newMt - ret)}</b>.</p><button class="btn" type="button" data-post="/api/admin/os/domaines" data-body={JSON.stringify({ action: 'btp.statement', siteId: id })} data-reload>Établir la situation et la facture</button></>
+          : <p class="small muted">Aucun avancement nouveau depuis la dernière situation ({pcCum} %). Mettez à jour l'avancement des lots.</p>}
+      </div>
+    </>
+  )}
+  {tab === 'sst' && (
+    <>
+      <div class="toolbar"><button class="btn ghost" type="button" data-dlg="dlg-sub">Ajouter un sous-traitant</button></div>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Sous-traitant</th><th>Lot</th><th>Montant du contrat</th><th>Payé ou demandé</th><th>Reste</th><th></th></tr></thead>
+          <tbody>
+            {subs.map((x) => <tr><td><b>{x.name}</b></td><td>{x.lot}</td><td class="num">{fcfa(x.amount)}</td><td class="num">{fcfa(x.paid)}</td><td class="num">{fcfa(x.amount - x.paid)}</td><td>{x.amount > x.paid && <button class="btn ghost sm" type="button" data-post="/api/admin/os/domaines" data-body={JSON.stringify({ action: 'btp.subpay', subId: x.id })} data-reload>Demander un paiement</button>}</td></tr>)}
+            {!subs.length && <tr><td colspan="6" class="muted">Aucun sous-traitant.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <p class="small muted" style="margin-top:8px">Une demande de paiement (30 % du reste) suit le circuit des dépenses : bureau pays, région ou Direction générale selon le montant, puis finance.</p>
+      <Dlg id="dlg-sub" title="Ajouter un sous-traitant" api="/api/admin/os/domaines">
+        <input type="hidden" name="action" value="btp.sub" /><input type="hidden" name="siteId" value={id} />
+        <div class="fg">
+          <div><label class="f" for="sn">Sous-traitant</label><input class="in" id="sn" name="name" required /></div>
+          <div><label class="f" for="sl">Lot</label><select class="in" id="sl" name="lot">{lots.map((l) => <option>{l.name}</option>)}</select></div>
+          <div><label class="f" for="sa">Montant du contrat (FCFA)</label><input class="in" type="number" id="sa" name="amount" min="1" required /></div>
+        </div>
+      </Dlg>
+    </>
+  )}
+  {tab === 'hse' && (
+    <div class="split">
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Date</th><th>Événement</th><th>Statut</th><th></th></tr></thead>
+          <tbody>
+            {hse.map((h) => <tr><td>{dstr(h.at)}</td><td>{h.text}</td><td><Tags st={h.status === 'Clôturé' ? 'Résolu' : 'En cours'} /></td><td>{h.status !== 'Clôturé' && <button class="btn ghost sm" type="button" data-post="/api/admin/os/domaines" data-body={JSON.stringify({ action: 'btp.hseclose', id: h.id })} data-reload>Clôturer</button>}</td></tr>)}
+            {!hse.length && <tr><td colspan="4" class="muted">Aucun incident déclaré. {days} jours sans accident.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <aside>
+        <form class="card" data-api="/api/admin/os/domaines" data-reload>
+          <h3>Déclarer un incident</h3>
+          <input type="hidden" name="action" value="btp.hse" /><input type="hidden" name="siteId" value={id} />
+          <label class="f" for="hg">Gravité</label><select class="in" id="hg" name="gravity" style="width:100%"><option>Presque-accident</option><option>Accident sans arrêt</option><option>Accident avec arrêt</option></select>
+          <label class="f" for="ht" style="margin-top:8px">Description</label><textarea class="in" id="ht" name="text" required></textarea>
+          <button class="btn bad" type="submit" style="margin-top:8px;width:100%">Déclarer</button>
+        </form>
+      </aside>
+    </div>
+  )}
+</AdminLayout>
+<script>
+  document.querySelectorAll<HTMLInputElement>('[data-lot]').forEach((i) => i.addEventListener('change', async () => {
+    const r = await fetch('/api/admin/os/domaines', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'btp.lot', lotId: i.dataset.lot, [i.dataset.k!]: Number(i.value) }) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    (window as unknown as { toast: (t: string) => void }).toast(r?.ok ? d.message : d.error || 'Une erreur est survenue.');
+    if (r?.ok) setTimeout(() => location.reload(), 700);
+  }));
+</script>

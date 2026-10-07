@@ -10,7 +10,8 @@ import { db } from '../../lib/db';
 import { invoice } from '../../db/schema/finance';
 import { payment, membership } from '../../db/schema/app';
 import { dossier } from '../../db/schema/kapital';
-import { osDecision, osTask, osContract, osStockItem, osInscription } from '../../db/schema/os';
+import { osDecision, osTask, osContract, osStockItem, osInscription, osSite, osSiteLot } from '../../db/schema/os';
+import { marge } from '../../lib/os/domaines';
 import { osContext, allStaff, scopeState } from '../../lib/os/core';
 import { pendingFor, budgets } from '../../lib/os/approvals';
 import { allOkrs, okrProg } from '../../lib/os/pilotage';
@@ -49,6 +50,10 @@ const insAll = (await db.select({ c: osInscription.country, d: osInscription.dom
 const insV = insAll.filter((x) => x.st === 'Validée').length, insP = insAll.filter((x) => x.st === 'En attente').length;
 const insLate = insAll.filter((x) => x.st === 'En attente' && Date.now() - x.f.getTime() > 48 * 36e5).length;
 const staffN = people.filter((s) => s.active && sc.inScope({ country: s.country })).length;
+// Chantiers BTP : facturé (situations), marges à terminaison
+const [sites, sLots] = await Promise.all([db.select().from(osSite), db.select().from(osSiteLot)]);
+const sitesV = sites.filter((x) => sc.inScope({ country: x.country })).map((x) => ({ x, m: marge(x.amount, sLots.filter((l) => l.siteId === x.id)) }));
+const btpCa = Number(((await db.execute(sql`select coalesce(sum(amount),0)::float s from os_site_statement`)).rows[0] as { s: number }).s);
 const [expiring, lowStock] = await Promise.all([
   db.select({ title: osContract.title, country: osContract.country, domain: osContract.domain }).from(osContract).where(sql`${osContract.status} = 'En vigueur' and ${osContract.end} < now() + interval '60 days'`),
   db.select({ label: osStockItem.label, country: osStockItem.country }).from(osStockItem).where(sql`${osStockItem.qty} < ${osStockItem.min}`),
@@ -57,6 +62,7 @@ const attention = [
   late.length ? `${late.length} facture(s) en retard : ${mfcfa(lateSum)}` : null,
   ...ds.filter((d) => bud[d] && bud[d].budget && bud[d].engaged / bud[d].budget > 0.9).map((d) => `Budget presque consommé : ${DOM[d].n}`),
   insLate ? `${insLate} inscription(s) au-delà de 48 h` : null,
+  ...sitesV.filter((y) => y.m.pct < 8).map((y) => `Marge faible : ${y.x.name}`),
   lateTasks[0].n ? `${lateTasks[0].n} tâche(s) en retard` : null,
   pend.length > 5 ? `${pend.length} approbations vous attendent` : null,
   ...expiring.map((k) => `Contrat bientôt échu : ${k.title}`),
@@ -74,6 +80,7 @@ const attention = [
     <div class="card kpi"><div class="l">Budget engagé</div><div class="v num">{bt ? Math.round((eng / bt) * 100) : 0} %</div><div class="d">{mfcfa(eng)} sur {mfcfa(bt)}</div></div>
     <div class="card kpi"><div class="l">Membres validés</div><div class="v num">{fmt(insV)}</div><div class:list={['d', { down: insP > 0 }]}>{insP} inscription(s) en attente · {fmt(mem.n)} adhésion(s) actives</div></div>
     <div class="card kpi"><div class="l">Dossiers Kapital actifs</div><div class="v num">{kap.n}</div></div>
+    <div class="card kpi"><div class="l">BTP facturé</div><div class="v num">{mfcfa(btpCa)}</div><div class="d">{sitesV.length} chantier(s)</div></div>
     <div class="card kpi"><div class="l">Effectif</div><div class="v num">{staffN}</div><div class="d">collaborateurs</div></div>
   </div>
   <div class="grid g2" style="margin-top:14px">

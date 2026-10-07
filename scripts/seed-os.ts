@@ -18,7 +18,7 @@ const { and, eq, sql, inArray } = await import('drizzle-orm');
 const { PDOM, DOM, BANDS, gradeOf, profOf, pn, DK } = await import('../src/lib/os/ref');
 
 if (process.argv.includes('--reset')) {
-  await db.execute(sql`truncate os_inscription, os_report, os_candidate, os_recruit, os_payroll, os_ledger, os_closing, os_treasury, os_receipt, os_po, os_stock_move, os_stock_item, os_supplier, os_contract, os_okr, os_risk, os_audit, os_review_item, os_review, os_interview, os_flow, os_country, os_message, os_channel_seen, os_channel, os_meeting, os_task, os_decision, os_request, os_delegation, os_timesheet, os_budget, staff restart identity cascade`);
+  await db.execute(sql`truncate os_event_fin, os_project, os_capital, os_site_lot, os_site_log, os_site_statement, os_site_sub, os_site_hse, os_site, os_tender, os_inscription, os_report, os_candidate, os_recruit, os_payroll, os_ledger, os_closing, os_treasury, os_receipt, os_po, os_stock_move, os_stock_item, os_supplier, os_contract, os_okr, os_risk, os_audit, os_review_item, os_review, os_interview, os_flow, os_country, os_message, os_channel_seen, os_channel, os_meeting, os_task, os_decision, os_request, os_delegation, os_timesheet, os_budget, staff restart identity cascade`);
   console.log('• Tables de CEA OS vidées.');
 }
 const [any] = await db.select({ id: s.staff.id }).from(s.staff).limit(1);
@@ -175,5 +175,25 @@ const ins = Array.from({ length: 150 }, (_, i) => {
   return { id: `MEM-${country}-${String(100000 + i)}`, name: `${pick(FN)} ${pick(LN)}`, phone: `+228 9${rint(0, 9)} ${rint(10, 99)} ${rint(10, 99)} ${rint(10, 99)}`, company: `${pick(['Agro', 'Bati', 'Tech', 'Santé', 'Kente'])}${pick(['plus', ' Services', ' SARL', ' Africa'])}`, country, domains: [...new Set([d1, d2])], source: R() < 0.7 ? 'Site web' : pick(['Événement', 'Ambassadeur', 'WhatsApp']), status: pend ? 'En attente' : R() < 0.92 ? 'Validée' : 'Rejetée', slaFrom: at, createdAt: at, decidedAt: pend ? null : new Date(at.getTime() + rint(4, 70) * 36e5) };
 });
 await db.insert(s.osInscription).values(ins);
+// Domaines : actionnariat, projets, budgets d'événements, chantiers BTP et appels d'offres (contenus du prototype)
+await db.insert(s.osCapital).values((['Manioc+ SA', 'AgroSahel', 'Kente Studio', 'BatiVert SARL', 'Sahel Dairy', 'AquaPure'] as const).map((name, k) => ({ name, country: ['TG', 'SN', 'CI', 'CI', 'BF', 'BJ'][k], stage: ["Recherche d'investisseurs", 'Valorisation', 'Sensibilisation', "Pacte d'associés", 'Valorisation', "Recherche d'investisseurs"][k], valuation: rint(3, 40) * 1e8, share: rint(10, 35) })));
+await db.insert(s.osProject).values(([['Programme Agritech Sahel', 'ML', 'Fondation Partenaire (fictive)', 380e6], ['Incubateur numérique de Lomé', 'TG', 'Coopération (fictive)', 210e6], ['Forum panafricain 2026', 'TG', 'Sponsors privés', 160e6], ['Plateforme Diaspora Invest', 'SN', 'Banque de développement (fictive)', 95e6], ["Observatoire de l'emploi des jeunes", 'CI', 'Agence (fictive)', 70e6]] as const).map(([name, country, funder, budget], k) => ({ name, country, funder, budget, spent: Math.round(budget * (0.2 + R() * 0.6)), progress: rint(15, 85), health: ['ok', 'warn', 'ok', 'bad', 'ok'][k], milestones: [['Lancement', true], ['Rapport T2', k % 2 === 0], ['Évaluation à mi-parcours', false]] as [string, boolean][], next: ago(-rint(5, 60)) })));
+await db.insert(s.osEventFin).values([{ eventId: 'e1', budget: 160e6, sponsors: 7, sponsorship: 120e6 }, { eventId: 'e2', budget: 4e6, sponsors: 1, sponsorship: 2e6 }, { eventId: 'e3', budget: 2.5e6, sponsors: 2, sponsorship: 0 }]);
+const cond = P((r) => r.poste === 'C21' && r.country === 'TG');
+const SITES: [string, string, string, string, number, number[][]][] = [
+  ['CH-201', 'Centre de formation de Kara', 'TG', "Ministère de l'Enseignement technique (fictif)", 820e6, [[100, 1.0], [70, 1.02], [20, 0.95], [0, 0]]],
+  ['CH-202', 'Marché moderne de Parakou', 'BJ', 'Commune de Parakou (fictive)', 1450e6, [[100, 0.98], [45, 1.12], [5, 1.0], [0, 0]]],
+  ['CH-203', 'Logements sociaux Cité Verte', 'CI', 'Groupe Habitat Plus', 980e6, [[100, 1.0], [90, 0.97], [60, 1.01], [10, 1.0]]],
+];
+for (const [id, name, country, client, amount, prog] of SITES) {
+  await db.insert(s.osSite).values({ id, name, country, client, amount, manager: cond, start: ago(rint(150, 400)), end: ago(-rint(90, 300)) });
+  const { DEFAULT_LOTS } = await import('../src/lib/os/domaines');
+  await db.insert(s.osSiteLot).values(DEFAULT_LOTS.map(([l, f], i) => { const budget = Math.round(amount * f * 0.85); return { siteId: id, name: l, budget, progress: prog[i][0], cost: Math.round((budget * prog[i][0] / 100) * prog[i][1]), position: i }; }));
+}
+await db.insert(s.osSiteStatement).values([{ siteId: 'CH-201', no: 1, progress: 20, amount: 164e6, at: ago(90) }, { siteId: 'CH-201', no: 2, progress: 40, amount: 164e6, at: ago(40) }]);
+await db.insert(s.osSiteLog).values([{ siteId: 'CH-201', weather: 'Ensoleillé', workforce: 42, text: 'Coulage de la dalle du bâtiment B, réception de 300 sacs de ciment.', by: cond, at: ago(1) }, { siteId: 'CH-201', weather: 'Pluie', workforce: 18, text: 'Arrêt partiel l’après-midi ; mise à l’abri du matériel.', by: cond, at: ago(2) }]);
+await db.insert(s.osSiteSub).values([{ siteId: 'CH-202', name: 'Électro Services (fictif)', lot: 'Second œuvre', amount: 86e6, paid: 30e6 }]);
+await db.insert(s.osSiteHse).values([{ siteId: 'CH-202', text: 'Presque-accident — chute d’outil depuis l’échafaudage', at: ago(4) }]);
+await db.insert(s.osTender).values([{ id: 'AO-26-031', object: "Construction d'un lycée technique", client: 'État (fictif)', country: 'TG', amount: 1.2e9, deadline: ago(-6), status: 'En étude', probability: 40 }, { id: 'AO-26-034', object: 'Pont de franchissement rural', client: 'Agence des routes (fictive)', country: 'BJ', amount: 640e6, deadline: ago(-18), status: 'Veille', probability: 25 }]);
 console.log(`✓ ${rows.length} collaborateurs, budgets ${year} de ${DK.length} domaines. Comptes rattachés : admin@cea.demo (DG), analyste@cea.demo, editeur@cea.demo.`);
 process.exit(0);

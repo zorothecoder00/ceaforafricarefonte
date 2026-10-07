@@ -401,3 +401,109 @@ export const osReport = pgTable('os_report', {
   submittedBy: text('submitted_by'),
   submittedAt: ts('submitted_at'),
 }, (t) => [primaryKey({ columns: [t.country, t.period] })]);
+
+/* ===== Lot 6 (2/2) : domaines d'intervention ===== */
+
+/* CEA Events : budget et sponsors d'un événement du catalogue (inscrits, présents et recettes viennent de la billetterie). */
+export const osEventFin = pgTable('os_event_fin', {
+  eventId: text('event_id').primaryKey(),
+  budget: bigint('budget', { mode: 'number' }).notNull().default(0),
+  sponsors: integer('sponsors').notNull().default(0),
+  sponsorship: bigint('sponsorship', { mode: 'number' }).notNull().default(0), // recettes de sponsoring
+});
+
+/* CEA Project Studio : portefeuille des projets conduits par CEA FOR AFRICA (bailleur, budget, jalons, santé). */
+export const osProject = pgTable('os_project', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  country: text('country').notNull(),
+  domain: text('domain').notNull().default('prj'),
+  funder: text('funder').notNull().default(''),
+  budget: bigint('budget', { mode: 'number' }).notNull().default(0),
+  spent: bigint('spent', { mode: 'number' }).notNull().default(0),
+  progress: integer('progress').notNull().default(0),
+  health: text('health').notNull().default('ok'), // ok | warn | bad
+  milestones: jsonb('milestones').$type<[string, boolean][]>().notNull().default([]),
+  next: ts('next'),
+  owner: text('owner'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+
+/* CEA Actionnariat : PME accompagnées dans l'ouverture de leur capital. */
+export const osCapital = pgTable('os_capital', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  country: text('country').notNull(),
+  stage: text('stage').notNull().default('Sensibilisation'), // Sensibilisation | Valorisation | Pacte d'associés | Recherche d'investisseurs | Opération réalisée | Transférée à Kapital
+  valuation: bigint('valuation', { mode: 'number' }).notNull().default(0),
+  share: integer('share').notNull().default(0), // part ouverte (%)
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+
+/* CEA BTP & Infrastructures : chantiers, lots, journal, situations de travaux, sous-traitants, sécurité, appels d'offres. */
+export const osSite = pgTable('os_site', {
+  id: text('id').primaryKey(), // CH-201
+  name: text('name').notNull(),
+  country: text('country').notNull(),
+  client: text('client').notNull().default(''), // maître d'ouvrage
+  amount: bigint('amount', { mode: 'number' }).notNull(), // montant du marché
+  start: ts('start').notNull().defaultNow(),
+  end: ts('end').notNull(),
+  manager: text('manager'), // conducteur de travaux (matricule)
+  retention: integer('retention').notNull().default(5), // retenue de garantie (%)
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+export const osSiteLot = pgTable('os_site_lot', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  siteId: text('site_id').notNull().references(() => osSite.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  budget: bigint('budget', { mode: 'number' }).notNull().default(0),
+  progress: integer('progress').notNull().default(0),
+  cost: bigint('cost', { mode: 'number' }).notNull().default(0),
+  position: integer('position').notNull().default(0),
+});
+export const osSiteLog = pgTable('os_site_log', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  siteId: text('site_id').notNull().references(() => osSite.id, { onDelete: 'cascade' }),
+  at: ts('at').notNull().defaultNow(),
+  weather: text('weather').notNull(),
+  workforce: integer('workforce').notNull().default(0),
+  text: text('text').notNull(),
+  photo: jsonb('photo').$type<{ key: string; name: string }>(),
+  by: text('by'),
+});
+export const osSiteStatement = pgTable('os_site_statement', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  siteId: text('site_id').notNull().references(() => osSite.id, { onDelete: 'cascade' }),
+  no: integer('no').notNull(),
+  at: ts('at').notNull().defaultNow(),
+  progress: integer('progress').notNull(), // avancement cumulé (%)
+  amount: bigint('amount', { mode: 'number' }).notNull(), // montant HT de la période
+  invoiceNumber: text('invoice_number'),
+});
+export const osSiteSub = pgTable('os_site_sub', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  siteId: text('site_id').notNull().references(() => osSite.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  lot: text('lot').notNull(),
+  amount: bigint('amount', { mode: 'number' }).notNull(),
+  paid: bigint('paid', { mode: 'number' }).notNull().default(0),
+});
+export const osSiteHse = pgTable('os_site_hse', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  siteId: text('site_id').notNull().references(() => osSite.id, { onDelete: 'cascade' }),
+  at: ts('at').notNull().defaultNow(),
+  text: text('text').notNull(),
+  status: text('status').notNull().default('Action en cours'), // Action en cours | Clôturé
+});
+export const osTender = pgTable('os_tender', {
+  id: text('id').primaryKey(), // AO-26-031
+  object: text('object').notNull(),
+  client: text('client').notNull().default(''),
+  country: text('country').notNull(),
+  amount: bigint('amount', { mode: 'number' }).notNull().default(0),
+  deadline: ts('deadline').notNull(),
+  status: text('status').notNull().default('Veille'), // Veille | En étude | Go | No-go | Déposé | Gagné | Perdu
+  probability: integer('probability').notNull().default(30),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
