@@ -1,7 +1,8 @@
 ---
 import Icon from './Icon.astro';
 import LocalePicker from './LocalePicker.astro';
-import { MEGA, megaOf } from '../data/nav';
+import { megaOf } from '../data/nav';
+import { megaLive } from '../lib/calls';
 import { tr } from '../i18n/content-en';
 import { getLang, lp, stripLang, useT } from '../i18n/ui';
 import { allDomains } from '../lib/domains';
@@ -9,6 +10,7 @@ import { allDomains } from '../lib/domains';
 const lang = getLang(Astro.currentLocale);
 const t = useT(lang);
 const L = (p: string) => lp(lang, p);
+const mega = await megaLive();
 const cur = megaOf(stripLang(Astro.url.pathname));
 const en = lang === 'en';
 const path = stripLang(Astro.url.pathname);
@@ -72,7 +74,7 @@ const chev = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke
       <a class="btn btn-primary" href="/espace" style="flex:1" data-auth="in" hidden>{t('mySpace')}</a>
       <button class="btn btn-ghost" type="button" style="flex:1" data-auth="in" data-logout hidden>{t('logout')}</button>
     </div>
-    {MEGA.map((m) => (
+    {mega.map((m) => (
       <details open={m.k === cur}>
         <summary>{m.label[lang]} <Fragment set:html={chev} /></summary>
         {m.cols.flatMap((c) => c.items).map((it) => (

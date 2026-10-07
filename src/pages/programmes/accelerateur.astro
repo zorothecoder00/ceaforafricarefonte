@@ -10,13 +10,15 @@ export const prerender = false;
 // Dates et état réels : appel du back-office s'il existe, sinon catalogue
 const prog = await catalogueItem('accelerateur-c4');
 const open = prog?.state === 'ouvert';
+// Nom de la session en cours (appel publié dans le back-office, sinon catalogue)
+const name = prog?.title ?? 'Accélérateur';
 const day = (d: Date | null | undefined) => (d ? d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Lome' }) : 'date à confirmer');
 
 const steps = [['Candidature', 'Formulaire et pièces'], ['Diagnostic de maturité', '8 dimensions, avec un analyste'], ["Plan d'accompagnement", 'Objectifs et jalons sur 6 mois'], ['Séances de mentorat', 'Toutes les 2 semaines'], ['Jalons validés', "Chiffre d'affaires, équipe, produit"], ['Demo Day', 'Devant les investisseurs de Kapital Invest']];
 const gets = ['Un mentor dédié et 12 séances', "Un accès gratuit à tous les cours de l'Académie", 'La préparation Investor Ready avec Kapital Invest', 'Une place au Demo Day du Forum 2026'];
 ---
-<BaseLayout title="Accélérateur — Cohorte 4">
-  <PageHead title="Accélérateur CEA — Cohorte 4" lead="Six mois pour accélérer, avec un mentor dédié et un Demo Day devant 40 investisseurs." crumbs={[['/programmes', 'Programmes'], ['', 'Accélérateur']]} subnav={SUBS.programmes} />
+<BaseLayout title={name}>
+  <PageHead title={name.replace(/^Accélérateur/, "Accélérateur CEA")} lead="Six mois pour accélérer, avec un mentor dédié et un Demo Day devant 40 investisseurs." crumbs={[['/programmes', 'Programmes'], ['', 'Accélérateur']]} subnav={SUBS.programmes} />
   <section class="block">
     <div class="wrap split">
       <div>

@@ -1,11 +1,12 @@
 ---
 import PageHead from '../PageHead.astro';
-import { MEGA } from '../../data/nav';
+import { megaLive } from '../../lib/calls';
 import { KMENU } from '../../data/site';
 import { lp, type Lang } from '../../i18n/ui';
 
 interface Props { lang: Lang }
 const { lang } = Astro.props;
+const MEGA = await megaLive();
 const en = lang === 'en';
 const L = (p: string) => lp(lang, p);
 const other: [string, string][] = en

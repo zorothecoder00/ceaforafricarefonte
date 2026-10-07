@@ -7,6 +7,7 @@ import { db } from './db';
 import { programmeCall } from '../db/schema/programmes';
 import { callState, Fields, Grid, DEFAULT_GRID, type CallState } from './programmes';
 import { staticProgrammes, applyPath, type CatalogueItem } from './catalogue';
+import { MEGA, type Mega } from '../data/nav';
 
 export { staticProgrammes, applyPath, type CatalogueItem };
 
@@ -41,6 +42,25 @@ export async function programmeCatalogue(now = new Date()): Promise<CatalogueIte
 }
 
 /** Un programme du catalogue (ou appel) par identifiant. */
+/** Appels ouverts (cache d'une minute : lus par l'en-tête de chaque page). */
+let openCache: { at: number; items: CatalogueItem[] } | null = null;
+export async function openCalls(): Promise<CatalogueItem[]> {
+  if (openCache && Date.now() - openCache.at < 60_000) return openCache.items;
+  const items = (await programmeCatalogue().catch(() => [])).filter((p) => p.state === 'ouvert');
+  openCache = { at: Date.now(), items };
+  return items;
+}
+
+/** Méga-menu avec l'entrée « Appels à candidatures ouverts » branchée sur les vrais appels. */
+export async function megaLive(): Promise<Mega[]> {
+  const open = await openCalls();
+  const d = open.length === 1 ? { fr: open[0].title, en: open[0].title }
+    : open.length ? { fr: `${open.length} appels ouverts`, en: `${open.length} open calls` }
+    : { fr: 'Aucun appel ouvert pour le moment', en: 'No open call right now' };
+  const href = open.length === 1 ? open[0].href : '/programmes';
+  return MEGA.map((m) => ({ ...m, cols: m.cols.map((c) => ({ ...c, items: c.items.map((it) => (it.live === 'calls' ? { ...it, href, d, badge: open.length ? { fr: 'Ouvert', en: 'Open' } : undefined } : it)) })) }));
+}
+
 export async function catalogueItem(slug: string) {
   return (await programmeCatalogue()).find((p) => p.slug === slug) ?? null;
 }

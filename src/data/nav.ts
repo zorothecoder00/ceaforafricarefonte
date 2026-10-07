@@ -1,7 +1,8 @@
 /* Méga-menu du portail CEA FOR AFRICA : 8 entrées (CDC §6), chacune avec ses sous-rubriques et un contenu mis en avant. */
 import type { L } from '../i18n/ui';
 
-export type MegaItem = { href: string; ic: string; t: L; d: L; badge?: L };
+/** live: 'calls' → lien et description remplacés par les appels à candidatures réellement ouverts (src/lib/calls.ts › megaLive). */
+export type MegaItem = { href: string; ic: string; t: L; d: L; badge?: L; live?: 'calls' };
 export type Feature = 'president' | 'quiz' | 'call' | 'course' | 'mastermind' | 'forum' | 'jobs' | 'study';
 export type Mega = { k: string; label: L; href: string; match: string[]; cols: { h: L; items: MegaItem[] }[]; feat: Feature };
 
@@ -53,7 +54,7 @@ export const MEGA: Mega[] = [
         i('/programmes#sectoriels', 'globe', { fr: 'Programmes sectoriels et pays', en: 'Sector and country programmes' }, { fr: 'Agritech, femmes, diaspora…', en: 'Agritech, women, diaspora…' }),
       ] },
       { h: { fr: 'Candidater', en: 'Apply' }, items: [
-        i('/programmes/accelerateur', 'star', { fr: 'Appels à candidatures ouverts', en: 'Open calls' }, { fr: 'Accélérateur — Cohorte 4', en: 'Accelerator — Cohort 4' }, { fr: 'Ouvert', en: 'Open' }),
+        { ...i('/programmes', 'star', { fr: 'Appels à candidatures ouverts', en: 'Open calls' }, { fr: 'Les appels en cours et leurs dates', en: 'Current calls and their dates' }), live: 'calls' },
         i('/programmes/calendrier', 'event', { fr: 'Calendrier', en: 'Calendar' }, { fr: 'Toutes les dates des appels', en: 'All call dates' }),
         i('/programmes/alumni', 'users', { fr: 'Anciens (alumni)', en: 'Alumni' }, { fr: 'Le réseau des anciens', en: 'The alumni network' }),
       ] },

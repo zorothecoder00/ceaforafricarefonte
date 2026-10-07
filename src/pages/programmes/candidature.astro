@@ -8,12 +8,13 @@ import { resolveProgramme } from '../../lib/calls';
 export const prerender = false;
 const prog = await resolveProgramme('accelerateur-c4');
 const open = prog?.state === 'ouvert';
+const name = prog?.label ?? 'Accélérateur';
 
 const sectors = ['Agroalimentaire', 'Fintech', 'Énergie', 'Santé', 'Éducation', 'BTP', 'Commerce', 'Numérique'];
 const recap: [string, string][] = [['Nom', 'nom'], ['Téléphone', 'tel'], ['Entreprise', 'entreprise'], ['Secteur', 'secteur'], ['Salariés', 'salaries']];
 ---
 <BaseLayout title="Candidature">
-  <PageHead title="Candidater à l'Accélérateur — Cohorte 4" lead="Environ 10 minutes. Vous pouvez interrompre et reprendre plus tard." crumbs={[['/programmes', 'Programmes'], ['', 'Candidature']]} subnav={SUBS.programmes} />
+  <PageHead title={`Candidater : ${name}`} lead="Environ 10 minutes. Vous pouvez interrompre et reprendre plus tard." crumbs={[['/programmes', 'Programmes'], ['', 'Candidature']]} subnav={SUBS.programmes} />
   <section class="block">
     <div class="wrap" style="max-width:740px">
       {!open && <div class="panel">{prog?.state === 'a_venir' ? 'Les candidatures ne sont pas encore ouvertes.' : 'Les candidatures de la cohorte 4 sont closes.'} <a href="/programmes">Voir les autres programmes</a></div>}
