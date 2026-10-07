@@ -83,3 +83,66 @@ export const osBudget = pgTable('os_budget', {
   realised: bigint('realised', { mode: 'number' }).notNull().default(0),
   updatedAt: ts('updated_at').notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.year, t.domain] })]);
+
+/* ===== Lot 2 : collaboration (messagerie interne, agenda et réunions, tâches, registre des décisions) ===== */
+
+/* Canaux de la messagerie interne. Portée : « * » toute l'organisation, dep:<département>, dom:<domaine>, reg:<région>,
+   pays:<pays>, dm:<matricule>,<matricule> (message direct). */
+export const osChannel = pgTable('os_channel', {
+  id: text('id').primaryKey(), // general, dom_btp, reg_AO, pays_TG, dep_finance, dm_EMP001_EMP014
+  name: text('name').notNull(),
+  scope: text('scope').notNull(),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+export const osMessage = pgTable('os_message', {
+  id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+  channelId: text('channel_id').notNull().references(() => osChannel.id, { onDelete: 'cascade' }),
+  staffId: text('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),
+  body: text('body').notNull(),
+  at: ts('at').notNull().defaultNow(),
+}, (t) => [index('os_message_channel_idx').on(t.channelId, t.id)]);
+/* Dernier message lu par canal (messages non lus du menu). */
+export const osChannelSeen = pgTable('os_channel_seen', {
+  staffId: text('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),
+  channelId: text('channel_id').notNull().references(() => osChannel.id, { onDelete: 'cascade' }),
+  lastId: bigint('last_id', { mode: 'number' }).notNull().default(0),
+}, (t) => [primaryKey({ columns: [t.staffId, t.channelId] })]);
+
+/* Réunions : participants, ordre du jour, compte rendu, décisions (reportées au registre). */
+export const osMeeting = pgTable('os_meeting', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: text('title').notNull(),
+  at: ts('at').notNull(),
+  hour: text('hour').notNull(), // 09:00
+  duration: integer('duration').notNull().default(60),
+  place: text('place').notNull().default('Visio'),
+  participants: jsonb('participants').$type<string[]>().notNull().default([]),
+  agenda: text('agenda').notNull().default(''),
+  minutes: text('minutes').notNull().default(''),
+  decisions: jsonb('decisions').$type<string[]>().notNull().default([]),
+  organizer: text('organizer').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('os_meeting_at_idx').on(t.at)]);
+
+/* Tâches (kanban À faire / En cours / Terminé). */
+export const osTask = pgTable('os_task', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: text('title').notNull(),
+  owner: text('owner').notNull().references(() => staff.id, { onDelete: 'cascade' }),
+  status: text('status').notNull().default('À faire'),
+  country: text('country'),
+  domain: text('domain'),
+  due: ts('due').notNull(),
+  createdBy: text('created_by').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('os_task_owner_idx').on(t.owner)]);
+
+/* Registre des décisions : décidé (Direction générale), en attente de la DG, refusé. */
+export const osDecision = pgTable('os_decision', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  text: text('text').notNull(),
+  status: text('status').notNull().default('En attente'),
+  source: text('source').notNull().default(''), // réunion d'origine
+  by: text('by').references(() => staff.id, { onDelete: 'set null' }),
+  at: ts('at').notNull().defaultNow(),
+});

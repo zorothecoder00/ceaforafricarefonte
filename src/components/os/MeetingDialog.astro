@@ -1,0 +1,23 @@
+---
+/* Dialogue « Planifier une réunion » (prototype › newMeeting) : objet, date, heure, lieu, participants, ordre du jour. */
+import Dlg from './Dlg.astro';
+import type { Person } from '../../lib/os/core';
+import { refT } from '../../lib/os/ref';
+interface Props { me: Person; people: Person[] }
+const { me, people } = Astro.props;
+---
+<Dlg id="dlg-meet" title="Planifier une réunion" api="/api/admin/os/reunions" submit="Envoyer les invitations" wide>
+  <input type="hidden" name="action" value="create" />
+  <div class="fg">
+    <div class="full"><label class="f" for="mt">Objet</label><input class="in" id="mt" name="title" required /></div>
+    <div><label class="f" for="md">Date</label><input class="in" type="date" id="md" name="date" required /></div>
+    <div><label class="f" for="mh">Heure</label><input class="in" type="time" id="mh" name="hour" value="09:00" required /></div>
+    <div><label class="f" for="ml">Lieu ou lien visio</label><input class="in" id="ml" name="place" value="Visio" /></div>
+    <div class="full">
+      <span class="f" style="display:block;font-size:.82rem;font-weight:600;margin-bottom:4px">Participants</span>
+      <input class="in" placeholder="Filtrer…" data-filter="#mpick" style="width:100%;margin-bottom:6px" aria-label="Filtrer les participants" />
+      <div class="pick" id="mpick">{people.filter((s) => s.active && s.id !== me.id).map((s) => <label data-row={`${s.name} ${refT(s.poste)}`}><input type="checkbox" name="participants" value={s.id} /> {s.name} — <span class="muted">{refT(s.poste)}</span></label>)}</div>
+    </div>
+    <div class="full"><label class="f" for="mo">Ordre du jour</label><textarea class="in" id="mo" name="agenda"></textarea></div>
+  </div>
+</Dlg>

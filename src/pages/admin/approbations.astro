@@ -5,12 +5,12 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 import Dlg from '../../components/os/Dlg.astro';
 import Steps from '../../components/os/Steps.astro';
 import Tags from '../../components/os/Tags.astro';
-import { desc, sql } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import { db } from '../../lib/db';
-import { osRequest } from '../../db/schema/os';
+import { osRequest, osDecision } from '../../db/schema/os';
 import { osContext, allStaff } from '../../lib/os/core';
 import { pendingFor, thresholds, activeDelegations } from '../../lib/os/approvals';
-import { RTYPE, pn, fcfa, type ReqType } from '../../lib/os/ref';
+import { RTYPE, pn, fcfa, dstr, type ReqType } from '../../lib/os/ref';
 
 export const prerender = false;
 const os = await osContext(Astro.locals.user!);
@@ -18,12 +18,14 @@ const me = os.me;
 const [people, delegs, thr] = await Promise.all([allStaff(), activeDelegations(), thresholds()]);
 const list = me ? await pendingFor(me.id, { people, delegs }) : [];
 const done = me ? await db.select().from(osRequest).where(sql`${osRequest.steps} @> ${JSON.stringify([{ whoId: me.id }])}::jsonb`).orderBy(desc(osRequest.updatedAt)).limit(10) : [];
+// Décisions issues des réunions, à trancher par la Direction générale
+const decs = me?.prof === 'dg' ? await db.select().from(osDecision).where(eq(osDecision.status, 'En attente')).orderBy(desc(osDecision.at)) : [];
 const name = (id: string) => people.find((s) => s.id === id)?.name ?? '—';
 ---
-<AdminLayout title="Approbations" lead={`${list.length} élément(s) attendent votre décision · seuils : pays ≤ ${fcfa(thr.pays)}, région ≤ ${fcfa(thr.reg)}, au-delà Direction générale`}>
+<AdminLayout title="Approbations" lead={`${list.length + decs.length} élément(s) attendent votre décision · seuils : pays ≤ ${fcfa(thr.pays)}, région ≤ ${fcfa(thr.reg)}, au-delà Direction générale`}>
   <Fragment slot="actions">{list.length > 1 && <button class="btn ok" type="button" data-post="/api/admin/os/approbations" data-body='{"action":"all"}' data-reload>Tout approuver ({list.length})</button>}</Fragment>
   {!me && <div class="watch" style="margin-bottom:14px">Votre compte n'est rattaché à aucune fiche du personnel : aucune approbation ne peut vous être adressée.</div>}
-  {list.length ? (
+  {list.length || decs.length ? (list.length > 0 && (
     <div class="tw">
       <table class="t">
         <thead><tr><th>Objet</th><th>Demandeur</th><th>Votre niveau</th><th>Pays</th><th>Montant</th><th>Circuit</th><th></th></tr></thead>
@@ -48,7 +50,15 @@ const name = (id: string) => people.find((s) => s.id === id)?.name ?? '—';
         </tbody>
       </table>
     </div>
-  ) : <div class="empty">Aucune approbation en attente pour vous.</div>}
+  )) : <div class="empty">Aucune approbation en attente pour vous.</div>}
+  {decs.length > 0 && (
+    <div class="tw" style="margin-top:14px">
+      <table class="t">
+        <thead><tr><th>Décision proposée</th><th>Proposée par</th><th>Votre niveau</th><th>Date</th><th></th></tr></thead>
+        <tbody>{decs.map((d) => <tr><td><b>{d.text}</b></td><td class="small">{d.by ? name(d.by) : '—'}</td><td class="small">Décision de la Direction générale</td><td class="small">{dstr(d.at)}</td><td style="white-space:nowrap"><button class="btn ok sm" type="button" data-post="/api/admin/os/decisions" data-body={JSON.stringify({ id: d.id, ok: true })} data-reload>Décider</button> <button class="btn ghost sm" type="button" data-post="/api/admin/os/decisions" data-body={JSON.stringify({ id: d.id, ok: false })} data-reload>Refuser</button></td></tr>)}</tbody>
+      </table>
+    </div>
+  )}
   <div class="card" style="margin-top:14px">
     <h2>Mes dernières décisions</h2>
     {done.map((r) => <div class="small" style="padding:5px 0;border-bottom:1px solid var(--line)"><b>{r.id}</b> — {r.title} <Tags st={r.status} /></div>)}

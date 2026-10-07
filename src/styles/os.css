@@ -129,3 +129,19 @@ html.side-min .os-logo img{height:32px}
 @media (max-width:980px){html.side-min .os-shell,.os-shell{grid-template-columns:1fr}}
 /* Taille de base du prototype (16 px), indépendante de la taille de texte choisie sur le site public */
 html:has(body.os){font-size:16px}
+
+/* Messagerie (prototype : .chat) */
+body.os .chatg{display:grid;grid-template-columns:260px 1fr;border:1px solid var(--line);border-radius:12px;background:var(--surface);min-height:520px;overflow:hidden}
+body.os .chatg .ch{border-right:1px solid var(--line);overflow:auto;max-height:70vh}
+body.os .chatg .ch a{display:block;padding:11px 12px;border-bottom:1px solid var(--line);text-decoration:none;color:var(--ink)}
+body.os .chatg .ch a[aria-current="true"]{background:var(--surface-2);box-shadow:inset 3px 0 0 var(--gold)}
+body.os .chatg .th{display:flex;flex-direction:column;min-width:0}
+body.os .chatg .ms{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:8px;max-height:60vh}
+body.os .bub{max-width:80%;padding:8px 11px;border-radius:12px;background:var(--surface-2);font-size:.9rem;white-space:pre-wrap;overflow-wrap:anywhere}
+body.os .bub.me{align-self:flex-end;background:var(--navy);color:var(--surface)}
+body.os .bub .w{font-size:.72rem;font-weight:700;opacity:.8}
+body.os .chatf{display:flex;gap:6px;padding:10px;border-top:1px solid var(--line)}
+body.os .chatf input{flex:1}
+@media (max-width:760px){body.os .chatg{grid-template-columns:1fr}body.os .chatg .ch{max-height:180px}}
+body.os .pick{max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+body.os .pick label{display:flex;gap:8px;align-items:center;padding:3px 0;font-size:.85rem}

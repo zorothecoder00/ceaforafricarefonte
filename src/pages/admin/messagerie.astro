@@ -1,0 +1,87 @@
+---
+/* CEA OS — Messagerie (prototype › pMessages) : canaux d'équipe (général, départements, domaines, régions, bureaux pays)
+   et messages directs ; nouveaux messages récupérés toutes les 8 secondes. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Dlg from '../../components/os/Dlg.astro';
+import { asc, eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { osMessage } from '../../db/schema/os';
+import { osContext, allStaff } from '../../lib/os/core';
+import { myChannels, markSeen } from '../../lib/os/collab';
+import { refT, dtstr } from '../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const me = os.me;
+const people = await allStaff();
+const chans = me ? await myChannels(me, people) : [];
+const cur = chans.find((c) => c.id === Astro.url.searchParams.get('c')) ?? chans[0];
+const msgs = me && cur ? await db.select().from(osMessage).where(eq(osMessage.channelId, cur.id)).orderBy(asc(osMessage.id)).limit(300) : [];
+if (me && cur) await markSeen(me.id, cur.id);
+const name = (id: string) => people.find((s) => s.id === id)?.name ?? '—';
+// Nom d'un message direct vu par l'utilisateur : l'autre personne
+const label = (c: (typeof chans)[number]) => (c.scope.startsWith('dm:') ? name(c.scope.slice(3).split(',').find((x) => x !== me?.id) ?? '') : c.name);
+const lastId = msgs.at(-1)?.id ?? 0;
+---
+<AdminLayout title="Messagerie" lead="Canaux d'équipe et messages directs · en temps réel pour tous les utilisateurs">
+  <Fragment slot="actions"><button class="btn ghost" type="button" data-dlg="dlg-dm">Nouveau message direct</button></Fragment>
+  {!me ? <div class="empty">Votre compte n'est rattaché à aucune fiche du personnel.</div> : !cur ? <div class="empty">Aucun canal accessible.</div> : (
+    <div class="chatg">
+      <div class="ch">
+        {chans.map((x) => (
+          <a href={`/admin/messagerie?c=${x.id}`} aria-current={x.id === cur.id ? 'true' : 'false'}>
+            <span class="row between" style="flex-wrap:nowrap"><b class="small">{label(x)}</b>{x.unread > 0 && x.id !== cur.id && <span class="tag gold">{x.unread}</span>}</span>
+            <span class="xs muted">{x.last ? `${name(x.last.staff_id).split(' ')[0]} : ${x.last.body.slice(0, 40)}` : `${x.total} message(s)`}</span>
+          </a>
+        ))}
+      </div>
+      <div class="th">
+        <div style="padding:12px 14px;border-bottom:1px solid var(--line)"><b>{label(cur)}</b></div>
+        <div class="ms" id="ms" data-channel={cur.id} data-last={lastId}>
+          {msgs.map((m) => <div class:list={['bub', { me: m.staffId === me.id }]}><div class="w">{name(m.staffId)} · {dtstr(m.at)}</div>{m.body}</div>)}
+          {!msgs.length && <p class="small muted" id="first">Écrivez le premier message.</p>}
+        </div>
+        <form class="chatf" id="mf"><input class="in" id="mi" placeholder="Votre message" aria-label="Votre message" autocomplete="off" maxlength="4000" /><button class="btn sm" type="submit">Envoyer</button></form>
+      </div>
+    </div>
+  )}
+  {me && (
+    <Dlg id="dlg-dm" title="Nouveau message direct" api="/api/admin/os/messages" submit="Ouvrir la conversation">
+      <input type="hidden" name="action" value="dm" />
+      <label class="f" for="dmw">Destinataire</label>
+      <select class="in" id="dmw" name="to" style="width:100%">{people.filter((s) => s.active && s.id !== me.id).map((s) => <option value={s.id}>{s.name} — {refT(s.poste)}</option>)}</select>
+    </Dlg>
+  )}
+</AdminLayout>
+<script>
+  const box = document.getElementById('ms') as HTMLElement | null;
+  if (box) {
+    const ch = box.dataset.channel!;
+    let last = Number(box.dataset.last) || 0;
+    box.scrollTop = box.scrollHeight;
+    const add = (m: { id: number; me: boolean; who: string; at: string; body: string }) => {
+      document.getElementById('first')?.remove();
+      const d = document.createElement('div');
+      d.className = 'bub' + (m.me ? ' me' : '');
+      const w = document.createElement('div'); w.className = 'w'; w.textContent = `${m.who} · ${m.at}`;
+      d.append(w, document.createTextNode(m.body));
+      box.append(d); last = Math.max(last, m.id);
+    };
+    const poll = async () => {
+      const r = await fetch(`/api/admin/os/messages?c=${encodeURIComponent(ch)}&after=${last}`, { credentials: 'same-origin' }).catch(() => null);
+      const d = r?.ok ? await r.json().catch(() => null) : null;
+      if (d?.messages?.length) { d.messages.forEach(add); box.scrollTop = box.scrollHeight; }
+    };
+    setInterval(poll, 8000);
+    const f = document.getElementById('mf') as HTMLFormElement, i = document.getElementById('mi') as HTMLInputElement;
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const body = i.value.trim();
+      if (!body) return;
+      i.value = '';
+      const r = await fetch('/api/admin/os/messages', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send', channel: ch, body }) }).catch(() => null);
+      if (!r?.ok) { i.value = body; (window as unknown as { toast: (t: string) => void }).toast('Message non envoyé. Réessayez.'); return; }
+      await poll();
+    });
+  }
+</script>

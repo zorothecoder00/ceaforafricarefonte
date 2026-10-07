@@ -12,6 +12,7 @@ import { db } from '../lib/db';
 import { can, isStaff, ROLE_LABEL, type Obj, type Role } from '../lib/rbac';
 import { MODS, canUse, moduleOf, osContext, scopeState, type NavItem } from '../lib/os/core';
 import { pendingFor } from '../lib/os/approvals';
+import { unreadCount } from '../lib/os/collab';
 import { DOM, pn, refT, initials } from '../lib/os/ref';
 import '../styles/os.css';
 
@@ -31,14 +32,16 @@ const mod = moduleOf(path);
 const allowed = obj ? staffRole && can(me.roles, obj, 'L') : mod ? gate(mod) : true;
 
 // Compteurs « à traiter » (pastilles dorées du menu)
-const pending = os.me ? (await pendingFor(os.me.id).catch(() => [])).length : 0;
+const decisionsPending = os.me?.prof === 'dg' ? Number(((await db.execute(sql`select count(*)::int as n from os_decision where status = 'En attente'`).catch(() => ({ rows: [{ n: 0 }] }))).rows[0] as { n: number }).n) : 0;
+const pending = os.me ? (await pendingFor(os.me.id).catch(() => [])).length + decisionsPending : 0;
+const unread = os.me ? await unreadCount(os.me).catch(() => 0) : 0;
 const c = (await db.execute(sql`select
   (select count(*) from contact_message where status = 'nouveau')::int as messages,
   (select count(*) from post where status = 'en_moderation')::int as moderation,
   (select count(*) from job where status = 'en_moderation')::int as emplois,
   (select count(*) from programme_application where status = 'recue')::int as candidatures,
   (select count(*) from kapital.dossier where status = 'recu')::int as kapital`).catch(() => ({ rows: [{}] }))).rows[0] as Record<string, number>;
-const COUNT: Record<string, number> = { '/admin/approbations': pending, '/admin/messages': c.messages ?? 0, '/admin/moderation': c.moderation ?? 0, '/admin/emplois': c.emplois ?? 0, '/admin/candidatures': c.candidatures ?? 0, '/admin/kapital': c.kapital ?? 0 };
+const COUNT: Record<string, number> = { '/admin/approbations': pending, '/admin/messagerie': unread, '/admin/messages': c.messages ?? 0, '/admin/moderation': c.moderation ?? 0, '/admin/emplois': c.emplois ?? 0, '/admin/candidatures': c.candidatures ?? 0, '/admin/kapital': c.kapital ?? 0 };
 const groups = MODS.map(([g, items]) => [g, items.filter(gate)] as const).filter(([, items]) => items.length);
 const isCurrent = (h: string) => h === mod?.href;
 

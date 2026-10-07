@@ -59,9 +59,13 @@ export const MODS: [string, NavItem[]][] = [
     { href: '/admin/poste', label: 'Mon poste et mes indicateurs', spec: ALL, staff: true },
     { href: '/admin/moi', label: 'Mes demandes', spec: ALL, staff: true },
     { href: '/admin/moi/temps', label: 'Mes temps', spec: ALL, staff: true },
+    { href: '/admin/messagerie', label: 'Messagerie', spec: ALL, staff: true },
+    { href: '/admin/agenda', label: 'Agenda et réunions', spec: ALL, staff: true },
+    { href: '/admin/taches', label: 'Tâches', spec: ALL, staff: true },
     { href: '/admin/annuaire', label: 'Annuaire du personnel', spec: ALL },
   ]],
   ['Pilotage', [
+    { href: '/admin/cockpit', label: 'Cockpit', spec: MANAGERS },
     { href: '/admin/approbations', label: 'Approbations', spec: ALL },
     { href: '/admin/rapports', label: 'Rapports', obj: 'rapports' },
   ]],

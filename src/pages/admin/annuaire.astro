@@ -1,11 +1,12 @@
 ---
 /* CEA OS — Annuaire du personnel et organigramme (prototype › pAnnuaire, orgChart). */
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import { allStaff, type Person } from '../../lib/os/core';
+import { allStaff, osContext, type Person } from '../../lib/os/core';
 import { PK, pn, refT, initials } from '../../lib/os/ref';
 
 export const prerender = false;
 const people = await allStaff();
+const me = (await osContext(Astro.locals.user!)).me;
 const actifs = people.filter((s) => s.active);
 const org = Astro.url.searchParams.has('org');
 const root = actifs.find((s) => s.prof === 'dg') ?? actifs.find((s) => !s.managerId);
@@ -44,6 +45,7 @@ if (root) walk(root, 0, new Set());
               <div class="small muted">{refT(s.poste)}</div>
               <div class="xs muted">{s.department || '—'} · {pn(s.country)}</div>
               <div class="xs" style="margin-top:4px"><a href={`mailto:${s.email}`}>{s.email}</a>{s.phone && <><br />{s.phone}</>}</div>
+              {me && s.id !== me.id && <div class="row" style="margin-top:6px"><button class="btn ghost sm" type="button" data-post="/api/admin/os/messages" data-body={JSON.stringify({ action: 'dm', to: s.id })}>Message</button></div>}
             </div>
           </div>
         ))}

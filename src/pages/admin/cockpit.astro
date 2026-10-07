@@ -1,0 +1,79 @@
+---
+/* CEA OS — Cockpit (prototype › pCockpit), managers : chiffres clés du périmètre, encaissements et budgets par domaine,
+   points d'attention, registre des décisions ; files de travail du site en dessous. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import LegacyBoard from '../../components/os/LegacyBoard.astro';
+import Bars from '../../components/os/Bars.astro';
+import Tags from '../../components/os/Tags.astro';
+import { and, desc, eq, notInArray, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { invoice } from '../../db/schema/finance';
+import { payment, membership } from '../../db/schema/app';
+import { dossier } from '../../db/schema/kapital';
+import { osDecision, osTask } from '../../db/schema/os';
+import { osContext, allStaff, scopeState } from '../../lib/os/core';
+import { pendingFor, budgets } from '../../lib/os/approvals';
+import { isStaff } from '../../lib/rbac';
+import { DK, DOM, fmt, mfcfa, dstr, type Dom } from '../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const sc = scopeState(os, Astro.cookies);
+const people = await allStaff();
+const year = new Date().getFullYear();
+const today = new Date().toISOString().slice(0, 10);
+const n = sql<number>`coalesce(sum(${invoice.totalXof}),0)::float`;
+const [[enc], [due], late, bud, [mem], [kap], decisions, lateTasks, pend] = await Promise.all([
+  db.select({ s: n }).from(invoice).where(and(eq(invoice.kind, 'facture'), eq(invoice.status, 'payee'), eq(invoice.year, year))),
+  db.select({ s: n }).from(invoice).where(and(eq(invoice.kind, 'facture'), eq(invoice.status, 'a_payer'))),
+  db.select({ number: invoice.number, total: invoice.totalXof }).from(invoice).where(and(eq(invoice.kind, 'facture'), eq(invoice.status, 'a_payer'), sql`${invoice.dueOn} < ${today}`)),
+  budgets(year),
+  db.select({ n: sql<number>`count(*)::int` }).from(membership).where(eq(membership.status, 'active')),
+  db.select({ n: sql<number>`count(*)::int` }).from(dossier).where(notInArray(dossier.status, ['finance', 'cloture'])),
+  db.select().from(osDecision).orderBy(desc(osDecision.at)).limit(6),
+  db.select({ n: sql<number>`count(*)::int` }).from(osTask).where(and(sql`${osTask.due} < now()`, sql`${osTask.status} <> 'Terminé'`)),
+  os.me ? pendingFor(os.me.id, { people }) : Promise.resolve([]),
+]);
+const decPending = os.me?.prof === 'dg' ? decisions.filter((d) => d.status === 'En attente').length : 0;
+const ds = DK.filter((d) => sc.inScope({ domain: d }));
+const eng = ds.reduce((a, d) => a + (bud[d]?.engaged ?? 0), 0), bt = ds.reduce((a, d) => a + (bud[d]?.budget ?? 0), 0);
+const lateSum = late.reduce((a, x) => a + x.total, 0);
+// Encaissements par domaine : objet du paiement rattaché au domaine d'intervention
+const PURPOSE_DOM: Record<string, Dom> = { adhesion: 'voix', billet: 'evt', cours: 'aca', programme: 'aca', mastermind: 'mm', expert: 'prj', mise_en_avant: 'tal', recherche: 'kap', sponsoring: 'evt' };
+const byPurpose = await db.select({ p: payment.purpose, s: sql<number>`coalesce(sum(${payment.amountXof}),0)::float` }).from(payment).where(and(eq(payment.status, 'reussi'), sql`extract(year from ${payment.paidAt}) = ${year}`)).groupBy(payment.purpose);
+const byDom = ds.map((d) => byPurpose.filter((x) => PURPOSE_DOM[x.p] === d).reduce((a, x) => a + x.s, 0));
+const staffN = people.filter((s) => s.active && sc.inScope({ country: s.country })).length;
+const attention = [
+  late.length ? `${late.length} facture(s) en retard : ${mfcfa(lateSum)}` : null,
+  ...ds.filter((d) => bud[d] && bud[d].budget && bud[d].engaged / bud[d].budget > 0.9).map((d) => `Budget presque consommé : ${DOM[d].n}`),
+  lateTasks[0].n ? `${lateTasks[0].n} tâche(s) en retard` : null,
+  pend.length > 5 ? `${pend.length} approbations vous attendent` : null,
+].filter(Boolean).slice(0, 7) as string[];
+---
+<AdminLayout title="Cockpit" lead={`${sc.label} · temps réel`}>
+  <Fragment slot="actions">
+    <button class="btn ghost" type="button" onclick="openChat()">Synthèse de la semaine</button>
+    {os.me && <a class="btn" href="/admin/approbations">{pend.length + decPending} à approuver</a>}
+  </Fragment>
+  <div class="grid g4">
+    <div class="card kpi"><div class="l">Encaissements</div><div class="v num">{mfcfa(enc.s)}</div><div class="d">Factures soldées en {year}</div></div>
+    <div class="card kpi"><div class="l">Restant à encaisser</div><div class="v num">{mfcfa(due.s)}</div><div class:list={['d', { down: late.length > 0 }]}>{late.length} facture(s) en retard</div></div>
+    <div class="card kpi"><div class="l">Budget engagé</div><div class="v num">{bt ? Math.round((eng / bt) * 100) : 0} %</div><div class="d">{mfcfa(eng)} sur {mfcfa(bt)}</div></div>
+    <div class="card kpi"><div class="l">Adhésions actives</div><div class="v num">{fmt(mem.n)}</div></div>
+    <div class="card kpi"><div class="l">Dossiers Kapital actifs</div><div class="v num">{kap.n}</div></div>
+    <div class="card kpi"><div class="l">Effectif</div><div class="v num">{staffN}</div><div class="d">collaborateurs</div></div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h2>Encaissements par domaine</h2><Bars title="Encaissements par domaine" horizontal labels={ds.map((d) => DOM[d].n.replace('CEA ', ''))} series={[{ label: 'Encaissé', color: '#C9962B', values: byDom }]} colors={ds.map((d) => DOM[d].c)} /></div>
+    <div class="card"><h2>Budget engagé par domaine</h2><Bars title="Budget par domaine" labels={ds.map((d) => DOM[d].n.replace('CEA ', ''))} series={[{ label: 'Budget', color: '#B7C6D8', values: ds.map((d) => bud[d]?.budget ?? 0) }, { label: 'Engagé', color: '#C9962B', values: ds.map((d) => bud[d]?.engaged ?? 0) }, { label: 'Réalisé', color: '#082B4C', values: ds.map((d) => bud[d]?.realised ?? 0) }]} /></div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h2>Points d'attention</h2>{attention.map((t) => <div class="watch" style="margin-bottom:8px">{t}</div>)}{!attention.length && <div class="empty">Rien d'urgent.</div>}</div>
+    <div class="card">
+      <h2>Décisions</h2>
+      <ul class="timeline">{decisions.map((d) => <li><i></i><div class="small"><b>{d.text}</b><br /><span class="muted">{dstr(d.at)}</span> <Tags st={d.status === 'Décidé' ? 'Validée' : d.status === 'Refusé' ? 'Rejetée' : 'En attente'} label={d.status} /></div></li>)}</ul>
+      {!decisions.length && <p class="small muted">Aucune décision enregistrée : elles viennent des comptes rendus de réunion.</p>}
+    </div>
+  </div>
+  {isStaff(Astro.locals.user!.roles) && <><h2 style="margin-top:22px">Files de travail du site</h2><LegacyBoard /></>}
+</AdminLayout>

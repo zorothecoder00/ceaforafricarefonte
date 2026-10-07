@@ -1,0 +1,30 @@
+---
+/* Graphique en barres SVG (remplace Chart.js du prototype) : horizontal (une série colorée par barre) ou vertical groupé
+   (plusieurs séries avec légende). Valeurs en FCFA abrégées. */
+import { mfcfa } from '../../lib/os/ref';
+interface Series { label: string; color: string; values: number[] }
+interface Props { labels: string[]; series: Series[]; horizontal?: boolean; colors?: string[]; title: string }
+const { labels, series, horizontal, colors, title } = Astro.props;
+const max = Math.max(1, ...series.flatMap((s) => s.values));
+const W = 520, rowH = 24, H = horizontal ? labels.length * rowH + 10 : 220;
+const X0 = 70, groupW = (W - X0 - 10) / Math.max(1, labels.length), barW = Math.max(4, (groupW - 8) / series.length);
+const short = (n: number) => mfcfa(n).replace(' FCFA', '');
+---
+<svg viewBox={`0 0 ${W} ${H + (horizontal ? 0 : 90)}`} role="img" aria-label={`${title} : ${labels.map((l, i) => `${l} ${series.map((s) => short(s.values[i])).join(' / ')}`).join(', ')}`} style="width:100%;height:auto">
+  {horizontal ? labels.map((l, i) => {
+    const v = series[0].values[i]; const w = (v / max) * (W - 220);
+    return <>
+      <text x="0" y={i * rowH + 17} font-size="11" fill="currentColor" opacity=".75">{l}</text>
+      <rect x="150" y={i * rowH + 5} width={Math.max(v ? 2 : 0, w)} height="15" rx="4" fill={colors?.[i] ?? series[0].color} />
+      <text x={154 + w} y={i * rowH + 17} font-size="10" fill="currentColor">{short(v)}</text>
+    </>;
+  }) : (
+    <>
+      {labels.map((l, i) => <>
+        {series.map((s, k) => { const h = (s.values[i] / max) * (H - 30); return <rect x={X0 + i * groupW + k * barW} y={H - h} width={barW - 1} height={h} fill={s.color} />; })}
+        <text x={X0 + i * groupW + groupW / 2 - 4} y={H + 14} font-size="9" text-anchor="end" fill="currentColor" opacity=".75" transform={`rotate(-35 ${X0 + i * groupW + groupW / 2 - 4} ${H + 14})`}>{l}</text>
+      </>)}
+      {series.map((s, k) => <><rect x={W - 210 + k * 70} y="0" width="10" height="10" fill={s.color} /><text x={W - 196 + k * 70} y="9" font-size="10" fill="currentColor">{s.label}</text></>)}
+    </>
+  )}
+</svg>

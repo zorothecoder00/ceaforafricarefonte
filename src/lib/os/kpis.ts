@@ -3,7 +3,7 @@
    n : score sur 100 comparé à la cible (goal) pour la pastille verte / orange / rouge. */
 import { and, eq, gte, inArray, sql } from 'drizzle-orm';
 import { db } from '../db';
-import { osRequest } from '../../db/schema/os';
+import { osRequest, osTask } from '../../db/schema/os';
 import { auditLog } from '../../db/schema/app';
 import { kycCheck } from '../../db/schema/kapital';
 import { pendingFor, budgets } from './approvals';
@@ -30,6 +30,12 @@ export const KMAP: Record<string, string[]> = {
 
 type Ctx = { people: Person[] };
 const KF: Record<string, (u: Person, c: Ctx) => Promise<Omit<Kpi, 'k' | 'l'> | null>> = {
+  myTasks: async (u) => {
+    const l = await db.select({ due: osTask.due }).from(osTask).where(and(eq(osTask.owner, u.id), sql`${osTask.status} <> 'Terminé'`));
+    const late = l.filter((t) => t.due < new Date()).length;
+    const p = l.length ? Math.round(((l.length - late) / l.length) * 100) : 100;
+    return { v: p + ' %', n: p, goal: 90, sub: late + ' en retard sur ' + l.length };
+  },
   apprDelay: async (u) => {
     const rows = await db.select({ steps: osRequest.steps, at: osRequest.createdAt }).from(osRequest).where(sql`${osRequest.steps} @> ${JSON.stringify([{ whoId: u.id }])}::jsonb`);
     let n = 0, ok = 0;

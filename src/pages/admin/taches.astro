@@ -1,0 +1,71 @@
+---
+/* CEA OS — Tâches (prototype › pTaches) : kanban À faire / En cours / Terminé, glisser-déposer ou liste de statut ;
+   les managers voient aussi les tâches de leur périmètre et en confient à leur équipe. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Dlg from '../../components/os/Dlg.astro';
+import Tags from '../../components/os/Tags.astro';
+import { asc } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { osTask } from '../../db/schema/os';
+import { osContext, allStaff, canUse, MANAGERS, scopeState } from '../../lib/os/core';
+import { TASK_COLS } from '../../lib/os/collab';
+import { DK, DOM, dstr, regOf } from '../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const me = os.me;
+const people = await allStaff();
+const name = (id: string) => people.find((s) => s.id === id)?.name ?? '—';
+const mineOnly = !canUse(MANAGERS, os);
+const sc = scopeState(os, Astro.cookies);
+const list = me ? (await db.select().from(osTask).orderBy(asc(osTask.due))).filter((t) => (mineOnly ? t.owner === me.id : t.owner === me.id || sc.inScope({ country: t.country, domain: t.domain }))) : [];
+const team = me ? (mineOnly ? [me] : people.filter((s) => s.active && (s.id === me.id || s.managerId === me.id || me.prof === 'dg' || (me.prof === 'dirreg' && regOf(s.country) === me.reg)))) : [];
+const now = new Date();
+---
+<AdminLayout title="Tâches" lead={mineOnly ? 'Mes tâches' : `Mes tâches et celles de mon périmètre (${sc.label})`}>
+  <Fragment slot="actions">{me && <button class="btn" type="button" data-dlg="dlg-task">Nouvelle tâche</button>}</Fragment>
+  <div class="toolbar"><label class="row small"><input type="checkbox" id="mine" checked={mineOnly} disabled={mineOnly} /> Mes tâches uniquement</label></div>
+  <div class="kanban" data-me={me?.id}>
+    {TASK_COLS.map((c) => (
+      <div class="col" data-st={c}>
+        <h4><span>{c}</span><span class="tag">{list.filter((t) => t.status === c).length}</span></h4>
+        {list.filter((t) => t.status === c).map((t) => (
+          <div class="kc" draggable="true" data-id={t.id} data-who={t.owner}>
+            <b>{t.title}</b>
+            <div class="row between xs muted" style="margin-top:6px"><span>{name(t.owner)}</span><span class={t.due < now && c !== 'Terminé' ? 'down' : ''}>{dstr(t.due)}</span></div>
+            <div class="row" style="margin-top:6px"><Tags dom={t.domain} /><select class="in xs" data-mv={t.id} aria-label="Statut" style="padding:2px 4px;margin-left:auto">{TASK_COLS.map((x) => <option selected={x === c}>{x}</option>)}</select></div>
+          </div>
+        ))}
+      </div>
+    ))}
+  </div>
+  {me && (
+    <Dlg id="dlg-task" title="Nouvelle tâche" api="/api/admin/os/taches" submit="Créer">
+      <input type="hidden" name="action" value="create" />
+      <div class="fg">
+        <div class="full"><label class="f" for="tt">Intitulé</label><input class="in" id="tt" name="title" required /></div>
+        <div><label class="f" for="tw">Responsable</label><select class="in" id="tw" name="owner">{team.map((s) => <option value={s.id} selected={s.id === me.id}>{s.name}</option>)}</select></div>
+        <div><label class="f" for="tdm">Domaine</label><select class="in" id="tdm" name="domain">{DK.map((d) => <option value={d} selected={d === me.domain}>{DOM[d].n}</option>)}</select></div>
+        <div><label class="f" for="tdu">Échéance</label><input class="in" type="date" id="tdu" name="due" /></div>
+      </div>
+    </Dlg>
+  )}
+</AdminLayout>
+<script>
+  const mv = async (id: string, status: string) => {
+    const r = await fetch('/api/admin/os/taches', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'move', id, status }) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    (window as unknown as { toast: (t: string) => void }).toast(r?.ok ? d.message : d.error || 'Une erreur est survenue.');
+    if (r?.ok) setTimeout(() => location.reload(), 500);
+  };
+  document.querySelectorAll<HTMLSelectElement>('[data-mv]').forEach((s) => s.addEventListener('change', () => mv(s.dataset.mv!, s.value)));
+  document.querySelectorAll<HTMLElement>('.kc').forEach((c) => c.addEventListener('dragstart', (e) => e.dataTransfer?.setData('text', c.dataset.id!)));
+  document.querySelectorAll<HTMLElement>('.col').forEach((c) => {
+    c.addEventListener('dragover', (e) => { e.preventDefault(); c.classList.add('over'); });
+    c.addEventListener('dragleave', () => c.classList.remove('over'));
+    c.addEventListener('drop', (e) => { e.preventDefault(); c.classList.remove('over'); const id = e.dataTransfer?.getData('text'); if (id) mv(id, c.dataset.st!); });
+  });
+  const mine = document.getElementById('mine') as HTMLInputElement | null;
+  const myId = document.querySelector<HTMLElement>('[data-me]')?.dataset.me ?? '';
+  mine?.addEventListener('change', () => document.querySelectorAll<HTMLElement>('.kc').forEach((k) => { k.style.display = mine.checked && k.dataset.who !== myId ? 'none' : ''; }));
+</script>

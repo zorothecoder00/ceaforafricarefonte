@@ -1,18 +1,20 @@
 ---
-/* CEA OS — Accueil (prototype CEA OS › pHome) : salutation, actions rapides (congé, note de frais, achat, dépense, temps,
-   poste), chiffres clés, approbations attendues et demandes en cours. Les équipes sans fiche personnel voient les files
-   de travail du site. */
+/* CEA OS — Accueil (prototype CEA OS › pHome) : salutation, actions rapides (congé, note de frais, achat, dépense, réunion,
+   temps, poste), chiffres clés, mes tâches, approbations attendues, prochaines réunions, demandes en cours, messagerie.
+   Les équipes sans fiche personnel voient les files de travail du site. */
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import LegacyBoard from '../../components/os/LegacyBoard.astro';
 import RequestDialogs from '../../components/os/RequestDialogs.astro';
+import MeetingDialog from '../../components/os/MeetingDialog.astro';
 import Steps from '../../components/os/Steps.astro';
 import Tags from '../../components/os/Tags.astro';
-import { desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, ne, sql } from 'drizzle-orm';
 import { db } from '../../lib/db';
-import { osRequest } from '../../db/schema/os';
-import { osContext, allStaff, scopeState } from '../../lib/os/core';
+import { osRequest, osTask, osMeeting, osDecision } from '../../db/schema/os';
+import { osContext, allStaff, scopeState, canUse, MANAGERS, type Person } from '../../lib/os/core';
 import { pendingFor, thresholds, budgets, activeDelegations } from '../../lib/os/approvals';
-import { DK, PK, RTYPE, pn, refT, fcfa, type ReqType } from '../../lib/os/ref';
+import { myChannels } from '../../lib/os/collab';
+import { DK, PK, RTYPE, pn, refT, fcfa, dstr, type ReqType } from '../../lib/os/ref';
 
 export const prerender = false;
 const os = await osContext(Astro.locals.user!);
@@ -22,26 +24,35 @@ const first = (me?.name ?? Astro.locals.user!.name).split(' ')[0];
 const title = `${hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir'} ${first}`;
 const today = new Date().toLocaleDateString('fr-FR', { timeZone: 'Africa/Lome' });
 
+let people: Person[] = [];
 let data: null | {
   pend: Awaited<ReturnType<typeof pendingFor>>; mine: (typeof osRequest.$inferSelect)[]; manager: string;
   thr: Awaited<ReturnType<typeof thresholds>>; bud: Awaited<ReturnType<typeof budgets>>; countries: string[]; domains: string[];
+  tasks: (typeof osTask.$inferSelect)[]; decs: (typeof osDecision.$inferSelect)[]; meet: (typeof osMeeting.$inferSelect)[]; chans: Awaited<ReturnType<typeof myChannels>>;
 } = null;
 if (me) {
-  const [people, delegs] = await Promise.all([allStaff(), activeDelegations()]);
+  const [ps, delegs] = await Promise.all([allStaff(), activeDelegations()]);
+  people = ps;
   const sc = scopeState(os, Astro.cookies);
-  const [pend, mine, thr, bud] = await Promise.all([
+  const [pend, mine, thr, bud, tasks, meet, chans, decs] = await Promise.all([
     pendingFor(me.id, { people, delegs }),
     db.select().from(osRequest).where(eq(osRequest.byStaff, me.id)).orderBy(desc(osRequest.createdAt)),
     thresholds(), budgets(),
+    db.select().from(osTask).where(and(eq(osTask.owner, me.id), ne(osTask.status, 'Terminé'))).orderBy(asc(osTask.due)),
+    db.select().from(osMeeting).where(and(sql`${osMeeting.participants} @> ${JSON.stringify([me.id])}::jsonb`, gte(osMeeting.at, new Date(Date.now() - 864e5)))).orderBy(asc(osMeeting.at)).limit(4),
+    myChannels(me, people),
+    me.prof === 'dg' ? db.select().from(osDecision).where(eq(osDecision.status, 'En attente')) : Promise.resolve([]),
   ]);
   data = {
-    pend, mine, thr, bud, manager: people.find((s) => s.id === me.managerId)?.name ?? 'votre responsable',
+    pend, mine, thr, bud, tasks, meet, chans, decs, manager: people.find((s) => s.id === me.managerId)?.name ?? 'votre responsable',
     countries: PK.filter((p) => sc.inScope({ country: p })), domains: DK.filter((d) => sc.inScope({ domain: d })),
   };
 }
 const canDep = me && ['rep', 'dirreg', 'chef', 'dg', 'agent', 'cond'].includes(me.prof);
+const name = (id: string) => people.find((s) => s.id === id)?.name ?? '—';
 ---
 <AdminLayout title={title} lead={me ? `${refT(me.poste)} · ${pn(me.country)} · ${today}` : `${today} · vos files de travail selon vos droits ; toutes les actions sont tracées dans le journal d'audit.`}>
+  <Fragment slot="actions">{canUse(MANAGERS, os) && <a class="btn ghost" href="/admin/cockpit">Ouvrir le cockpit</a>}</Fragment>
   {me && data ? (
     <>
       <div class="quick grid" style="margin-bottom:16px">
@@ -49,20 +60,35 @@ const canDep = me && ['rep', 'dirreg', 'chef', 'dg', 'agent', 'cond'].includes(m
         <button type="button" data-dlg="dlg-ndf">Note de frais<small>Avec photo du justificatif</small></button>
         <button type="button" data-dlg="dlg-achat">Demande d'achat<small>Fournitures, matériel, prestations</small></button>
         {canDep && <button type="button" data-dlg="dlg-dep">Dépense<small>Circuit selon le montant</small></button>}
+        <button type="button" data-dlg="dlg-meet">Planifier une réunion<small>Avec compte rendu</small></button>
         <a href="/admin/moi/temps">Saisir mes temps<small>Semaine en cours</small></a>
         <a href="/admin/poste">Mon poste<small>Fiche {me.poste} et indicateurs</small></a>
       </div>
       <div class="grid g4">
-        <div class="card kpi"><div class="l">À approuver</div><div class="v num">{data.pend.length}</div>{data.pend.length > 0 && <div class="d down">Vous êtes attendu·e</div>}</div>
+        <div class="card kpi"><div class="l">À approuver</div><div class="v num">{data.pend.length + data.decs.length}</div>{data.pend.length + data.decs.length > 0 && <div class="d down">Vous êtes attendu·e</div>}</div>
+        <div class="card kpi"><div class="l">Mes tâches ouvertes</div><div class="v num">{data.tasks.length}</div></div>
         <div class="card kpi"><div class="l">Mes demandes en cours</div><div class="v num">{data.mine.filter((r) => r.status === 'En approbation').length}</div></div>
         <div class="card kpi"><div class="l">Solde de congés</div><div class="v num">{me.leaveDays} j</div></div>
       </div>
-      <div class="grid g2" style="margin-top:14px">
+      <div class="grid g3" style="margin-top:14px">
+        <div class="card">
+          <div class="row between"><h2>Mes tâches</h2><a class="small" href="/admin/taches">Toutes</a></div>
+          {data.tasks.slice(0, 6).map((t) => <div class="row between small" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>{t.title}</span><span class="muted">{dstr(t.due)}</span></div>)}
+          {!data.tasks.length && <p class="small muted">Aucune tâche ouverte.</p>}
+        </div>
         <div class="card">
           <div class="row between"><h2>À approuver</h2><a class="small" href="/admin/approbations">Tout voir</a></div>
           {data.pend.slice(0, 6).map((p) => <div class="small" style="padding:6px 0;border-bottom:1px solid var(--line)">{RTYPE[p.r.type as ReqType]} {p.r.id} — {p.r.title}{p.r.amount > 0 && <> · <b>{fcfa(p.r.amount)}</b></>}</div>)}
-          {!data.pend.length && <p class="small muted">Rien en attente.</p>}
+          {data.decs.slice(0, 3).map((d) => <div class="small" style="padding:6px 0;border-bottom:1px solid var(--line)">Décision : {d.text}</div>)}
+          {!data.pend.length && !data.decs.length && <p class="small muted">Rien en attente.</p>}
         </div>
+        <div class="card">
+          <div class="row between"><h2>Prochaines réunions</h2><a class="small" href="/admin/agenda">Agenda</a></div>
+          {data.meet.map((m) => <div class="small" style="padding:6px 0;border-bottom:1px solid var(--line)"><b>{m.title}</b><br /><span class="muted">{dstr(m.at)} à {m.hour} · {m.place}</span></div>)}
+          {!data.meet.length && <p class="small muted">Aucune réunion prévue.</p>}
+        </div>
+      </div>
+      <div class="grid g2" style="margin-top:14px">
         <div class="card">
           <div class="row between"><h2>Mes demandes</h2><a class="small" href="/admin/moi">Historique</a></div>
           {data.mine.slice(0, 5).map((r) => (
@@ -74,8 +100,18 @@ const canDep = me && ['rep', 'dirreg', 'chef', 'dg', 'agent', 'cond'].includes(m
           ))}
           {!data.mine.length && <p class="small muted">Aucune demande.</p>}
         </div>
+        <div class="card">
+          <div class="row between"><h2>Messagerie</h2><a class="small" href="/admin/messagerie">Ouvrir</a></div>
+          {data.chans.slice(0, 4).map((c) => (
+            <a href={`/admin/messagerie?c=${c.id}`} style="display:block;text-decoration:none;padding:6px 0;border-bottom:1px solid var(--line)" class="small">
+              <b>{c.scope.startsWith('dm:') ? name(c.scope.slice(3).split(',').find((x) => x !== me.id) ?? '') : c.name}</b><br />
+              <span class="muted">{c.last ? `${name(c.last.staff_id).split(' ')[0]} : ${c.last.body.slice(0, 70)}` : 'Aucun message'}</span>
+            </a>
+          ))}
+        </div>
       </div>
       <RequestDialogs me={me} managerName={data.manager} thr={data.thr} budgets={data.bud} countries={data.countries} domains={data.domains} />
+      <MeetingDialog me={me} people={people} />
     </>
   ) : (
     <>

@@ -1,0 +1,59 @@
+---
+/* CEA OS — Agenda et réunions (prototype › pAgenda) : réunions de l'utilisateur, compte rendu (décisions au registre,
+   actions en tâches), absences validées de l'équipe. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Dlg from '../../components/os/Dlg.astro';
+import MeetingDialog from '../../components/os/MeetingDialog.astro';
+import Tags from '../../components/os/Tags.astro';
+import { and, asc, eq, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { osMeeting, osRequest } from '../../db/schema/os';
+import { osContext, allStaff } from '../../lib/os/core';
+import { dstr, initials } from '../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const me = os.me;
+const people = await allStaff();
+const name = (id: string) => people.find((s) => s.id === id)?.name ?? '—';
+const mine = me ? await db.select().from(osMeeting).where(me.prof === 'dg' ? undefined : sql`${osMeeting.participants} @> ${JSON.stringify([me.id])}::jsonb`).orderBy(asc(osMeeting.at)) : [];
+const team = me ? people.filter((s) => s.managerId === me.id).map((s) => s.id).concat(me.id) : [];
+const abs = me ? (await db.select().from(osRequest).where(and(eq(osRequest.type, 'conge'), eq(osRequest.status, 'Approuvée')))).filter((r) => team.includes(r.byStaff)) : [];
+const now = new Date();
+---
+<AdminLayout title="Agenda et réunions" lead="Réunions, comptes rendus, décisions et absences de l'équipe">
+  <Fragment slot="actions">{me && <button class="btn" type="button" data-dlg="dlg-meet">Planifier une réunion</button>}</Fragment>
+  <div class="split">
+    <div>
+      {mine.map((m) => (
+        <div class="card" style="margin-bottom:10px">
+          <div class="row between">
+            <div><b>{m.title}</b><div class="small muted">{dstr(m.at)} à {m.hour} · {m.place} · {m.participants.length} participant(s)</div></div>
+            <Tags st={m.minutes ? 'Terminé' : m.at < now ? 'À traiter' : 'Planifié'} />
+          </div>
+          {m.agenda && <p class="small" style="margin:8px 0;white-space:pre-wrap">{m.agenda}</p>}
+          <div class="row">{m.participants.slice(0, 8).map((p) => <span class="av s" title={name(p)}>{initials(name(p))}</span>)}{m.participants.length > 8 && <span class="xs muted">+{m.participants.length - 8}</span>}</div>
+          {m.minutes
+            ? <div class="watch" style="margin-top:8px;white-space:pre-wrap"><b>Compte rendu :</b> {m.minutes}{m.decisions.length > 0 && <><br /><b>Décisions :</b> {m.decisions.join(' ; ')}</>}</div>
+            : me && (m.participants.includes(me.id) || me.prof === 'dg') && <button class="btn ghost sm" type="button" data-dlg="dlg-cr" data-set-id={m.id} data-set-label={m.title} style="margin-top:8px">Rédiger le compte rendu</button>}
+        </div>
+      ))}
+      {!mine.length && <div class="empty">Aucune réunion.</div>}
+    </div>
+    <aside>
+      <div class="card">
+        <h3>Absences validées de l'équipe</h3>
+        {abs.map((r) => <div class="small" style="padding:4px 0">{name(r.byStaff)} — {r.title}</div>)}
+        {!abs.length && <p class="small muted">Aucune absence.</p>}
+      </div>
+    </aside>
+  </div>
+  {me && <MeetingDialog me={me} people={people} />}
+  <Dlg id="dlg-cr" title="Compte rendu" api="/api/admin/os/reunions" submit="Enregistrer et diffuser" wide>
+    <input type="hidden" name="action" value="cr" /><input type="hidden" name="id" value="" />
+    <p class="small"><b data-text="label"></b></p>
+    <label class="f" for="crx">Compte rendu</label><textarea class="in" id="crx" name="minutes" style="min-height:120px" required></textarea>
+    <label class="f" for="crd" style="margin-top:8px">Décisions (une par ligne)</label><textarea class="in" id="crd" name="decisions"></textarea>
+    <label class="f" for="cra" style="margin-top:8px">Actions (une par ligne : vous en serez responsable par défaut)</label><textarea class="in" id="cra" name="actions"></textarea>
+  </Dlg>
+</AdminLayout>
