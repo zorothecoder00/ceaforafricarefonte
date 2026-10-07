@@ -18,7 +18,7 @@ const { and, eq, sql, inArray } = await import('drizzle-orm');
 const { PDOM, DOM, BANDS, gradeOf, profOf, pn, DK } = await import('../src/lib/os/ref');
 
 if (process.argv.includes('--reset')) {
-  await db.execute(sql`truncate os_candidate, os_recruit, os_payroll, os_ledger, os_closing, os_treasury, os_receipt, os_po, os_stock_move, os_stock_item, os_supplier, os_contract, os_okr, os_risk, os_audit, os_review_item, os_review, os_interview, os_flow, os_country, os_message, os_channel_seen, os_channel, os_meeting, os_task, os_decision, os_request, os_delegation, os_timesheet, os_budget, staff restart identity cascade`);
+  await db.execute(sql`truncate os_inscription, os_report, os_candidate, os_recruit, os_payroll, os_ledger, os_closing, os_treasury, os_receipt, os_po, os_stock_move, os_stock_item, os_supplier, os_contract, os_okr, os_risk, os_audit, os_review_item, os_review, os_interview, os_flow, os_country, os_message, os_channel_seen, os_channel, os_meeting, os_task, os_decision, os_request, os_delegation, os_timesheet, os_budget, staff restart identity cascade`);
   console.log('• Tables de CEA OS vidées.');
 }
 const [any] = await db.select({ id: s.staff.id }).from(s.staff).limit(1);
@@ -164,5 +164,16 @@ await db.insert(s.osCandidate).values([
   { recruitId: 'REC-21', name: 'Afi Kodjo', email: 'afi.kodjo@exemple.africa', source: 'Site web', at: ago(12) },
   { recruitId: 'REC-21', name: 'Koffi Mensah', email: 'koffi.mensah@exemple.africa', source: 'Cooptation', at: ago(9), status: 'Entretien', scores: { exp: 3, tech: 4, ent: 3, integ: 4, coop: 3, lang: 3 } },
 ]);
+// Membres et inscriptions : 30 en attente, 120 décidées (noms fictifs), rapports mensuels en brouillon
+const FN = ['Kossi', 'Ama', 'Yao', 'Awa', 'Kwame', 'Fatou', 'Ngozi', 'Moussa', 'Aïcha', 'Koffi', 'Mariam', 'Salif', 'Esther', 'Thabo', 'Wanjiru', 'Youssef', 'Grace', 'Ibrahim', 'Rose', 'Afi'];
+const LN = ['Mensah', 'Diallo', 'Kouassi', 'Ndiaye', 'Asante', 'Eze', 'Traoré', 'Agbodjan', 'Ouédraogo', 'Mukamana', 'Nkosi', 'Kamau', 'Benali', 'Kane', 'Atieno', 'Lawson'];
+const PAYS9 = ['TG', 'TG', 'TG', 'CI', 'SN', 'BJ', 'NG', 'GH', 'CM', 'KE', 'MA'];
+const pick = <T,>(a: readonly T[]) => a[Math.floor(R() * a.length)];
+const ins = Array.from({ length: 150 }, (_, i) => {
+  const country = pick(PAYS9); const d1 = pick(DK); const d2 = R() < 0.4 ? pick(DK) : d1;
+  const pend = i < 30; const at = ago(pend ? (R() < 0.8 ? rint(2, 46) / 24 : rint(50, 110) / 24) : rint(5, 300));
+  return { id: `MEM-${country}-${String(100000 + i)}`, name: `${pick(FN)} ${pick(LN)}`, phone: `+228 9${rint(0, 9)} ${rint(10, 99)} ${rint(10, 99)} ${rint(10, 99)}`, company: `${pick(['Agro', 'Bati', 'Tech', 'Santé', 'Kente'])}${pick(['plus', ' Services', ' SARL', ' Africa'])}`, country, domains: [...new Set([d1, d2])], source: R() < 0.7 ? 'Site web' : pick(['Événement', 'Ambassadeur', 'WhatsApp']), status: pend ? 'En attente' : R() < 0.92 ? 'Validée' : 'Rejetée', slaFrom: at, createdAt: at, decidedAt: pend ? null : new Date(at.getTime() + rint(4, 70) * 36e5) };
+});
+await db.insert(s.osInscription).values(ins);
 console.log(`✓ ${rows.length} collaborateurs, budgets ${year} de ${DK.length} domaines. Comptes rattachés : admin@cea.demo (DG), analyste@cea.demo, editeur@cea.demo.`);
 process.exit(0);

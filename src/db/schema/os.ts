@@ -368,3 +368,36 @@ export const osCandidate = pgTable('os_candidate', {
   cv: jsonb('cv').$type<{ key: string; name: string }>(),
   at: ts('at').notNull().defaultNow(),
 });
+
+/* ===== Lot 6 : relations (inscriptions des membres, rapports mensuels des bureaux pays) ===== */
+
+/* Inscriptions des entrepreneurs membres (formulaire public) : validation par le bureau pays sous 48 h, puis escalade
+   au directeur régional. domains : codes des domaines d'intervention (act, kap…), le premier est le domaine principal. */
+export const osInscription = pgTable('os_inscription', {
+  id: text('id').primaryKey(), // MEM-TG-XXXXXX (numéro de suivi donné au demandeur)
+  name: text('name').notNull(),
+  phone: text('phone').notNull().default(''),
+  email: text('email').notNull().default(''),
+  company: text('company').notNull().default(''),
+  country: text('country').notNull(),
+  domains: jsonb('domains').$type<string[]>().notNull().default([]),
+  source: text('source').notNull().default('Site web'),
+  status: text('status').notNull().default('En attente'), // En attente | Validée | Rejetée
+  reason: text('reason'),
+  messageId: uuid('message_id'),
+  userId: text('user_id'),
+  slaFrom: ts('sla_from').notNull().defaultNow(), // départ du délai de 48 h (repart à zéro après une demande de compléments)
+  decidedBy: text('decided_by'),
+  decidedAt: ts('decided_at'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('os_inscription_status_idx').on(t.status)]);
+
+/* Rapport mensuel d'un bureau pays (pré-rempli par CEA OS, commenté par le représentant, soumis au directeur régional). */
+export const osReport = pgTable('os_report', {
+  country: text('country').notNull(),
+  period: text('period').notNull(), // 2026-09
+  status: text('status').notNull().default('Brouillon'),
+  comment: text('comment').notNull().default(''),
+  submittedBy: text('submitted_by'),
+  submittedAt: ts('submitted_at'),
+}, (t) => [primaryKey({ columns: [t.country, t.period] })]);

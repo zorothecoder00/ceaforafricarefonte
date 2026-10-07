@@ -16,6 +16,7 @@ const KINDS = {
   candidature: "une réponse du dossier de candidature d'un entrepreneur à un programme d'accompagnement de CEA",
   // Synthèses : mise en forme de notes prises pendant une séance ou une réunion
   'compte-rendu': "le compte rendu structuré d'une séance de mentorat, à partir des notes brutes du mentor : objectifs, points abordés, conseils, prochaines étapes avec responsable",
+  'rapport-mensuel': "le commentaire du rapport mensuel d'un bureau pays de CEA FOR AFRICA (6 à 8 lignes, factuel), à partir des chiffres du formulaire : faits marquants, difficultés, puis deux besoins concrets",
   'proces-verbal': "le procès-verbal d'une séance du comité d'investissement de CEA Kapital Invest, à partir des notes brutes : participants, dossier examiné, points discutés, décision et conditions, réserves ; la décision doit rester exactement celle notée",
 } as const;
 const SYNTHESES = new Set(['compte-rendu', 'proces-verbal']);

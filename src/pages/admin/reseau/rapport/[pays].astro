@@ -1,0 +1,68 @@
+---
+/* CEA OS — Rapport mensuel d'un bureau pays (prototype › pRapport) : chiffres pré-remplis depuis CEA OS, commentaire du
+   représentant (aide à la rédaction IA), soumission au bureau régional, circuit. */
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import Tags from '../../../../components/os/Tags.astro';
+import { and, eq, inArray, sql } from 'drizzle-orm';
+import { db } from '../../../../lib/db';
+import { osInscription, osReport, osRequest } from '../../../../db/schema/os';
+import { invoice } from '../../../../db/schema/finance';
+import { osContext, scopeState } from '../../../../lib/os/core';
+import { memberBase, reportPeriod } from '../../../../lib/os/relations';
+import { PAYS, REGIONS, pn, regOf, fmt, mfcfa } from '../../../../lib/os/ref';
+
+export const prerender = false;
+const p = (Astro.params.pays ?? '').toUpperCase();
+const os = await osContext(Astro.locals.user!);
+const sc = scopeState(os, Astro.cookies);
+if (!PAYS[p] || !sc.inScope({ country: p })) return Astro.redirect('/admin/reseau');
+const period = reportPeriod();
+const [[r], base, [pend], [paid], [spent]] = await Promise.all([
+  db.select().from(osReport).where(and(eq(osReport.country, p), eq(osReport.period, period))),
+  memberBase(),
+  db.select({ n: sql<number>`count(*)::int` }).from(osInscription).where(and(eq(osInscription.country, p), eq(osInscription.status, 'En attente'))),
+  db.select({ s: sql<number>`coalesce(sum(${invoice.totalXof}),0)::float` }).from(invoice).where(and(eq(invoice.country, p), eq(invoice.kind, 'facture'), eq(invoice.status, 'payee'))),
+  db.select({ s: sql<number>`coalesce(sum(${osRequest.amount}),0)::float` }).from(osRequest).where(and(eq(osRequest.country, p), inArray(osRequest.status, ['Payée', 'Remboursée']))),
+]);
+const status = r?.status ?? 'Brouillon';
+const canEdit = (os.me?.prof === 'rep' && os.me.country === p) || os.me?.prof === 'dg';
+const nums: [string, string][] = [['Membres validés (total)', fmt(Object.values(base[p] ?? {}).reduce((a, b) => a + b, 0))], ['Inscriptions en attente', String(pend.n)], ['Encaissements', mfcfa(paid.s)], ['Dépenses payées', mfcfa(spent.s)]];
+const reg = regOf(p);
+---
+<AdminLayout title={`Rapport mensuel — ${pn(p)}`} lead={`Période ${period} · pré-rempli automatiquement depuis CEA OS`} crumbs={[['Réseau territorial', '/admin/reseau'], [pn(p)]]}>
+  <Fragment slot="actions"><Tags st={status} /></Fragment>
+  <div class="split">
+    <div>
+      <div class="grid g3">{nums.map(([l, v]) => <div class="card kpi"><div class="l">{l}</div><div class="v num">{v}</div></div>)}</div>
+      <form class="card" style="margin-top:14px" id="rf">
+        {nums.map(([l, v]) => <input type="hidden" name={l} value={v} />)}
+        <label class="f" for="rc">Faits marquants, difficultés et besoins</label>
+        <textarea class="in" id="rc" name="Commentaire du rapport mensuel" style="min-height:140px;width:100%" readonly={status === 'Soumis' || !canEdit} data-ai={status !== 'Soumis' && canEdit ? 'rapport-mensuel' : undefined} data-ai-form="rf">{r?.comment ?? ''}</textarea>
+        <div class="row" style="margin-top:10px">
+          {!canEdit ? <span class="small muted">Lecture seule.</span> : status === 'Soumis'
+            ? <button class="btn ghost" type="button" data-post="/api/admin/os/relations" data-body={JSON.stringify({ action: 'report.reopen', country: p })} data-reload>Rouvrir</button>
+            : <><button class="btn ghost" type="button" data-rep="report.save">Enregistrer</button><button class="btn" type="button" data-rep="report.submit">Soumettre au bureau régional</button></>}
+        </div>
+      </form>
+    </div>
+    <aside>
+      <div class="card">
+        <h3>Circuit</h3>
+        <ul class="timeline">
+          <li><i></i><span class="small">Représentant pays</span></li>
+          <li><i style={`background:${status === 'Soumis' ? 'var(--ok)' : 'var(--line)'}`}></i><span class="small">Directeur régional — {reg ? REGIONS[reg].n : '—'}</span></li>
+          <li><i style="background:var(--line)"></i><span class="small">Direction générale</span></li>
+        </ul>
+      </div>
+    </aside>
+  </div>
+</AdminLayout>
+<script define:vars={{ p }}>
+  document.querySelectorAll('[data-rep]').forEach((b) => b.addEventListener('click', async () => {
+    const comment = document.getElementById('rc').value;
+    const r = await fetch('/api/admin/os/relations', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: b.dataset.rep, country: p, comment }) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    window.toast(r && r.ok ? d.message : d.error || 'Une erreur est survenue.');
+    if (r && r.ok && b.dataset.rep === 'report.submit') setTimeout(() => location.reload(), 700);
+  }));
+</script>

@@ -6,6 +6,8 @@ import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { db } from '../../lib/db';
 import { contactMessage } from '../../db/schema/app';
+import { osInscription } from '../../db/schema/os';
+import { DK, DOM } from '../../lib/os/ref';
 import { json, fail, reference, audit, clientIp } from '../../lib/session';
 import { rateLimit, isBot, readJson } from '../../lib/guard';
 import { acknowledge, dueFrom } from '../../lib/support';
@@ -32,7 +34,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const p = Body.safeParse(raw);
   if (!p.success) return fail('Indiquez votre prénom, votre nom, votre téléphone, votre pays et le nom de votre entreprise.');
   const d = p.data;
-  const doms = (await allDomains()).filter((x) => raw?.['dom_' + x.id] === true).map((x) => x.dom);
+  const chosen = (await allDomains()).filter((x) => raw?.['dom_' + x.id] === true);
+  const doms = chosen.map((x) => x.dom);
   if (!doms.length) return fail("Choisissez au moins un domaine d'intervention.");
   const needs = NEEDS.filter((_, i) => raw?.['need_' + i] === true);
   const name = `${d.prenom} ${d.nom}`;
@@ -50,7 +53,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
     `Annuaire des membres : ${raw?.annuaire === true ? 'oui' : 'non'}`,
   ].filter(Boolean).join('\n');
   const ref = `MEM-${d.pays}-${reference('').slice(1)}`;
-  await db.insert(contactMessage).values({ reference: ref, motif: 'Inscription des entrepreneurs membres', routedTeam: team, country: d.pays, name, contact, message, userId: locals.user?.id ?? null, priority: 'normale', dueAt: dueFrom('2 jours ouvrés') });
+  const [msg] = await db.insert(contactMessage).values({ reference: ref, motif: 'Inscription des entrepreneurs membres', routedTeam: team, country: d.pays, name, contact, message, userId: locals.user?.id ?? null, priority: 'normale', dueAt: dueFrom('2 jours ouvrés') }).returning({ id: contactMessage.id });
+  // File de validation de CEA OS (Membres et inscriptions) : domaines rapportés aux codes du progiciel
+  const codes = chosen.map((x) => DK.find((k) => DOM[k].site === x.id)).filter((k): k is NonNullable<typeof k> => !!k);
+  await db.insert(osInscription).values({ id: ref, name, phone: d.tel, email: d.email, company: d.ent, country: d.pays, domains: codes, messageId: msg.id, userId: locals.user?.id ?? null }).catch((e) => console.error('[inscription] file CEA OS :', e instanceof Error ? e.message : e));
   await audit(locals.user?.id, 'inscription.membre', ref, { pays: d.pays, domaines: doms }, clientIp(request));
   await acknowledge({ reference: ref, name, contact, team, delay: 'sous 48 heures', userId: locals.user?.id });
   return json({ ok: true, reference: ref, redirect: '/adherer', message: `Inscription ${ref} reçue. Le bureau ${COUNTRIES[d.pays]} la valide sous 48 heures.` });

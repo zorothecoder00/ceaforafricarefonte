@@ -1,0 +1,102 @@
+---
+/* CEA OS — Membres et inscriptions (prototype › pMembres) : file de validation des inscriptions (48 h, puis escalade),
+   validation groupée, compléments, rejet motivé ; membres validés par pays et domaine ; décisions. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Dlg from '../../components/os/Dlg.astro';
+import Tags from '../../components/os/Tags.astro';
+import { asc, desc, eq, ne } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { osInscription } from '../../db/schema/os';
+import { osContext, scopeState } from '../../lib/os/core';
+import { hoursSince, memberBase } from '../../lib/os/relations';
+import { DK, DOM, PK, pn, fmt, dstr } from '../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const sc = scopeState(os, Astro.cookies);
+const tab = Astro.url.searchParams.get('t') ?? 'file';
+const canDecide = ['dg', 'rep', 'dirreg', 'agent'].includes(os.prof ?? '');
+const pend = (await db.select().from(osInscription).where(eq(osInscription.status, 'En attente')).orderBy(asc(osInscription.slaFrom))).filter((x) => sc.inScope({ country: x.country, domain: x.domains }));
+const hist = tab === 'hist' ? (await db.select().from(osInscription).where(ne(osInscription.status, 'En attente')).orderBy(desc(osInscription.decidedAt)).limit(300)).filter((x) => sc.inScope({ country: x.country, domain: x.domains })) : [];
+const base = tab === 'pivot' ? await memberBase() : {};
+const ps = PK.filter((p) => sc.inScope({ country: p }));
+const ds = DK.filter((d) => sc.inScope({ domain: d }));
+const mx = Math.max(1, ...Object.values(base).flatMap((o) => Object.values(o)));
+---
+<AdminLayout title="Membres et inscriptions" lead={`Registre des entrepreneurs membres · ${sc.label}`}>
+  <Fragment slot="actions"><a class="btn ghost" href="/api/admin/os/export?quoi=membres">Exporter le registre</a></Fragment>
+  <div class="tabs">
+    <a href="/admin/inscriptions" aria-selected={tab === 'file' ? 'true' : 'false'}>File de validation ({pend.length})</a>
+    <a href="/admin/inscriptions?t=pivot" aria-selected={tab === 'pivot' ? 'true' : 'false'}>Pays × domaines</a>
+    <a href="/admin/inscriptions?t=hist" aria-selected={tab === 'hist' ? 'true' : 'false'}>Décisions</a>
+  </div>
+  {tab === 'file' && (pend.length ? (
+    <>
+      <div class="toolbar">{canDecide && <button class="btn ok sm" type="button" id="bulk" disabled>Valider la sélection</button>}<span class="small muted">Délai cible : 48 h, puis escalade automatique au directeur régional.</span></div>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th></th><th>Numéro</th><th>Entrepreneur</th><th>Entreprise</th><th>Pays</th><th>Domaines</th><th>Source</th><th>Attente</th><th></th></tr></thead>
+          <tbody>
+            {pend.map((x) => { const h = hoursSince(x.slaFrom); return (
+              <tr>
+                <td>{canDecide && <input type="checkbox" class="sel" value={x.id} aria-label={`Sélectionner ${x.id}`} />}</td>
+                <td class="small num">{x.id}</td>
+                <td><b>{x.name}</b><div class="xs muted">{x.phone}{x.email && ` · ${x.email}`}</div></td>
+                <td>{x.company}</td><td>{pn(x.country)}</td>
+                <td>{x.domains.map((d) => <><Tags dom={d} /> </>)}</td>
+                <td>{x.source === 'Site web' ? 'En ligne' : x.source}</td>
+                <td><span class:list={['sla', h > 48 ? 'down' : h > 36 ? '' : 'up']}>{h} h{h > 48 && ' — escaladée'}</span></td>
+                <td style="white-space:nowrap">{canDecide && <>
+                  <button class="btn ok sm" type="button" data-post="/api/admin/os/relations" data-body={JSON.stringify({ action: 'ins.validate', ids: [x.id] })} data-reload>Valider</button>
+                  <button class="btn ghost sm" type="button" data-dlg="dlg-info" data-set-id={x.id} data-set-label={`Message WhatsApp à ${x.name} (${x.phone || x.email})`}>Compléments</button>
+                  <button class="btn ghost sm" type="button" data-dlg="dlg-rej" data-set-id={x.id} data-set-label={`${x.id} — ${x.name}`}>Rejeter</button>
+                </>}</td>
+              </tr>
+            ); })}
+          </tbody>
+        </table>
+      </div>
+    </>
+  ) : <div class="empty">Toutes les inscriptions du périmètre sont traitées.</div>)}
+  {tab === 'pivot' && (
+    <div class="tw">
+      <table class="t heat">
+        <thead><tr><th>Pays</th>{ds.map((d) => <th title={DOM[d].n}>{DOM[d].d.split(' ')[0]}</th>)}<th>Total</th></tr></thead>
+        <tbody>{ps.map((p) => { const vals = ds.map((d) => base[p]?.[d] ?? 0); return <tr><td><b>{pn(p)}</b></td>{vals.map((v) => <td class="c" style={`background:rgba(201,150,43,${((v / mx) * 0.55).toFixed(2)})`}>{fmt(v)}</td>)}<td class="c"><b>{fmt(vals.reduce((a, b) => a + b, 0))}</b></td></tr>; })}</tbody>
+      </table>
+    </div>
+  )}
+  {tab === 'hist' && (
+    <div class="tw">
+      <table class="t">
+        <thead><tr><th>Numéro</th><th>Entrepreneur</th><th>Pays</th><th>Décision</th><th>Date</th></tr></thead>
+        <tbody>
+          {hist.map((x) => <tr><td class="small">{x.id}</td><td>{x.name}</td><td>{pn(x.country)}</td><td><Tags st={x.status} />{x.reason && <div class="xs muted">{x.reason}</div>}</td><td class="small">{dstr(x.decidedAt)}</td></tr>)}
+          {!hist.length && <tr><td colspan="5" class="muted">Aucune décision.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  )}
+  <Dlg id="dlg-rej" title="Rejeter l'inscription" api="/api/admin/os/relations" submit="Rejeter" danger>
+    <input type="hidden" name="action" value="ins.reject" /><input type="hidden" name="id" value="" />
+    <p class="small" data-text="label"></p>
+    <label class="f" for="rm">Motif</label><select class="in" id="rm" name="reason" style="width:100%"><option>Informations invérifiables</option><option>Entreprise hors périmètre</option><option>Doublon</option></select>
+  </Dlg>
+  <Dlg id="dlg-info" title="Demander des compléments" api="/api/admin/os/relations" submit="Envoyer">
+    <input type="hidden" name="action" value="ins.info" /><input type="hidden" name="id" value="" />
+    <p class="small" data-text="label"></p>
+    <textarea class="in" name="message" style="width:100%">Bonjour, pour valider votre inscription à CEA FOR AFRICA, merci de nous transmettre votre numéro RCCM et une pièce d'identité.</textarea>
+  </Dlg>
+</AdminLayout>
+<script>
+  const bulk = document.getElementById('bulk') as HTMLButtonElement | null;
+  const sel = () => [...document.querySelectorAll<HTMLInputElement>('.sel:checked')].map((c) => c.value);
+  document.querySelectorAll('.sel').forEach((c) => c.addEventListener('change', () => { const n = sel().length; if (bulk) { bulk.disabled = !n; bulk.textContent = n ? `Valider la sélection (${n})` : 'Valider la sélection'; } }));
+  bulk?.addEventListener('click', async () => {
+    bulk.disabled = true;
+    const r = await fetch('/api/admin/os/relations', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ins.validate', ids: sel() }) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    (window as unknown as { toast: (t: string) => void }).toast(r?.ok ? d.message : d.error || 'Une erreur est survenue.');
+    if (r?.ok) setTimeout(() => location.reload(), 700); else bulk.disabled = false;
+  });
+</script>

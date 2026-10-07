@@ -86,7 +86,9 @@ export const MODS: [string, NavItem[]][] = [
   ]],
   ['Relations', [
     { href: '/admin/crm', label: 'Contacts (CRM 360°)', obj: 'crm' },
-    { href: '/admin/campagnes', label: 'Campagnes', obj: 'campagnes' },
+    { href: '/admin/inscriptions', label: 'Membres et inscriptions', spec: 'dg dirreg rep agent conf com' },
+    { href: '/admin/reseau', label: 'Réseau territorial', spec: 'dg adg dirreg rep' },
+    { href: '/admin/campagnes', label: 'Campagnes et contenus', obj: 'campagnes' },
     { href: '/admin/messages', label: 'Messages et signalements', obj: 'messages_contact' },
   ]],
   ["Domaines d'intervention", [

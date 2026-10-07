@@ -10,6 +10,7 @@ import { db } from '../../lib/db';
 import { osRequest, osDecision } from '../../db/schema/os';
 import { osContext, allStaff } from '../../lib/os/core';
 import { pendingFor, thresholds, activeDelegations } from '../../lib/os/approvals';
+import { escalatedFor, hoursSince } from '../../lib/os/relations';
 import { RTYPE, pn, fcfa, dstr, type ReqType } from '../../lib/os/ref';
 
 export const prerender = false;
@@ -19,13 +20,15 @@ const [people, delegs, thr] = await Promise.all([allStaff(), activeDelegations()
 const list = me ? await pendingFor(me.id, { people, delegs }) : [];
 const done = me ? await db.select().from(osRequest).where(sql`${osRequest.steps} @> ${JSON.stringify([{ whoId: me.id }])}::jsonb`).orderBy(desc(osRequest.updatedAt)).limit(10) : [];
 // Décisions issues des réunions, à trancher par la Direction générale
+// Inscriptions de membres escaladées (plus de 48 h sans décision du bureau pays)
+const esc = await escalatedFor(me);
 const decs = me?.prof === 'dg' ? await db.select().from(osDecision).where(eq(osDecision.status, 'En attente')).orderBy(desc(osDecision.at)) : [];
 const name = (id: string) => people.find((s) => s.id === id)?.name ?? '—';
 ---
-<AdminLayout title="Approbations" lead={`${list.length + decs.length} élément(s) attendent votre décision · seuils : pays ≤ ${fcfa(thr.pays)}, région ≤ ${fcfa(thr.reg)}, au-delà Direction générale`}>
+<AdminLayout title="Approbations" lead={`${list.length + decs.length + esc.length} élément(s) attendent votre décision · seuils : pays ≤ ${fcfa(thr.pays)}, région ≤ ${fcfa(thr.reg)}, au-delà Direction générale`}>
   <Fragment slot="actions">{list.length > 1 && <button class="btn ok" type="button" data-post="/api/admin/os/approbations" data-body='{"action":"all"}' data-reload>Tout approuver ({list.length})</button>}</Fragment>
   {!me && <div class="watch" style="margin-bottom:14px">Votre compte n'est rattaché à aucune fiche du personnel : aucune approbation ne peut vous être adressée.</div>}
-  {list.length || decs.length ? (list.length > 0 && (
+  {list.length || decs.length || esc.length ? (list.length > 0 && (
     <div class="tw">
       <table class="t">
         <thead><tr><th>Objet</th><th>Demandeur</th><th>Votre niveau</th><th>Pays</th><th>Montant</th><th>Circuit</th><th></th></tr></thead>
@@ -51,6 +54,14 @@ const name = (id: string) => people.find((s) => s.id === id)?.name ?? '—';
       </table>
     </div>
   )) : <div class="empty">Aucune approbation en attente pour vous.</div>}
+  {esc.length > 0 && (
+    <div class="tw" style="margin-top:14px">
+      <table class="t">
+        <thead><tr><th>Inscription escaladée</th><th>Entreprise</th><th>Votre niveau</th><th>Pays</th><th>Attente</th><th></th></tr></thead>
+        <tbody>{esc.map((x) => <tr><td><b>{x.id} — {x.name}</b></td><td class="small">{x.company}</td><td class="small">Escalade (&gt; 48 h)</td><td>{pn(x.country)}</td><td class="small down">{hoursSince(x.slaFrom)} h</td><td style="white-space:nowrap"><button class="btn ok sm" type="button" data-post="/api/admin/os/relations" data-body={JSON.stringify({ action: 'ins.validate', ids: [x.id] })} data-reload>Valider</button> <a class="btn ghost sm" href="/admin/inscriptions">Examiner</a></td></tr>)}</tbody>
+      </table>
+    </div>
+  )}
   {decs.length > 0 && (
     <div class="tw" style="margin-top:14px">
       <table class="t">

@@ -10,7 +10,7 @@ import { db } from '../../lib/db';
 import { invoice } from '../../db/schema/finance';
 import { payment, membership } from '../../db/schema/app';
 import { dossier } from '../../db/schema/kapital';
-import { osDecision, osTask, osContract, osStockItem } from '../../db/schema/os';
+import { osDecision, osTask, osContract, osStockItem, osInscription } from '../../db/schema/os';
 import { osContext, allStaff, scopeState } from '../../lib/os/core';
 import { pendingFor, budgets } from '../../lib/os/approvals';
 import { allOkrs, okrProg } from '../../lib/os/pilotage';
@@ -45,6 +45,9 @@ const lateSum = late.reduce((a, x) => a + x.total, 0);
 const PURPOSE_DOM: Record<string, Dom> = { adhesion: 'voix', billet: 'evt', cours: 'aca', programme: 'aca', mastermind: 'mm', expert: 'prj', mise_en_avant: 'tal', recherche: 'kap', sponsoring: 'evt' };
 const byPurpose = await db.select({ p: payment.purpose, s: sql<number>`coalesce(sum(${payment.amountXof}),0)::float` }).from(payment).where(and(eq(payment.status, 'reussi'), sql`extract(year from ${payment.paidAt}) = ${year}`)).groupBy(payment.purpose);
 const byDom = ds.map((d) => byPurpose.filter((x) => PURPOSE_DOM[x.p] === d).reduce((a, x) => a + x.s, 0));
+const insAll = (await db.select({ c: osInscription.country, d: osInscription.domains, st: osInscription.status, f: osInscription.slaFrom }).from(osInscription)).filter((x) => sc.inScope({ country: x.c, domain: x.d }));
+const insV = insAll.filter((x) => x.st === 'Validée').length, insP = insAll.filter((x) => x.st === 'En attente').length;
+const insLate = insAll.filter((x) => x.st === 'En attente' && Date.now() - x.f.getTime() > 48 * 36e5).length;
 const staffN = people.filter((s) => s.active && sc.inScope({ country: s.country })).length;
 const [expiring, lowStock] = await Promise.all([
   db.select({ title: osContract.title, country: osContract.country, domain: osContract.domain }).from(osContract).where(sql`${osContract.status} = 'En vigueur' and ${osContract.end} < now() + interval '60 days'`),
@@ -53,6 +56,7 @@ const [expiring, lowStock] = await Promise.all([
 const attention = [
   late.length ? `${late.length} facture(s) en retard : ${mfcfa(lateSum)}` : null,
   ...ds.filter((d) => bud[d] && bud[d].budget && bud[d].engaged / bud[d].budget > 0.9).map((d) => `Budget presque consommé : ${DOM[d].n}`),
+  insLate ? `${insLate} inscription(s) au-delà de 48 h` : null,
   lateTasks[0].n ? `${lateTasks[0].n} tâche(s) en retard` : null,
   pend.length > 5 ? `${pend.length} approbations vous attendent` : null,
   ...expiring.map((k) => `Contrat bientôt échu : ${k.title}`),
@@ -68,7 +72,7 @@ const attention = [
     <div class="card kpi"><div class="l">Encaissements</div><div class="v num">{mfcfa(enc.s)}</div><div class="d">Factures soldées en {year}</div></div>
     <div class="card kpi"><div class="l">Restant à encaisser</div><div class="v num">{mfcfa(due.s)}</div><div class:list={['d', { down: late.length > 0 }]}>{late.length} facture(s) en retard</div></div>
     <div class="card kpi"><div class="l">Budget engagé</div><div class="v num">{bt ? Math.round((eng / bt) * 100) : 0} %</div><div class="d">{mfcfa(eng)} sur {mfcfa(bt)}</div></div>
-    <div class="card kpi"><div class="l">Adhésions actives</div><div class="v num">{fmt(mem.n)}</div></div>
+    <div class="card kpi"><div class="l">Membres validés</div><div class="v num">{fmt(insV)}</div><div class:list={['d', { down: insP > 0 }]}>{insP} inscription(s) en attente · {fmt(mem.n)} adhésion(s) actives</div></div>
     <div class="card kpi"><div class="l">Dossiers Kapital actifs</div><div class="v num">{kap.n}</div></div>
     <div class="card kpi"><div class="l">Effectif</div><div class="v num">{staffN}</div><div class="d">collaborateurs</div></div>
   </div>

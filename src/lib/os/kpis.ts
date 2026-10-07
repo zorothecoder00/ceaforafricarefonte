@@ -3,7 +3,9 @@
    n : score sur 100 comparé à la cible (goal) pour la pastille verte / orange / rouge. */
 import { and, eq, gte, inArray, sql } from 'drizzle-orm';
 import { db } from '../db';
-import { osRequest, osTask, osReviewItem, osClosing, osContract } from '../../db/schema/os';
+import { osRequest, osTask, osReviewItem, osClosing, osContract, osInscription, osReport } from '../../db/schema/os';
+import { reportPeriod } from './relations';
+import { PK, regOf } from './ref';
 import { CLOSING, closingPeriod } from './ledger';
 import { allOkrs, okrProg, currentReview } from './pilotage';
 import { auditLog } from '../../db/schema/app';
@@ -31,7 +33,24 @@ export const KMAP: Record<string, string[]> = {
 };
 
 type Ctx = { people: Person[] };
+/** Pays dans le périmètre d'un poste : son pays (représentant, agent), sa région (directeur régional), sinon tous. */
+const inU = (u: Person, country: string) => (u.prof === 'rep' || u.prof === 'agent' || u.prof === 'cond' ? country === u.country : u.prof === 'dirreg' ? regOf(country) === u.reg : true);
 const KF: Record<string, (u: Person, c: Ctx) => Promise<Omit<Kpi, 'k' | 'l'> | null>> = {
+  ins48: async (u) => {
+    const l = (await db.select().from(osInscription).where(sql`${osInscription.decidedAt} is not null`)).filter((x) => inU(u, x.country));
+    const ok = l.filter((x) => (x.decidedAt!.getTime() - x.slaFrom.getTime()) / 36e5 <= 48).length;
+    const p = pct(ok, l.length);
+    return { v: p === null ? '—' : p + ' %', n: p, goal: 90, sub: l.length + ' décisions' };
+  },
+  insPend: async (u) => {
+    const n = (await db.select({ c: osInscription.country }).from(osInscription).where(eq(osInscription.status, 'En attente'))).filter((x) => inU(u, x.c)).length;
+    return { v: String(n), n: n === 0 ? 100 : Math.max(0, 100 - n * 5), goal: 90, sub: 'en attente' };
+  },
+  reports: async (u) => {
+    const ps = PK.filter((p) => inU(u, p));
+    const sub = (await db.select({ c: osReport.country }).from(osReport).where(and(eq(osReport.period, reportPeriod()), eq(osReport.status, 'Soumis')))).filter((x) => ps.includes(x.c)).length;
+    return { v: sub + '/' + ps.length, n: pct(sub, ps.length), goal: 100 };
+  },
   rappro: async () => {
     const [r] = (await db.execute(sql`select count(*) filter (where status = 'Rapproché')::int as ok, count(*)::int as t from os_receipt`)).rows as { ok: number; t: number }[];
     if (!r.t) return null;

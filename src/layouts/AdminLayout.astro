@@ -5,7 +5,7 @@
    CEA Copilot, compte), en-tête de page (titre, sous-titre, actions).
    Accès : une page du progiciel interne est gardée par le profil du poste (src/lib/os/core.ts › MODS) ; une page du site
    par un droit de la matrice (prop obj). Chaque API vérifie aussi ses propres droits. */
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import BaseLayout from './BaseLayout.astro';
 import RightsHint from '../components/RightsHint.astro';
 import { db } from '../lib/db';
@@ -13,6 +13,8 @@ import { can, isStaff, ROLE_LABEL, type Obj, type Role } from '../lib/rbac';
 import { MODS, canUse, moduleOf, osContext, scopeState, type NavItem } from '../lib/os/core';
 import { pendingFor } from '../lib/os/approvals';
 import { unreadCount } from '../lib/os/collab';
+import { escalatedFor } from '../lib/os/relations';
+import { osInscription } from '../db/schema/os';
 import { DOM, pn, refT, initials } from '../lib/os/ref';
 import '../styles/os.css';
 
@@ -33,7 +35,9 @@ const allowed = obj ? staffRole && can(me.roles, obj, 'L') : mod ? gate(mod) : t
 
 // Compteurs « à traiter » (pastilles dorées du menu)
 const decisionsPending = os.me?.prof === 'dg' ? Number(((await db.execute(sql`select count(*)::int as n from os_decision where status = 'En attente'`).catch(() => ({ rows: [{ n: 0 }] }))).rows[0] as { n: number }).n) : 0;
-const pending = os.me ? (await pendingFor(os.me.id).catch(() => [])).length + decisionsPending : 0;
+const escalated = (await escalatedFor(os.me).catch(() => [])).length;
+const pending = os.me ? (await pendingFor(os.me.id).catch(() => [])).length + decisionsPending + escalated : 0;
+const insPending = os.prof || os.superuser ? (await db.select({ c: osInscription.country, d: osInscription.domains }).from(osInscription).where(eq(osInscription.status, 'En attente')).catch(() => [])).filter((x) => scopeState(os, Astro.cookies).inScope({ country: x.c, domain: x.d })).length : 0;
 const unread = os.me ? await unreadCount(os.me).catch(() => 0) : 0;
 const c = (await db.execute(sql`select
   (select count(*) from contact_message where status = 'nouveau')::int as messages,
@@ -41,7 +45,7 @@ const c = (await db.execute(sql`select
   (select count(*) from job where status = 'en_moderation')::int as emplois,
   (select count(*) from programme_application where status = 'recue')::int as candidatures,
   (select count(*) from kapital.dossier where status = 'recu')::int as kapital`).catch(() => ({ rows: [{}] }))).rows[0] as Record<string, number>;
-const COUNT: Record<string, number> = { '/admin/approbations': pending, '/admin/messagerie': unread, '/admin/messages': c.messages ?? 0, '/admin/moderation': c.moderation ?? 0, '/admin/emplois': c.emplois ?? 0, '/admin/candidatures': c.candidatures ?? 0, '/admin/kapital': c.kapital ?? 0 };
+const COUNT: Record<string, number> = { '/admin/approbations': pending, '/admin/messagerie': unread, '/admin/inscriptions': insPending, '/admin/messages': c.messages ?? 0, '/admin/moderation': c.moderation ?? 0, '/admin/emplois': c.emplois ?? 0, '/admin/candidatures': c.candidatures ?? 0, '/admin/kapital': c.kapital ?? 0 };
 const groups = MODS.map(([g, items]) => [g, items.filter(gate)] as const).filter(([, items]) => items.length);
 const isCurrent = (h: string) => h === mod?.href;
 
