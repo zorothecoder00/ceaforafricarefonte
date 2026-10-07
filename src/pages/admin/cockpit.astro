@@ -71,7 +71,7 @@ const attention = [
 ---
 <AdminLayout title="Cockpit" lead={`${sc.label} · temps réel`}>
   <Fragment slot="actions">
-    <button class="btn ghost" type="button" onclick="openChat()">Synthèse de la semaine</button>
+    <button class="btn ghost" type="button" data-ai-task="semaine" data-ai-title="Synthèse de la semaine">Synthèse de la semaine</button>
     {os.me && <a class="btn" href="/admin/approbations">{pend.length + decPending} à approuver</a>}
   </Fragment>
   <div class="grid g4">

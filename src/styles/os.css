@@ -148,3 +148,15 @@ body.os .pick label{display:flex;gap:8px;align-items:center;padding:3px 0;font-s
 /* Résultats de la recherche globale */
 body.os .sres a{display:flex;gap:10px;padding:9px;border-radius:8px;text-decoration:none;align-items:center;color:var(--ink)}
 body.os .sres a:hover{background:var(--surface-2)}
+/* CEA Copilot interne (tiroir à droite, prototype) */
+body.os .drawer{position:fixed;inset:0 0 0 auto;width:min(420px,100%);background:var(--surface);border-left:1px solid var(--line);z-index:70;display:none;flex-direction:column;box-shadow:-20px 0 50px rgba(0,0,0,.2);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body.os .drawer.open{display:flex}
+body.os .drawer .dh2{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
+body.os .chatb{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+body.os .msg{max-width:90%;padding:9px 12px;border-radius:12px;font-size:.9rem;white-space:pre-wrap}
+body.os .msg.u{align-self:flex-end;background:var(--navy);color:var(--surface)}
+body.os .msg.a{align-self:flex-start;background:var(--surface-2)}
+body.os .sugg{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 10px}
+body.os .sugg button{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:99px;padding:4px 10px;font-size:.78rem;cursor:pointer}
+body.os .chatf{display:flex;gap:6px;padding:10px;border-top:1px solid var(--line)}
+body.os .chatf input{flex:1}

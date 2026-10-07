@@ -83,7 +83,7 @@ const roleLine = me.roles.filter((r) => r !== 'membre').map((r) => ROLE_LABEL[r 
         <button class="os-ib" type="button" id="osSearchBtn" aria-label="Rechercher (Ctrl+K)">⌕ <span class="hide-s">Rechercher</span></button>
         {os.me && <a class="os-ib" href="/admin/approbations" aria-label={`Approbations : ${pending}`}>✓ <span class="hide-s">Approbations</span>{pending > 0 && <span class="badge">{pending > 99 ? '99+' : pending}</span>}</a>}
         <a class="os-ib" href="/espace/notifications" aria-label="Notifications">🔔<span class="badge" data-unread hidden></span></a>
-        <button class="os-ib" type="button" onclick="openChat()" aria-label="Ouvrir CEA Copilot">✦ <span class="hide-s">Copilot</span></button>
+        <button class="os-ib" type="button" id="copB" aria-label="Ouvrir CEA Copilot" aria-controls="cop">✦ <span class="hide-s">Copilot</span></button>
         <a class="os-user" href={os.me ? '/admin/poste' : '/espace/profil'} title="Mon compte"><span class="av">{initials(os.me?.name ?? me.name)}</span><span class="t hide-s">{os.me?.name ?? me.name}</span></a>
       </header>
       <div class="os-content">
@@ -96,6 +96,16 @@ const roleLine = me.roles.filter((r) => r !== 'membre').map((r) => ROLE_LABEL[r 
           <div class="row"><slot name="actions" /></div>
         </div>
         {allowed && hints.length > 0 && <RightsHint objs={hints} />}
+        <aside class="drawer" id="cop" aria-label="CEA Copilot" data-first={(os.me?.name ?? Astro.locals.user!.name).split(' ')[0]}>
+          <div class="dh2"><div><b style="font-family:var(--display)">CEA Copilot</b><div class="xs muted" id="copMode">Assistant interne — répond à partir de vos données autorisées</div></div><button class="os-ib" type="button" id="copX" aria-label="Fermer">✕</button></div>
+          <div class="chatb" id="copBody" aria-live="polite"></div><div class="sugg" id="copSugg"></div>
+          <form class="chatf" id="copF"><input class="in" id="copIn" placeholder="Posez une question sur vos données…" aria-label="Question" autocomplete="off" maxlength="2000" /><button class="btn sm">Envoyer</button></form>
+        </aside>
+        <dialog class="os-dlg wide" id="osAi" aria-labelledby="osAiT">
+          <div class="dh"><h3 id="osAiT">CEA Copilot</h3><button class="os-ib" type="button" data-close aria-label="Fermer">✕</button></div>
+          <div class="db"><p class="small muted">Brouillon généré à partir des données de CEA OS : à relire avant tout usage.</p><textarea class="in" id="osAiOut" style="min-height:280px;width:100%"></textarea></div>
+          <div class="df"><button class="btn ghost" type="button" data-close>Fermer</button><button class="btn" type="button" id="osAiCopy">Copier</button></div>
+        </dialog>
         <dialog class="os-dlg wide" id="osSearch" aria-labelledby="osSearchT">
           <div class="dh"><h3 id="osSearchT">Rechercher dans CEA OS</h3><button class="os-ib" type="button" data-close aria-label="Fermer">✕</button></div>
           <div class="db"><input class="in" id="osSq" style="width:100%" placeholder="Personne, contact, dossier, chantier, facture, demande, inscription…" aria-label="Rechercher" autocomplete="off" /><div class="sres" id="osSr" style="margin-top:10px"><p class="small muted">Ctrl+K. Les résultats respectent vos droits.</p></div></div>

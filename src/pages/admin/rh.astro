@@ -6,8 +6,9 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 import Dlg from '../../components/os/Dlg.astro';
 import Steps from '../../components/os/Steps.astro';
 import Tags from '../../components/os/Tags.astro';
-import { desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '../../lib/db';
+import { account } from '../../db/schema/auth';
 import { osRequest, osTimesheet, osPayroll, osInterview } from '../../db/schema/os';
 import { getSetting } from '../../lib/settings';
 import { COMPS } from '../../lib/os/pilotage';
@@ -28,6 +29,8 @@ const sumP = (k: 'brut' | 'net' | 'cp') => (pay?.lines ?? []).reduce((a, l) => a
 const pct = (x: number) => (x * 100).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
 const people = await allStaff();
 const name = (id: string | null) => people.find((s) => s.id === id)?.name ?? '—';
+// Comptes déjà activés (mot de passe choisi) : plus d'invitation à renvoyer
+const activated = new Set(tab === 'eff' ? (await db.select({ u: account.userId }).from(account).where(and(eq(account.providerId, 'credential'), sql`${account.password} is not null`))).map((a) => a.u) : []);
 const leaves = tab === 'abs' ? await db.select().from(osRequest).where(eq(osRequest.type, 'conge')).orderBy(desc(osRequest.createdAt)) : [];
 const byDom = tab === 'temps' ? await db.select({ d: osTimesheet.domain, h: sql<number>`sum(${osTimesheet.hours})::float` }).from(osTimesheet).groupBy(osTimesheet.domain) : [];
 const totH = byDom.reduce((a, x) => a + x.h, 0);
@@ -53,7 +56,7 @@ const totH = byDom.reduce((a, x) => a + x.h, 0);
                 <td class="num">{fcfa(s.salary)}</td>
                 <td class="num">{s.leaveDays} j</td>
                 <td><button class="toggle" type="button" role="switch" aria-checked={s.active ? 'true' : 'false'} aria-label={`Compte actif de ${s.name}`} data-post="/api/admin/os/personnel" data-body={JSON.stringify({ action: 'toggle', id: s.id })} data-confirm={s.active ? `Désactiver ${s.name} (départ) ? Ses accès seront révoqués immédiatement.` : undefined} data-reload></button></td>
-                <td><button class="btn ghost sm" type="button" data-dlg="dlg-edit" data-set-id={s.id} data-set-who={s.name} data-set-phone={s.phone} data-set-salary={String(s.salary)} data-set-leave-days={String(s.leaveDays)} data-set-manager-id={s.managerId ?? ''} data-set-grade={s.grade}>Modifier</button></td>
+                <td style="white-space:nowrap">{s.userId && s.active && !activated.has(s.userId) && <button class="btn ghost sm" type="button" data-post="/api/admin/os/personnel" data-body={JSON.stringify({ action: 'invite', id: s.id })} title="Compte pas encore activé : renvoyer le lien pour choisir le mot de passe">Invitation</button>} <button class="btn ghost sm" type="button" data-dlg="dlg-edit" data-set-id={s.id} data-set-who={s.name} data-set-phone={s.phone} data-set-salary={String(s.salary)} data-set-leave-days={String(s.leaveDays)} data-set-manager-id={s.managerId ?? ''} data-set-grade={s.grade}>Modifier</button></td>
               </tr>
             ))}
             {!people.length && <tr><td colspan="11" class="muted">Aucun collaborateur : créez la première fiche avec « Nouveau collaborateur ».</td></tr>}
@@ -72,7 +75,7 @@ const totH = byDom.reduce((a, x) => a + x.h, 0);
           <div><label class="f" for="es">Salaire brut mensuel</label><input class="in" type="number" id="es" name="salary" value="900000" min="0" /></div>
           <div><label class="f" for="el">Solde de congés (jours)</label><input class="in" type="number" id="el" name="leaveDays" value="0" min="0" step="0.5" /></div>
         </div>
-        <p class="small muted" style="margin-top:8px">Le compte CEA OS est créé avec les droits du profil choisi ; l'intéressé reçoit ses accès par e-mail.</p>
+        <p class="small muted" style="margin-top:8px">Le compte CEA OS est créé avec les droits du profil choisi ; l'intéressé reçoit ses accès par e-mail. Si l'e-mail ne part pas, le lien d'invitation s'affiche pour que vous le transmettiez vous-même.</p>
       </Dlg>
       <Dlg id="dlg-edit" title="Modifier la fiche" api="/api/admin/os/personnel" submit="Enregistrer" wide>
         <input type="hidden" name="action" value="update" /><input type="hidden" name="id" value="" />

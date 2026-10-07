@@ -556,6 +556,26 @@ function formJson(f: HTMLFormElement) {
   }
   return out;
 }
+/* Réponse { link } (ex. invitation dont l'e-mail n'est pas parti) : fenêtre avec le lien à copier ; rechargement à la fermeture */
+function showLink(link: string, message: string, reload: boolean) {
+  const d = document.createElement('dialog');
+  d.className = 'os-dlg';
+  d.setAttribute('aria-label', 'Lien à transmettre');
+  d.style.cssText = 'border:0;border-radius:14px;padding:18px;max-width:min(600px,calc(100% - 24px))';
+  const p = document.createElement('p'); p.textContent = message; p.style.marginTop = '0';
+  const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
+  const inp = document.createElement('input'); inp.className = 'in'; inp.readOnly = true; inp.value = link; inp.style.cssText = 'flex:1;min-width:220px;margin:0'; inp.setAttribute('aria-label', 'Lien');
+  const cp = document.createElement('button'); cp.type = 'button'; cp.className = 'btn'; cp.textContent = 'Copier';
+  cp.onclick = () => { inp.select(); navigator.clipboard?.writeText(link).then(() => (cp.textContent = 'Copié ✓'), () => {}); };
+  const close = document.createElement('button'); close.type = 'button'; close.className = 'btn ghost'; close.textContent = 'Fermer'; close.onclick = () => d.close();
+  row.append(inp, cp, close);
+  d.append(p, row);
+  document.body.append(d);
+  d.addEventListener('close', () => { d.remove(); if (reload) location.reload(); });
+  d.showModal();
+  inp.select();
+}
+
 $$<HTMLFormElement>('form[data-api]').forEach((f) => f.addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!f.checkValidity()) { f.reportValidity(); return; }
@@ -566,6 +586,7 @@ $$<HTMLFormElement>('form[data-api]').forEach((f) => f.addEventListener('submit'
     const d = await res.json().catch(() => ({}));
     if (res.status === 401) { location.href = withLang('/connexion') + '?retour=' + encodeURIComponent(location.pathname); return; }
     if (!res.ok || d.ok === false) { toast(d.error || (EN ? 'Something went wrong. Please try again.' : 'Une erreur est survenue. Réessayez.')); if (d.redirect) setTimeout(() => (location.href = d.redirect), 1500); return; }
+    if (d.link) { f.closest('dialog')?.close(); if (f.hasAttribute('data-reset')) f.reset(); showLink(d.link, d.message || '', f.hasAttribute('data-reload')); return; }
     toast(d.message || f.dataset.success || (EN ? 'Saved.' : 'Enregistré.'));
     if (f.hasAttribute('data-reset')) f.reset();
     if (d.redirect || f.dataset.redirect) setTimeout(() => (location.href = d.redirect || f.dataset.redirect!), 700);
@@ -585,6 +606,7 @@ $$<HTMLButtonElement>('[data-post]').forEach((b) => b.addEventListener('click', 
   b.disabled = false;
   if (res?.status === 401) { location.href = withLang('/connexion') + '?retour=' + encodeURIComponent(location.pathname); return; }
   if (!res || !res.ok || d.ok === false) { toast(d.error || (EN ? 'Something went wrong.' : 'Une erreur est survenue.')); if (d.redirect) setTimeout(() => (location.href = d.redirect), 1500); return; }
+  if (d.link) { showLink(d.link, d.message || '', b.hasAttribute('data-reload')); return; }
   toast(d.message || (EN ? 'Done.' : 'C’est fait.'));
   if (d.redirect) setTimeout(() => (location.href = d.redirect), 600);
   else if (b.hasAttribute('data-reload')) setTimeout(() => location.reload(), 600);

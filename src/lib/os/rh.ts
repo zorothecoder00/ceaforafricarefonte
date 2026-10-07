@@ -51,7 +51,9 @@ export async function hire(x: Recruit, c: Candidate, salary: number, people: Per
     id, userId, name: c.name, email, poste: x.poste, country: x.country, domain: dom, managerId: x.byStaff, grade: gradeOf(x.poste),
     department: dom ? DOM[dom].n : profOf(x.poste) === 'rep' ? 'Bureau de représentation ' + pn(x.country) : '', salary, onboarding: [false, false, false],
   });
-  if (userId && !existing) await inviteLink(userId, origin, true).catch(() => null);
+  const inv = userId && !existing ? await inviteLink(userId, origin, true).catch(() => null) : { sent: true };
+  // Invitation non partie : les RH la renvoient (ou copient le lien) depuis RH › Effectifs
+  if (!inv?.sent) await notifyStaff(people.filter((s) => s.prof === 'rh' && s.active).map((s) => s.id), `L'invitation de ${c.name} (${id}) n'a pas pu partir par e-mail : utilisez « Invitation » sur sa fiche dans RH › Effectifs`, '/admin/rh', people);
   await db.update(osRecruit).set({ status: 'Pourvu' }).where(eq(osRecruit.id, x.id));
   await db.update(osCandidate).set({ status: 'Embauché·e' }).where(eq(osCandidate.id, c.id));
   if (x.byStaff) await notifyStaff([x.byStaff], `Arrivée de ${c.name} (${x.poste}) : compte CEA OS créé avec le profil du poste`, '/admin/equipe', people);

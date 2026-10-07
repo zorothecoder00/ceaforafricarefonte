@@ -3,7 +3,8 @@
    - sélecteur de périmètre (cookie os-scope) ;
    - <form data-upload="/api/…"> : envoi multipart (pièces jointes) puis rechargement ;
    - <select data-go> : navigation vers la valeur choisie ;
-   - [data-filter="#tableau"] : filtre plein texte des lignes d'un tableau. */
+   - [data-filter="#tableau"] : filtre plein texte des lignes d'un tableau ;
+   - CEA Copilot interne (tiroir #cop) et rédactions guidées [data-ai-task]. */
 const $$ = <T extends Element = HTMLElement>(s: string, r: ParentNode = document) => [...r.querySelectorAll<T>(s)];
 const toast = (t: string) => (window as unknown as { toast?: (t: string) => void }).toast?.(t);
 
@@ -75,6 +76,64 @@ sq?.addEventListener('input', () => {
     sr.innerHTML = res.length ? res.map(([k, t, h]) => `<a href="${esc(h)}"><span class="tag info">${esc(k)}</span><span>${esc(t)}</span></a>`).join('') : '<div class="empty">Aucun résultat dans votre périmètre.</div>';
   }, 250);
 });
+
+/* CEA Copilot interne : tiroir de conversation (bouton ✦ Copilot) et rédactions guidées ([data-ai-task]) */
+const cop = document.getElementById('cop'), copBody = document.getElementById('copBody'), copSugg = document.getElementById('copSugg');
+const copIn = document.getElementById('copIn') as HTMLInputElement | null;
+const hist: { role: 'user' | 'assistant'; content: string }[] = [];
+const addMsg = (r: 'u' | 'a', t: string) => {
+  const d = document.createElement('div');
+  d.className = 'msg ' + r; d.textContent = t;
+  copBody?.appendChild(d);
+  if (copBody) copBody.scrollTop = 1e9;
+  return d;
+};
+async function askCop(q: string) {
+  if (!q.trim() || !copSugg) return;
+  copSugg.innerHTML = '';
+  addMsg('u', q);
+  hist.push({ role: 'user', content: q });
+  const a = addMsg('a', '…');
+  const r = await fetch('/api/admin/os/copilot', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: hist.slice(-11) }) }).catch(() => null);
+  const d = r ? await r.json().catch(() => ({})) : {};
+  const t = r?.ok && d.reply ? d.reply : d.error || 'Copilot n’a pas pu répondre.';
+  a.textContent = t;
+  if (r?.ok) { hist.push({ role: 'assistant', content: t }); if (d.ai === false) document.getElementById('copMode')!.textContent = 'Mode hors ligne'; }
+  else hist.pop();
+}
+function openCop() {
+  if (!cop || !copBody || !copSugg) return;
+  cop.classList.add('open');
+  if (!copBody.children.length) {
+    addMsg('a', `Bonjour ${cop.dataset.first ?? ''}. Je réponds à partir des données que vous êtes autorisé·e à voir.`);
+    copSugg.innerHTML = '';
+    for (const s of ['Combien me reste-t-il de congés ?', 'Quelles sont mes tâches ?', 'Comment faire une note de frais ?', 'Résume ma semaine']) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = s;
+      b.addEventListener('click', () => askCop(s));
+      copSugg.appendChild(b);
+    }
+  }
+  copIn?.focus();
+}
+document.getElementById('copB')?.addEventListener('click', () => (cop?.classList.contains('open') ? cop.classList.remove('open') : openCop()));
+document.getElementById('copX')?.addEventListener('click', () => cop?.classList.remove('open'));
+document.getElementById('copF')?.addEventListener('submit', (e) => { e.preventDefault(); if (!copIn) return; const q = copIn.value; copIn.value = ''; askCop(q); });
+(window as unknown as { openChat: () => void }).openChat = openCop;
+
+const aiDlg = document.getElementById('osAi') as HTMLDialogElement | null, aiOut = document.getElementById('osAiOut') as HTMLTextAreaElement | null;
+$$<HTMLButtonElement>('[data-ai-task]').forEach((b) => b.addEventListener('click', async () => {
+  if (!aiDlg || !aiOut) return;
+  document.getElementById('osAiT')!.textContent = b.dataset.aiTitle || 'CEA Copilot';
+  aiOut.value = 'Rédaction en cours…';
+  aiDlg.showModal();
+  b.disabled = true;
+  const r = await fetch('/api/admin/os/copilot', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: b.dataset.aiTask, id: b.dataset.aiId }) }).catch(() => null);
+  const d = r ? await r.json().catch(() => ({})) : {};
+  aiOut.value = r?.ok ? d.reply : d.error || 'Copilot n’a pas pu répondre.';
+  b.disabled = false;
+}));
+document.getElementById('osAiCopy')?.addEventListener('click', () => { if (aiOut) navigator.clipboard?.writeText(aiOut.value).then(() => toast('Texte copié.'), () => toast('Copie impossible.')); });
 
 $$<HTMLSelectElement>('select[data-go]').forEach((s) => s.addEventListener('change', () => { location.href = s.value; }));
 

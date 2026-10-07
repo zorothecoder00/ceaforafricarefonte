@@ -82,7 +82,7 @@ const searchIndex = ([
     {!os && !translated && <div class="i18n-note">{t('notTranslated')} <a href={alt('fr')} hreflang="fr">Version française</a></div>}
     <main id="app" tabindex="-1" lang={translated ? lang : 'fr'} set:html={body} />
     {!os && <Footer />}
-    <Copilot />
+    {!os && <Copilot />}
     <CookieBanner lang={lang === 'en' ? 'en' : 'fr'} />
     <script type="application/json" id="searchIndex" set:html={JSON.stringify(searchIndex)} />
     <script type="application/json" id="currencies" set:html={JSON.stringify(loc.currencies.filter((c) => c.active).map(({ code, perEur, symbol }) => ({ code, perEur, symbol })))} />

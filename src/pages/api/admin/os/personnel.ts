@@ -1,6 +1,8 @@
 /* CEA OS — fiches du personnel (prototype : Ressources humaines › Effectifs), profils « dg » et « rh ».
    POST { action: 'create', name, email?, poste, country, grade, managerId, salary, leaveDays? }
-        → matricule EMPxxx ; le compte CEA OS est créé (ou rattaché s'il existe déjà) avec les droits du poste et une invitation part par e-mail.
+        → matricule EMPxxx ; le compte CEA OS est créé (ou rattaché s'il existe déjà) avec les droits du poste et une invitation part par e-mail
+          (si l'e-mail ne part pas : { link } = lien d'invitation à transmettre soi-même).
+   POST { action: 'invite', id } → renvoi de l'invitation tant que le compte n'a pas de mot de passe ({ link } si l'e-mail ne part pas).
    POST { action: 'update', id, phone?, salary, leaveDays, managerId, grade }
    POST { action: 'toggle', id } → départ (désactivation : accès révoqués, sessions fermées) ou réactivation. */
 import type { APIRoute } from 'astro';
@@ -13,7 +15,7 @@ import { json, fail, audit, clientIp } from '../../../../lib/session';
 import { osApi, type WithMe } from '../../../../lib/os/guard';
 import { nextEmp, staffById } from '../../../../lib/os/core';
 import { notifyStaff } from '../../../../lib/os/approvals';
-import { createMember, inviteLink, closeSessions } from '../../../../lib/members';
+import { createMember, inviteLink, closeSessions, hasPassword } from '../../../../lib/members';
 import { DOM, GRADES, PDOM, PK, REF, pn, profOf, refT } from '../../../../lib/os/ref';
 
 export const prerender = false;
@@ -29,6 +31,7 @@ const Body = z.discriminatedUnion('action', [
   }),
   z.object({ action: z.literal('update'), id: Id, phone: z.string().trim().max(40).optional().default(''), salary: z.coerce.number().int().min(0).max(1e9), leaveDays: z.coerce.number().min(0).max(120), managerId: z.preprocess((v) => (v === '' ? undefined : v), Id.optional()), grade: z.enum(GRADES) }),
   z.object({ action: z.literal('toggle'), id: Id }),
+  z.object({ action: z.literal('invite'), id: Id }),
 ]);
 
 const slug = (n: string) => n.toLowerCase().normalize('NFD').replace(/[^a-z ]/g, '').trim().replace(/ +/g, '.');
@@ -62,10 +65,11 @@ export const POST: APIRoute = async ({ locals, request, url }) => {
       department: dom ? DOM[dom].n : profOf(b.poste) === 'rep' ? 'Bureau de représentation ' + pn(b.country) : '', salary: b.salary, leaveDays: b.leaveDays,
       onboarding: [false, false, false],
     });
-    const inv = existing ? { sent: false } : await inviteLink(userId, url.origin, true);
+    const inv: { url?: string; sent: boolean } = existing ? { sent: false } : await inviteLink(userId, url.origin, true);
     if (b.managerId) await notifyStaff([b.managerId], `Nouveau collaborateur dans votre équipe : ${b.name}`, '/admin/annuaire');
     await audit(actor, 'os.personnel.creation', id, { poste: b.poste, pays: b.country }, ip);
-    return json({ ok: true, id, message: `${b.name} ajouté·e (${id}, ${refT(b.poste)}) ; compte CEA OS ${existing ? 'rattaché' : inv.sent ? 'créé, accès envoyés par e-mail' : 'créé (l’e-mail d’invitation n’a pas pu partir)'}.` });
+    const failed = !existing && !inv.sent && !!inv.url;
+    return json({ ok: true, id, ...(failed ? { link: inv.url } : {}), message: `${b.name} ajouté·e (${id}, ${refT(b.poste)}) ; compte CEA OS ${existing ? 'rattaché' : inv.sent ? 'créé, accès envoyés par e-mail' : 'créé, mais l’e-mail d’invitation n’a pas pu partir : transmettez-lui ce lien vous-même (valable 7 jours)'}.` });
   }
 
   const s = await staffById(b.id);
@@ -75,6 +79,16 @@ export const POST: APIRoute = async ({ locals, request, url }) => {
     await db.update(staff).set({ phone: b.phone, salary: b.salary, leaveDays: b.leaveDays, managerId: b.managerId ?? null, grade: b.grade, updatedAt: new Date() }).where(eq(staff.id, s.id));
     await audit(actor, 'os.personnel.modification', s.id, { salaire: b.salary, conges: b.leaveDays }, ip);
     return json({ ok: true, message: 'Fiche mise à jour.' });
+  }
+  if (b.action === 'invite') {
+    // Renvoi de l'invitation tant que la personne n'a pas choisi son mot de passe (jamais pour un compte déjà utilisé :
+    // le lien affiché permettrait de prendre la main sur ce compte)
+    if (!s.userId) return fail('Cette fiche n’a pas de compte de connexion.');
+    if (!s.active) return fail('Collaborateur désactivé.');
+    if (await hasPassword(s.userId)) return fail('Ce compte est déjà activé : la personne peut utiliser « Mot de passe oublié » sur la page de connexion.');
+    const inv = await inviteLink(s.userId, url.origin, true);
+    await audit(actor, 'os.personnel.invitation', s.id, { envoyee: inv.sent }, ip);
+    return json({ ok: true, ...(!inv.sent && { link: inv.url }), message: inv.sent ? `Invitation renvoyée à ${s.email}.` : 'L’e-mail n’a pas pu partir : transmettez ce lien vous-même (valable 7 jours).' });
   }
   const me = (c as WithMe).me;
   if (me?.id === s.id) return fail('Vous ne pouvez pas désactiver votre propre compte.');

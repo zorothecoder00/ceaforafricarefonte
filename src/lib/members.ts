@@ -7,7 +7,7 @@ import { auth } from './auth';
 import { db } from './db';
 import { env } from './env';
 import { sendEmail } from './messaging';
-import { user, session } from '../db/schema/auth';
+import { user, session, account } from '../db/schema/auth';
 import { userRole } from '../db/schema/app';
 import { dossier } from '../db/schema/kapital';
 
@@ -26,7 +26,8 @@ export async function inviteLink(userId: string, origin: string, firstTime: bool
   const ctx = await auth.$context;
   const token = randomBytes(24).toString('base64url');
   await ctx.internalAdapter.createVerificationValue({ identifier: `reset-password:${token}`, value: userId, expiresAt: new Date(Date.now() + INVITE_DAYS * 86_400_000) });
-  const base = (env('BETTER_AUTH_URL') ?? origin).replace(/\/$/, '');
+  // Adresse publique du site : jamais l'origine vide d'un traitement sans requête (approbation finale, tâche planifiée)
+  const base = (env('BETTER_AUTH_URL') || env('PUBLIC_SITE_URL') || origin || 'https://cea4africa.com').replace(/\/$/, '');
   const url = `${base}/connexion/nouveau-mot-de-passe?token=${token}`;
   const [u] = await db.select({ name: user.name, email: user.email }).from(user).where(eq(user.id, userId));
   let sent = false;
@@ -36,6 +37,12 @@ export async function inviteLink(userId: string, origin: string, firstTime: bool
     sent = await sendEmail(u.email, subject, text).then(() => true, () => false);
   }
   return { url, sent };
+}
+
+/** Le compte a-t-il déjà choisi un mot de passe ? (sinon : invitation jamais utilisée) */
+export async function hasPassword(userId: string): Promise<boolean> {
+  const [a] = await db.select({ id: account.id }).from(account).where(and(eq(account.userId, userId), eq(account.providerId, 'credential'), sql`${account.password} is not null`)).limit(1);
+  return !!a;
 }
 
 /** Ferme toutes les sessions d'un compte (suspension, changement d'adresse). */

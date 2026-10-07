@@ -177,7 +177,7 @@ const KCOLS = KAP_STEPS.filter((s) => !['incomplet', 'preselectionne'].includes(
               <td class="num small">{mfcfa(p.budget)}<br />{mfcfa(p.spent)} ({p.budget ? Math.round((p.spent / p.budget) * 100) : 0} %)</td>
               <td class="xs">{p.milestones.map((m, i) => <><button type="button" class={`tag ${m[1] ? 'ok' : ''}`} style="border:0;cursor:pointer" data-post="/api/admin/os/domaines" data-body={JSON.stringify({ action: 'prj.milestone', id: p.id, i, done: !m[1] })} data-reload title={m[1] ? 'Rouvrir' : 'Marquer atteint'}>{m[0]}</button> </>)}</td>
               <td class="small">{dstr(p.next)}</td>
-              <td style="white-space:nowrap"><button class="btn ghost sm" type="button" data-dlg="dlg-prju" data-set-id={p.id} data-set-progress={String(p.progress)} data-set-spent={String(p.spent)} data-set-health={p.health} data-set-label={p.name}>Mettre à jour</button> <button class="btn ghost sm" type="button" onclick="openChat()">Rapport bailleur</button></td>
+              <td style="white-space:nowrap"><button class="btn ghost sm" type="button" data-dlg="dlg-prju" data-set-id={p.id} data-set-progress={String(p.progress)} data-set-spent={String(p.spent)} data-set-health={p.health} data-set-label={p.name}>Mettre à jour</button> <button class="btn ghost sm" type="button" data-ai-task="bailleur" data-ai-id={p.id} data-ai-title={`Rapport bailleur — ${p.name}`}>Rapport bailleur</button></td>
             </tr>)}
             {!projs.length && <tr><td colspan="9" class="muted">Aucun projet dans le portefeuille.</td></tr>}
           </tbody>
@@ -334,7 +334,7 @@ const KCOLS = KAP_STEPS.filter((s) => !['incomplet', 'preselectionne'].includes(
         <div class="card">
           <h2>Consultations</h2>
           {CONSULTS.map((c) => { const open = c.close >= today.toISOString().slice(0, 10); return <div class="row between small" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>{c.t}</span><span>{fmt(voix.votes.find((v) => v.id === c.id)?.n ?? 0)} réponses <Tags st={open ? 'En cours' : 'Terminé'} /></span></div>; })}
-          <button class="btn ghost sm" type="button" onclick="openChat()" style="margin-top:10px">Analyser les réponses ouvertes</button>
+          <button class="btn ghost sm" type="button" data-ai-task="voix" data-ai-title="Analyse des propositions" style="margin-top:10px">Analyser les propositions</button>
         </div>
         <div class="card">
           <h2>Propositions de plaidoyer</h2>

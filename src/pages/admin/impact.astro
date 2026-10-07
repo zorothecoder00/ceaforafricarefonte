@@ -20,7 +20,7 @@ const META: Record<string, [string, string]> = {
 <AdminLayout title="CEA Impact Lab" lead={`Indicateurs calculés en direct à partir des modules · ${sc.label}${sc.sc.startsWith('r:') ? ' (vue organisation : filtre régional non appliqué aux indicateurs)' : ''}`}>
   <Fragment slot="actions">
     <a class="btn ghost" href="/impact/donnees/indicateurs.csv">Exporter</a>
-    <button class="btn" type="button" onclick="openChat()">Rapport d'impact avec Copilot</button>
+    <button class="btn" type="button" data-ai-task="impact" data-ai-title="Rapport d'impact">Rapport d'impact avec Copilot</button>
   </Fragment>
   <div class="grid g3">
     {d.kpis.map((k) => <div class="card kpi"><div class="l">{k.label}</div><div class="v num">{k.display}</div><div class="d">{META[k.id]?.[0] ?? ''}</div></div>)}
