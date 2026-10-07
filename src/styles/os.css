@@ -145,3 +145,6 @@ body.os .chatf input{flex:1}
 @media (max-width:760px){body.os .chatg{grid-template-columns:1fr}body.os .chatg .ch{max-height:180px}}
 body.os .pick{max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px}
 body.os .pick label{display:flex;gap:8px;align-items:center;padding:3px 0;font-size:.85rem}
+/* Résultats de la recherche globale */
+body.os .sres a{display:flex;gap:10px;padding:9px;border-radius:8px;text-decoration:none;align-items:center;color:var(--ink)}
+body.os .sres a:hover{background:var(--surface-2)}

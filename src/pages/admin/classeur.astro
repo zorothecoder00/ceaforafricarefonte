@@ -1,0 +1,52 @@
+---
+/* CEA OS — Documents (prototype › pDocs) : niveaux de confidentialité (Public, Interne, Confidentiel, Strictement
+   confidentiel), versions, consultation journalisée, partage sécurisé à durée limitée. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Dlg from '../../components/os/Dlg.astro';
+import Tags from '../../components/os/Tags.astro';
+import { desc } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { osDocument } from '../../db/schema/os';
+import { osContext, scopeState } from '../../lib/os/core';
+import { canSeeDoc, CONF } from '../../lib/os/support';
+import { DK, DOM, pn, dstr } from '../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const sc = scopeState(os, Astro.cookies);
+const docs = (await db.select().from(osDocument).orderBy(desc(osDocument.updatedAt))).filter((d) => sc.inScope({ country: d.country, domain: d.domain }));
+const CLS: Record<string, string> = { Public: 'ok', Interne: 'info', Confidentiel: 'warn', 'Strictement confidentiel': 'bad' };
+---
+<AdminLayout title="Documents" lead={`Niveaux de confidentialité, versions, partage sécurisé · ${sc.label}`}>
+  <Fragment slot="actions">{os.me && <button class="btn" type="button" data-dlg="dlg-up">Déposer un document</button>}</Fragment>
+  <div class="toolbar"><input class="in" placeholder="Rechercher" style="flex:1;min-width:220px" aria-label="Rechercher" data-filter="#dt" /></div>
+  <div class="tw">
+    <table class="t" id="dt">
+      <thead><tr><th>Document</th><th>Domaine</th><th>Pays</th><th>Confidentialité</th><th>Version</th><th>Modifié</th><th></th></tr></thead>
+      <tbody>
+        {docs.map((d) => <tr data-row={d.name}>
+          <td><b>{d.name}</b></td><td><Tags dom={d.domain} /></td><td>{d.country ? pn(d.country) : '—'}</td>
+          <td><span class={`tag ${CLS[d.confidentiality] ?? ''}`}>{d.confidentiality}</span></td><td>v{d.version}</td><td class="small">{dstr(d.updatedAt)}</td>
+          <td style="white-space:nowrap">{canSeeDoc(d, os) ? <><a class="btn ghost sm" href={`/api/admin/os/doc?id=${d.id}`} target="_blank" rel="noopener">Ouvrir</a> <button class="btn ghost sm" type="button" data-dlg="dlg-share" data-set-id={d.id} data-set-label={d.name}>Partager</button></> : <span class="tag bad">Accès restreint</span>}</td>
+        </tr>)}
+        {!docs.length && <tr><td colspan="7" class="muted">Aucun document.</td></tr>}
+      </tbody>
+    </table>
+  </div>
+  <p class="xs muted" style="margin-top:6px">Chaque consultation et chaque partage sont inscrits au journal d'audit. Déposer un fichier du même nom crée une nouvelle version. La gestion documentaire par dossiers reste disponible dans « Outils du site ».</p>
+  <Dlg id="dlg-up" title="Déposer un document" upload="/api/admin/os/support" submit="Enregistrer">
+    <input type="hidden" name="action" value="doc.upload" />
+    <div class="fg">
+      <div class="full"><label class="f" for="uf">Fichier</label><input class="in" type="file" id="uf" name="file" required /></div>
+      <div><label class="f" for="ud">Domaine</label><select class="in" id="ud" name="domain">{DK.map((d) => <option value={d} selected={d === os.me?.domain}>{DOM[d].n}</option>)}</select></div>
+      <div><label class="f" for="uc">Confidentialité</label><select class="in" id="uc" name="confidentiality">{CONF.map((c) => <option selected={c === 'Interne'}>{c}</option>)}</select></div>
+    </div>
+    <p class="small muted" style="margin-top:8px">Formats acceptés : PDF, Word, Excel, PowerPoint, images ; contrôle du contenu à chaque dépôt.</p>
+  </Dlg>
+  <Dlg id="dlg-share" title="Partager le document" api="/api/admin/os/support" submit="Créer le lien">
+    <input type="hidden" name="action" value="doc.share" /><input type="hidden" name="id" value="" />
+    <p class="small"><b data-text="label"></b></p>
+    <label class="f" for="se">Destinataire (e-mail)</label><input class="in" id="se" name="email" type="email" required style="width:100%" />
+    <label class="f" for="sx" style="margin-top:8px">Expiration</label><select class="in" id="sx" name="days"><option value="1">24 heures</option><option value="7">7 jours</option><option value="30">30 jours</option></select>
+  </Dlg>
+</AdminLayout>

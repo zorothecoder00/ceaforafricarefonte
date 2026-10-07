@@ -18,7 +18,7 @@ const { and, eq, sql, inArray } = await import('drizzle-orm');
 const { PDOM, DOM, BANDS, gradeOf, profOf, pn, DK } = await import('../src/lib/os/ref');
 
 if (process.argv.includes('--reset')) {
-  await db.execute(sql`truncate os_event_fin, os_project, os_capital, os_site_lot, os_site_log, os_site_statement, os_site_sub, os_site_hse, os_site, os_tender, os_inscription, os_report, os_candidate, os_recruit, os_payroll, os_ledger, os_closing, os_treasury, os_receipt, os_po, os_stock_move, os_stock_item, os_supplier, os_contract, os_okr, os_risk, os_audit, os_review_item, os_review, os_interview, os_flow, os_country, os_message, os_channel_seen, os_channel, os_meeting, os_task, os_decision, os_request, os_delegation, os_timesheet, os_budget, staff restart identity cascade`);
+  await db.execute(sql`truncate os_ticket, os_doc_share, os_document, os_event_fin, os_project, os_capital, os_site_lot, os_site_log, os_site_statement, os_site_sub, os_site_hse, os_site, os_tender, os_inscription, os_report, os_candidate, os_recruit, os_payroll, os_ledger, os_closing, os_treasury, os_receipt, os_po, os_stock_move, os_stock_item, os_supplier, os_contract, os_okr, os_risk, os_audit, os_review_item, os_review, os_interview, os_flow, os_country, os_message, os_channel_seen, os_channel, os_meeting, os_task, os_decision, os_request, os_delegation, os_timesheet, os_budget, staff restart identity cascade`);
   console.log('• Tables de CEA OS vidées.');
 }
 const [any] = await db.select({ id: s.staff.id }).from(s.staff).limit(1);
@@ -195,5 +195,13 @@ await db.insert(s.osSiteLog).values([{ siteId: 'CH-201', weather: 'Ensoleillé',
 await db.insert(s.osSiteSub).values([{ siteId: 'CH-202', name: 'Électro Services (fictif)', lot: 'Second œuvre', amount: 86e6, paid: 30e6 }]);
 await db.insert(s.osSiteHse).values([{ siteId: 'CH-202', text: 'Presque-accident — chute d’outil depuis l’échafaudage', at: ago(4) }]);
 await db.insert(s.osTender).values([{ id: 'AO-26-031', object: "Construction d'un lycée technique", client: 'État (fictif)', country: 'TG', amount: 1.2e9, deadline: ago(-6), status: 'En étude', probability: 40 }, { id: 'AO-26-034', object: 'Pont de franchissement rural', client: 'Agence des routes (fictive)', country: 'BJ', amount: 640e6, deadline: ago(-18), status: 'Veille', probability: 25 }]);
+// Support (lot 7)
+const someone = (k: number) => rows[(k * 7) % rows.length];
+await db.insert(s.osTicket).values([
+  ['Accès refusé au module Comptabilité', 'Accès et droits', 'P2', 'En cours', 30],
+  ['Imprimante du bureau de Lomé hors service', 'Logistique', 'P3', 'Ouvert', 50],
+  ['Messagerie lente depuis ce matin', 'Informatique', 'P1', 'Ouvert', 6],
+  ['Remboursement de note de frais en attente', 'Finance', 'P3', 'Résolu', 120],
+].map(([title, category, priority, status, h], k) => { const p = someone(k + 1); return { id: `TK-${311 + k}`, title: title as string, category: category as string, priority: priority as string, status: status as string, byStaff: p.id!, country: p.country, domain: p.domain ?? 'prj', createdAt: new Date(Date.now() - (h as number) * 36e5) }; }));
 console.log(`✓ ${rows.length} collaborateurs, budgets ${year} de ${DK.length} domaines. Comptes rattachés : admin@cea.demo (DG), analyste@cea.demo, editeur@cea.demo.`);
 process.exit(0);

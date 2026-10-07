@@ -1,0 +1,104 @@
+---
+/* CEA OS — Administration (prototype › pAdmin), profils dg, it, conf : utilisateurs et profils, matrice d'accès aux modules,
+   journal d'audit inaltérable, intégrations, pays et bureaux, export des données (réversibilité). */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { desc, eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { auditLog } from '../../db/schema/app';
+import { user } from '../../db/schema/auth';
+import { osContext, allStaff, MODS } from '../../lib/os/core';
+import { env } from '../../lib/env';
+import { PAYS, PK, PROF, REGIONS, DOM, pn, refT, dtstr, type Dom, type Prof } from '../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const tab = Astro.url.searchParams.get('t') ?? 'users';
+const T: [string, string][] = [['users', 'Utilisateurs et profils'], ['droits', 'Matrice des droits'], ['journal', "Journal d'audit"], ['integ', 'Intégrations et API'], ['pays', 'Pays et bureaux'], ['data', 'Données']];
+const people = await allStaff();
+const journal = tab === 'journal' ? await db.select({ at: auditLog.at, a: auditLog.action, t: auditLog.target, who: user.name }).from(auditLog).leftJoin(user, eq(user.id, auditLog.actorId)).orderBy(desc(auditLog.at)).limit(300) : [];
+const profs = Object.keys(PROF) as Prof[];
+const mods = MODS.flatMap(([, it]) => it).filter((i) => i.spec && (!i.dom || i.dom === 'kap' || i.dom === 'btp'));
+const has = (spec: string, p: string) => spec.split(' ').some((t) => t === p || t.startsWith(p + ':'));
+const on = (...k: string[]) => k.every((x) => !!env(x));
+const CONNECTORS: [string, string, boolean][] = [
+  ['Agrégateur de paiement (Mobile Money, cartes)', 'Webhooks signés', on('CINETPAY_APIKEY', 'CINETPAY_SITE_ID')],
+  ['WhatsApp Business Platform', 'Notifications', on('WHATSAPP_TOKEN', 'WHATSAPP_PHONE_ID')],
+  ['E-mail transactionnel', 'Notifications', on('RESEND_API_KEY')],
+  ['SMS', 'Codes et alertes', on('TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN')],
+  ['Notifications push', 'Navigateur et mobile', on('VAPID_PRIVATE_KEY')],
+  ['Stockage chiffré des fichiers', 'Documents, justificatifs, CV', on('S3_BUCKET', 'S3_ACCESS_KEY_ID')],
+  ['CEA Copilot (IA)', 'Assistant, rédaction, synthèses', on('ANTHROPIC_API_KEY')],
+  ['Signature électronique', 'Contrats', false],
+  ['Prestataire KYC/KYB', 'Conformité', false],
+  ['Google Workspace / Microsoft 365', 'Agenda', false],
+  ['Banques (relevés)', 'Trésorerie', false],
+  ['Paie locale par pays', 'RH', false],
+];
+const canData = ['dg', 'it'].includes(os.prof ?? '') || os.superuser;
+---
+<AdminLayout title="Administration" lead="Comptes, droits, traçabilité, intégrations et données">
+  <div class="tabs">{T.map(([k, l]) => <a href={`/admin/administration?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
+  {tab === 'users' && (
+    <>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Utilisateur</th><th>Poste</th><th>Pays</th><th>Profil d'accès</th><th>Domaine</th><th>Compte</th><th>Actif</th></tr></thead>
+          <tbody>{people.map((s) => <tr>
+            <td><b>{s.name}</b><div class="xs muted">{s.id} · {s.email}</div></td><td class="small">{refT(s.poste)}</td><td>{pn(s.country)}</td>
+            <td class="small"><span class="tag">{s.poste}</span> {PROF[s.prof]}</td><td>{s.domain && s.domain in DOM ? DOM[s.domain as Dom].n.replace('CEA ', '') : '—'}</td>
+            <td class="small">{s.userId ? 'Rattaché' : 'Sans compte'}</td>
+            <td>{s.active ? s.suspended ? <span class="tag bad">Suspendu</span> : <span class="tag ok">Actif</span> : <span class="tag">Désactivé</span>}</td>
+          </tr>)}</tbody>
+        </table>
+      </div>
+      <p class="xs muted" style="margin-top:6px">Le profil d'accès découle du poste occupé : pour le changer, affectez un autre poste dans « Organisation et postes ». Création et départs : ressources humaines. Les comptes et rôles des membres du site se gèrent dans « Comptes et rôles ».</p>
+    </>
+  )}
+  {tab === 'droits' && (
+    <>
+      <p class="small muted">Accès aux modules par profil (✓). Le périmètre de données s'ajoute : pays pour les représentants, région pour les directeurs régionaux, domaine pour les chefs de département. Les pages du site gardent leur matrice de droits (« Matrice des droits »).</p>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Module</th>{profs.map((p) => <th style="writing-mode:vertical-rl;transform:rotate(180deg);height:120px">{PROF[p]}</th>)}</tr></thead>
+          <tbody>{mods.map((m) => <tr><td class="small">{m.label}</td>{profs.map((p) => <td style="text-align:center">{has(m.spec!, p) ? '✓' : ''}</td>)}</tr>)}</tbody>
+        </table>
+      </div>
+    </>
+  )}
+  {tab === 'journal' && (
+    <>
+      <div class="toolbar"><a class="btn ghost" href="/api/admin/os/export?quoi=journal">Exporter le journal</a></div>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Date</th><th>Utilisateur</th><th>Action</th><th>Objet</th></tr></thead>
+          <tbody>{journal.map((a) => <tr><td class="small num">{dtstr(a.at)}</td><td class="small">{a.who ?? 'Site web'}</td><td>{a.a}</td><td class="small">{a.t}</td></tr>)}</tbody>
+        </table>
+      </div>
+      <p class="xs muted" style="margin-top:6px">Journal inaltérable : aucune ligne ne peut être modifiée ni supprimée.</p>
+    </>
+  )}
+  {tab === 'integ' && (
+    <div class="card">
+      <h3>Connecteurs</h3>
+      {CONNECTORS.map(([n, u, ok]) => <div class="row between small" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>{n}<br /><span class="xs muted">{u}</span></span>{ok ? <span class="tag ok">Actif</span> : <span class="tag warn">À configurer</span>}</div>)}
+      <p class="xs muted" style="margin-top:8px">Clés d'API stockées dans les variables d'environnement de l'hébergeur (jamais dans le code) ; état détecté automatiquement. API publique documentée : <a href="/developpeurs">/developpeurs</a>.</p>
+    </div>
+  )}
+  {tab === 'pays' && (
+    <div class="tw">
+      <table class="t">
+        <thead><tr><th>Pays</th><th>Région</th><th>Bureau régional</th><th>Représentant·e</th><th>Devise</th><th>Référentiel comptable</th><th>Effectif</th></tr></thead>
+        <tbody>{PK.map((p) => { const r = people.find((s) => s.prof === 'rep' && s.country === p && s.active); const reg = REGIONS[PAYS[p][1]]; return (
+          <tr><td><b>{pn(p)}</b></td><td>{reg.n}</td><td>{reg.city}</td><td class="small">{r?.name ?? '—'}</td><td>{PAYS[p][2]}</td><td class="small">{['XOF', 'XAF', 'CDF', 'GNF'].includes(PAYS[p][2]) ? 'SYSCOHADA révisé' : 'Référentiel local'}</td><td class="num">{people.filter((s) => s.country === p && s.active).length}</td></tr>
+        ); })}</tbody>
+      </table>
+    </div>
+  )}
+  {tab === 'data' && (
+    <div class="card" style="max-width:760px">
+      <h3>Base de données</h3>
+      <p class="small">Toutes les données de CEA OS sont dans la base PostgreSQL de la plateforme, partagées en temps réel par tous les utilisateurs, avec une sauvegarde chiffrée chaque nuit.</p>
+      {canData ? <a class="btn ghost" href="/api/admin/os/export?quoi=donnees">Exporter toutes les données de CEA OS (réversibilité)</a> : <p class="small muted">Export réservé à la Direction générale et à l'informatique.</p>}
+    </div>
+  )}
+</AdminLayout>

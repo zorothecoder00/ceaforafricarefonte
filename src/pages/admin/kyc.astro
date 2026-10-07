@@ -1,0 +1,51 @@
+---
+/* CEA OS — Conformité KYC / KYB (prototype › pKYC) : investisseurs à vérifier, risque (contrôles du prestataire : identité,
+   sanctions, personnes politiquement exposées), décision de la conformité (vigilance renforcée confirmée pour une PPE).
+   Le détail des pièces et des contrôles reste dans « Conformité et KYC » (Outils du site). */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Tags from '../../components/os/Tags.astro';
+import { desc, eq, inArray } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { investorProfile, kycCheck } from '../../db/schema/kapital';
+import { user } from '../../db/schema/auth';
+import { profile } from '../../db/schema/app';
+import { osContext } from '../../lib/os/core';
+import { pn } from '../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const canDecide = ['dg', 'conf'].includes(os.prof ?? '') || os.superuser;
+const inv = await db.select({ p: investorProfile, name: user.name, country: profile.country }).from(investorProfile).leftJoin(user, eq(user.id, investorProfile.userId)).leftJoin(profile, eq(profile.userId, investorProfile.userId)).orderBy(desc(investorProfile.kycStatus));
+const checks = inv.length ? await db.select().from(kycCheck).where(inArray(kycCheck.userId, inv.map((x) => x.p.userId))) : [];
+const TYPE: Record<string, string> = { particulier: 'Investisseur particulier', averti: 'Investisseur averti', professionnel: 'Personne morale / professionnel' };
+const rows = inv.map((x) => {
+  const c = checks.filter((k) => k.userId === x.p.userId);
+  const pep = c.some((k) => k.kind === 'pep' && k.status !== 'verifie' && k.status !== 'non_commence');
+  const sanc = c.some((k) => k.kind === 'sanctions' && k.status === 'refuse');
+  const risk = sanc || pep ? 'Élevé' : x.p.category === 'professionnel' ? 'Moyen' : 'Faible';
+  const st = x.p.kycStatus === 'verifie' ? 'Conforme' : x.p.kycStatus === 'refuse' ? 'Refusé' : x.p.kycStatus === 'expire' ? 'Expiré' : pep ? 'Alerte PEP' : 'À vérifier';
+  return { ...x, risk, st, pep };
+});
+---
+<AdminLayout title="Conformité — vérifications KYC / KYB" lead="Investisseurs à vérifier · pièces stockées dans un espace chiffré, accès journalisé">
+  <Fragment slot="actions"><a class="btn ghost" href="/admin/conformite">Pièces et contrôles détaillés</a></Fragment>
+  <div class="tw">
+    <table class="t">
+      <thead><tr><th>Nom</th><th>Type</th><th>Pays</th><th>Risque</th><th>Statut</th><th></th></tr></thead>
+      <tbody>
+        {rows.map((x) => <tr>
+          <td><b>{x.name ?? '—'}</b></td><td>{TYPE[x.p.category ?? ''] ?? '—'}</td><td>{x.country ? pn(x.country) : '—'}</td>
+          <td><span class={`tag ${x.risk === 'Élevé' ? 'bad' : x.risk === 'Moyen' ? 'warn' : 'ok'}`}>{x.risk}</span></td>
+          <td><Tags st={x.st === 'Refusé' ? 'Rejetée' : x.st} label={x.st} /></td>
+          <td style="white-space:nowrap">{canDecide && ['À vérifier', 'Alerte PEP'].includes(x.st) && <>
+            <button class="btn ok sm" type="button" data-post="/api/admin/os/support" data-body={JSON.stringify({ action: 'kyc.decide', userId: x.p.userId, status: 'verifie' })} data-confirm={x.pep ? `Personne politiquement exposée : confirmez-vous la validation de ${x.name} après vigilance renforcée ?` : undefined} data-reload>Conforme</button>
+            <button class="btn ghost sm" type="button" data-post="/api/admin/os/support" data-body={JSON.stringify({ action: 'kyc.decide', userId: x.p.userId, status: 'refuse' })} data-reload>Refuser</button>
+            <button class="btn ghost sm" type="button" data-post="/api/admin/os/support" data-body={JSON.stringify({ action: 'kyc.decide', userId: x.p.userId, status: 'en_cours' })}>Demander des pièces</button>
+          </>}</td>
+        </tr>)}
+        {!rows.length && <tr><td colspan="6" class="muted">Aucun investisseur à vérifier.</td></tr>}
+      </tbody>
+    </table>
+  </div>
+  <p class="small muted" style="margin-top:8px">Contrôles automatiques effectués par le prestataire : identité, listes de sanctions, personnes politiquement exposées.</p>
+</AdminLayout>

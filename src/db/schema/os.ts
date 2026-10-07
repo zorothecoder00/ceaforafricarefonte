@@ -507,3 +507,43 @@ export const osTender = pgTable('os_tender', {
   probability: integer('probability').notNull().default(30),
   createdAt: ts('created_at').notNull().defaultNow(),
 });
+
+/* ===== Lot 7 : support et administration ===== */
+
+/* Tickets internes (informatique, logistique, accès, finance) ; délais cibles P1 4 h, P2 24 h, P3 72 h. */
+export const osTicket = pgTable('os_ticket', {
+  id: text('id').primaryKey(), // TK-311
+  title: text('title').notNull(),
+  priority: text('priority').notNull().default('P3'),
+  category: text('category').notNull().default('Informatique'),
+  status: text('status').notNull().default('Ouvert'), // Ouvert | En cours | Résolu
+  text: text('text').notNull().default(''),
+  byStaff: text('by_staff').references(() => staff.id, { onDelete: 'set null' }),
+  country: text('country'),
+  domain: text('domain'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+});
+
+/* Documents de CEA OS : niveau de confidentialité, versions, liens de partage à durée limitée. */
+export const osDocument = pgTable('os_document', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  domain: text('domain'),
+  country: text('country'),
+  confidentiality: text('confidentiality').notNull().default('Interne'), // Public | Interne | Confidentiel | Strictement confidentiel
+  version: integer('version').notNull().default(1),
+  storageKey: text('storage_key').notNull(),
+  mime: text('mime').notNull(),
+  size: integer('size').notNull().default(0),
+  by: text('by'),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+});
+export const osDocShare = pgTable('os_doc_share', {
+  token: text('token').primaryKey(),
+  documentId: uuid('document_id').notNull().references(() => osDocument.id, { onDelete: 'cascade' }),
+  email: text('email').notNull(),
+  expiresAt: ts('expires_at').notNull(),
+  by: text('by'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});

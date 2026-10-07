@@ -55,6 +55,27 @@ $$<HTMLFormElement>('form[data-upload]').forEach((f) => f.addEventListener('subm
   }
 }));
 
+/* Recherche globale de CEA OS (bouton ⌕ et Ctrl+K) : remplace la recherche du site public dans le back-office */
+const sdlg = document.getElementById('osSearch') as HTMLDialogElement | null;
+const sq = document.getElementById('osSq') as HTMLInputElement | null, sr = document.getElementById('osSr');
+const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+const openSearch = () => { if (!sdlg || !sq) return; sdlg.showModal(); sq.value = ''; sq.focus(); };
+document.getElementById('osSearchBtn')?.addEventListener('click', openSearch);
+window.addEventListener('keydown', (e) => { if (sdlg && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); e.stopImmediatePropagation(); openSearch(); } }, true);
+let st: number | undefined;
+sq?.addEventListener('input', () => {
+  clearTimeout(st);
+  st = window.setTimeout(async () => {
+    const q = sq.value.trim();
+    if (!sr) return;
+    if (q.length < 2) { sr.innerHTML = ''; return; }
+    const r = await fetch('/api/admin/os/recherche?q=' + encodeURIComponent(q), { credentials: 'same-origin' }).catch(() => null);
+    const d = r?.ok ? await r.json().catch(() => null) : null;
+    const res: [string, string, string][] = d?.results ?? [];
+    sr.innerHTML = res.length ? res.map(([k, t, h]) => `<a href="${esc(h)}"><span class="tag info">${esc(k)}</span><span>${esc(t)}</span></a>`).join('') : '<div class="empty">Aucun résultat dans votre périmètre.</div>';
+  }, 250);
+});
+
 $$<HTMLSelectElement>('select[data-go]').forEach((s) => s.addEventListener('change', () => { location.href = s.value; }));
 
 $$<HTMLInputElement>('[data-filter]').forEach((i) => i.addEventListener('input', () => {

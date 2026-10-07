@@ -1,0 +1,68 @@
+---
+/* CEA OS — Support (prototype › pSupport) : tickets internes (informatique, logistique, accès, finance) et demandes reçues
+   du site web, délais cibles par priorité (P1 4 h, P2 24 h, P3 72 h), statut notifié au demandeur. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Dlg from '../../components/os/Dlg.astro';
+import Tags from '../../components/os/Tags.astro';
+import { desc, ne } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { osTicket } from '../../db/schema/os';
+import { contactMessage } from '../../db/schema/app';
+import { osContext, allStaff, canUse, MANAGERS, scopeState } from '../../lib/os/core';
+import { SLA, SITE_PRIO, SITE_STATUS } from '../../lib/os/support';
+import { pn, dstr } from '../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const sc = scopeState(os, Astro.cookies);
+const isIT = ['it', 'dg'].includes(os.prof ?? '') || os.superuser;
+const mgr = canUse(MANAGERS, os);
+const people = await allStaff();
+const name = (id: string | null) => people.find((s) => s.id === id)?.name ?? '—';
+const internal = (await db.select().from(osTicket).orderBy(desc(osTicket.createdAt)).limit(300)).filter((t) => isIT || t.byStaff === os.me?.id || (mgr && sc.inScope({ country: t.country, domain: t.domain })));
+const site = isIT || mgr ? (await db.select().from(contactMessage).where(ne(contactMessage.motif, 'Inscription des entrepreneurs membres')).orderBy(desc(contactMessage.createdAt)).limit(100)).filter((m) => isIT || sc.inScope({ country: m.country })) : [];
+type Row = { kind: 'int' | 'site'; id: string; ref: string; title: string; text: string; origin: string; p: string; country: string | null; at: Date; st: string };
+const rows: Row[] = [
+  ...internal.map((t) => ({ kind: 'int' as const, id: t.id, ref: t.id, title: t.title, text: t.text, origin: name(t.byStaff), p: t.priority, country: t.country, at: t.createdAt, st: t.status })),
+  ...site.map((m) => ({ kind: 'site' as const, id: m.id, ref: m.reference, title: m.motif, text: `${m.name} — ${m.message}`, origin: 'Site web', p: SITE_PRIO[m.priority] ?? 'P3', country: m.country, at: m.createdAt, st: SITE_STATUS[m.status] ?? 'Ouvert' })),
+].sort((a, b) => (a.st === 'Résolu' ? 1 : 0) - (b.st === 'Résolu' ? 1 : 0) || b.at.getTime() - a.at.getTime());
+const canEdit = (_r: Row) => isIT || mgr;
+---
+<AdminLayout title="Support" lead={isIT ? 'Tous les tickets internes et externes' : 'Mes tickets et ceux de mon périmètre'}>
+  <Fragment slot="actions">{os.me && <button class="btn" type="button" data-dlg="dlg-ticket">Signaler un problème</button>}</Fragment>
+  <div class="tw">
+    <table class="t">
+      <thead><tr><th>Ticket</th><th>Objet</th><th>Origine</th><th>Priorité</th><th>Pays</th><th>Délai cible</th><th>Statut</th></tr></thead>
+      <tbody>
+        {rows.map((r) => { const age = (Date.now() - r.at.getTime()) / 36e5; const late = age > (SLA[r.p] ?? 72) && r.st !== 'Résolu'; return (
+          <tr>
+            <td class="small">{r.ref}<br />{dstr(r.at)}</td>
+            <td>{r.title}{r.text && <div class="xs muted">{r.text.slice(0, 100)}</div>}</td>
+            <td class="small">{r.origin === 'Site web' ? <span class="tag gold">Site web</span> : r.origin}</td>
+            <td><Tags st={r.p} /></td><td>{r.country ? pn(r.country) : '—'}</td>
+            <td class:list={['small', { down: late }]}>{SLA[r.p] ?? 72} h{late && ' — dépassé'}</td>
+            <td>{canEdit(r) ? <select class="in xs" style="min-width:112px" aria-label="Statut" data-t={r.id} data-k={r.kind}>{['Ouvert', 'En cours', 'Résolu'].map((s) => <option selected={s === r.st}>{s}</option>)}</select> : <Tags st={r.st} />}</td>
+          </tr>
+        ); })}
+        {!rows.length && <tr><td colspan="7" class="muted">Aucun ticket.</td></tr>}
+      </tbody>
+    </table>
+  </div>
+  <p class="xs muted" style="margin-top:6px">Les échanges détaillés avec les demandeurs du site se poursuivent dans « Messages et signalements ».</p>
+  <Dlg id="dlg-ticket" title="Signaler un problème" api="/api/admin/os/support" submit="Envoyer" wide>
+    <input type="hidden" name="action" value="ticket.create" />
+    <div class="fg">
+      <div class="full"><label class="f" for="to">Objet</label><input class="in" id="to" name="title" required /></div>
+      <div><label class="f" for="tc">Catégorie</label><select class="in" id="tc" name="category"><option>Informatique</option><option>Logistique</option><option>Accès et droits</option><option>Finance</option><option>Autre</option></select></div>
+      <div><label class="f" for="tp">Urgence</label><select class="in" id="tp" name="priority"><option value="P3">Normale</option><option value="P2">Importante</option><option value="P1">Bloquante</option></select></div>
+      <div class="full"><label class="f" for="tx">Description</label><textarea class="in" id="tx" name="text"></textarea></div>
+    </div>
+  </Dlg>
+</AdminLayout>
+<script>
+  document.querySelectorAll<HTMLSelectElement>('[data-t]').forEach((s) => s.addEventListener('change', async () => {
+    const r = await fetch('/api/admin/os/support', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: s.dataset.k === 'site' ? 'site.status' : 'ticket.status', id: s.dataset.t, status: s.value }) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    (window as unknown as { toast: (t: string) => void }).toast(r?.ok ? d.message : d.error || 'Une erreur est survenue.');
+  }));
+</script>

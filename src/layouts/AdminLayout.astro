@@ -80,7 +80,7 @@ const roleLine = me.roles.filter((r) => r !== 'membre').map((r) => ROLE_LABEL[r 
           ? <div class="os-scope" title="Périmètre affiché"><b>Périmètre</b><select id="scopeSel" aria-label="Périmètre affiché">{sc.opts.map(([v, l]) => <option value={v} selected={v === sc.sc}>{l}</option>)}</select></div>
           : <div class="os-scope" title="Périmètre affiché"><b>Périmètre</b><span>{sc.opts[0][1].trim()}</span></div>}
         <div class="os-grow"></div>
-        <button class="os-ib" type="button" id="searchBtn" aria-label="Rechercher (Ctrl+K)">⌕ <span class="hide-s">Rechercher</span></button>
+        <button class="os-ib" type="button" id="osSearchBtn" aria-label="Rechercher (Ctrl+K)">⌕ <span class="hide-s">Rechercher</span></button>
         {os.me && <a class="os-ib" href="/admin/approbations" aria-label={`Approbations : ${pending}`}>✓ <span class="hide-s">Approbations</span>{pending > 0 && <span class="badge">{pending > 99 ? '99+' : pending}</span>}</a>}
         <a class="os-ib" href="/espace/notifications" aria-label="Notifications">🔔<span class="badge" data-unread hidden></span></a>
         <button class="os-ib" type="button" onclick="openChat()" aria-label="Ouvrir CEA Copilot">✦ <span class="hide-s">Copilot</span></button>
@@ -96,6 +96,10 @@ const roleLine = me.roles.filter((r) => r !== 'membre').map((r) => ROLE_LABEL[r 
           <div class="row"><slot name="actions" /></div>
         </div>
         {allowed && hints.length > 0 && <RightsHint objs={hints} />}
+        <dialog class="os-dlg wide" id="osSearch" aria-labelledby="osSearchT">
+          <div class="dh"><h3 id="osSearchT">Rechercher dans CEA OS</h3><button class="os-ib" type="button" data-close aria-label="Fermer">✕</button></div>
+          <div class="db"><input class="in" id="osSq" style="width:100%" placeholder="Personne, contact, dossier, chantier, facture, demande, inscription…" aria-label="Rechercher" autocomplete="off" /><div class="sres" id="osSr" style="margin-top:10px"><p class="small muted">Ctrl+K. Les résultats respectent vos droits.</p></div></div>
+        </dialog>
         {allowed ? <slot /> : <div class="empty">Votre profil ne donne pas accès à ce module. Les droits sont gérés par l’administration. <a href="/admin">Revenir à l’accueil</a></div>}
       </div>
     </div>

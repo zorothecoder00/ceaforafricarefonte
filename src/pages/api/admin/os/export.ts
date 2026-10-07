@@ -1,10 +1,13 @@
 /* CEA OS — exports CSV (séparateur « ; », UTF-8 avec BOM pour Excel).
    GET ?quoi=effectifs (profils dg, rh) · ?quoi=ecritures (profils dg, fin : écritures SYSCOHADA, une ligne par compte)
-       ?quoi=paie&m=AAAA-MM (profils dg, rh : livre de paie) */
+       ?quoi=paie&m=AAAA-MM (profils dg, rh : livre de paie) · ?quoi=membres · ?quoi=journal (dg, it, conf : journal d'audit)
+       ?quoi=donnees (dg, it : toutes les tables de CEA OS en JSON, réversibilité) */
 import type { APIRoute } from 'astro';
-import { asc, eq } from 'drizzle-orm';
+import { asc, desc, eq, sql } from 'drizzle-orm';
 import { db } from '../../../../lib/db';
 import { osLedger, osPayroll } from '../../../../db/schema/os';
+import { auditLog } from '../../../../db/schema/app';
+import { user } from '../../../../db/schema/auth';
 import { fail, audit } from '../../../../lib/session';
 import { osApi } from '../../../../lib/os/guard';
 import { allStaff } from '../../../../lib/os/core';
@@ -15,15 +18,26 @@ import { memberBase } from '../../../../lib/os/relations';
 
 export const prerender = false;
 
-const SPEC: Record<string, string> = { effectifs: 'dg rh', ecritures: 'dg fin', paie: 'dg rh', membres: 'dg dirreg rep agent conf com' };
+const SPEC: Record<string, string> = { effectifs: 'dg rh', ecritures: 'dg fin', paie: 'dg rh', membres: 'dg dirreg rep agent conf com', journal: 'dg it conf', donnees: 'dg it' };
 
 export const GET: APIRoute = async ({ locals, url }) => {
   const quoi = url.searchParams.get('quoi') ?? '';
   if (!SPEC[quoi]) return fail('Export inconnu.', 404);
   const c = await osApi(locals.user, SPEC[quoi]);
   if (c instanceof Response) return c;
+  if (quoi === 'donnees') {
+    // Réversibilité : toutes les tables de CEA OS (os_* et personnel) en JSON
+    const tables = (await db.execute(sql`select tablename from pg_tables where schemaname = 'public' and (tablename like 'os\\_%' or tablename = 'staff') order by 1`)).rows as { tablename: string }[];
+    const out: Record<string, unknown[]> = {};
+    for (const t of tables) out[t.tablename] = (await db.execute(sql.raw(`select * from "${t.tablename}"`))).rows;
+    await audit(locals.user!.id, 'os.export', quoi, { tables: tables.length });
+    return new Response(JSON.stringify({ export: 'CEA OS', at: new Date().toISOString(), tables: out }, null, 1), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': 'attachment; filename="cea-os-export.json"', 'Cache-Control': 'no-store' } });
+  }
   let rows: unknown[][];
-  if (quoi === 'effectifs') {
+  if (quoi === 'journal') {
+    const l = await db.select({ at: auditLog.at, a: auditLog.action, t: auditLog.target, who: user.name }).from(auditLog).leftJoin(user, eq(user.id, auditLog.actorId)).orderBy(desc(auditLog.at)).limit(20000);
+    rows = [['Date', 'Utilisateur', 'Action', 'Objet'], ...l.map((x) => [x.at, x.who ?? 'Site web', x.a, x.t ?? ''])];
+  } else if (quoi === 'effectifs') {
     const people = await allStaff();
     rows = [['Matricule', 'Nom', 'Poste', 'Grade', 'Pays', 'Département', 'Entrée', 'Salaire brut', 'Actif'], ...people.map((s) => [s.id, s.name, `${s.poste} — ${refT(s.poste)}`, s.grade, pn(s.country), s.department, dstr(s.hireDate), s.salary, s.active ? 'oui' : 'non'])];
   } else if (quoi === 'membres') {

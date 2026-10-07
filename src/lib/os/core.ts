@@ -104,10 +104,12 @@ export const MODS: [string, NavItem[]][] = [
     { href: '/admin/paiements', label: 'Paiements en ligne', obj: 'paiements' },
   ]],
   ['Support et administration', [
-    { href: '/admin/documents', label: 'Documents', obj: 'documents' },
+    { href: '/admin/support', label: 'Support', spec: ALL },
+    { href: '/admin/classeur', label: 'Documents', spec: ALL },
     { href: '/admin/organisation', label: 'Organisation et postes', spec: 'dg adg ops rh it conf' },
     { href: '/admin/processus', label: 'Processus et seuils', spec: 'dg ops it conf' },
-    { href: '/admin/conformite', label: 'Conformité KYC', obj: 'pieces_kyc' },
+    { href: '/admin/kyc', label: 'Conformité KYC', spec: 'dg conf analyste' },
+    { href: '/admin/administration', label: 'Administration', spec: 'dg it conf' },
     { href: '/admin/membres', label: 'Comptes et rôles', obj: 'membres' },
     { href: '/admin/droits', label: 'Matrice des droits', obj: 'contenus' },
     { href: '/admin/audit', label: "Journal d'audit", obj: 'journal_audit' },
@@ -115,6 +117,8 @@ export const MODS: [string, NavItem[]][] = [
   ]],
   ['Outils du site', [
     { href: '/admin/kapital', label: 'Dossiers Kapital (fiches)', obj: 'dossier_kapital' },
+    { href: '/admin/documents', label: 'Gestion documentaire (dossiers)', obj: 'documents' },
+    { href: '/admin/conformite', label: 'Pièces et contrôles KYC', obj: 'pieces_kyc' },
     { href: '/admin/projets', label: 'Projets des entrepreneurs', obj: 'fiche_projet' },
     { href: '/admin/emplois', label: "Offres d'emploi (modération)", obj: 'offre_emploi' },
     { href: '/admin/programmes', label: 'Programmes et cohortes', obj: 'programmes' },
