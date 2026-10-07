@@ -8,6 +8,8 @@ import { crmContact } from '../../../../db/schema/crm';
 import { dossier } from '../../../../db/schema/kapital';
 import { invoice } from '../../../../db/schema/finance';
 import { json } from '../../../../lib/session';
+import { matchAll } from '../../../../lib/fold';
+import { search } from '../../../../lib/fuzzy';
 import { osApi } from '../../../../lib/os/guard';
 import { allStaff, canUse, scopeState, MANAGERS } from '../../../../lib/os/core';
 import { can, isStaff } from '../../../../lib/rbac';
@@ -25,9 +27,11 @@ export const GET: APIRoute = async ({ locals, url, cookies }) => {
   const sc = scopeState(c, cookies);
   const roles = locals.user!.roles;
   const res: [string, string, string][] = [];
-  const s = q.toLowerCase();
-  for (const x of (await allStaff()).filter((x) => x.active && (x.name + refT(x.poste)).toLowerCase().includes(s)).slice(0, 5)) res.push(['Collègue', `${x.name} · ${refT(x.poste)}`, '/admin/annuaire']);
-  if (isStaff(roles) && can(roles, 'crm', 'L')) for (const x of await db.select().from(crmContact).where(or(ilike(crmContact.name, like), ilike(crmContact.email, like), ilike(crmContact.phone, like))).limit(6)) if (sc.inScope({ country: x.country })) res.push(['Contact', `${x.name}${x.email ? ' · ' + x.email : ''}`, `/admin/crm/personne/c-${x.id}`]);
+  // Personnes : mots dans n'importe quel ordre, sans accents ni majuscules
+  // (fautes de frappe tolérées pour les collègues, liste en mémoire)
+  for (const x of search((await allStaff()).filter((x) => x.active), q, (x) => [x.name, `${refT(x.poste)} ${x.email}`], 5)) res.push(['Collègue', `${x.name} · ${refT(x.poste)}`, '/admin/annuaire']);
+  const cm = matchAll([crmContact.name, crmContact.email], q, crmContact.phone);
+  if (cm && isStaff(roles) && can(roles, 'crm', 'L')) for (const x of await db.select().from(crmContact).where(cm).limit(6)) if (sc.inScope({ country: x.country })) res.push(['Contact', `${x.name}${x.email ? ' · ' + x.email : ''}`, `/admin/crm/personne/c-${x.id}`]);
   if (canUse(domSpec('kap'), c)) for (const x of await db.select().from(dossier).where(or(ilike(dossier.companyName, like), ilike(dossier.reference, like))).limit(5)) if (sc.inScope({ country: x.country })) res.push(['Dossier Kapital', `${x.companyName} · ${x.reference}`, `/admin/kapital/${x.id}`]);
   if (canUse(domSpec('btp'), c)) for (const x of await db.select().from(osSite).where(or(ilike(osSite.name, like), ilike(osSite.id, like))).limit(5)) if (sc.inScope({ country: x.country })) res.push(['Chantier', x.name, `/admin/dom/btp/${x.id}`]);
   if (canUse('dg fin dirreg rep chef', c)) for (const x of await db.select().from(invoice).where(or(ilike(invoice.number, like), sql`${invoice.buyer}->>'name' ilike ${like}`)).orderBy(desc(invoice.issuedAt)).limit(5)) if (sc.inScope({ country: x.country, domain: x.domain })) res.push(['Facture', `${x.number} · ${(x.buyer as { name?: string }).name ?? ''} · ${fcfa(x.totalXof)}`, '/admin/tresorerie?t=fac']);

@@ -39,7 +39,7 @@ const totH = byDom.reduce((a, x) => a + x.h, 0);
   <div class="tabs">{T.map(([k, l]) => <a href={`/admin/rh?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
   {tab === 'eff' && (
     <>
-      <div class="toolbar"><button class="btn" type="button" data-dlg="dlg-new">Nouveau collaborateur</button><a class="btn ghost" href="/api/admin/os/export?quoi=effectifs">Exporter</a></div>
+      <div class="toolbar"><button class="btn" type="button" data-dlg="dlg-new">Nouveau collaborateur</button><button class="btn ghost" type="button" data-dlg="dlg-link">Rattacher un compte existant</button><a class="btn ghost" href="/api/admin/os/export?quoi=effectifs">Exporter</a></div>
       <div class="tw">
         <table class="t">
           <thead><tr><th>Matricule</th><th>Nom</th><th>Poste</th><th>Grade</th><th>Pays</th><th>Responsable</th><th>Entrée</th><th>Salaire brut</th><th>Congés</th><th>Statut</th><th></th></tr></thead>
@@ -77,6 +77,22 @@ const totH = byDom.reduce((a, x) => a + x.h, 0);
         </div>
         <p class="small muted" style="margin-top:8px">Le compte CEA OS est créé avec les droits du profil choisi ; l'intéressé reçoit ses accès par e-mail. Si l'e-mail ne part pas, le lien d'invitation s'affiche pour que vous le transmettiez vous-même.</p>
       </Dlg>
+      <Dlg id="dlg-link" title="Rattacher un compte existant" api="/api/admin/os/personnel" submit="Rattacher" wide>
+        <input type="hidden" name="action" value="link" /><input type="hidden" name="userId" value="" id="lku" />
+        <label class="f" for="lkq">Compte du site (nom, e-mail ou téléphone)</label>
+        <input class="in" id="lkq" style="width:100%" autocomplete="off" placeholder="Tapez au moins 2 caractères…" aria-describedby="lkh" />
+        <div class="sres" id="lkr" style="margin-top:6px"></div>
+        <p class="small" id="lkh" style="margin:8px 0 0">Aucun compte choisi. Seuls les comptes sans fiche du personnel apparaissent ; nom, e-mail et téléphone sont repris du compte.</p>
+        <div class="fg" style="margin-top:10px">
+          <div class="full"><label class="f" for="lpc">Poste du référentiel (le profil d'accès en découle)</label><select class="in" id="lpc" name="poste">{REF.filter((r) => r.c !== 'A1' || !people.some((p) => p.poste === 'A1' && p.active)).map((r) => <option value={r.c} data-grade={gradeOf(r.c)}>{r.c} — {r.t}</option>)}</select></div>
+          <div><label class="f" for="lpa">Pays</label><select class="in" id="lpa" name="country">{PK.map((p) => <option value={p}>{pn(p)}</option>)}</select></div>
+          <div><label class="f" for="lg">Grade</label><select class="in" id="lg" name="grade">{GRADES.map((g) => <option selected={g === 'Cadre'}>{g}</option>)}</select></div>
+          <div><label class="f" for="lm">Responsable</label><select class="in" id="lm" name="managerId"><option value="">— Aucun (Direction générale)</option>{people.filter((s) => s.active).map((s) => <option value={s.id}>{s.name}</option>)}</select></div>
+          <div><label class="f" for="ls">Salaire brut mensuel</label><input class="in" type="number" id="ls" name="salary" value="900000" min="0" /></div>
+          <div><label class="f" for="ll">Solde de congés (jours)</label><input class="in" type="number" id="ll" name="leaveDays" value="0" min="0" step="0.5" /></div>
+        </div>
+        <p class="small muted" style="margin-top:8px">La personne garde ses identifiants habituels et accède à CEA OS dès sa prochaine page (double authentification exigée).</p>
+      </Dlg>
       <Dlg id="dlg-edit" title="Modifier la fiche" api="/api/admin/os/personnel" submit="Enregistrer" wide>
         <input type="hidden" name="action" value="update" /><input type="hidden" name="id" value="" />
         <p class="small"><b data-text="who"></b> — le poste se change dans « Organisation et postes ».</p>
@@ -92,9 +108,45 @@ const totH = byDom.reduce((a, x) => a + x.h, 0);
       <script>
         // Grade et salaire proposés d'après le poste choisi (fourchette du grade)
         const b = JSON.parse(document.getElementById('bands')?.textContent || '{}');
-        const pc = document.getElementById('epc') as HTMLSelectElement | null, g = document.getElementById('eg') as HTMLSelectElement | null, s = document.getElementById('es') as HTMLInputElement | null;
-        const upd = () => { const gr = pc?.selectedOptions[0]?.dataset.grade; if (gr && g && s) { g.value = gr; s.value = String(b[gr]?.[0] ?? s.value); } };
-        pc?.addEventListener('change', upd); upd();
+        const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T | null;
+        for (const [p, gid, sid] of [['epc', 'eg', 'es'], ['lpc', 'lg', 'ls']]) {
+          const pc = el<HTMLSelectElement>(p), g = el<HTMLSelectElement>(gid), s = el<HTMLInputElement>(sid);
+          const upd = () => { const gr = pc?.selectedOptions[0]?.dataset.grade; if (gr && g && s) { g.value = gr; s.value = String(b[gr]?.[0] ?? s.value); } };
+          pc?.addEventListener('change', upd); upd();
+        }
+
+        // Rattachement d'un compte existant : recherche du compte, reprise de ses informations
+        type Acc = { id: string; name: string; email: string; phone: string | null; country: string | null };
+        const q = el<HTMLInputElement>('lkq'), res = el<HTMLElement>('lkr'), hid = el<HTMLInputElement>('lku'), help = el<HTMLElement>('lkh');
+        let timer: number | undefined;
+        const pick = (a: Acc) => {
+          if (!hid || !help || !res || !q) return;
+          hid.value = a.id;
+          help.textContent = `Compte choisi : ${a.name}${a.email ? ' · ' + a.email : ''}${a.phone ? ' · ' + a.phone : ''}`;
+          help.style.fontWeight = '600';
+          res.innerHTML = ''; q.value = a.name;
+          const pa = el<HTMLSelectElement>('lpa');
+          if (a.country && pa) pa.value = a.country;
+        };
+        q?.addEventListener('input', () => {
+          clearTimeout(timer);
+          if (hid) hid.value = '';
+          timer = window.setTimeout(async () => {
+            if (!res || !q) return;
+            const v = q.value.trim();
+            if (v.length < 2) { res.innerHTML = ''; return; }
+            const r = await fetch('/api/admin/os/personnel?q=' + encodeURIComponent(v), { credentials: 'same-origin' }).catch(() => null);
+            const list: Acc[] = r?.ok ? (await r.json().catch(() => ({}))).accounts ?? [] : [];
+            res.innerHTML = '';
+            if (!list.length) { res.innerHTML = '<p class="small muted">Aucun compte sans fiche ne correspond.</p>'; return; }
+            for (const a of list) {
+              const btn = document.createElement('a');
+              btn.href = '#'; btn.textContent = `${a.name}${a.email ? ' — ' + a.email : ''}${a.phone ? ' — ' + a.phone : ''}`;
+              btn.addEventListener('click', (e) => { e.preventDefault(); pick(a); });
+              res.appendChild(btn);
+            }
+          }, 250);
+        });
       </script>
     </>
   )}
