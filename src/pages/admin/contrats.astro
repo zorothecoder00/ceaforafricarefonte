@@ -1,0 +1,61 @@
+---
+/* CEA OS — Contrats et juridique (prototype › pContrats) : cycle de vie des contrats (circuit juridique puis Direction
+   générale au-delà du seuil, signature, échéance), alerte à 60 jours, renouvellement. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Dlg from '../../components/os/Dlg.astro';
+import Tags from '../../components/os/Tags.astro';
+import { desc } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { osContract } from '../../db/schema/os';
+import { osContext, scopeState } from '../../lib/os/core';
+import { thresholds } from '../../lib/os/approvals';
+import { DK, DOM, mfcfa, dstr, fcfa } from '../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const sc = scopeState(os, Astro.cookies);
+const thr = await thresholds();
+const l = (await db.select().from(osContract).orderBy(desc(osContract.createdAt))).filter((c) => sc.inScope({ country: c.country, domain: c.domain })).map((c) => {
+  const dl = Math.round((c.end.getTime() - Date.now()) / 864e5);
+  return { ...c, dl, stt: c.status === 'En vigueur' && dl < 60 ? 'Expire bientôt' : c.status };
+});
+---
+<AdminLayout title="Contrats et juridique" lead={`Cycle de vie des contrats · alertes d'échéance · ${sc.label}`}>
+  <Fragment slot="actions">{os.me && <button class="btn" type="button" data-dlg="dlg-ctr">Nouveau contrat</button>}</Fragment>
+  <div class="grid g4" style="margin-bottom:14px">
+    <div class="card kpi"><div class="l">Contrats</div><div class="v num">{l.length}</div></div>
+    <div class="card kpi"><div class="l">Expirent sous 60 jours</div><div class="v num">{l.filter((c) => c.stt === 'Expire bientôt').length}</div></div>
+    <div class="card kpi"><div class="l">En signature</div><div class="v num">{l.filter((c) => c.status === 'En signature').length}</div></div>
+    <div class="card kpi"><div class="l">Montant engagé</div><div class="v num">{mfcfa(l.reduce((a, c) => a + c.amount, 0))}</div></div>
+  </div>
+  <div class="tw">
+    <table class="t">
+      <thead><tr><th>Contrat</th><th>Partie</th><th>Type</th><th>Domaine</th><th>Montant</th><th>Échéance</th><th>Statut</th><th></th></tr></thead>
+      <tbody>
+        {l.map((c) => <tr>
+          <td><b>{c.title}</b><div class="xs muted">{c.id}</div></td><td class="small">{c.party}</td><td class="small">{c.type}</td><td><Tags dom={c.domain} /></td><td class="num">{mfcfa(c.amount)}</td>
+          <td class:list={['small', { down: c.dl < 60 }]}>{dstr(c.end)} ({c.dl} j)</td><td><Tags st={c.stt} /></td>
+          <td style="white-space:nowrap">{c.status === 'En signature' ? <button class="btn ok sm" type="button" data-post="/api/admin/os/gestion" data-body={JSON.stringify({ action: 'contract.sign', id: c.id })} data-reload>Marquer signé</button> : c.stt === 'Expire bientôt' ? <button class="btn ghost sm" type="button" data-post="/api/admin/os/gestion" data-body={JSON.stringify({ action: 'contract.renew', id: c.id })} data-reload>Renouveler 1 an</button> : null}</td>
+        </tr>)}
+        {!l.length && <tr><td colspan="8" class="muted">Aucun contrat : un contrat soumis passe par le juridique (et la Direction générale au-delà de {fcfa(thr.contrat)}), puis arrive ici en signature.</td></tr>}
+      </tbody>
+    </table>
+  </div>
+  <Dlg id="dlg-ctr" title="Nouveau contrat" upload="/api/admin/os/demandes" submit="Soumettre au circuit" wide>
+    <input type="hidden" name="type" value="contrat" />
+    <div class="fg">
+      <div class="full"><label class="f" for="ct">Intitulé</label><input class="in" id="ct" name="title" required /></div>
+      <div><label class="f" for="cp">Cocontractant</label><input class="in" id="cp" name="party" required /></div>
+      <div><label class="f" for="cty">Type</label><select class="in" id="cty" name="ctype">{['Convention de partenariat', 'Prestation', 'Marché de travaux', 'Sous-traitance', 'Bail', 'Accord de confidentialité'].map((x) => <option>{x}</option>)}</select></div>
+      <div><label class="f" for="ca">Montant (FCFA)</label><input class="in" type="number" id="ca" name="amount" value="0" min="0" /></div>
+      <div><label class="f" for="cd">Domaine</label><select class="in" id="cd" name="domain">{DK.map((d) => <option value={d} selected={d === os.me?.domain}>{DOM[d].n}</option>)}</select></div>
+      <div><label class="f" for="cf">Fin</label><input class="in" type="date" id="cf" name="end" /></div>
+    </div>
+    <div class="watch" id="cw" style="margin-top:10px" data-thr={thr.contrat}></div>
+  </Dlg>
+</AdminLayout>
+<script>
+  const w = document.getElementById('cw') as HTMLElement | null, a = document.getElementById('ca') as HTMLInputElement | null;
+  const upd = () => { if (w && a) w.innerHTML = `Circuit : <b>Juridique${Number(a.value) > Number(w.dataset.thr) ? ' → Direction générale' : ''}</b>, puis signature électronique.`; };
+  a?.addEventListener('input', upd); upd();
+</script>

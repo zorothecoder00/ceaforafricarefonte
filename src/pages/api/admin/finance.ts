@@ -16,6 +16,7 @@ import { crmOrg } from '../../../db/schema/crm';
 import { json, fail, audit, clientIp } from '../../../lib/session';
 import { staffApi } from '../../../lib/admin';
 import { issue, invoiceForPayment, creditNote, totals } from '../../../lib/invoices';
+import { postPaid } from '../../../lib/os/ledger';
 import { readStatement, reconcile } from '../../../lib/reconcile';
 import { getSetting } from '../../../lib/settings';
 
@@ -67,7 +68,8 @@ export const POST: APIRoute = async ({ locals, request }) => {
       const [inv] = await db.select().from(invoice).where(eq(invoice.id, b.id));
       if (!inv || inv.kind !== 'facture') return fail('Facture introuvable.', 404);
       if (inv.status !== 'a_payer') return fail('Cette facture n’est pas en attente de paiement.');
-      await db.update(invoice).set({ status: 'payee', paidAt: new Date(`${b.paidAt}T12:00:00Z`), paymentMethod: b.method }).where(eq(invoice.id, b.id));
+      const [paid] = await db.update(invoice).set({ status: 'payee', paidAt: new Date(`${b.paidAt}T12:00:00Z`), paymentMethod: b.method }).where(eq(invoice.id, b.id)).returning();
+      if (paid) await postPaid(paid, b.method).catch(() => {}); // comptabilité CEA OS
       await audit(u.id, 'finance.facture.encaissement', inv.number, { method: b.method }, ip);
       return json({ ok: true, message: 'Encaissement enregistré.' });
     }

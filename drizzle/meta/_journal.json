@@ -267,6 +267,13 @@
       "when": 1791363819624,
       "tag": "0037_cea_os_pilotage",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1791364916946,
+      "tag": "0038_cea_os_gestion",
+      "breakpoints": true
     }
   ]
 }

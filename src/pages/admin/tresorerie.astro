@@ -1,0 +1,198 @@
+---
+/* CEA OS — Finance et trésorerie (prototype › pFinance) : dépenses et notes de frais, factures clients, rapprochement des
+   encaissements Mobile Money, budgets par domaine, trésorerie et prévision à 13 semaines. Analytique par domaine et pays. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Dlg from '../../components/os/Dlg.astro';
+import Steps from '../../components/os/Steps.astro';
+import Tags from '../../components/os/Tags.astro';
+import RequestDialogs from '../../components/os/RequestDialogs.astro';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { invoice } from '../../db/schema/finance';
+import { osRequest, osReceipt, osTreasury, osPo } from '../../db/schema/os';
+import { osContext, allStaff, scopeState } from '../../lib/os/core';
+import { budgets, thresholds } from '../../lib/os/approvals';
+import { suggest } from '../../lib/os/gestion';
+import { ACCOUNTS, PURPOSE_DOM } from '../../lib/os/ledger';
+import { DK, DOM, PK, RTYPE, pn, fcfa, mfcfa, dstr, dtstr, type ReqType } from '../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const sc = scopeState(os, Astro.cookies);
+const tab = Astro.url.searchParams.get('t') ?? 'dep';
+const T: [string, string][] = [['dep', 'Dépenses et notes de frais'], ['fac', 'Factures clients'], ['rap', 'Rapprochement Mobile Money'], ['bud', 'Budgets'], ['tre', 'Trésorerie']];
+const isFin = ['dg', 'fin'].includes(os.prof ?? '') || os.superuser;
+const people = await allStaff();
+const name = (id: string) => people.find((s) => s.id === id)?.name ?? '—';
+const today = new Date().toISOString().slice(0, 10);
+const domOfInv = (i: typeof invoice.$inferSelect) => i.domain ?? PURPOSE_DOM[i.purpose] ?? null;
+const invAll = tab === 'fac' || tab === 'rap' || tab === 'tre' ? await db.select().from(invoice).where(eq(invoice.kind, 'facture')).orderBy(desc(invoice.issuedAt)).limit(500) : [];
+const inv = invAll.filter((i) => sc.inScope({ country: i.country, domain: domOfInv(i) }));
+const stOf = (i: typeof invoice.$inferSelect) => (i.status === 'payee' ? 'Payée' : i.status === 'annulee' ? 'Annulée' : i.dueOn && i.dueOn < today ? 'En retard' : 'Émise');
+const deps = tab === 'dep' ? (await db.select().from(osRequest).where(inArray(osRequest.type, ['dep', 'ndf', 'achat'])).orderBy(desc(osRequest.createdAt))).filter((r) => sc.inScope({ country: r.country, domain: r.domain })) : [];
+const recs = tab === 'rap' ? await db.select().from(osReceipt).orderBy(desc(osReceipt.at)) : [];
+const unpaid = invAll.filter((i) => i.status === 'a_payer');
+const bud = await budgets();
+const ds = DK.filter((d) => sc.inScope({ domain: d }));
+const accounts = tab === 'tre' ? await db.select().from(osTreasury).orderBy(asc(osTreasury.name)) : [];
+const pendingOut = tab === 'tre' ? (await db.select({ a: osRequest.amount }).from(osRequest).where(and(eq(osRequest.status, 'En approbation'), inArray(osRequest.type, ['dep', 'ndf', 'achat'])))).reduce((a, x) => a + x.a, 0) + (await db.select({ a: osPo.amount }).from(osPo).where(inArray(osPo.status, ['Commandé', 'Livré']))).reduce((a, x) => a + x.a, 0) : 0;
+const tot = accounts.reduce((a, x) => a + x.balance, 0);
+const inN = unpaid.reduce((a, x) => a + x.totalXof, 0);
+const forecast = Array.from({ length: 13 }, (_, i) => Math.round(tot + (i + 1) * (inN / 13 * 0.75 - pendingOut / 13)));
+const lo = Math.min(...forecast), hi = Math.max(...forecast), pad = Math.max(1, (hi - lo) * 0.15 || Math.abs(hi) * 0.05);
+const fmin = lo - pad, fmax = hi + pad;
+const me = os.me;
+const [thr] = me && tab === 'dep' ? await Promise.all([thresholds()]) : [null];
+---
+<AdminLayout title="Finance et trésorerie" lead={`Analytique par domaine et par pays · ${sc.label}`}>
+  <div class="tabs">{T.map(([k, l]) => <a href={`/admin/tresorerie?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
+  {tab === 'dep' && (
+    <>
+      <div class="toolbar">{me && ['rep', 'dirreg', 'chef', 'dg', 'fin'].includes(me.prof) && <button class="btn" type="button" data-dlg="dlg-dep">Nouvelle dépense</button>}</div>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Référence</th><th>Objet</th><th>Demandeur</th><th>Domaine</th><th>Pays</th><th>Montant</th><th>Circuit</th><th>Statut</th></tr></thead>
+          <tbody>
+            {deps.map((r) => <tr><td class="small"><b>{RTYPE[r.type as ReqType]}</b><br />{r.id}</td><td>{r.title}<div class="xs muted">{dstr(r.createdAt)}</div></td><td class="small">{name(r.byStaff)}</td><td><Tags dom={r.domain} /></td><td>{pn(r.country)}</td><td class="num">{fcfa(r.amount)}</td><td><Steps steps={r.steps} cur={r.cur} status={r.status} /></td><td><Tags st={r.status} /></td></tr>)}
+            {!deps.length && <tr><td colspan="8" class="muted">Aucune dépense dans le périmètre.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {me && thr && <RequestDialogs me={me} managerName={name(me.managerId ?? '')} thr={thr} budgets={bud} countries={PK.filter((p) => sc.inScope({ country: p }))} domains={ds} />}
+    </>
+  )}
+  {tab === 'fac' && (
+    <>
+      <div class="toolbar">
+        {(isFin || ['rep', 'chef', 'dirreg'].includes(os.prof ?? '')) && <button class="btn" type="button" data-dlg="dlg-inv">Nouvelle facture</button>}
+        <button class="btn ghost" type="button" disabled={!inv.some((i) => stOf(i) === 'En retard')} data-post="/api/admin/os/gestion" data-body='{"action":"invoice.remind"}'>Relancer les factures en retard</button>
+        <a class="btn ghost" href="/admin/finance">Avoirs et exports comptables</a>
+      </div>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Numéro</th><th>Client</th><th>Objet</th><th>Domaine</th><th>Pays</th><th>Montant</th><th>Échéance</th><th>Statut</th><th></th></tr></thead>
+          <tbody>
+            {inv.map((i) => { const st = stOf(i); return <tr><td class="small">{i.number}</td><td>{(i.buyer as { name?: string }).name ?? '—'}</td><td class="small">{(i.lines as { label: string }[])[0]?.label ?? i.purpose}</td><td><Tags dom={domOfInv(i)} /></td><td>{i.country ? pn(i.country) : '—'}</td><td class="num">{fcfa(i.totalXof)}</td><td class="small">{i.dueOn ? dstr(i.dueOn) : '—'}</td><td><Tags st={st} /></td><td>{i.status === 'a_payer' && isFin && <button class="btn ghost sm" type="button" data-post="/api/admin/os/gestion" data-body={JSON.stringify({ action: 'invoice.pay', id: i.id, method: 'virement' })} data-reload>Encaissement manuel</button>}</td></tr>; })}
+            {!inv.length && <tr><td colspan="9" class="muted">Aucune facture dans le périmètre.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <Dlg id="dlg-inv" title="Nouvelle facture" api="/api/admin/os/gestion" submit="Émettre" wide>
+        <input type="hidden" name="action" value="invoice.create" />
+        <div class="fg">
+          <div><label class="f" for="fc">Client</label><input class="in" id="fc" name="client" required /></div>
+          <div><label class="f" for="fo">Objet</label><input class="in" id="fo" name="label" /></div>
+          <div><label class="f" for="fa">Montant TTC (FCFA)</label><input class="in" id="fa" name="amount" type="number" min="1" required /></div>
+          <div><label class="f" for="fd">Domaine</label><select class="in" id="fd" name="domain">{ds.map((d) => <option value={d}>{DOM[d].n}</option>)}</select></div>
+          <div><label class="f" for="fp">Pays</label><select class="in" id="fp" name="country">{PK.filter((p) => sc.inScope({ country: p })).map((p) => <option value={p} selected={p === me?.country}>{pn(p)}</option>)}</select></div>
+          <div><label class="f" for="fe">Échéance</label><input class="in" type="date" id="fe" name="due" /></div>
+        </div>
+      </Dlg>
+    </>
+  )}
+  {tab === 'rap' && (
+    <>
+      <div class="watch" style="margin-bottom:12px">Les paiements Mobile Money et virements reçus arrivent ici. L'agent de rapprochement propose une facture pour chacun. {!isFin && <b>Lecture seule pour votre rôle.</b>}</div>
+      <div class="toolbar">
+        {isFin && <button class="btn" type="button" data-dlg="dlg-rec">Enregistrer un encaissement</button>}
+        <button class="btn ok" type="button" disabled={!isFin || !recs.some((r) => r.status === 'Non rapproché' && (suggest(r, unpaid)?.score ?? 0) >= 90)} data-post="/api/admin/os/gestion" data-body='{"action":"receipt.auto"}' data-reload>Valider les correspondances sûres (≥ 90 %)</button>
+      </div>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Encaissement</th><th>Canal</th><th>Référence reçue</th><th>Montant</th><th>Correspondance proposée</th><th>Confiance</th><th></th></tr></thead>
+          <tbody>
+            {recs.filter((r) => r.status === 'Non rapproché').map((r) => { const s = suggest(r, unpaid); return (
+              <tr>
+                <td class="small">{dtstr(r.at)}</td><td>{r.source}</td><td>{r.ref || '—'}</td><td class="num">{fcfa(r.amount)}</td>
+                <td>{s ? <>{s.inv.number} — {(s.inv.buyer as { name?: string }).name}<div class="xs muted">{s.why}</div></> : <span class="muted">Aucune</span>}</td>
+                <td>{s ? <span class={`tag ${s.score >= 90 ? 'ok' : s.score >= 60 ? 'warn' : 'bad'}`}>{s.score} %</span> : '—'}</td>
+                <td style="white-space:nowrap">{isFin && <>{s && <button class="btn ok sm" type="button" data-post="/api/admin/os/gestion" data-body={JSON.stringify({ action: 'receipt.match', id: r.id, invoiceId: s.inv.id })} data-reload>Valider</button>} <button class="btn ghost sm" type="button" data-dlg="dlg-match" data-set-id={r.id} data-set-label={`${r.source} ${r.ref} — ${fcfa(r.amount)}`}>Choisir…</button></>}</td>
+              </tr>
+            ); })}
+            {!recs.some((r) => r.status === 'Non rapproché') && <tr><td colspan="7" class="muted">Tous les encaissements sont rapprochés.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <p class="small muted" style="margin-top:8px">{recs.filter((r) => r.status === 'Rapproché').length} encaissement(s) rapproché(s). Les paiements en ligne du site sont rapprochés automatiquement à la réception ; le relevé de l'agrégateur se contrôle dans <a href="/admin/finance?onglet=rapprochement">Factures et exports</a>.</p>
+      <Dlg id="dlg-rec" title="Enregistrer un encaissement" api="/api/admin/os/gestion">
+        <input type="hidden" name="action" value="receipt.create" />
+        <div class="fg">
+          <div><label class="f" for="rs">Canal</label><select class="in" id="rs" name="source">{['Orange Money', 'MTN MoMo', 'Wave', 'Moov Money', 'Virement'].map((x) => <option>{x}</option>)}</select></div>
+          <div><label class="f" for="ra">Montant (FCFA)</label><input class="in" type="number" id="ra" name="amount" min="1" required /></div>
+          <div class="full"><label class="f" for="rr">Référence reçue</label><input class="in" id="rr" name="ref" placeholder="Paiement FAC-2026-000123…" /></div>
+        </div>
+      </Dlg>
+      <Dlg id="dlg-match" title="Rapprocher un encaissement" api="/api/admin/os/gestion" submit="Rapprocher">
+        <input type="hidden" name="action" value="receipt.match" /><input type="hidden" name="id" value="" />
+        <p class="small" data-text="label"></p>
+        <label class="f" for="ci">Facture</label>
+        <select class="in" id="ci" name="invoiceId" style="width:100%">{unpaid.map((i) => <option value={i.id}>{i.number} — {(i.buyer as { name?: string }).name} — {fcfa(i.totalXof)}</option>)}</select>
+      </Dlg>
+    </>
+  )}
+  {tab === 'bud' && (
+    <>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Domaine</th><th>Budget {new Date().getFullYear()}</th><th>Engagé</th><th>Réalisé</th><th>Consommation</th><th>Reste à engager</th>{isFin && <th></th>}</tr></thead>
+          <tbody>{ds.map((d) => { const b = bud[d] ?? { budget: 0, engaged: 0, realised: 0 }; const pc = b.budget ? Math.round((b.engaged / b.budget) * 100) : 0; return (
+            <tr><td><Tags dom={d} /></td><td class="num">{mfcfa(b.budget)}</td><td class="num">{mfcfa(b.engaged)}</td><td class="num">{mfcfa(b.realised)}</td>
+              <td style="min-width:150px"><div class:list={['bar', pc > 90 ? 'bad' : pc > 75 ? 'warn' : 'ok']}><span style={`width:${Math.min(100, pc)}%`}></span></div><span class="xs">{pc} %</span></td>
+              <td class="num">{mfcfa(b.budget - b.engaged)}</td>
+              {isFin && <td><button class="btn ghost sm" type="button" data-dlg="dlg-bud" data-set-domain={d} data-set-budget={String(b.budget)} data-set-label={DOM[d].n}>Réviser</button></td>}</tr>
+          ); })}</tbody>
+        </table>
+      </div>
+      <Dlg id="dlg-bud" title="Réviser le budget" api="/api/admin/os/gestion">
+        <input type="hidden" name="action" value="budget.revise" /><input type="hidden" name="domain" value="" />
+        <p class="small"><b data-text="label"></b></p>
+        <label class="f" for="bb">Nouveau budget annuel (FCFA)</label><input class="in" type="number" id="bb" name="budget" min="0" required style="width:100%" />
+      </Dlg>
+    </>
+  )}
+  {tab === 'tre' && (
+    <>
+      <div class="grid g3">
+        <div class="card kpi"><div class="l">Trésorerie disponible</div><div class="v num">{mfcfa(tot)}</div></div>
+        <div class="card kpi"><div class="l">Encaissements attendus</div><div class="v num">{mfcfa(inN)}</div></div>
+        <div class="card kpi"><div class="l">Décaissements prévus</div><div class="v num">{mfcfa(pendingOut)}</div></div>
+      </div>
+      <div class="grid g2" style="margin-top:14px">
+        <div>
+          <div class="tw">
+            <table class="t">
+              <thead><tr><th>Compte</th><th>Compte comptable</th><th>Solde</th>{isFin && <th></th>}</tr></thead>
+              <tbody>
+                {accounts.map((a) => <tr><td>{a.name}<div class="xs muted">mis à jour le {dstr(a.updatedAt)}</div></td><td class="num">{a.account} — {ACCOUNTS[a.account]}</td><td class="num">{fcfa(a.balance)}</td>{isFin && <td><button class="btn ghost sm" type="button" data-dlg="dlg-sol" data-set-id={a.id} data-set-balance={String(a.balance)} data-set-label={a.name}>Relevé</button></td>}</tr>)}
+                {!accounts.length && <tr><td colspan="4" class="muted">Aucun compte de trésorerie.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          {isFin && <button class="btn ghost sm" type="button" data-dlg="dlg-acc" style="margin-top:8px">Ajouter un compte</button>}
+        </div>
+        <div class="card">
+          <h3>Prévision à 13 semaines</h3>
+          <svg viewBox="0 0 520 220" role="img" aria-label={`Prévision de trésorerie : ${forecast.map((v, i) => `S${i + 1} ${mfcfa(v)}`).join(', ')}`} style="width:100%;height:auto">
+            <polyline fill="rgba(201,150,43,.15)" stroke="none" points={`20,200 ${forecast.map((v, i) => `${20 + i * 38},${200 - ((v - fmin) / (fmax - fmin || 1)) * 180}`).join(' ')} ${20 + 12 * 38},200`} />
+            <polyline fill="none" stroke="#C9962B" stroke-width="2.5" points={forecast.map((v, i) => `${20 + i * 38},${200 - ((v - fmin) / (fmax - fmin || 1)) * 180}`).join(' ')} />
+            {forecast.map((_, i) => <text x={20 + i * 38} y="216" font-size="9" text-anchor="middle" fill="currentColor" opacity=".7">S{i + 1}</text>)}
+          </svg>
+          <p class="xs muted">Hypothèse : 75 % des encaissements attendus et la totalité des décaissements prévus, répartis sur 13 semaines.</p>
+        </div>
+      </div>
+      <Dlg id="dlg-sol" title="Solde d'après le relevé" api="/api/admin/os/gestion">
+        <input type="hidden" name="action" value="treasury.update" /><input type="hidden" name="id" value="" />
+        <p class="small"><b data-text="label"></b></p>
+        <label class="f" for="sb">Solde (FCFA)</label><input class="in" type="number" id="sb" name="balance" required style="width:100%" />
+      </Dlg>
+      <Dlg id="dlg-acc" title="Ajouter un compte de trésorerie" api="/api/admin/os/gestion">
+        <input type="hidden" name="action" value="treasury.create" />
+        <div class="fg">
+          <div class="full"><label class="f" for="an">Nom</label><input class="in" id="an" name="name" placeholder="Banque — compte principal (Lomé)" required /></div>
+          <div><label class="f" for="ac">Type</label><select class="in" id="ac" name="account"><option value="521">521 — Banque</option><option value="585">585 — Mobile Money</option><option value="571">571 — Caisse</option></select></div>
+          <div><label class="f" for="ab">Solde (FCFA)</label><input class="in" type="number" id="ab" name="balance" value="0" /></div>
+        </div>
+      </Dlg>
+    </>
+  )}
+</AdminLayout>

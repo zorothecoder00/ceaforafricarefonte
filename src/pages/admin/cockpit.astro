@@ -10,7 +10,7 @@ import { db } from '../../lib/db';
 import { invoice } from '../../db/schema/finance';
 import { payment, membership } from '../../db/schema/app';
 import { dossier } from '../../db/schema/kapital';
-import { osDecision, osTask } from '../../db/schema/os';
+import { osDecision, osTask, osContract, osStockItem } from '../../db/schema/os';
 import { osContext, allStaff, scopeState } from '../../lib/os/core';
 import { pendingFor, budgets } from '../../lib/os/approvals';
 import { allOkrs, okrProg } from '../../lib/os/pilotage';
@@ -46,11 +46,17 @@ const PURPOSE_DOM: Record<string, Dom> = { adhesion: 'voix', billet: 'evt', cour
 const byPurpose = await db.select({ p: payment.purpose, s: sql<number>`coalesce(sum(${payment.amountXof}),0)::float` }).from(payment).where(and(eq(payment.status, 'reussi'), sql`extract(year from ${payment.paidAt}) = ${year}`)).groupBy(payment.purpose);
 const byDom = ds.map((d) => byPurpose.filter((x) => PURPOSE_DOM[x.p] === d).reduce((a, x) => a + x.s, 0));
 const staffN = people.filter((s) => s.active && sc.inScope({ country: s.country })).length;
+const [expiring, lowStock] = await Promise.all([
+  db.select({ title: osContract.title, country: osContract.country, domain: osContract.domain }).from(osContract).where(sql`${osContract.status} = 'En vigueur' and ${osContract.end} < now() + interval '60 days'`),
+  db.select({ label: osStockItem.label, country: osStockItem.country }).from(osStockItem).where(sql`${osStockItem.qty} < ${osStockItem.min}`),
+]).then(([e, st]) => [e.filter((k) => sc.inScope(k)), st.filter((k) => sc.inScope(k))] as const);
 const attention = [
   late.length ? `${late.length} facture(s) en retard : ${mfcfa(lateSum)}` : null,
   ...ds.filter((d) => bud[d] && bud[d].budget && bud[d].engaged / bud[d].budget > 0.9).map((d) => `Budget presque consommé : ${DOM[d].n}`),
   lateTasks[0].n ? `${lateTasks[0].n} tâche(s) en retard` : null,
   pend.length > 5 ? `${pend.length} approbations vous attendent` : null,
+  ...expiring.map((k) => `Contrat bientôt échu : ${k.title}`),
+  ...lowStock.map((x) => `Stock bas : ${x.label}`),
 ].filter(Boolean).slice(0, 7) as string[];
 ---
 <AdminLayout title="Cockpit" lead={`${sc.label} · temps réel`}>

@@ -224,3 +224,111 @@ export const osCountry = pgTable('os_country', {
   currency: text('currency').notNull().default('XOF'),
   createdAt: ts('created_at').notNull().defaultNow(),
 });
+
+/* ===== Lot 4 : gestion (comptabilité SYSCOHADA, trésorerie, achats et stocks, contrats) ===== */
+
+/* Écritures comptables (SYSCOHADA révisé) générées par les autres modules ou saisies en opérations diverses.
+   lines : [compte, débit, crédit] ; journaux VE ventes, AC achats, BQ banque et Mobile Money, OD opérations diverses, PA paie. */
+export const osLedger = pgTable('os_ledger', {
+  id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+  at: ts('at').notNull().defaultNow(),
+  journal: text('journal').notNull(),
+  label: text('label').notNull(),
+  lines: jsonb('lines').$type<[string, number, number][]>().notNull(),
+  country: text('country'),
+  domain: text('domain'),
+  ref: text('ref').notNull().default(''),
+  createdBy: text('created_by'),
+}, (t) => [index('os_ledger_at_idx').on(t.at), index('os_ledger_ref_idx').on(t.ref)]);
+
+/* Clôture mensuelle : liste de contrôle par période (AAAA-MM) ; la dernière étape revient à la Direction générale. */
+export const osClosing = pgTable('os_closing', {
+  period: text('period').primaryKey(),
+  items: jsonb('items').$type<boolean[]>().notNull(),
+  closedAt: ts('closed_at'),
+});
+
+/* Comptes de trésorerie (banques, Mobile Money, caisse) : solde mis à jour d'après les relevés. */
+export const osTreasury = pgTable('os_treasury', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  account: text('account').notNull(), // 521 banques, 585 Mobile Money, 571 caisse
+  balance: bigint('balance', { mode: 'number' }).notNull().default(0),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+});
+
+/* Encaissements reçus (Mobile Money, virements) à rapprocher d'une facture. */
+export const osReceipt = pgTable('os_receipt', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  source: text('source').notNull(), // Orange Money, MTN MoMo, Wave, Moov Money, Virement
+  amount: bigint('amount', { mode: 'number' }).notNull(),
+  ref: text('ref').notNull().default(''),
+  at: ts('at').notNull().defaultNow(),
+  status: text('status').notNull().default('Non rapproché'),
+  invoiceId: uuid('invoice_id'),
+  createdBy: text('created_by'),
+});
+
+/* Fournisseurs : coordonnées bancaires masquées, vérification par une seconde personne (double contrôle). */
+export const osSupplier = pgTable('os_supplier', {
+  id: text('id').primaryKey(), // FRN-10
+  name: text('name').notNull(),
+  category: text('category').notNull().default(''),
+  country: text('country').notNull(),
+  iban: text('iban').notNull().default(''),
+  status: text('status').notNull().default('À vérifier'),
+  createdBy: text('created_by'),
+  verifiedBy: text('verified_by'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+
+/* Articles en stock, mouvements, bons de commande. */
+export const osStockItem = pgTable('os_stock_item', {
+  code: text('code').primaryKey(),
+  label: text('label').notNull(),
+  unit: text('unit').notNull(),
+  qty: integer('qty').notNull().default(0),
+  min: integer('min').notNull().default(0),
+  country: text('country').notNull(),
+  unitCost: bigint('unit_cost', { mode: 'number' }).notNull().default(0),
+});
+export const osStockMove = pgTable('os_stock_move', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  code: text('code').notNull().references(() => osStockItem.code, { onDelete: 'cascade' }),
+  type: text('type').notNull(), // Entrée | Sortie
+  qty: integer('qty').notNull(),
+  ref: text('ref').notNull().default(''),
+  by: text('by'),
+  at: ts('at').notNull().defaultNow(),
+});
+export const osPo = pgTable('os_po', {
+  id: text('id').primaryKey(), // BC-2026-071
+  byStaff: text('by_staff'),
+  supplierId: text('supplier_id').references(() => osSupplier.id, { onDelete: 'set null' }),
+  label: text('label').notNull(),
+  itemCode: text('item_code'),
+  qty: integer('qty').notNull().default(0),
+  amount: bigint('amount', { mode: 'number' }).notNull(),
+  country: text('country').notNull(),
+  domain: text('domain'),
+  status: text('status').notNull().default('Commandé'), // Commandé | Livré | Facturé
+  requestId: text('request_id'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+
+/* Contrats : cycle de vie (circuit juridique, signature, échéance, renouvellement). */
+export const osContract = pgTable('os_contract', {
+  id: text('id').primaryKey(), // CTR-30
+  title: text('title').notNull(),
+  party: text('party').notNull(),
+  type: text('type').notNull(),
+  domain: text('domain'),
+  country: text('country').notNull(),
+  amount: bigint('amount', { mode: 'number' }).notNull().default(0),
+  start: ts('start').notNull().defaultNow(),
+  end: ts('end').notNull(),
+  status: text('status').notNull().default('En signature'), // En signature | En vigueur | Échu
+  owner: text('owner'),
+  requestId: text('request_id'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});

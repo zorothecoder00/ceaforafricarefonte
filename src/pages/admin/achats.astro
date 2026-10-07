@@ -1,0 +1,134 @@
+---
+/* CEA OS — Achats et stocks (prototype › pAchats) : du besoin au paiement (demande, approbation, bon de commande,
+   réception, facture fournisseur contrôlée à trois voies), stocks et mouvements, fournisseurs (double contrôle). */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Dlg from '../../components/os/Dlg.astro';
+import Steps from '../../components/os/Steps.astro';
+import Tags from '../../components/os/Tags.astro';
+import RequestDialogs from '../../components/os/RequestDialogs.astro';
+import { asc, desc, eq, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { osPo, osRequest, osStockItem, osStockMove, osSupplier } from '../../db/schema/os';
+import { osContext, allStaff, scopeState } from '../../lib/os/core';
+import { budgets, thresholds } from '../../lib/os/approvals';
+import { DK, PK, pn, fcfa, fmt, dstr, dtstr } from '../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const sc = scopeState(os, Astro.cookies);
+const tab = Astro.url.searchParams.get('t') ?? 'bc';
+const T: [string, string][] = [['bc', 'Bons de commande'], ['da', "Demandes d'achat"], ['st', 'Stocks'], ['fr', 'Fournisseurs']];
+const isFin = ['dg', 'fin'].includes(os.prof ?? '') || os.superuser;
+const people = await allStaff();
+const name = (id: string | null) => people.find((s) => s.id === id)?.name ?? '—';
+const [pos, das, items, moves, sups, poCount] = await Promise.all([
+  db.select().from(osPo).orderBy(desc(osPo.createdAt)),
+  tab === 'da' ? db.select().from(osRequest).where(eq(osRequest.type, 'achat')).orderBy(desc(osRequest.createdAt)) : Promise.resolve([]),
+  db.select().from(osStockItem).orderBy(asc(osStockItem.code)),
+  tab === 'st' ? db.select().from(osStockMove).orderBy(desc(osStockMove.at)).limit(12) : Promise.resolve([]),
+  db.select().from(osSupplier).orderBy(asc(osSupplier.id)),
+  db.select({ s: osPo.supplierId, n: sql<number>`count(*)::int` }).from(osPo).groupBy(osPo.supplierId),
+]);
+const posV = pos.filter((p) => sc.inScope({ country: p.country, domain: p.domain }));
+const dasV = das.filter((r) => sc.inScope({ country: r.country, domain: r.domain }));
+const itemsV = items.filter((s) => sc.inScope({ country: s.country }));
+const me = os.me;
+const [thr, bud] = me ? await Promise.all([thresholds(), budgets()]) : [null, {}];
+---
+<AdminLayout title="Achats et stocks" lead={`Du besoin au paiement : demande, approbation, commande, réception, facture · ${sc.label}`}>
+  <Fragment slot="actions">{me && <button class="btn" type="button" data-dlg="dlg-achat">Nouvelle demande d'achat</button>}</Fragment>
+  <div class="tabs">{T.map(([k, l]) => <a href={`/admin/achats?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
+  {tab === 'bc' && (
+    <div class="tw">
+      <table class="t">
+        <thead><tr><th>Bon de commande</th><th>Fournisseur</th><th>Objet</th><th>Montant</th><th>Domaine</th><th>Pays</th><th>Statut</th><th></th></tr></thead>
+        <tbody>
+          {posV.map((p) => <tr>
+            <td class="small"><b>{p.id}</b><br />{dstr(p.createdAt)}</td><td>{sups.find((s) => s.id === p.supplierId)?.name ?? '—'}</td><td>{p.label}</td><td class="num">{fcfa(p.amount)}</td><td><Tags dom={p.domain} /></td><td>{pn(p.country)}</td><td><Tags st={p.status} /></td>
+            <td style="white-space:nowrap">{p.status === 'Commandé' && <button class="btn ghost sm" type="button" data-post="/api/admin/os/gestion" data-body={JSON.stringify({ action: 'po.receive', id: p.id })} data-reload>Réceptionner</button>}{p.status === 'Livré' && isFin && <button class="btn ghost sm" type="button" data-dlg="dlg-fa" data-set-id={p.id} data-set-amount={String(p.amount)} data-set-label={`Contrôle à trois voies : commande ${fcfa(p.amount)} · réception conforme · facture :`}>Facture fournisseur</button>}</td>
+          </tr>)}
+          {!posV.length && <tr><td colspan="8" class="muted">Aucun bon de commande : ils sont créés automatiquement quand une demande d'achat est approuvée.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  )}
+  {tab === 'da' && (
+    <div class="tw">
+      <table class="t">
+        <thead><tr><th>Demande</th><th>Objet</th><th>Demandeur</th><th>Montant</th><th>Circuit</th><th>Statut</th></tr></thead>
+        <tbody>
+          {dasV.map((r) => <tr><td class="small">{r.id}<br />{dstr(r.createdAt)}</td><td>{r.title}</td><td class="small">{name(r.byStaff)}</td><td class="num">{fcfa(r.amount)}</td><td><Steps steps={r.steps} cur={r.cur} status={r.status} /></td><td><Tags st={r.status} /></td></tr>)}
+          {!dasV.length && <tr><td colspan="6" class="muted">Aucune demande d'achat.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  )}
+  {tab === 'st' && (
+    <>
+      {isFin && <div class="toolbar"><button class="btn ghost" type="button" data-dlg="dlg-item">Nouvel article</button></div>}
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Code</th><th>Article</th><th>Lieu</th><th>Quantité</th><th>Seuil</th><th>Valeur</th><th></th></tr></thead>
+          <tbody>
+            {itemsV.map((s) => <tr><td class="small">{s.code}</td><td><b>{s.label}</b></td><td>{pn(s.country)}</td><td class:list={['num', { down: s.qty < s.min }]}>{fmt(s.qty)} {s.unit}{s.qty < s.min && <> <span class="tag bad">Sous le seuil</span></>}</td><td class="num">{fmt(s.min)}</td><td class="num">{fcfa(s.qty * s.unitCost)}</td><td><button class="btn ghost sm" type="button" data-dlg="dlg-out" data-set-code={s.code} data-set-label={`${s.label} — disponible : ${s.qty} ${s.unit}`}>Sortie</button></td></tr>)}
+            {!itemsV.length && <tr><td colspan="7" class="muted">Aucun article en stock.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <h3 style="margin-top:16px">Derniers mouvements</h3>
+      <div class="tw"><table class="t"><tbody>
+        {moves.map((m) => <tr><td class="small">{dtstr(m.at)}</td><td>{m.type}</td><td>{items.find((s) => s.code === m.code)?.label ?? m.code}</td><td class="num">{m.qty}</td><td class="small">{m.ref}</td><td class="small">{name(m.by)}</td></tr>)}
+        {!moves.length && <tr><td class="muted">Aucun mouvement.</td></tr>}
+      </tbody></table></div>
+    </>
+  )}
+  {tab === 'fr' && (
+    <>
+      {isFin && <div class="toolbar"><button class="btn ghost" type="button" data-dlg="dlg-sup">Nouveau fournisseur</button></div>}
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Fournisseur</th><th>Catégorie</th><th>Pays</th><th>Coordonnées bancaires</th><th>Vérification</th><th>Commandes</th></tr></thead>
+          <tbody>
+            {sups.map((s) => <tr><td><b>{s.name}</b></td><td>{s.category}</td><td>{pn(s.country)}</td><td class="small num">{s.iban || '—'}</td><td><Tags st={s.status} />{s.status !== 'Vérifié' && isFin && <> <button class="btn ghost sm" type="button" data-post="/api/admin/os/gestion" data-body={JSON.stringify({ action: 'supplier.verify', id: s.id })} data-reload>Valider (double contrôle)</button></>}</td><td class="num">{poCount.find((x) => x.s === s.id)?.n ?? 0}</td></tr>)}
+            {!sups.length && <tr><td colspan="6" class="muted">Aucun fournisseur.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <p class="xs muted" style="margin-top:6px">Toute création de fournisseur ou modification de coordonnées bancaires exige la validation d'une seconde personne.</p>
+    </>
+  )}
+  <Dlg id="dlg-fa" title="Facture fournisseur" api="/api/admin/os/gestion" submit="Comptabiliser et payer">
+    <input type="hidden" name="action" value="po.invoice" /><input type="hidden" name="id" value="" />
+    <p class="small" data-text="label"></p>
+    <label class="f" for="fm">Montant facturé</label><input class="in" type="number" id="fm" name="amount" min="1" required style="width:100%" />
+  </Dlg>
+  <Dlg id="dlg-out" title="Sortie de stock" api="/api/admin/os/gestion">
+    <input type="hidden" name="action" value="stock.out" /><input type="hidden" name="code" value="" />
+    <p class="small" data-text="label"></p>
+    <div class="fg">
+      <div><label class="f" for="oq">Quantité</label><input class="in" type="number" id="oq" name="qty" value="1" min="1" /></div>
+      <div><label class="f" for="or">Destination (chantier, événement…)</label><input class="in" id="or" name="dest" /></div>
+    </div>
+  </Dlg>
+  <Dlg id="dlg-item" title="Nouvel article" api="/api/admin/os/gestion" wide>
+    <input type="hidden" name="action" value="stock.create" />
+    <div class="fg">
+      <div><label class="f" for="ic">Code</label><input class="in" id="ic" name="code" placeholder="CIM-50" required /></div>
+      <div><label class="f" for="il">Article</label><input class="in" id="il" name="label" required /></div>
+      <div><label class="f" for="iu">Unité</label><input class="in" id="iu" name="unit" value="unité" /></div>
+      <div><label class="f" for="im">Seuil d'alerte</label><input class="in" type="number" id="im" name="min" value="0" min="0" /></div>
+      <div><label class="f" for="ip">Lieu</label><select class="in" id="ip" name="country">{PK.map((p) => <option value={p}>{pn(p)}</option>)}</select></div>
+      <div><label class="f" for="ik">Coût unitaire (FCFA)</label><input class="in" type="number" id="ik" name="unitCost" value="0" min="0" /></div>
+    </div>
+  </Dlg>
+  <Dlg id="dlg-sup" title="Nouveau fournisseur" api="/api/admin/os/gestion" submit="Créer (à vérifier)" wide>
+    <input type="hidden" name="action" value="supplier.create" />
+    <div class="fg">
+      <div><label class="f" for="sn">Raison sociale</label><input class="in" id="sn" name="name" required /></div>
+      <div><label class="f" for="sc">Catégorie</label><input class="in" id="sc" name="category" /></div>
+      <div><label class="f" for="sp">Pays</label><select class="in" id="sp" name="country">{PK.map((p) => <option value={p}>{pn(p)}</option>)}</select></div>
+      <div><label class="f" for="si">IBAN ou numéro Mobile Money</label><input class="in" id="si" name="iban" /></div>
+    </div>
+  </Dlg>
+  {me && thr && <RequestDialogs me={me} managerName={name(me.managerId)} thr={thr} budgets={bud} countries={PK.filter((p) => sc.inScope({ country: p }))} domains={DK.filter((d) => sc.inScope({ domain: d }))} />}
+</AdminLayout>

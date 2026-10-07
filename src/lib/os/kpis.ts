@@ -3,7 +3,8 @@
    n : score sur 100 comparé à la cible (goal) pour la pastille verte / orange / rouge. */
 import { and, eq, gte, inArray, sql } from 'drizzle-orm';
 import { db } from '../db';
-import { osRequest, osTask, osReviewItem } from '../../db/schema/os';
+import { osRequest, osTask, osReviewItem, osClosing, osContract } from '../../db/schema/os';
+import { CLOSING, closingPeriod } from './ledger';
 import { allOkrs, okrProg, currentReview } from './pilotage';
 import { auditLog } from '../../db/schema/app';
 import { kycCheck } from '../../db/schema/kapital';
@@ -31,6 +32,27 @@ export const KMAP: Record<string, string[]> = {
 
 type Ctx = { people: Person[] };
 const KF: Record<string, (u: Person, c: Ctx) => Promise<Omit<Kpi, 'k' | 'l'> | null>> = {
+  rappro: async () => {
+    const [r] = (await db.execute(sql`select count(*) filter (where status = 'Rapproché')::int as ok, count(*)::int as t from os_receipt`)).rows as { ok: number; t: number }[];
+    if (!r.t) return null;
+    const p = pct(r.ok, r.t)!;
+    return { v: p + ' %', n: p, goal: 95 };
+  },
+  cloture: async () => {
+    const [c] = await db.select().from(osClosing).where(eq(osClosing.period, closingPeriod()));
+    const d = (c?.items ?? []).filter(Boolean).length;
+    return { v: d + '/' + CLOSING.length, n: pct(d, CLOSING.length), goal: 100 };
+  },
+  late: async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const [r] = (await db.execute(sql`select count(*) filter (where status = 'a_payer' and due_on < ${today})::int as late, count(*)::int as t from invoice where kind = 'facture'`)).rows as { late: number; t: number }[];
+    const p = r.t ? Math.round(((r.t - r.late) / r.t) * 100) : 100;
+    return { v: r.late + ' en retard', n: p, goal: 90 };
+  },
+  contrats: async () => {
+    const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(osContract).where(sql`${osContract.status} = 'En vigueur' and ${osContract.end} < now() + interval '60 days'`);
+    return { v: String(n), n: n ? 50 : 100, goal: 100, sub: 'contrat(s) à renouveler sous 60 j' };
+  },
   okr: async () => {
     const all = await allOkrs();
     const roots = all.filter((o) => !o.parentId);

@@ -14,11 +14,11 @@ if (!['localhost', '127.0.0.1'].includes(host) || process.env.DB_TARGET === 'pro
 
 const { db } = await import('../src/lib/db');
 const s = await import('../src/db/schema');
-const { eq, sql, inArray } = await import('drizzle-orm');
+const { and, eq, sql, inArray } = await import('drizzle-orm');
 const { PDOM, DOM, BANDS, gradeOf, profOf, pn, DK } = await import('../src/lib/os/ref');
 
 if (process.argv.includes('--reset')) {
-  await db.execute(sql`truncate os_okr, os_risk, os_audit, os_review_item, os_review, os_interview, os_flow, os_country, os_message, os_channel_seen, os_channel, os_meeting, os_task, os_decision, os_request, os_delegation, os_timesheet, os_budget, staff restart identity cascade`);
+  await db.execute(sql`truncate os_ledger, os_closing, os_treasury, os_receipt, os_po, os_stock_move, os_stock_item, os_supplier, os_contract, os_okr, os_risk, os_audit, os_review_item, os_review, os_interview, os_flow, os_country, os_message, os_channel_seen, os_channel, os_meeting, os_task, os_decision, os_request, os_delegation, os_timesheet, os_budget, staff restart identity cascade`);
   console.log('• Tables de CEA OS vidées.');
 }
 const [any] = await db.select({ id: s.staff.id }).from(s.staff).limit(1);
@@ -142,5 +142,21 @@ await db.insert(s.osRisk).values([
   { title: "Fuite de données d'un dossier Kapital", domain: 'kap', probability: 1, impact: 5, owner: conf, plan: 'Cloisonnement, revue des droits', country: 'TG' },
 ]);
 await db.insert(s.osAudit).values([{ title: 'Achats et séparation des tâches', status: 'En cours', findings: 2 }, { title: 'Rapprochements Mobile Money', status: 'Planifié', findings: 0 }]);
+// Gestion : fournisseurs, stocks, bons de commande, contrats, trésorerie, factures et encaissements (contenus du prototype)
+const finId = P((r) => r.poste === 'D2');
+await db.insert(s.osSupplier).values(([['Ciments du Golfe (fictifs)', 'Matériaux', 'TG', 'Vérifié'], ['Électro Services (fictif)', 'Sous-traitance', 'BJ', 'Vérifié'], ['Imprimerie Moderne (fictive)', 'Impression', 'TG', 'Vérifié'], ['Traiteur Délices (fictif)', 'Restauration', 'CI', 'Vérifié'], ['Location Engins Plus (fictif)', 'Location matériel', 'SN', 'À vérifier'], ['Fournitures Bureau Afrique (fictif)', 'Fournitures', 'TG', 'Vérifié']] as const).map(([name, category, country, status], k) => ({ id: `FRN-${10 + k}`, name, category, country, status, iban: `TG53 •••• •••• ${rint(1000, 9999)}`, createdBy: finId })));
+await db.insert(s.osStockItem).values(([['CIM-50', 'Ciment 50 kg', 'sac', 420, 200, 'TG', 5200], ['FER-12', 'Fer à béton 12 mm', 'barre', 310, 150, 'TG', 6800], ['BRQ-15', 'Briques 15', 'unité', 8400, 3000, 'BJ', 350], ['KIT-EVT', 'Kit événement (badges, cordons)', 'kit', 140, 200, 'TG', 2500], ['PAP-A4', 'Papier A4', 'ramette', 60, 40, 'TG', 3500], ['CAS-CHT', 'Casque de chantier', 'unité', 48, 30, 'CI', 4500]] as const).map(([code, label, unit, qty, min, country, unitCost]) => ({ code, label, unit, qty, min, country, unitCost })));
+await db.insert(s.osPo).values([
+  { id: 'BC-2026-071', byStaff: P((r) => r.poste === 'C21' && r.country === 'TG'), supplierId: 'FRN-10', label: 'Ciment 50 kg × 300', itemCode: 'CIM-50', qty: 300, amount: 1560000, country: 'TG', domain: 'btp', status: 'Commandé', createdAt: ago(6) },
+  { id: 'BC-2026-072', byStaff: chefs.evt, supplierId: 'FRN-12', label: 'Badges Forum 2026', itemCode: 'KIT-EVT', qty: 500, amount: 1250000, country: 'TG', domain: 'evt', status: 'Livré', createdAt: ago(12) },
+]);
+await db.insert(s.osContract).values(([['Convention Fondation Partenaire 2026', 'Fondation Partenaire (fictive)', 'Convention de financement', 'prj', 'TG', 180e6, 240, 90], ['Marché Centre de formation de Kara', "Ministère de l'Enseignement technique (fictif)", 'Marché de travaux', 'btp', 'TG', 820e6, 300, 240], ['Sous-traitance électricité Parakou', 'Électro Services (fictif)', 'Sous-traitance', 'btp', 'BJ', 86e6, 120, 45], ['Bail des bureaux de Lomé', 'SCI Golfe (fictive)', 'Bail', 'prj', 'TG', 36e6, 700, 25], ['Licences logicielles', 'Éditeur (fictif)', 'Abonnement', 'prj', 'TG', 12e6, 300, 40], ['Contrat traiteur Forum 2026', 'Traiteur Délices (fictif)', 'Prestation', 'evt', 'TG', 22e6, 20, 55]] as const).map(([title, party, type, domain, country, amount, start, end], k) => ({ id: `CTR-${30 + k}`, title, party, type, domain, country, amount, start: ago(start), end: ago(-end), status: 'En vigueur', owner: P((r) => r.poste === 'A6') })));
+await db.insert(s.osTreasury).values([['Banque — compte principal (Lomé)', '521', 412e6], ['Banque — compte Abidjan', '521', 96e6], ['Orange Money marchand', '585', 8.4e6], ['Wave marchand', '585', 5.1e6], ['MTN MoMo marchand (Ghana)', '585', 3.2e6], ['Caisse siège', '571', 1.2e6]].map(([name, account, balance]) => ({ name: name as string, account: account as string, balance: balance as number })));
+const { issue } = await import('../src/lib/invoices');
+const CLIENTS: [string, string, number, string, string, number][] = [['Ministère du Commerce (fictif)', 'Formation des agents', 4500000, 'aca', 'TG', -20], ['Banque Atlantique (fictive)', 'Sponsoring Forum 2026', 9800000, 'evt', 'CI', 15], ['Groupe Habitat Plus', 'Situation de travaux n°2 — Cité Verte', 24000000, 'btp', 'CI', -5], ['AgroSahel', 'Accompagnement levée de fonds', 1800000, 'kap', 'SN', 30]];
+await db.delete(s.invoice).where(and(eq(s.invoice.purpose, 'autre'), inArray(sql`${s.invoice.buyer}->>'name'`, CLIENTS.map((c) => c[0])))); // factures de démonstration d'un chargement précédent
+for (const [name, label, amount, domain, country, due] of CLIENTS) await issue({ kind: 'facture', buyer: { name }, purpose: 'autre', lines: [{ label, qty: 1, unitXof: amount }], totalHtXof: amount, taxRate: 0, taxXof: 0, totalXof: amount, status: 'a_payer', dueOn: ago(-due).toISOString().slice(0, 10), country, domain });
+const [inv1] = await db.select({ n: s.invoice.number }).from(s.invoice).where(eq(s.invoice.totalXof, 1800000));
+await db.insert(s.osReceipt).values([{ source: 'Orange Money', amount: 1800000, ref: `Paiement ${inv1?.n ?? ''}` }, { source: 'Wave', amount: 4500000, ref: 'MINCOM FORMATION' }, { source: 'Virement', amount: 350000, ref: 'VIR 0045' }]);
 console.log(`✓ ${rows.length} collaborateurs, budgets ${year} de ${DK.length} domaines. Comptes rattachés : admin@cea.demo (DG), analyste@cea.demo, editeur@cea.demo.`);
 process.exit(0);

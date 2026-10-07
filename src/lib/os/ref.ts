@@ -97,6 +97,7 @@ const ST: Record<string, string> = {
   Payée: 'ok', Approuvée: 'ok', Approuvé: 'ok', Validée: 'ok', Vérifié: 'ok', Soumis: 'ok', Terminé: 'ok', Résolu: 'ok', Rapproché: 'ok', Conforme: 'ok',
   Publié: 'ok', Remboursée: 'ok', Commandée: 'info', Reçu: 'ok', Livré: 'ok', 'En vigueur': 'ok', Traité: 'ok', Actif: 'ok', 'En retard': 'bad', Rejetée: 'bad',
   'Alerte PEP': 'bad', P1: 'bad', 'Expire bientôt': 'bad', 'En approbation': 'warn', 'En attente': 'warn', 'À vérifier': 'warn', 'En relecture': 'warn',
+  Facturé: 'ok', Annulée: 'bad', 'Pièces demandées': 'warn', Refusé: 'bad', Clos: '', Maîtrisé: 'ok', 'En traitement': 'info',
   Ouvert: 'warn', 'Non rapproché': 'warn', 'À traiter': 'warn', 'En signature': 'warn', 'En cours': 'info', Émise: 'info', Commandé: 'info', Brouillon: '', Planifié: 'info',
 };
 export const stClass = (s: string) => ST[s] ?? '';

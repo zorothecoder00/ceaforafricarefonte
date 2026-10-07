@@ -8,7 +8,8 @@
 import { and, desc, eq, gt, lte, sql } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import { db } from '../db';
-import { osRequest, osDelegation, osBudget, staff, type Step } from '../../db/schema/os';
+import { osRequest, osDelegation, osBudget, osPo, osContract, staff, type Step } from '../../db/schema/os';
+import { post } from './ledger';
 import { getSetting } from '../settings';
 import { notify } from '../notify';
 import { audit } from '../session';
@@ -163,14 +164,34 @@ export async function decide(id: string, me: Person, ok: boolean, com = ''): Pro
 /** Fin de circuit : effets de la demande approuvée. */
 async function finalize(r: Req, people: Person[]) {
   let status = 'Approuvée';
-  if (r.type === 'dep') { status = 'Payée'; await engageBudget(r.domain, r.amount, 'realised'); }
-  if (r.type === 'ndf') { status = 'Remboursée'; await engageBudget(r.domain, r.amount, 'realised'); }
+  const meta = { country: r.country, domain: r.domain, ref: r.id };
+  if (r.type === 'dep') {
+    status = 'Payée'; await engageBudget(r.domain, r.amount, 'realised');
+    await post('AC', r.title, [['638', r.amount, 0], ['401', 0, r.amount]], meta);
+    await post('BQ', 'Paiement ' + r.id, [['401', r.amount, 0], ['521', 0, r.amount]], meta);
+  }
+  if (r.type === 'ndf') {
+    status = 'Remboursée'; await engageBudget(r.domain, r.amount, 'realised');
+    const who = people.find((p) => p.id === r.byStaff)?.name ?? '';
+    await post('OD', `Note de frais ${r.id} — ${who}`, [[r.data.cat === 'Transport' ? '618' : '638', r.amount, 0], ['421', 0, r.amount]], meta);
+    await post('BQ', 'Remboursement ' + r.id, [['421', r.amount, 0], ['585', 0, r.amount]], meta);
+  }
   if (r.type === 'conge') {
     const days = Number(r.data.days) || 0;
     if (r.data.kind === 'Congé annuel' || !r.data.kind) await db.update(staff).set({ leaveDays: sql`greatest(0, ${staff.leaveDays} - ${days})`, updatedAt: new Date() }).where(eq(staff.id, r.byStaff));
   }
-  if (r.type === 'achat') { status = 'Commandée'; await engageBudget(r.domain, r.amount); }
-  if (r.type === 'contrat') status = 'Approuvé';
+  if (r.type === 'achat') {
+    status = 'Commandée'; await engageBudget(r.domain, r.amount);
+    const year = new Date().getFullYear();
+    const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(osPo).where(sql`${osPo.id} like ${`BC-${year}-%`}`);
+    const sup = typeof r.data.supplier === 'string' && /^FRN-/.test(r.data.supplier) ? r.data.supplier : null;
+    await db.insert(osPo).values({ id: `BC-${year}-${String(n + 1).padStart(3, '0')}`, byStaff: r.byStaff, supplierId: sup, label: r.title, itemCode: (r.data.item as string) || null, qty: Number(r.data.qty) || 0, amount: r.amount, country: r.country, domain: r.domain, requestId: r.id });
+  }
+  if (r.type === 'contrat') {
+    status = 'Approuvé';
+    const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(osContract);
+    await db.insert(osContract).values({ id: `CTR-${30 + n}`, title: r.title, party: String(r.data.party ?? ''), type: String(r.data.ctype ?? 'Prestation'), domain: r.domain, country: r.country, amount: r.amount, end: r.data.end ? new Date(String(r.data.end)) : new Date(Date.now() + 365 * 864e5), owner: r.byStaff, requestId: r.id });
+  }
   await db.update(osRequest).set({ status, updatedAt: new Date() }).where(eq(osRequest.id, r.id));
   await notifyStaff([r.byStaff], `${label(r)} : ${status.toLowerCase()}`, '/admin/moi', people);
 }

@@ -1,7 +1,8 @@
 /* CEA OS — demandes du collaborateur (prototype : Accueil et Mes demandes), soumises au circuit d'approbation.
    POST JSON ou multipart { type: 'conge', from, days, kind }
                           { type: 'ndf', title, amount, cat, domain, file (justificatif, obligatoire) }
-                          { type: 'achat', title, amount, supplier?, qty?, domain }
+                          { type: 'achat', title, amount, supplier? (FRN-…), item? (article en stock), qty?, domain }
+                          { type: 'contrat', title, party, ctype, amount, domain, end? } → circuit juridique, puis signature
                           { type: 'dep', title, amount, domain, country, file? }
    → { ok, id, message } ; le circuit dépend du type, du montant et des seuils (Processus et seuils). */
 import type { APIRoute } from 'astro';
@@ -21,7 +22,8 @@ const Dom = z.enum(DK as [string, ...string[]], { message: 'Domaine inconnu.' })
 const Body = z.discriminatedUnion('type', [
   z.object({ type: z.literal('conge'), from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Indiquez la date de début.'), days: z.coerce.number().int().min(1, 'Indiquez le nombre de jours.').max(90), kind: z.enum(['Congé annuel', 'Congé maladie', 'Événement familial', 'Sans solde']) }),
   z.object({ type: z.literal('ndf'), title: Title, amount: Amount, cat: z.enum(['Transport', 'Repas', 'Hébergement', 'Autre']), domain: Dom }),
-  z.object({ type: z.literal('achat'), title: Title, amount: Amount, supplier: z.string().trim().max(160).optional().default(''), qty: z.coerce.number().int().min(1).max(1e6).optional().default(1), domain: Dom }),
+  z.object({ type: z.literal('achat'), title: Title, amount: Amount, supplier: z.string().trim().max(160).optional().default(''), item: z.string().trim().max(40).optional().default(''), qty: z.coerce.number().int().min(1).max(1e6).optional().default(1), domain: Dom }),
+  z.object({ type: z.literal('contrat'), title: Title, party: z.string().trim().min(2, 'Indiquez le cocontractant.').max(200), ctype: z.enum(['Convention de partenariat', 'Prestation', 'Marché de travaux', 'Sous-traitance', 'Bail', 'Accord de confidentialité']), amount: z.coerce.number().int().min(0).max(1e12), domain: Dom, end: z.string().regex(/^(\d{4}-\d{2}-\d{2})?$/).default('') }),
   z.object({ type: z.literal('dep'), title: Title, amount: Amount, domain: Dom, country: z.enum(PK as [string, ...string[]], { message: 'Pays inconnu.' }) }),
 ]);
 
@@ -56,8 +58,9 @@ export const POST: APIRoute = async ({ locals, request, cookies }) => {
   }
   const data: Record<string, unknown> = { ...(just ? { just } : {}) };
   if (b.type === 'ndf') data.cat = b.cat;
-  if (b.type === 'achat') Object.assign(data, { supplier: b.supplier, qty: b.qty });
+  if (b.type === 'achat') Object.assign(data, { supplier: b.supplier, item: b.item, qty: b.qty });
+  if (b.type === 'contrat') Object.assign(data, { party: b.party, ctype: b.ctype, end: b.end || null });
   const r = await createRequest(me, b.type, { title: b.title, amount: b.amount, domain: b.domain, country: b.type === 'dep' ? b.country : me.country, data });
   if (b.type === 'dep') await engageBudget(b.domain, b.amount); // dépense engagée dès la soumission
-  return json({ ok: true, id: r.id, message: `${RTYPE[b.type]} ${r.id} (${fcfa(b.amount)}) soumise : ${circuit(r.steps)}.` });
+  return json({ ok: true, id: r.id, message: `${RTYPE[b.type]} ${r.id} (${fcfa(b.amount)}) ${b.type === 'contrat' ? 'soumis' : 'soumise'} : ${circuit(r.steps)}${b.type === 'contrat' ? ', puis signature' : ''}.` });
 };

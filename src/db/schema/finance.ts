@@ -36,6 +36,8 @@ export const invoice = pgTable('invoice', {
   notes: text('notes'),
   issuedBy: text('issued_by').references(() => user.id, { onDelete: 'set null' }),
   issuedAt: ts('issued_at').notNull().defaultNow(),
+  country: text('country'), // analytique CEA OS : pays et domaine d'intervention
+  domain: text('domain'),
 }, (t) => [uniqueIndex('invoice_year_seq').on(t.kind, t.year, t.seq), uniqueIndex('invoice_payment_unique').on(t.paymentId, t.kind), index('invoice_user_idx').on(t.userId)]);
 
 /* Rapprochement avec le relevé de l'agrégateur : résumé et écarts relevés (aucune écriture automatique) */

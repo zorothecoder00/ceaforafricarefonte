@@ -6,6 +6,7 @@ import { invoice } from '../db/schema/finance';
 import { payment, profile } from '../db/schema/app';
 import { user } from '../db/schema/auth';
 import { getSetting } from './settings';
+import { postInvoice } from './os/ledger';
 
 type Invoice = typeof invoice.$inferSelect;
 export type Line = { label: string; qty: number; unitXof: number };
@@ -24,13 +25,16 @@ export function totals(lines: Line[], rate: number) {
 /** Émet une facture ou un avoir avec le prochain numéro de la série (verrou : deux émissions simultanées ne prennent pas le même numéro). */
 export async function issue(v: Omit<typeof invoice.$inferInsert, 'number' | 'year' | 'seq'>): Promise<Invoice> {
   const year = new Date().getFullYear();
-  return db.transaction(async (tx) => {
+  const row = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`facturation-${v.kind}-${year}`}))`);
     const [{ max }] = await tx.select({ max: sql<number>`coalesce(max(${invoice.seq}), 0)::int` }).from(invoice).where(and(eq(invoice.kind, v.kind ?? 'facture'), eq(invoice.year, year)));
     const seq = max + 1;
-    const [row] = await tx.insert(invoice).values({ ...v, year, seq, number: formatNumber(v.kind ?? 'facture', year, seq) }).returning();
-    return row;
+    const [r] = await tx.insert(invoice).values({ ...v, year, seq, number: formatNumber(v.kind ?? 'facture', year, seq) }).returning();
+    return r;
   });
+  // Comptabilité CEA OS : écriture de vente (et d'encaissement si la facture est déjà payée) ; n'empêche jamais l'émission
+  await postInvoice(row).catch((e) => console.error('[comptabilité] écriture impossible :', e instanceof Error ? e.message : e));
+  return row;
 }
 
 /** Facture d'un paiement réussi (une seule par paiement ; sans effet si elle existe déjà). Le prix payé est TTC. */

@@ -1,0 +1,120 @@
+---
+/* CEA OS — Comptabilité (prototype › pCompta), profils dg et fin : SYSCOHADA révisé, écritures générées automatiquement par
+   les autres modules ; journal, balance, grand livre, analytique par domaine, clôture mensuelle, écriture manuelle (OD). */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Dlg from '../../components/os/Dlg.astro';
+import Tags from '../../components/os/Tags.astro';
+import { asc, eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { osLedger, osClosing } from '../../db/schema/os';
+import { osContext, scopeState } from '../../lib/os/core';
+import { ACCOUNTS, JOURNALS, CLOSING, balances, closingPeriod } from '../../lib/os/ledger';
+import { DK, DOM, PK, pn, fmt, fcfa, dstr } from '../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const sc = scopeState(os, Astro.cookies);
+const tab = Astro.url.searchParams.get('t') ?? 'jr';
+const T: [string, string][] = [['jr', 'Journal des écritures'], ['bal', 'Balance'], ['gl', 'Grand livre'], ['ana', 'Analytique'], ['clo', 'Clôture mensuelle']];
+const L = (await db.select().from(osLedger).orderBy(asc(osLedger.id))).filter((e) => sc.inScope({ country: e.country, domain: e.domain }));
+const b = balances(L);
+const ks = Object.keys(b).sort();
+const td = ks.reduce((a, k) => a + b[k][0], 0), tc = ks.reduce((a, k) => a + b[k][1], 0);
+const acc = Astro.url.searchParams.get('a') ?? '411';
+let solde = 0;
+const gl = L.filter((e) => e.lines.some((x) => x[0] === acc)).flatMap((e) => e.lines.filter((x) => x[0] === acc).map((x) => { solde += x[1] - x[2]; return { e, d: x[1], c: x[2], s: solde }; }));
+const ana = DK.filter((d) => sc.inScope({ domain: d })).map((d) => { let p = 0, c = 0; L.filter((e) => e.domain === d).forEach((e) => e.lines.forEach(([a, dd, cc]) => { if (a[0] === '7') p += cc - dd; if (a[0] === '6') c += dd - cc; })); return { d, p, c }; });
+const period = closingPeriod();
+const [clo] = await db.select().from(osClosing).where(eq(osClosing.period, period));
+const items = clo?.items ?? CLOSING.map(() => false);
+const done = items.filter(Boolean).length;
+const isDg = os.prof === 'dg' || os.superuser;
+const monthName = new Date(`${period}-01T12:00:00`).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+---
+<AdminLayout title="Comptabilité" lead={`SYSCOHADA révisé · écritures générées automatiquement par les autres modules · ${sc.label}`}>
+  <Fragment slot="actions"><a class="btn ghost" href="/api/admin/os/export?quoi=ecritures">Exporter les écritures</a><button class="btn" type="button" data-dlg="dlg-od">Écriture manuelle</button></Fragment>
+  <div class="tabs">{T.map(([k, l]) => <a href={`/admin/compta?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
+  {tab === 'jr' && (
+    <>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>N°</th><th>Date</th><th>Journal</th><th>Libellé</th><th>Compte</th><th>Débit</th><th>Crédit</th><th>Pays</th><th>Domaine</th></tr></thead>
+          <tbody>
+            {L.slice().reverse().slice(0, 150).map((e) => e.lines.map((x, i) => (
+              <tr style={i === 0 ? 'border-top:2px solid var(--line)' : ''}>
+                <td class="small">{i === 0 ? 'EC-' + String(e.id).padStart(5, '0') : ''}</td><td class="small">{i === 0 ? dstr(e.at) : ''}</td><td>{i === 0 ? e.journal : ''}</td><td class="small">{i === 0 ? e.label : ''}</td>
+                <td class="num small">{x[0]} {ACCOUNTS[x[0]] ?? ''}</td><td class="num">{x[1] ? fmt(x[1]) : ''}</td><td class="num">{x[2] ? fmt(x[2]) : ''}</td>
+                <td class="small">{i === 0 && e.country ? pn(e.country) : ''}</td><td>{i === 0 && <Tags dom={e.domain} />}</td>
+              </tr>
+            )))}
+            {!L.length && <tr><td colspan="9" class="muted">Aucune écriture : elles sont générées par les factures, dépenses, notes de frais, achats et la paie.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <p class="xs muted" style="margin-top:6px">{L.length} écriture(s). Journaux : {Object.entries(JOURNALS).map(([k, v]) => `${k} ${v.toLowerCase()}`).join(', ')}.</p>
+    </>
+  )}
+  {tab === 'bal' && (
+    <div class="tw">
+      <table class="t">
+        <thead><tr><th>Compte</th><th>Intitulé</th><th>Débit</th><th>Crédit</th><th>Solde débiteur</th><th>Solde créditeur</th></tr></thead>
+        <tbody>
+          {ks.map((k) => { const s = b[k][0] - b[k][1]; return <tr class="click" onclick={`location.href='/admin/compta?t=gl&a=${k}'`}><td class="num"><b>{k}</b></td><td>{ACCOUNTS[k] ?? ''}</td><td class="num">{fmt(b[k][0])}</td><td class="num">{fmt(b[k][1])}</td><td class="num">{s > 0 ? fmt(s) : ''}</td><td class="num">{s < 0 ? fmt(-s) : ''}</td></tr>; })}
+          <tr><td colspan="2"><b>Totaux</b></td><td class="num"><b>{fmt(td)}</b></td><td class="num"><b>{fmt(tc)}</b></td><td colspan="2">{Math.round(td) === Math.round(tc) ? <span class="tag ok">Équilibrée</span> : <span class="tag bad">Déséquilibrée</span>}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  )}
+  {tab === 'gl' && (
+    <>
+      <div class="toolbar"><label class="f" for="ga" style="margin:0">Compte</label><select class="in" id="ga" data-go>{Object.keys(ACCOUNTS).map((k) => <option value={`/admin/compta?t=gl&a=${k}`} selected={k === acc}>{k} — {ACCOUNTS[k]}</option>)}</select></div>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Date</th><th>Pièce</th><th>Libellé</th><th>Débit</th><th>Crédit</th><th>Solde</th></tr></thead>
+          <tbody>
+            {gl.map((g) => <tr><td class="small">{dstr(g.e.at)}</td><td class="small">{g.e.ref || 'EC-' + g.e.id}</td><td class="small">{g.e.label}</td><td class="num">{g.d ? fmt(g.d) : ''}</td><td class="num">{g.c ? fmt(g.c) : ''}</td><td class="num">{fmt(g.s)}</td></tr>)}
+            {!gl.length && <tr><td colspan="6" class="muted">Aucun mouvement.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )}
+  {tab === 'ana' && (
+    <>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Domaine</th><th>Produits</th><th>Charges</th><th>Résultat analytique</th></tr></thead>
+          <tbody>{ana.map((r) => <tr><td><Tags dom={r.d} /></td><td class="num">{fcfa(r.p)}</td><td class="num">{fcfa(r.c)}</td><td class:list={['num', r.p - r.c < 0 ? 'down' : 'up']}>{fcfa(r.p - r.c)}</td></tr>)}</tbody>
+        </table>
+      </div>
+      <p class="small muted" style="margin-top:8px">Chaque écriture porte un pays et un domaine : le résultat est disponible par pays en changeant le périmètre.</p>
+    </>
+  )}
+  {tab === 'clo' && (
+    <div class="card" style="max-width:720px">
+      <div class="row between"><h2 style="margin:0">Clôture de {monthName}</h2><span class="small">{done}/{CLOSING.length}</span></div>
+      <div class="bar" style="margin:10px 0"><span style={`width:${(done / CLOSING.length) * 100}%`}></span></div>
+      {CLOSING.map((l, i) => <label class="chk"><input type="checkbox" checked={items[i]} disabled={i === CLOSING.length - 1 && !isDg} data-clo={i} /> {l}</label>)}
+      {clo?.closedAt && <div class="watch" style="margin-top:12px">Période clôturée le {dstr(clo.closedAt)} : les écritures de {monthName} sont verrouillées.</div>}
+    </div>
+  )}
+  <Dlg id="dlg-od" title="Écriture manuelle (OD)" api="/api/admin/os/gestion" submit="Comptabiliser" wide>
+    <input type="hidden" name="action" value="od.create" />
+    <div class="fg">
+      <div class="full"><label class="f" for="ol">Libellé</label><input class="in" id="ol" name="label" required /></div>
+      <div><label class="f" for="o1">Compte débité</label><select class="in" id="o1" name="debit">{Object.keys(ACCOUNTS).map((k) => <option value={k}>{k} — {ACCOUNTS[k]}</option>)}</select></div>
+      <div><label class="f" for="o2">Compte crédité</label><select class="in" id="o2" name="credit">{Object.keys(ACCOUNTS).map((k) => <option value={k} selected={k === '521'}>{k} — {ACCOUNTS[k]}</option>)}</select></div>
+      <div><label class="f" for="oa">Montant</label><input class="in" type="number" id="oa" name="amount" min="1" required /></div>
+      <div><label class="f" for="od2">Domaine</label><select class="in" id="od2" name="domain">{DK.map((d) => <option value={d}>{DOM[d].n}</option>)}</select></div>
+      <div><label class="f" for="op">Pays</label><select class="in" id="op" name="country">{PK.map((p) => <option value={p}>{pn(p)}</option>)}</select></div>
+    </div>
+  </Dlg>
+</AdminLayout>
+<script>
+  document.querySelectorAll<HTMLInputElement>('[data-clo]').forEach((c) => c.addEventListener('change', async () => {
+    const r = await fetch('/api/admin/os/gestion', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'closing.toggle', i: Number(c.dataset.clo), checked: c.checked }) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    (window as unknown as { toast: (t: string) => void }).toast(r?.ok ? d.message : d.error || 'Une erreur est survenue.');
+    if (r?.ok) setTimeout(() => location.reload(), 600); else c.checked = !c.checked;
+  }));
+</script>

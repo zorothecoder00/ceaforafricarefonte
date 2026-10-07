@@ -96,9 +96,13 @@ export const MODS: [string, NavItem[]][] = [
     { href: '/admin/candidatures', label: 'Candidatures aux programmes', obj: 'candidature', dom: 'aca' },
   ]],
   ['Gestion', [
-    { href: '/admin/finance', label: 'Finance et comptabilité', obj: 'paiements' },
-    { href: '/admin/paiements', label: 'Paiements', obj: 'paiements' },
-    { href: '/admin/rh', label: 'Ressources humaines', spec: 'dg rh' },
+    { href: '/admin/tresorerie', label: 'Finance et trésorerie', spec: 'dg fin dirreg rep chef' },
+    { href: '/admin/compta', label: 'Comptabilité', spec: 'dg fin' },
+    { href: '/admin/achats', label: 'Achats et stocks', spec: 'dg fin chef dirreg rep cond' },
+    { href: '/admin/rh', label: 'Ressources humaines et paie', spec: 'dg rh' },
+    { href: '/admin/contrats', label: 'Contrats et juridique', spec: 'dg jur fin chef' },
+    { href: '/admin/finance', label: 'Factures, avoirs et exports', obj: 'paiements' },
+    { href: '/admin/paiements', label: 'Paiements en ligne', obj: 'paiements' },
   ]],
   ['Support et administration', [
     { href: '/admin/documents', label: 'Documents', obj: 'documents' },
