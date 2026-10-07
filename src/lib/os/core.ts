@@ -6,7 +6,7 @@
 import { asc, eq } from 'drizzle-orm';
 import type { AstroCookies } from 'astro';
 import { db } from '../db';
-import { staff } from '../../db/schema/os';
+import { staff, osCountry } from '../../db/schema/os';
 import { PAYS, PK, REGIONS, DOM, regOf, pn, profOf, type Prof, type Region, type Dom } from './ref';
 import type { CurrentUser } from '../session';
 import type { Obj } from '../rbac';
@@ -33,9 +33,19 @@ export async function nextEmp(): Promise<string> {
   return 'EMP' + String(Math.max(0, ...ids.map((x) => Number(x.id.slice(3)) || 0)) + 1).padStart(3, '0');
 }
 
+/** Pays ouverts depuis CEA OS (Organisation › Régions et bureaux) : ajoutés au réseau du code. Cache 30 s. */
+let countriesAt = 0;
+export async function loadCountries(force = false) {
+  if (!force && Date.now() - countriesAt < 30_000) return;
+  const rows = await db.select().from(osCountry).catch(() => []);
+  for (const r of rows) { if (!PAYS[r.code]) PK.push(r.code); PAYS[r.code] = [r.name, r.region as Region, r.currency]; }
+  countriesAt = Date.now();
+}
+
 /* ===== Contexte de l'utilisateur connecté ===== */
 export type OsCtx = { user: CurrentUser; me: Person | null; prof: Prof | null; superuser: boolean };
 export async function osContext(user: CurrentUser): Promise<OsCtx> {
+  await loadCountries();
   const me = await staffById(user.staffId);
   const superuser = user.roles.includes('admin') || user.roles.includes('direction');
   return { user, me, prof: me?.prof ?? null, superuser };
@@ -62,11 +72,15 @@ export const MODS: [string, NavItem[]][] = [
     { href: '/admin/messagerie', label: 'Messagerie', spec: ALL, staff: true },
     { href: '/admin/agenda', label: 'Agenda et réunions', spec: ALL, staff: true },
     { href: '/admin/taches', label: 'Tâches', spec: ALL, staff: true },
+    { href: '/admin/equipe', label: 'Mon équipe', spec: MANAGERS + ' jur conf com it', staff: true },
     { href: '/admin/annuaire', label: 'Annuaire du personnel', spec: ALL },
   ]],
   ['Pilotage', [
     { href: '/admin/cockpit', label: 'Cockpit', spec: MANAGERS },
     { href: '/admin/approbations', label: 'Approbations', spec: ALL },
+    { href: '/admin/okr', label: 'Objectifs (OKR)', spec: ALL },
+    { href: '/admin/impact', label: 'CEA Impact Lab', spec: 'dg adg ops chef dirreg rep com agent:prj' },
+    { href: '/admin/risques', label: 'Risques et audit interne', spec: 'dg ops conf jur chef dirreg' },
     { href: '/admin/rapports', label: 'Rapports', obj: 'rapports' },
   ]],
   ['Relations', [
@@ -88,6 +102,7 @@ export const MODS: [string, NavItem[]][] = [
   ]],
   ['Support et administration', [
     { href: '/admin/documents', label: 'Documents', obj: 'documents' },
+    { href: '/admin/organisation', label: 'Organisation et postes', spec: 'dg adg ops rh it conf' },
     { href: '/admin/processus', label: 'Processus et seuils', spec: 'dg ops it conf' },
     { href: '/admin/conformite', label: 'Conformité KYC', obj: 'pieces_kyc' },
     { href: '/admin/membres', label: 'Comptes et rôles', obj: 'membres' },

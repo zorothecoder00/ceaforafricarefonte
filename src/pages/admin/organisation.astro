@@ -1,0 +1,151 @@
+---
+/* CEA OS — Organisation et postes (prototype › pOrg) : postes du référentiel (titulaires, vacances, affectation avec
+   séparation des tâches), organigramme, régions et bureaux (ouverture d'un pays), revue des droits, historique. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Dlg from '../../components/os/Dlg.astro';
+import Fiche from '../../components/os/Fiche.astro';
+import { desc, eq, or, like } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { osReviewItem } from '../../db/schema/os';
+import { auditLog } from '../../db/schema/app';
+import { user } from '../../db/schema/auth';
+import { osContext, allStaff, type Person } from '../../lib/os/core';
+import { currentReview } from '../../lib/os/pilotage';
+import { REF, REGIONS, PROF, PK, PDOM, DOM, pn, regOf, refT, gradeOf, profOf, dtstr, dstr, initials, type Region } from '../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const me = os.me;
+const tab = Astro.url.searchParams.get('t') ?? 'postes';
+const T: [string, string][] = [['postes', 'Postes du référentiel'], ['org', 'Organigramme'], ['ent', 'Régions et bureaux'], ['revue', 'Revue des droits'], ['hist', 'Historique']];
+const can = ['dg', 'rh'].includes(os.prof ?? '') || os.superuser;
+const canReview = ['dg', 'it', 'conf'].includes(os.prof ?? '') || os.superuser;
+const people = await allStaff();
+const actifs = people.filter((s) => s.active);
+const titulaires = (c: string) => actifs.filter((u) => u.poste === c || u.poste2 === c);
+const vac = REF.filter((r) => !titulaires(r.c).length);
+const fiche = Astro.url.searchParams.get('fiche');
+// Organigramme aplati
+const root = actifs.find((s) => s.prof === 'dg') ?? actifs.find((s) => !s.managerId);
+const tree: [number, Person][] = [];
+const walk = (s: Person, d: number, seen: Set<string>) => { if (seen.has(s.id)) return; seen.add(s.id); tree.push([d, s]); actifs.filter((x) => x.managerId === s.id).forEach((k) => walk(k, d + 1, seen)); };
+if (tab === 'org' && root) walk(root, 0, new Set());
+const review = await currentReview();
+const items = tab === 'revue' ? await db.select().from(osReviewItem).where(eq(osReviewItem.quarter, review.quarter)) : [];
+const hist = tab === 'hist' ? await db.select({ at: auditLog.at, a: auditLog.action, t: auditLog.target, who: user.name }).from(auditLog).leftJoin(user, eq(user.id, auditLog.actorId)).where(or(like(auditLog.action, 'os.poste%'), like(auditLog.action, 'os.pays%'), like(auditLog.action, 'os.personnel%'), like(auditLog.action, 'os.delegation%'), like(auditLog.action, 'os.revue%'))).orderBy(desc(auditLog.at)).limit(200) : [];
+const ACTION: Record<string, string> = { 'os.poste.changement': 'Changement de poste', 'os.poste.cumul': 'Cumul de poste (intérim)', 'os.pays.ouverture': 'Ouverture de pays', 'os.personnel.creation': 'Collaborateur créé', 'os.personnel.depart': 'Compte désactivé (départ)', 'os.personnel.reactivation': 'Compte réactivé', 'os.personnel.modification': 'Fiche modifiée', 'os.delegation.creation': 'Délégation de signature', 'os.delegation.revocation': 'Délégation révoquée', 'os.revue.confirmation': 'Revue des droits : accès confirmés', 'os.revue.retrait': 'Revue des droits : accès retirés', 'os.revue.echeance': 'Revue des droits appliquée', 'os.revue.levee': 'Suspensions levées', 'os.revue.lancement': 'Revue des droits lancée' };
+const name = (id: string | null) => people.find((s) => s.id === id)?.name ?? '—';
+---
+<AdminLayout title="Organisation et postes" lead={`${REF.length} postes · ${actifs.length} collaborateurs actifs · le poste porte les droits, pas la personne`}>
+  <div class="tabs">{T.map(([k, l]) => <a href={`/admin/organisation?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
+  {tab === 'postes' && (
+    <>
+      <div class="grid g4" style="margin-bottom:12px">
+        <div class="card kpi"><div class="l">Postes pourvus</div><div class="v num">{REF.length - vac.length}/{REF.length}</div></div>
+        <div class="card kpi"><div class="l">Postes vacants</div><div class="v num">{vac.length}</div><div class="d">leurs approbations remontent au N+1</div></div>
+        <div class="card kpi"><div class="l">Cumuls (intérims)</div><div class="v num">{actifs.filter((s) => s.poste2).length}</div></div>
+      </div>
+      <div class="toolbar">
+        <input class="in" placeholder="Code, intitulé…" style="flex:1;min-width:200px" aria-label="Filtrer" data-filter="#pt" />
+        <select class="in" aria-label="Statut" id="pf"><option value="">Tous</option><option value="v">Vacants</option><option value="p">Pourvus</option></select>
+      </div>
+      <div class="tw">
+        <table class="t" id="pt">
+          <thead><tr><th>Code</th><th>Poste</th><th>Grade</th><th>Profil d'accès</th><th>Titulaire(s)</th><th></th></tr></thead>
+          <tbody>
+            {REF.map((x) => { const ti = titulaires(x.c); return (
+              <tr data-row={`${x.c} ${x.t}`} data-st={ti.length ? 'p' : 'v'}>
+                <td><span class="tag gold">{x.c}</span></td><td><b class="small">{x.t}</b></td><td class="small">{gradeOf(x.c)}</td><td class="small">{PROF[profOf(x.c)]}</td>
+                <td class="small">{ti.length ? ti.map((u) => <>{u.name}{u.poste2 === x.c && ' (intérim)'} · {pn(u.country)}<br /></>) : <span class="tag warn">Vacant</span>}</td>
+                <td style="white-space:nowrap"><a class="btn ghost sm" href={`/admin/organisation?t=postes&fiche=${x.c}&ouvrir=dlg-fiche`}>Fiche</a>{can && <> <button class="btn ghost sm" type="button" data-dlg="dlg-assign" data-set-code={x.c} data-set-label={`${x.c} — ${x.t} · profil ${PROF[profOf(x.c)]}${PDOM[x.c] ? ' · domaine ' + DOM[PDOM[x.c]].n : ''}`}>Affecter</button></>}</td>
+              </tr>
+            ); })}
+          </tbody>
+        </table>
+      </div>
+      {fiche && REF.some((r) => r.c === fiche) && <Dlg id="dlg-fiche" title={`Fiche ${fiche}`} wide><Fiche code={fiche} full /></Dlg>}
+      {can && (
+        <Dlg id="dlg-assign" title="Affecter un poste" api="/api/admin/os/pilotage" submit="Affecter" wide>
+          <input type="hidden" name="action" value="poste.assign" /><input type="hidden" name="code" value="" />
+          <div class="watch" style="margin-bottom:10px">Poste : <b data-text="label"></b></div>
+          <label class="f" for="as">Collaborateur</label>
+          <select class="in" id="as" name="staffId" style="width:100%">{actifs.map((s) => <option value={s.id}>{s.name} — {s.poste} {refT(s.poste)}</option>)}</select>
+          <div style="margin-top:10px">
+            <label class="row small"><input type="radio" name="mode" value="main" checked /> Titulaire principal : les droits suivent le nouveau poste</label>
+            <label class="row small"><input type="radio" name="mode" value="cumul" /> Cumul ou intérim</label>
+          </div>
+          <p class="xs muted" style="margin-top:8px">Cumuls interdits (séparation des tâches) : analyste et conformité Kapital, trésorerie et achats, achats et comptabilité.</p>
+        </Dlg>
+      )}
+    </>
+  )}
+  {tab === 'org' && (
+    <div>
+      {tree.map(([d, s]) => <div style={`margin-left:${d * 36}px;${d ? 'border-left:2px solid var(--line);padding-left:14px' : ''}`}><div class="card" style="display:inline-flex;gap:8px;align-items:center;padding:8px 10px;margin:4px 0"><span class="av s">{initials(s.name)}</span><span class="small"><b>{s.name}</b><br /><span class="muted">{refT(s.poste)}</span></span></div></div>)}
+      {!tree.length && <div class="empty">Aucun collaborateur enregistré.</div>}
+    </div>
+  )}
+  {tab === 'ent' && (
+    <>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Région</th><th>Bureau</th><th>Directeur·rice</th><th>Pays</th><th>Effectif</th></tr></thead>
+          <tbody>{(Object.keys(REGIONS) as Region[]).map((k) => { const d = actifs.find((s) => s.prof === 'dirreg' && s.reg === k); const ps = PK.filter((p) => regOf(p) === k); return (
+            <tr><td><b>{REGIONS[k].n}</b></td><td>{REGIONS[k].city}</td><td class="small">{d ? d.name : <span class="tag warn">Vacant</span>}</td><td class="small">{ps.map(pn).join(', ')}</td><td class="num">{actifs.filter((s) => ps.includes(s.country)).length}</td></tr>
+          ); })}</tbody>
+        </table>
+      </div>
+      {can && <button class="btn" type="button" data-dlg="dlg-pays" style="margin-top:12px">Ouvrir un nouveau pays</button>}
+      <Dlg id="dlg-pays" title="Ouvrir un nouveau pays" api="/api/admin/os/pilotage" submit="Ouvrir le bureau" wide>
+        <input type="hidden" name="action" value="country.open" />
+        <p class="small">L'assistant crée le bureau et son canal de messagerie ; le poste de représentant (B2) apparaît vacant jusqu'à l'affectation.</p>
+        <div class="fg">
+          <div><label class="f" for="nc">Code ISO (2 lettres)</label><input class="in" id="nc" name="code" maxlength="2" required /></div>
+          <div><label class="f" for="nn">Nom du pays</label><input class="in" id="nn" name="name" required /></div>
+          <div><label class="f" for="nr">Région</label><select class="in" id="nr" name="region">{(Object.keys(REGIONS) as Region[]).map((k) => <option value={k}>{REGIONS[k].n}</option>)}</select></div>
+          <div><label class="f" for="nd">Devise</label><input class="in" id="nd" name="currency" value="XOF" /></div>
+        </div>
+      </Dlg>
+    </>
+  )}
+  {tab === 'revue' && (
+    <>
+      <div class="grid g3">
+        <div class="card kpi"><div class="l">Revue</div><div class="v num">{review.quarter}</div><div class="d">lancée le {dstr(review.start)}</div></div>
+        <div class="card kpi"><div class="l">Accès confirmés ou retirés</div><div class="v num">{items.length}/{actifs.length}</div></div>
+        <div class="card kpi"><div class="l">Comptes suspendus</div><div class="v num">{people.filter((s) => s.suspended).length}</div></div>
+      </div>
+      <p class="small" style="margin:10px 0">Chaque responsable confirme ou retire les accès de son équipe dans « Mon équipe ». Après 15 jours, les accès non confirmés sont suspendus.</p>
+      {canReview && (
+        <div class="row">
+          <button class="btn bad" type="button" data-post="/api/admin/os/pilotage" data-body='{"action":"review.apply"}' data-confirm="Les comptes non confirmés seront suspendus (sauf la Direction générale et vous-même)." data-reload>Appliquer l'échéance : suspendre les non-confirmés</button>
+          <button class="btn ghost" type="button" data-post="/api/admin/os/pilotage" data-body='{"action":"review.lift"}' data-reload>Lever toutes les suspensions</button>
+          <button class="btn ghost" type="button" data-post="/api/admin/os/pilotage" data-body='{"action":"review.new"}' data-reload>Lancer une nouvelle revue</button>
+        </div>
+      )}
+      <div class="tw" style="margin-top:12px">
+        <table class="t">
+          <thead><tr><th>Collaborateur</th><th>Responsable</th><th>Profil</th><th>Statut</th></tr></thead>
+          <tbody>{actifs.map((s) => { const d = items.find((x) => x.staffId === s.id)?.decision; return (
+            <tr><td>{s.name}</td><td class="small">{name(s.managerId)}</td><td class="small">{PROF[s.prof]}</td><td>{d === 'ok' ? <span class="tag ok">Confirmés</span> : d === 'ko' ? <span class="tag bad">Retirés</span> : s.suspended ? <span class="tag bad">Suspendu</span> : <span class="tag warn">En attente</span>}</td></tr>
+          ); })}</tbody>
+        </table>
+      </div>
+    </>
+  )}
+  {tab === 'hist' && (
+    <div class="tw">
+      <table class="t">
+        <thead><tr><th>Date</th><th>Auteur</th><th>Changement</th><th>Objet</th></tr></thead>
+        <tbody>
+          {hist.map((h) => <tr><td class="small">{dtstr(h.at)}</td><td class="small">{h.who ?? '—'}</td><td>{ACTION[h.a] ?? h.a}</td><td class="small">{h.t && /^EMP\d+$/.test(h.t) ? name(h.t) : h.t}</td></tr>)}
+          {!hist.length && <tr><td colspan="4" class="muted">Aucun changement de structure enregistré.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  )}
+</AdminLayout>
+<script>
+  const pf = document.getElementById('pf') as HTMLSelectElement | null;
+  pf?.addEventListener('change', () => document.querySelectorAll<HTMLElement>('#pt [data-st]').forEach((r) => { r.style.display = pf.value && r.dataset.st !== pf.value ? 'none' : ''; }));
+</script>

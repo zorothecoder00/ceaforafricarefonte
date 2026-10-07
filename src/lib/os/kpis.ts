@@ -3,7 +3,8 @@
    n : score sur 100 comparé à la cible (goal) pour la pastille verte / orange / rouge. */
 import { and, eq, gte, inArray, sql } from 'drizzle-orm';
 import { db } from '../db';
-import { osRequest, osTask } from '../../db/schema/os';
+import { osRequest, osTask, osReviewItem } from '../../db/schema/os';
+import { allOkrs, okrProg, currentReview } from './pilotage';
 import { auditLog } from '../../db/schema/app';
 import { kycCheck } from '../../db/schema/kapital';
 import { pendingFor, budgets } from './approvals';
@@ -30,6 +31,20 @@ export const KMAP: Record<string, string[]> = {
 
 type Ctx = { people: Person[] };
 const KF: Record<string, (u: Person, c: Ctx) => Promise<Omit<Kpi, 'k' | 'l'> | null>> = {
+  okr: async () => {
+    const all = await allOkrs();
+    const roots = all.filter((o) => !o.parentId);
+    if (!roots.length) return null;
+    const p = Math.round(roots.reduce((a, o) => a + okrProg(o, all), 0) / roots.length);
+    return { v: p + ' %', n: p, goal: 70 };
+  },
+  rights: async (_u, c) => {
+    const r = await currentReview();
+    const tot = c.people.filter((s) => s.active).length;
+    const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(osReviewItem).where(eq(osReviewItem.quarter, r.quarter));
+    const p = pct(n, tot) ?? 0;
+    return { v: p + ' %', n: p, goal: 100, sub: 'revue des droits ' + r.quarter };
+  },
   myTasks: async (u) => {
     const l = await db.select({ due: osTask.due }).from(osTask).where(and(eq(osTask.owner, u.id), sql`${osTask.status} <> 'Terminé'`));
     const late = l.filter((t) => t.due < new Date()).length;

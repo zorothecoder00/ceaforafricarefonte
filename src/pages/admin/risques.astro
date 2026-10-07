@@ -1,0 +1,78 @@
+---
+/* CEA OS — Risques et audit interne (prototype › pRisques) : cartographie (probabilité × impact), plans de maîtrise,
+   carte des risques, missions d'audit. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Dlg from '../../components/os/Dlg.astro';
+import Tags from '../../components/os/Tags.astro';
+import { asc, desc } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { osRisk, osAudit } from '../../db/schema/os';
+import { osContext, allStaff, scopeState } from '../../lib/os/core';
+import { DK, DOM } from '../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const sc = scopeState(os, Astro.cookies);
+const people = await allStaff();
+const name = (id: string | null) => people.find((s) => s.id === id)?.name ?? '—';
+const l = (await db.select().from(osRisk).orderBy(desc(osRisk.createdAt))).filter((r) => sc.inScope({ country: r.country, domain: r.domain }));
+const audits = await db.select().from(osAudit).orderBy(asc(osAudit.createdAt));
+const crit = (c: number) => (c >= 15 ? 'bad' : c >= 8 ? 'warn' : 'ok');
+---
+<AdminLayout title="Risques et audit interne" lead="Cartographie des risques, plans de maîtrise et missions d'audit">
+  <Fragment slot="actions"><button class="btn" type="button" data-dlg="dlg-risk">Nouveau risque</button></Fragment>
+  <div class="split">
+    <div class="tw">
+      <table class="t">
+        <thead><tr><th>Risque</th><th>Domaine</th><th>Probabilité</th><th>Impact</th><th>Criticité</th><th>Responsable</th><th>Plan de maîtrise</th><th>Statut</th></tr></thead>
+        <tbody>
+          {l.map((r) => { const c = r.probability * r.impact; return (
+            <tr>
+              <td><b>{r.title}</b></td><td><Tags dom={r.domain} /></td><td class="num">{r.probability}/5</td><td class="num">{r.impact}/5</td>
+              <td><span class={`tag ${crit(c)}`}>{c}</span></td><td class="small">{name(r.owner)}</td><td class="small">{r.plan}</td>
+              <td><select class="in xs" aria-label="Statut" data-risk={r.id}>{['Ouvert', 'En traitement', 'Maîtrisé', 'Clos'].map((s) => <option selected={s === r.status}>{s}</option>)}</select></td>
+            </tr>
+          ); })}
+          {!l.length && <tr><td colspan="8" class="muted">Aucun risque enregistré dans le périmètre.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+    <aside>
+      <div class="card">
+        <h3>Carte des risques</h3>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:3px">
+          {[5, 4, 3, 2, 1].map((i) => [1, 2, 3, 4, 5].map((p) => { const n = l.filter((r) => r.probability === p && r.impact === i).length; return <div style={`aspect-ratio:1;border-radius:4px;background:var(--${crit(p * i)}-soft);display:flex;align-items:center;justify-content:center;font-weight:700`} title={`Probabilité ${p}, impact ${i}`}>{n || ''}</div>; }))}
+        </div>
+        <p class="xs muted">Horizontal : probabilité · vertical : impact</p>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <h3>Missions d'audit</h3>
+        {audits.map((a) => <div class="row between small" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>{a.title}<br /><span class="xs muted">{a.findings} constat(s)</span></span><Tags st={a.status} /></div>)}
+        {!audits.length && <p class="small muted">Aucune mission.</p>}
+        <button class="btn ghost sm" type="button" data-dlg="dlg-audit" style="margin-top:8px">Nouvelle mission</button>
+      </div>
+    </aside>
+  </div>
+  <Dlg id="dlg-risk" title="Nouveau risque" api="/api/admin/os/pilotage" wide>
+    <input type="hidden" name="action" value="risk.create" />
+    <div class="fg">
+      <div class="full"><label class="f" for="rt">Description</label><input class="in" id="rt" name="title" required /></div>
+      <div><label class="f" for="rd">Domaine</label><select class="in" id="rd" name="domain">{DK.map((d) => <option value={d}>{DOM[d].n}</option>)}</select></div>
+      <div><label class="f" for="rp">Probabilité (1-5)</label><input class="in" type="number" min="1" max="5" value="3" id="rp" name="probability" /></div>
+      <div><label class="f" for="ri">Impact (1-5)</label><input class="in" type="number" min="1" max="5" value="3" id="ri" name="impact" /></div>
+      <div><label class="f" for="ro">Responsable</label><select class="in" id="ro" name="owner">{people.filter((s) => s.active).map((s) => <option value={s.id}>{s.name}</option>)}</select></div>
+      <div class="full"><label class="f" for="rpl">Plan de maîtrise</label><input class="in" id="rpl" name="plan" /></div>
+    </div>
+  </Dlg>
+  <Dlg id="dlg-audit" title="Nouvelle mission d'audit" api="/api/admin/os/pilotage">
+    <input type="hidden" name="action" value="audit.create" />
+    <label class="f" for="at">Intitulé de la mission</label><input class="in" id="at" name="title" required style="width:100%" />
+  </Dlg>
+</AdminLayout>
+<script>
+  document.querySelectorAll<HTMLSelectElement>('[data-risk]').forEach((s) => s.addEventListener('change', async () => {
+    const r = await fetch('/api/admin/os/pilotage', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'risk.status', id: s.dataset.risk, status: s.value }) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    (window as unknown as { toast: (t: string) => void }).toast(r?.ok ? d.message : d.error || 'Une erreur est survenue.');
+  }));
+</script>

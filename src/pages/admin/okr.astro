@@ -1,0 +1,62 @@
+---
+/* CEA OS — Objectifs (OKR) en cascade (prototype › pOKR) : objectifs de l'organisation déclinés par département, région,
+   pays et fonction ; l'avancement d'un parent est la moyenne de ses enfants ; le responsable met à jour une feuille. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Dlg from '../../components/os/Dlg.astro';
+import { osContext, allStaff, canUse, MANAGERS } from '../../lib/os/core';
+import { allOkrs, okrProg, type Okr } from '../../lib/os/pilotage';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const me = os.me;
+const [people, all] = await Promise.all([allStaff(), allOkrs()]);
+const name = (id: string | null) => people.find((s) => s.id === id)?.name ?? '—';
+const kids = (o: Okr) => all.filter((x) => x.parentId === o.id);
+const tree: [number, Okr][] = [];
+const walk = (o: Okr, d: number) => { tree.push([d, o]); kids(o).forEach((k) => walk(k, d + 1)); };
+all.filter((o) => !o.parentId).forEach((o) => walk(o, 0));
+const isDg = me?.prof === 'dg' || os.superuser;
+const decline = canUse(MANAGERS, os);
+const owners = people.filter((s) => s.active && ['dg', 'chef', 'dirreg', 'rep', 'fin', 'rh', 'ops', 'jur', 'conf', 'com', 'it'].includes(s.prof));
+---
+<AdminLayout title="Objectifs (OKR) en cascade" lead="Les objectifs de l'organisation se déclinent par département, région, pays et fonction ; l'avancement d'un parent est la moyenne de ses enfants">
+  <Fragment slot="actions">{isDg && <button class="btn" type="button" data-dlg="dlg-okr" data-set-parent-id="" data-set-label="">Nouvel objectif de l'organisation</button>}</Fragment>
+  <div>
+    {tree.map(([d, o]) => {
+      const ch = kids(o); const p = okrProg(o, all); const mine = o.owner === me?.id;
+      return (
+        <div style={`margin:6px 0 6px ${d * 32}px;${d ? 'border-left:2px solid var(--line);padding-left:10px' : ''}`}>
+          <div class="card" style="padding:10px 12px">
+            <div class="row between">
+              <div><span class="tag">{o.level}</span> <b class="small">{o.title}</b><div class="xs muted">{name(o.owner)}{ch.length > 0 && ` · moyenne de ${ch.length} objectif(s)`}</div></div>
+              <div class="row">
+                <b class="num">{p} %</b>
+                {!ch.length && (mine || isDg) && <input type="range" min="0" max="100" value={o.progress} data-okr={o.id} aria-label="Avancement" style="width:110px;accent-color:var(--gold)" />}
+                {decline && <button class="btn ghost sm" type="button" data-dlg="dlg-okr" data-set-parent-id={o.id} data-set-label={`Parent : ${o.title}`}>Décliner</button>}
+              </div>
+            </div>
+            <div class:list={['bar', { warn: p < 40 }]} style="margin-top:6px"><span style={`width:${p}%`}></span></div>
+          </div>
+        </div>
+      );
+    })}
+    {!tree.length && <div class="empty">Aucun objectif. {isDg ? 'Fixez les objectifs de l’organisation avec le bouton ci-dessus.' : 'La Direction générale fixe les objectifs de l’organisation.'}</div>}
+  </div>
+  <Dlg id="dlg-okr" title="Objectif" api="/api/admin/os/pilotage" submit="Créer" wide>
+    <input type="hidden" name="action" value="okr.create" /><input type="hidden" name="parentId" value="" />
+    <p class="small muted" data-text="label"></p>
+    <div class="fg">
+      <div class="full"><label class="f" for="ot">Objectif</label><input class="in" id="ot" name="title" required /></div>
+      <div><label class="f" for="ol">Niveau (objectif décliné)</label><select class="in" id="ol" name="level">{['Département', 'Région', 'Pays', 'Fonction', 'Équipe', 'Organisation'].map((x) => <option>{x}</option>)}</select></div>
+      <div><label class="f" for="oo">Responsable</label><select class="in" id="oo" name="owner">{owners.map((s) => <option value={s.id} selected={s.id === me?.id}>{s.name}</option>)}</select></div>
+    </div>
+  </Dlg>
+</AdminLayout>
+<script>
+  document.querySelectorAll<HTMLInputElement>('[data-okr]').forEach((r) => r.addEventListener('change', async () => {
+    const res = await fetch('/api/admin/os/pilotage', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'okr.progress', id: r.dataset.okr, progress: Number(r.value) }) }).catch(() => null);
+    const d = res ? await res.json().catch(() => ({})) : {};
+    (window as unknown as { toast: (t: string) => void }).toast(res?.ok ? d.message : d.error || 'Une erreur est survenue.');
+    if (res?.ok) setTimeout(() => location.reload(), 500);
+  }));
+</script>

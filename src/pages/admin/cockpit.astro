@@ -13,6 +13,7 @@ import { dossier } from '../../db/schema/kapital';
 import { osDecision, osTask } from '../../db/schema/os';
 import { osContext, allStaff, scopeState } from '../../lib/os/core';
 import { pendingFor, budgets } from '../../lib/os/approvals';
+import { allOkrs, okrProg } from '../../lib/os/pilotage';
 import { isStaff } from '../../lib/rbac';
 import { DK, DOM, fmt, mfcfa, dstr, type Dom } from '../../lib/os/ref';
 
@@ -34,6 +35,8 @@ const [[enc], [due], late, bud, [mem], [kap], decisions, lateTasks, pend] = awai
   db.select({ n: sql<number>`count(*)::int` }).from(osTask).where(and(sql`${osTask.due} < now()`, sql`${osTask.status} <> 'Terminé'`)),
   os.me ? pendingFor(os.me.id, { people }) : Promise.resolve([]),
 ]);
+const okrs = await allOkrs();
+const roots = okrs.filter((o) => !o.parentId);
 const decPending = os.me?.prof === 'dg' ? decisions.filter((d) => d.status === 'En attente').length : 0;
 const ds = DK.filter((d) => sc.inScope({ domain: d }));
 const eng = ds.reduce((a, d) => a + (bud[d]?.engaged ?? 0), 0), bt = ds.reduce((a, d) => a + (bud[d]?.budget ?? 0), 0);
@@ -67,7 +70,8 @@ const attention = [
     <div class="card"><h2>Encaissements par domaine</h2><Bars title="Encaissements par domaine" horizontal labels={ds.map((d) => DOM[d].n.replace('CEA ', ''))} series={[{ label: 'Encaissé', color: '#C9962B', values: byDom }]} colors={ds.map((d) => DOM[d].c)} /></div>
     <div class="card"><h2>Budget engagé par domaine</h2><Bars title="Budget par domaine" labels={ds.map((d) => DOM[d].n.replace('CEA ', ''))} series={[{ label: 'Budget', color: '#B7C6D8', values: ds.map((d) => bud[d]?.budget ?? 0) }, { label: 'Engagé', color: '#C9962B', values: ds.map((d) => bud[d]?.engaged ?? 0) }, { label: 'Réalisé', color: '#082B4C', values: ds.map((d) => bud[d]?.realised ?? 0) }]} /></div>
   </div>
-  <div class="grid g2" style="margin-top:14px">
+  <div class="grid g3" style="margin-top:14px">
+    <div class="card"><h2>Objectifs {year}</h2>{roots.map((o) => { const p = okrProg(o, okrs); return <div style="margin:8px 0"><div class="row between small"><span>{o.title}</span><b>{p} %</b></div><div class:list={['bar', { warn: p < 40 }]}><span style={`width:${p}%`}></span></div></div>; })}{!roots.length && <p class="small muted">Aucun objectif fixé : <a href="/admin/okr">Objectifs (OKR)</a>.</p>}</div>
     <div class="card"><h2>Points d'attention</h2>{attention.map((t) => <div class="watch" style="margin-bottom:8px">{t}</div>)}{!attention.length && <div class="empty">Rien d'urgent.</div>}</div>
     <div class="card">
       <h2>Décisions</h2>

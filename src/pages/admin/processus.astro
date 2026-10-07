@@ -1,11 +1,13 @@
 ---
-/* CEA OS — Processus et seuils (prototype › pProc), profils dg, ops, it, conf : seuils d'approbation appliqués à toute
-   l'organisation. Le paramétrage des étapes de processus arrive avec le module Pilotage. */
+/* CEA OS — Processus, seuils et automatisations (prototype › pProc), profils dg, ops, it, conf : seuils d'approbation
+   appliqués à toute l'organisation ; processus (étapes versionnées, activation) modifiables sans code. */
 import AdminLayout from '../../layouts/AdminLayout.astro';
+import Dlg from '../../components/os/Dlg.astro';
 import { thresholds } from '../../lib/os/approvals';
+import { allFlows } from '../../lib/os/pilotage';
 
 export const prerender = false;
-const thr = await thresholds();
+const [thr, flows] = await Promise.all([thresholds(), allFlows()]);
 ---
 <AdminLayout title="Processus, seuils et automatisations" lead="Paramétrage sans code par les administrateurs fonctionnels">
   <form class="card" data-api="/api/admin/os/seuils" data-reload>
@@ -17,4 +19,19 @@ const thr = await thresholds();
     </div>
     <button class="btn" type="submit" style="margin-top:6px">Enregistrer</button>
   </form>
+  <h2 style="margin-top:18px">Processus</h2>
+  <div class="grid g2">
+    {flows.map((f) => (
+      <div class="card">
+        <div class="row between"><h3 style="margin:0">{f.name} <span class="xs muted">v{f.version}</span></h3><button class="toggle" type="button" role="switch" aria-checked={f.active ? 'true' : 'false'} aria-label={`Activer ${f.name}`} data-post="/api/admin/os/pilotage" data-body={JSON.stringify({ action: 'flow.toggle', id: f.id })} data-reload></button></div>
+        <div class="row" style="margin-top:10px;gap:4px">{f.steps.map((s, k) => <>{k > 0 && <span class="muted">›</span>}<span class={`tag ${f.active ? 'info' : ''}`}>{k + 1}. {s}</span></>)}</div>
+        <button class="btn ghost sm" type="button" data-dlg="dlg-flow" data-set-id={f.id} data-set-steps={f.steps.join('\n')} data-set-label={f.name} style="margin-top:10px">Modifier les étapes</button>
+      </div>
+    ))}
+  </div>
+  <Dlg id="dlg-flow" title="Étapes du processus" api="/api/admin/os/pilotage" submit="Enregistrer une nouvelle version">
+    <input type="hidden" name="action" value="flow.steps" /><input type="hidden" name="id" value="" />
+    <p class="small"><b data-text="label"></b> — une étape par ligne.</p>
+    <textarea class="in" name="steps" style="min-height:160px;width:100%"></textarea>
+  </Dlg>
 </AdminLayout>

@@ -1,0 +1,90 @@
+---
+/* CEA OS — Mon équipe (prototype › pEquipe) : collaborateurs directement rattachés, demandes en cours, tâches en retard,
+   absences, intégration des 90 premiers jours, revue trimestrielle des droits (confirmer / retirer), entretien annuel,
+   indicateurs de l'équipe. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Dlg from '../../components/os/Dlg.astro';
+import Onboarding from '../../components/os/Onboarding.astro';
+import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { osRequest, osTask, osReviewItem, osInterview } from '../../db/schema/os';
+import { osContext, allStaff } from '../../lib/os/core';
+import { kpisOf, kpiState } from '../../lib/os/kpis';
+import { currentReview, COMPS } from '../../lib/os/pilotage';
+import { pn, refT } from '../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const me = os.me;
+const people = await allStaff();
+const tm = me ? people.filter((s) => s.managerId === me.id) : [];
+const ids = tm.map((s) => s.id);
+const review = await currentReview();
+const [reqs, late, leaves, items, interviews] = ids.length ? await Promise.all([
+  db.select({ by: osRequest.byStaff, n: sql<number>`count(*)::int` }).from(osRequest).where(and(inArray(osRequest.byStaff, ids), eq(osRequest.status, 'En approbation'))).groupBy(osRequest.byStaff),
+  db.select({ by: osTask.owner, n: sql<number>`count(*)::int` }).from(osTask).where(and(inArray(osTask.owner, ids), ne(osTask.status, 'Terminé'), sql`${osTask.due} < now()`)).groupBy(osTask.owner),
+  db.select({ by: osRequest.byStaff, n: sql<number>`count(*)::int` }).from(osRequest).where(and(inArray(osRequest.byStaff, ids), eq(osRequest.type, 'conge'), eq(osRequest.status, 'Approuvée'))).groupBy(osRequest.byStaff),
+  db.select().from(osReviewItem).where(and(eq(osReviewItem.quarter, review.quarter), inArray(osReviewItem.staffId, ids))),
+  db.select().from(osInterview).where(inArray(osInterview.staffId, ids)).orderBy(desc(osInterview.at)),
+]) : [[], [], [], [], []];
+const cnt = (l: { by: string; n: number }[], id: string) => l.find((x) => x.by === id)?.n ?? 0;
+const kp = await Promise.all(tm.map(async (s) => [s.id, await kpisOf(s, people)] as const));
+const kpOf = (id: string) => kp.find((x) => x[0] === id)?.[1] ?? [];
+---
+<AdminLayout title="Mon équipe" lead={`${tm.length} collaborateur(s) directement rattaché(s) · revue des droits ${review.quarter}`}>
+  {tm.length ? (
+    <div class="tw">
+      <table class="t">
+        <thead><tr><th>Collaborateur</th><th>Poste</th><th>Demandes en cours</th><th>Tâches en retard</th><th>Absences</th><th>Intégration</th><th>Revue des droits</th><th></th></tr></thead>
+        <tbody>
+          {tm.map((s) => { const rv = items.find((x) => x.staffId === s.id)?.decision; const l = cnt(late, s.id); return (
+            <tr>
+              <td><b>{s.name}</b><div class="xs muted">{pn(s.country)}{!s.active ? ' · désactivé' : s.suspended ? ' · suspendu' : ''}</div></td>
+              <td class="small"><span class="tag">{s.poste}</span> {refT(s.poste)}</td>
+              <td class="num">{cnt(reqs, s.id)}</td>
+              <td class:list={['num', { down: l > 0 }]}>{l}</td>
+              <td class="num">{cnt(leaves, s.id)}</td>
+              <td>{s.onboarding ? <>{s.onboarding.filter(Boolean).length}/3 <button class="btn ghost sm" type="button" data-dlg={`onb-${s.id}`}>Suivre</button></> : '—'}</td>
+              <td style="white-space:nowrap">{rv === 'ok' ? <span class="tag ok">Confirmés</span> : rv === 'ko' ? <span class="tag bad">Retirés</span> : <><button class="btn ok sm" type="button" data-post="/api/admin/os/pilotage" data-body={JSON.stringify({ action: 'review.decide', staffId: s.id, ok: true })} data-reload>Confirmer</button> <button class="btn ghost sm" type="button" data-post="/api/admin/os/pilotage" data-body={JSON.stringify({ action: 'review.decide', staffId: s.id, ok: false })} data-confirm={`Les accès de ${s.name} seront suspendus immédiatement.`} data-reload>Retirer</button></>}</td>
+              <td><button class="btn ghost sm" type="button" data-dlg={`ea-${s.id}`}>Entretien annuel</button></td>
+            </tr>
+          ); })}
+        </tbody>
+      </table>
+    </div>
+  ) : <div class="empty">Aucun collaborateur ne vous est directement rattaché.</div>}
+  {tm.length > 0 && <h2 style="margin-top:18px">Indicateurs de l'équipe</h2>}
+  <div class="grid g3">
+    {tm.slice(0, 9).map((s) => { const k = kpOf(s.id).filter((x) => x.n !== null); const ok = k.filter((x) => kpiState(x) === 'ok').length; return (
+      <div class="card"><b>{s.name}</b><div class="xs muted">{refT(s.poste)}</div><div class:list={['bar', ok / Math.max(1, k.length) < 0.5 ? 'warn' : 'ok']} style="margin:8px 0"><span style={`width:${k.length ? (ok / k.length) * 100 : 0}%`}></span></div><span class="xs">{ok}/{k.length} indicateur(s) dans la cible</span></div>
+    ); })}
+  </div>
+  {tm.map((s) => { const prev = interviews.find((i) => i.staffId === s.id); return (
+    <>
+      {s.onboarding && <Dlg id={`onb-${s.id}`} title={`Intégration — ${s.name}`} wide><Onboarding u={s} canTick /></Dlg>}
+      <Dlg id={`ea-${s.id}`} title={`Entretien annuel — ${s.name}`} api="/api/admin/os/pilotage" submit="Enregistrer l'entretien" wide>
+        <input type="hidden" name="action" value="interview.save" /><input type="hidden" name="staffId" value={s.id} />
+        <p class="small muted">Indicateurs de la fiche {s.poste} pré-remplis avec le réalisé.{prev && ` Dernier entretien le ${prev.at.toLocaleDateString('fr-FR')}.`}</p>
+        <div class="tw"><table class="t"><tbody>{kpOf(s.id).map((k) => <tr><td>{k.l}</td><td class="num"><b>{k.v}</b></td></tr>)}</tbody></table></div>
+        <h3 style="margin-top:12px">Compétences communes (1 à 4)</h3>
+        <div class="fg">{COMPS.map((c, i) => <div><label class="f" for={`cp${s.id}${i}`}>{c}</label><select class="in" id={`cp${s.id}${i}`} name="competences" data-comp>{[1, 2, 3, 4].map((n) => <option selected={(prev?.competences[i] ?? 3) === n}>{n}</option>)}</select></div>)}</div>
+        <label class="f" for={`eo${s.id}`} style="margin-top:10px">Objectifs de l'année et besoins de formation</label>
+        <textarea class="in" id={`eo${s.id}`} name="objectives">{prev?.objectives ?? ''}</textarea>
+      </Dlg>
+    </>
+  ); })}
+</AdminLayout>
+<script>
+  // Plusieurs listes « competences » : envoyées en tableau ordonné (le formulaire générique ne garde que la dernière)
+  document.querySelectorAll<HTMLFormElement>('form[data-api]').forEach((f) => {
+    const comps = f.querySelectorAll<HTMLSelectElement>('[data-comp]');
+    if (!comps.length) return;
+    f.addEventListener('submit', (e) => {
+      e.preventDefault(); e.stopImmediatePropagation();
+      const body = { action: 'interview.save', staffId: (f.querySelector('[name=staffId]') as HTMLInputElement).value, competences: [...comps].map((c) => Number(c.value)), objectives: (f.querySelector('textarea') as HTMLTextAreaElement).value };
+      fetch('/api/admin/os/pilotage', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        .then((r) => r.json().then((d) => [r.ok, d] as const)).then(([ok, d]) => { (window as unknown as { toast: (t: string) => void }).toast(ok ? d.message : d.error); if (ok) f.closest('dialog')?.close(); })
+        .catch(() => (window as unknown as { toast: (t: string) => void }).toast('Erreur réseau.'));
+    }, { capture: true });
+  });
+</script>

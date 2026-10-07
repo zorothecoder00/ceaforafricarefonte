@@ -1,0 +1,36 @@
+---
+/* CEA OS — CEA Impact Lab (prototype › pImpact) : indicateurs calculés en direct à partir des modules (observatoire d'impact,
+   src/lib/impact.ts) et dictionnaire des indicateurs ; périmètre pays appliqué quand un seul pays est affiché. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { osContext, scopeState } from '../../lib/os/core';
+import { computeImpact } from '../../lib/impact';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const sc = scopeState(os, Astro.cookies);
+const country = sc.sc.startsWith('p:') ? sc.sc.slice(2) : undefined;
+const d = await computeImpact({ country });
+// Propriétaire et fréquence de chaque indicateur (prototype)
+const META: Record<string, [string, string]> = {
+  entrepreneurs_formes: ['Département Academy', 'Mensuelle'], entrepreneurs_accompagnes: ['Département Academy', 'Par cohorte'],
+  emplois_crees: ['CEA Impact Lab', 'Mensuelle'], financements_obtenus: ['Département Kapital', 'À chaque clôture'],
+  part_femmes: ['CEA Impact Lab', 'Mensuelle'], participants_evenements: ['Département Events', 'Par événement'],
+};
+---
+<AdminLayout title="CEA Impact Lab" lead={`Indicateurs calculés en direct à partir des modules · ${sc.label}${sc.sc.startsWith('r:') ? ' (vue organisation : filtre régional non appliqué aux indicateurs)' : ''}`}>
+  <Fragment slot="actions">
+    <a class="btn ghost" href="/impact/donnees/indicateurs.csv">Exporter</a>
+    <button class="btn" type="button" onclick="openChat()">Rapport d'impact avec Copilot</button>
+  </Fragment>
+  <div class="grid g3">
+    {d.kpis.map((k) => <div class="card kpi"><div class="l">{k.label}</div><div class="v num">{k.display}</div><div class="d">{META[k.id]?.[0] ?? ''}</div></div>)}
+  </div>
+  <h2 style="margin-top:18px">Dictionnaire des indicateurs</h2>
+  <div class="tw">
+    <table class="t">
+      <thead><tr><th>Indicateur</th><th>Définition</th><th>Source</th><th>Propriétaire</th><th>Fréquence</th></tr></thead>
+      <tbody>{d.kpis.map((k) => <tr><td><b>{k.label}</b></td><td class="small">{k.definition}</td><td class="small">{k.source}</td><td class="small">{META[k.id]?.[0] ?? '—'}</td><td class="small">{META[k.id]?.[1] ?? '—'}</td></tr>)}</tbody>
+    </table>
+  </div>
+  <p class="xs muted" style="margin-top:6px">Valeurs au {d.asOf}. Aucune valeur concernant moins de 10 personnes n'est publiée (protection contre la réidentification).</p>
+</AdminLayout>

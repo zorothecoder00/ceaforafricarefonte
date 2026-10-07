@@ -260,6 +260,13 @@
       "when": 1791362784517,
       "tag": "0036_cea_os_collaboration",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1791363819624,
+      "tag": "0037_cea_os_pilotage",
+      "breakpoints": true
     }
   ]
 }

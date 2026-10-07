@@ -18,7 +18,7 @@ const { eq, sql, inArray } = await import('drizzle-orm');
 const { PDOM, DOM, BANDS, gradeOf, profOf, pn, DK } = await import('../src/lib/os/ref');
 
 if (process.argv.includes('--reset')) {
-  await db.execute(sql`truncate os_message, os_channel_seen, os_channel, os_meeting, os_task, os_decision, os_request, os_delegation, os_timesheet, os_budget, staff restart identity cascade`);
+  await db.execute(sql`truncate os_okr, os_risk, os_audit, os_review_item, os_review, os_interview, os_flow, os_country, os_message, os_channel_seen, os_channel, os_meeting, os_task, os_decision, os_request, os_delegation, os_timesheet, os_budget, staff restart identity cascade`);
   console.log('• Tables de CEA OS vidées.');
 }
 const [any] = await db.select({ id: s.staff.id }).from(s.staff).limit(1);
@@ -118,5 +118,29 @@ await db.insert(s.osMessage).values([
   { channelId: 'dom_btp', staffId: chefs.btp, body: 'Point chantier Kara jeudi 9 h, en visio pour les autres pays.', at: ago(1) },
   { channelId: 'reg_AO', staffId: dirs.AO, body: 'Les rapports mensuels de septembre sont attendus avant le 5.', at: ago(3) },
 ]);
+// Pilotage : objectifs en cascade, risques, missions d'audit (contenus du prototype)
+const okr = async (title: string, level: string, owner: string, parentId: string | null = null, progress = 0) => (await db.insert(s.osOkr).values({ title, level, owner, parentId, progress }).returning())[0].id;
+const o1 = await okr('Atteindre 40 000 membres validés', 'Organisation', dg);
+const o2 = await okr('Lever 5 Md FCFA pour les entreprises accompagnées', 'Organisation', dg);
+const o3 = await okr('Remporter 3 marchés BTP publics', 'Organisation', dg);
+const o4 = await okr('Clôture mensuelle en 8 jours ouvrés', 'Organisation', dg);
+const o1a = await okr("Afrique de l'Ouest : 24 000 membres", 'Région', dirs.AO, o1, 66);
+await okr('Afrique centrale : 6 000 membres', 'Région', dirs.AC, o1, 48);
+await okr("Afrique de l'Est : 6 000 membres", 'Région', dirs.AE, o1, 57);
+await okr('Togo : 9 000 membres', 'Pays', P((r) => r.poste === 'B2' && r.country === 'TG'), o1a, 71);
+await okr("60 dossiers au comité d'investissement", 'Département', chefs.kap, o2, 38);
+await okr('100 investisseurs vérifiés actifs', 'Département', chefs.kap, o2, 45);
+await okr("Répondre à 12 appels d'offres", 'Département', chefs.btp, o3, 50);
+await okr('Bibliothèque de prix pour 5 pays', 'Département', chefs.btp, o3, 40);
+await okr('Rapprochement automatique ≥ 95 %', 'Fonction', P((r) => r.poste === 'D3'), o4, 80);
+await okr('Comptes justifiés à chaque clôture', 'Fonction', P((r) => r.poste === 'D2'), o4, 70);
+await db.insert(s.osRisk).values([
+  { title: "Retard de paiement d'un maître d'ouvrage public", domain: 'btp', probability: 4, impact: 4, owner: chefs.btp, plan: "Clauses d'intérêts moratoires, suivi mensuel", country: 'TG' },
+  { title: 'Concentration des revenus sur le Forum', domain: 'evt', probability: 3, impact: 3, owner: chefs.evt, plan: 'Diversifier les sponsors', country: 'TG' },
+  { title: 'Validation des inscriptions au-delà de 48 h', domain: 'voix', probability: 3, impact: 2, owner: chefs.voix, plan: 'Renfort temporaire dans 3 pays', country: 'TG' },
+  { title: "Dépendance à un agrégateur de paiement", domain: 'prj', probability: 2, impact: 4, owner: fin, plan: 'Second agrégateur en V2', country: 'TG' },
+  { title: "Fuite de données d'un dossier Kapital", domain: 'kap', probability: 1, impact: 5, owner: conf, plan: 'Cloisonnement, revue des droits', country: 'TG' },
+]);
+await db.insert(s.osAudit).values([{ title: 'Achats et séparation des tâches', status: 'En cours', findings: 2 }, { title: 'Rapprochements Mobile Money', status: 'Planifié', findings: 0 }]);
 console.log(`✓ ${rows.length} collaborateurs, budgets ${year} de ${DK.length} domaines. Comptes rattachés : admin@cea.demo (DG), analyste@cea.demo, editeur@cea.demo.`);
 process.exit(0);

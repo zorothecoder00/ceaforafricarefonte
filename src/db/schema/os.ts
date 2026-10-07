@@ -146,3 +146,81 @@ export const osDecision = pgTable('os_decision', {
   by: text('by').references(() => staff.id, { onDelete: 'set null' }),
   at: ts('at').notNull().defaultNow(),
 });
+
+/* ===== Lot 3 : pilotage (OKR, risques et audit, revue des droits, entretiens annuels, processus, pays ouverts) ===== */
+
+/* Objectifs en cascade : l'avancement d'un parent est la moyenne de ses enfants. */
+export const osOkr = pgTable('os_okr', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: text('title').notNull(),
+  level: text('level').notNull(), // Organisation | Département | Région | Pays | Fonction | Équipe
+  parentId: uuid('parent_id'),
+  owner: text('owner').references(() => staff.id, { onDelete: 'set null' }),
+  progress: integer('progress').notNull().default(0),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+
+/* Cartographie des risques (probabilité × impact) et missions d'audit interne. */
+export const osRisk = pgTable('os_risk', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: text('title').notNull(),
+  domain: text('domain').notNull(),
+  probability: integer('probability').notNull(),
+  impact: integer('impact').notNull(),
+  owner: text('owner').references(() => staff.id, { onDelete: 'set null' }),
+  plan: text('plan').notNull().default(''),
+  status: text('status').notNull().default('Ouvert'), // Ouvert | En traitement | Maîtrisé | Clos
+  country: text('country'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+export const osAudit = pgTable('os_audit', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: text('title').notNull(),
+  status: text('status').notNull().default('Planifié'),
+  findings: integer('findings').notNull().default(0),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+
+/* Revue trimestrielle des droits : chaque responsable confirme ou retire les accès de son équipe. */
+export const osReview = pgTable('os_review', {
+  quarter: text('quarter').primaryKey(), // 2026-T4
+  start: ts('start').notNull().defaultNow(),
+  applied: boolean('applied').notNull().default(false),
+});
+export const osReviewItem = pgTable('os_review_item', {
+  quarter: text('quarter').notNull().references(() => osReview.quarter, { onDelete: 'cascade' }),
+  staffId: text('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),
+  decision: text('decision').notNull(), // ok | ko
+  by: text('by').references(() => staff.id, { onDelete: 'set null' }),
+  at: ts('at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.quarter, t.staffId] })]);
+
+/* Entretiens annuels : indicateurs du poste figés, compétences communes (1 à 4), objectifs et besoins de formation. */
+export const osInterview = pgTable('os_interview', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  staffId: text('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),
+  managerId: text('manager_id').references(() => staff.id, { onDelete: 'set null' }),
+  competences: jsonb('competences').$type<number[]>().notNull(),
+  objectives: text('objectives').notNull().default(''),
+  kpis: jsonb('kpis').$type<[string, string][]>().notNull().default([]),
+  at: ts('at').notNull().defaultNow(),
+});
+
+/* Processus paramétrables (étapes, activation). */
+export const osFlow = pgTable('os_flow', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull().unique(),
+  steps: jsonb('steps').$type<string[]>().notNull(),
+  active: boolean('active').notNull().default(true),
+  version: integer('version').notNull().default(1),
+  position: integer('position').notNull().default(0),
+});
+
+/* Pays ouverts depuis CEA OS (en plus du réseau du code) : bureau, devise, région. */
+export const osCountry = pgTable('os_country', {
+  code: text('code').primaryKey(),
+  name: text('name').notNull(),
+  region: text('region').notNull(),
+  currency: text('currency').notNull().default('XOF'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
