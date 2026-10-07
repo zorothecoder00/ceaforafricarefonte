@@ -1,0 +1,28 @@
+---
+/* Intégration : objectifs des 90 premiers jours du poste (prototype › onbHTML), cochés par le collaborateur, son responsable
+   ou les ressources humaines. */
+import type { Person } from '../../lib/os/core';
+import { poste } from '../../lib/os/ref';
+interface Props { u: Person; canTick: boolean }
+const { u, canTick } = Astro.props;
+const f = poste(u.poste);
+const s = u.onboarding;
+const d = Math.round((Date.now() - new Date(u.hireDate).getTime()) / 864e5);
+---
+{f && s && (
+  <div class="card">
+    <div class="row between"><h3 style="margin:0">Intégration : objectifs des 90 premiers jours</h3><span class="small muted">Jour {d}</span></div>
+    <div class="bar" style="margin:10px 0"><span style={`width:${Math.min(100, (d / 90) * 100)}%`}></span></div>
+    {['Jours 1 à 30', 'Jours 31 à 60', 'Jours 61 à 90'].map((l, i) => (
+      <label class="chk"><input type="checkbox" checked={s[i]} disabled={!canTick} data-onb={u.id} data-i={i} /><span class="small"><b>{l}</b> — {f.j[i]}</span></label>
+    ))}
+  </div>
+)}
+<script>
+  document.querySelectorAll<HTMLInputElement>('[data-onb]').forEach((c) => c.addEventListener('change', async () => {
+    const res = await fetch('/api/admin/os/integration', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.dataset.onb, i: Number(c.dataset.i), checked: c.checked }) }).catch(() => null);
+    const d = res ? await res.json().catch(() => ({})) : {};
+    (window as unknown as { toast: (t: string) => void }).toast(res?.ok ? d.message : d.error || 'Une erreur est survenue.');
+    if (!res?.ok) c.checked = !c.checked;
+  }));
+</script>

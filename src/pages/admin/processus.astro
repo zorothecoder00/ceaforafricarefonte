@@ -1,0 +1,20 @@
+---
+/* CEA OS — Processus et seuils (prototype › pProc), profils dg, ops, it, conf : seuils d'approbation appliqués à toute
+   l'organisation. Le paramétrage des étapes de processus arrive avec le module Pilotage. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { thresholds } from '../../lib/os/approvals';
+
+export const prerender = false;
+const thr = await thresholds();
+---
+<AdminLayout title="Processus, seuils et automatisations" lead="Paramétrage sans code par les administrateurs fonctionnels">
+  <form class="card" data-api="/api/admin/os/seuils" data-reload>
+    <h2>Seuils d'approbation</h2>
+    <div class="fg" style="max-width:820px">
+      <div><label class="f" for="t1">Représentant pays jusqu'à (FCFA)</label><input class="in num" id="t1" name="pays" type="number" min="1" value={thr.pays} required /></div>
+      <div><label class="f" for="t2">Directeur régional jusqu'à (FCFA)</label><input class="in num" id="t2" name="reg" type="number" min="1" value={thr.reg} required /></div>
+      <div><label class="f" for="t3">Contrats : Direction générale au-delà de</label><input class="in num" id="t3" name="contrat" type="number" min="1" value={thr.contrat} required /></div>
+    </div>
+    <button class="btn" type="submit" style="margin-top:6px">Enregistrer</button>
+  </form>
+</AdminLayout>

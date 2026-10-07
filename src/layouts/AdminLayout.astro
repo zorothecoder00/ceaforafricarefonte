@@ -1,95 +1,101 @@
 ---
 /* Back-office « CEA OS » (CDC §12), au design du prototype CEA OS : application à part entière (sans l'en-tête ni le pied de
-   page du site public), menu latéral bleu nuit par rubriques avec compteurs, barre supérieure (périmètre, recherche,
-   « À traiter », notifications, CEA Copilot, compte), en-tête de page. Navigation filtrée selon les droits ; chaque page
-   vérifie aussi son propre droit. */
+   page du site public), menu latéral bleu nuit par rubriques (Mon espace, Pilotage, Relations, Domaines d'intervention,
+   Gestion, Support et administration) avec compteurs, barre supérieure (périmètre, recherche, approbations, notifications,
+   CEA Copilot, compte), en-tête de page (titre, sous-titre, actions).
+   Accès : une page du progiciel interne est gardée par le profil du poste (src/lib/os/core.ts › MODS) ; une page du site
+   par un droit de la matrice (prop obj). Chaque API vérifie aussi ses propres droits. */
 import { sql } from 'drizzle-orm';
 import BaseLayout from './BaseLayout.astro';
 import RightsHint from '../components/RightsHint.astro';
-import { ADMIN_NAV, ADMIN_ICON, ADMIN_GROUPS, countriesFor } from '../lib/admin';
-import Icon from '../components/Icon.astro';
 import { db } from '../lib/db';
-import { can, ROLE_LABEL, type Obj, type Role } from '../lib/rbac';
-import { country } from '../data/site';
+import { can, isStaff, ROLE_LABEL, type Obj, type Role } from '../lib/rbac';
+import { MODS, canUse, moduleOf, osContext, scopeState, type NavItem } from '../lib/os/core';
+import { pendingFor } from '../lib/os/approvals';
+import { DOM, pn, refT, initials } from '../lib/os/ref';
+import '../styles/os.css';
 
-/* hints : objets dont les droits manquants sont expliqués en haut de page (par défaut l'objet de la page ; [] pour aucun) */
-interface Props { title: string; lead?: string; obj: Obj; hints?: Obj[] }
-const { title, lead, obj, hints = [obj] } = Astro.props;
+/* obj : droit du site qui garde la page (pages historiques) ; sans obj, l'accès suit l'entrée du menu (profil du poste).
+   crumbs : fil d'Ariane [libellé, lien?][] ; hints : objets dont les droits manquants sont expliqués (par défaut obj). */
+interface Props { title: string; lead?: string; obj?: Obj; hints?: Obj[]; crumbs?: [string, string?][] }
+const { title, lead, obj, crumbs } = Astro.props;
+const hints = Astro.props.hints ?? (obj ? [obj] : []);
 const me = Astro.locals.user!;
-const path = Astro.url.pathname.replace(/\/$/, '');
-const allowed = can(me.roles, obj, 'L');
-const roles = me.roles.filter((r) => r !== 'membre').map((r) => ROLE_LABEL[r as Role] ?? r).join(' · ');
-const initials = me.name.split(' ').map((x) => x[0]).join('').slice(0, 2).toUpperCase();
+const os = await osContext(me);
+const path = Astro.url.pathname.replace(/\/$/, '') || '/admin';
 
-// Menu par rubriques, limité aux entrées autorisées
-const nav = ADMIN_NAV.filter(([, , o]) => can(me.roles, o, 'L'));
-const placed = new Set(ADMIN_GROUPS.flatMap(([, h]) => h));
-const groups = [...ADMIN_GROUPS, ['Autres', nav.map(([h]) => h).filter((h) => !placed.has(h))] as [string, string[]]]
-  .map(([g, hrefs]) => [g, hrefs.map((h) => nav.find(([x]) => x === h)).filter((x): x is (typeof nav)[number] => !!x)] as const)
-  .filter(([, items]) => items.length);
+// Pages du site (obj) : réservées aux rôles du back-office ; un collaborateur sans rôle n'y accède pas
+const staffRole = isStaff(me.roles);
+const gate = (i: NavItem) => (i.obj ? staffRole && can(me.roles, i.obj, 'L') : i.spec ? canUse(i.spec, os) && (!i.staff || !!os.me) : true);
+const mod = moduleOf(path);
+const allowed = obj ? staffRole && can(me.roles, obj, 'L') : mod ? gate(mod) : true;
 
-// Compteurs « à traiter » (comme les pastilles du prototype)
+// Compteurs « à traiter » (pastilles dorées du menu)
+const pending = os.me ? (await pendingFor(os.me.id).catch(() => [])).length : 0;
 const c = (await db.execute(sql`select
   (select count(*) from contact_message where status = 'nouveau')::int as messages,
   (select count(*) from post where status = 'en_moderation')::int as moderation,
   (select count(*) from job where status = 'en_moderation')::int as emplois,
   (select count(*) from programme_application where status = 'recue')::int as candidatures,
   (select count(*) from kapital.dossier where status = 'recu')::int as kapital`).catch(() => ({ rows: [{}] }))).rows[0] as Record<string, number>;
-const COUNT: Record<string, number> = { '/admin/messages': c.messages ?? 0, '/admin/moderation': c.moderation ?? 0, '/admin/emplois': c.emplois ?? 0, '/admin/candidatures': c.candidatures ?? 0, '/admin/kapital': c.kapital ?? 0 };
-const todo = Object.entries(COUNT).filter(([h]) => nav.some(([x]) => x === h)).reduce((n, [, v]) => n + v, 0);
-const isCurrent = (h: string) => path === h || (h !== '/admin' && path.startsWith(h + '/')) || (h !== '/admin' && path === h);
+const COUNT: Record<string, number> = { '/admin/approbations': pending, '/admin/messages': c.messages ?? 0, '/admin/moderation': c.moderation ?? 0, '/admin/emplois': c.emplois ?? 0, '/admin/candidatures': c.candidatures ?? 0, '/admin/kapital': c.kapital ?? 0 };
+const groups = MODS.map(([g, items]) => [g, items.filter(gate)] as const).filter(([, items]) => items.length);
+const isCurrent = (h: string) => h === mod?.href;
 
-// Périmètre affiché (lecture seule) : toute l'organisation, ou les pays d'un responsable pays
-const scope = await countriesFor(me, obj).catch(() => null);
-const scopeLabel = scope ? (scope.length ? scope.map((x) => country(x)).join(', ') : 'Aucun pays attribué') : 'Toute l’organisation';
+// Périmètre (pays, région ou toute l'organisation) ; masqué quand il n'y a qu'une option
+const sc = scopeState(os, Astro.cookies);
+const roleLine = me.roles.filter((r) => r !== 'membre').map((r) => ROLE_LABEL[r as Role] ?? r).join(' · ');
 ---
 <BaseLayout title={`${title} — CEA OS`} os>
   <div class="os-shell">
     <nav class="os-side side" id="sideNav" aria-label="Navigation CEA OS">
       <a class="os-logo" href="/admin"><img src="/logo.png" alt="CEA FOR AFRICA" width="68" height="38" /><span>CEA OS<small>Connecter • Entreprendre • Accélérer</small></span></a>
-      <button class="side-toggle" type="button" data-side-toggle aria-controls="sideNav" aria-pressed="false"><span class="st-open">‹ Réduire le menu</span><span class="st-closed" aria-hidden="true">›</span></button>
       <div class="side-body" id="sideBody">
         {groups.map(([g, items]) => (
           <>
             <h6>{g}</h6>
-            {items.map(([href, label]) => <a href={href} title={label} aria-current={isCurrent(href) ? 'page' : undefined}><Icon name={ADMIN_ICON[href] ?? 'info'} size={18} /><span class="sl">{label}</span>{COUNT[href] ? <span class="cnt" aria-label={`${COUNT[href]} à traiter`}>{COUNT[href]}</span> : null}</a>)}
+            {items.map((i) => <a href={i.href} title={i.label} aria-current={isCurrent(i.href) ? 'page' : undefined}>{i.dom && <span class="dot" style={`background:${DOM[i.dom].c}`}></span>}<span class="sl">{i.label}</span>{COUNT[i.href] ? <span class="cnt" aria-label={`${COUNT[i.href]} à traiter`}>{COUNT[i.href]}</span> : null}</a>)}
           </>
         ))}
         <h6>Raccourcis</h6>
-        <a href="/espace" title="Mon espace"><Icon name="back" size={18} /><span class="sl">Mon espace</span></a>
-        <a href="/" title="Site public"><Icon name="home" size={18} /><span class="sl">Site public</span></a>
+        <a href="/espace" title="Mon espace membre"><span class="sl">Mon espace membre</span></a>
+        <a href="/" title="Site public"><span class="sl">Site public</span></a>
       </div>
       <div class="os-foot">
-        <span class="sl"><b>{me.name}</b><br />{roles}</span>
+        <span class="sl"><b>{os.me?.name ?? me.name}</b><br />{os.me ? <>{refT(os.me.poste)}<br />{pn(os.me.country)}</> : roleLine}</span>
         <div class="row" style="gap:6px;margin-top:8px"><button class="os-ghost" type="button" id="themeBtn" title="Thème clair / sombre">Thème</button><button class="os-ghost" type="button" data-logout title="Se déconnecter">Déconnexion</button></div>
       </div>
     </nav>
     <div class="os-main">
       <header class="os-top">
         <button class="os-ib os-menu" type="button" data-os-menu aria-controls="sideNav" aria-expanded="false" aria-label="Ouvrir la navigation">☰</button>
-        <div class="os-scope" title="Périmètre des données affichées"><b>Périmètre</b><span>{scopeLabel}</span></div>
+        {sc.opts.length > 1
+          ? <div class="os-scope" title="Périmètre affiché"><b>Périmètre</b><select id="scopeSel" aria-label="Périmètre affiché">{sc.opts.map(([v, l]) => <option value={v} selected={v === sc.sc}>{l}</option>)}</select></div>
+          : <div class="os-scope" title="Périmètre affiché"><b>Périmètre</b><span>{sc.opts[0][1].trim()}</span></div>}
         <div class="os-grow"></div>
         <button class="os-ib" type="button" id="searchBtn" aria-label="Rechercher (Ctrl+K)">⌕ <span class="hide-s">Rechercher</span></button>
-        <a class="os-ib" href="/admin" aria-label={`À traiter : ${todo}`} title="À traiter">✓{todo > 0 && <span class="badge">{todo > 99 ? '99+' : todo}</span>}</a>
+        {os.me && <a class="os-ib" href="/admin/approbations" aria-label={`Approbations : ${pending}`}>✓ <span class="hide-s">Approbations</span>{pending > 0 && <span class="badge">{pending > 99 ? '99+' : pending}</span>}</a>}
         <a class="os-ib" href="/espace/notifications" aria-label="Notifications">🔔<span class="badge" data-unread hidden></span></a>
         <button class="os-ib" type="button" onclick="openChat()" aria-label="Ouvrir CEA Copilot">✦ <span class="hide-s">Copilot</span></button>
-        <a class="os-user" href="/espace/profil" title="Mon profil"><span class="av">{initials}</span><span class="t hide-s">{me.name}</span></a>
+        <a class="os-user" href={os.me ? '/admin/poste' : '/espace/profil'} title="Mon compte"><span class="av">{initials(os.me?.name ?? me.name)}</span><span class="t hide-s">{os.me?.name ?? me.name}</span></a>
       </header>
       <div class="os-content">
+        {crumbs && <div class="crumbs">{crumbs.map(([l, h], i) => <>{i > 0 && ' / '}{h ? <a href={h}>{l}</a> : l}</>)}</div>}
         <div class="ph">
           <div>
-            <div class="crumbs"><a href="/admin">CEA OS</a>{path !== '/admin' && <> / {title}</>}</div>
             <h1>{title}</h1>
             {lead && <p>{lead}</p>}
           </div>
+          <div class="row"><slot name="actions" /></div>
         </div>
-        {allowed && <RightsHint objs={hints} />}
-        {allowed ? <slot /> : <div class="empty">Vous n’avez pas accès à cette rubrique.</div>}
+        {allowed && hints.length > 0 && <RightsHint objs={hints} />}
+        {allowed ? <slot /> : <div class="empty">Votre profil ne donne pas accès à ce module. Les droits sont gérés par l’administration. <a href="/admin">Revenir à l’accueil</a></div>}
       </div>
     </div>
   </div>
 </BaseLayout>
 <script>
+  import '../scripts/os.ts';
   // Menu latéral sur téléphone et tablette : tiroir ouvert par ☰, fermé par un lien ou un clic à côté
   const side = document.getElementById('sideNav');
   const btn = document.querySelector<HTMLButtonElement>('[data-os-menu]');

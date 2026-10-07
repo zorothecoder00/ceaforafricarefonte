@@ -91,6 +91,13 @@ export const SETTINGS = {
     // Article de la base de connaissances → lien de la vidéo (YouTube, Vimeo ou fichier https://)
     defaults: { videos: {} as Record<string, string> },
   },
+  seuils: {
+    label: "Seuils d'approbation (CEA OS)",
+    // Dépenses : représentant pays jusqu'à « pays », directeur régional jusqu'à « reg », Direction générale au-delà ;
+    // contrats : Direction générale au-delà de « contrat » (FCFA)
+    schema: z.object({ pays: z.number().int().positive(), reg: z.number().int().positive(), contrat: z.number().int().positive() }),
+    defaults: { pays: 500000, reg: 5000000, contrat: 10000000 },
+  },
   reseaux: {
     label: 'Réseaux sociaux (pied de page)',
     schema: z.object({ linkedin: z.string(), facebook: z.string(), x: z.string(), youtube: z.string(), instagram: z.string(), tiktok: z.string(), whatsapp: z.string() }),

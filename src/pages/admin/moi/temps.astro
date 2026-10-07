@@ -1,0 +1,47 @@
+---
+/* CEA OS — Mes temps (prototype › pTemps) : temps passé par semaine, domaine et projet ; sert à facturer les bailleurs et à
+   mesurer le coût complet des activités. */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Tags from '../../../components/os/Tags.astro';
+import { desc, eq } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { osTimesheet } from '../../../db/schema/os';
+import { project } from '../../../db/schema/app';
+import { osContext } from '../../../lib/os/core';
+import { DK, DOM, weekKey } from '../../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const me = os.me;
+const wk = weekKey();
+const mine = me ? await db.select().from(osTimesheet).where(eq(osTimesheet.staffId, me.id)).orderBy(desc(osTimesheet.createdAt)) : [];
+const cur = mine.filter((t) => t.week === wk).reduce((a, t) => a + t.hours, 0);
+// Projets proposés : projets suivis sur la plateforme (Project Studio)
+const projects = await db.select({ t: project.name }).from(project).orderBy(desc(project.createdAt)).limit(40).catch(() => []);
+---
+<AdminLayout title="Mes temps" lead={`Semaine ${wk} · le temps passé par domaine sert à facturer les bailleurs et à mesurer les coûts`}>
+  <div class="split">
+    <div class="tw">
+      <table class="t">
+        <thead><tr><th>Semaine</th><th>Domaine</th><th>Projet / activité</th><th>Heures</th></tr></thead>
+        <tbody>
+          {mine.map((t) => <tr><td>{t.week}</td><td><Tags dom={t.domain} /></td><td>{t.project}</td><td class="num">{t.hours.toLocaleString('fr-FR')} h</td></tr>)}
+          {!mine.length && <tr><td colspan="4" class="muted">Aucune saisie.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+    <aside>
+      <form class="card" data-api="/api/admin/os/temps" data-reload>
+        <h3>Saisir pour {wk}</h3>
+        <p class="small muted">Déjà saisi cette semaine : <b>{cur.toLocaleString('fr-FR')} h</b> / 40 h</p>
+        <label class="f" for="td">Domaine</label>
+        <select class="in" id="td" name="domain" style="width:100%">{DK.map((d) => <option value={d} selected={d === me?.domain}>{DOM[d].n}</option>)}</select>
+        <label class="f" for="tp" style="margin-top:8px">Projet ou activité</label>
+        <select class="in" id="tp" name="project" style="width:100%"><option>Activité courante</option>{projects.map((p) => <option>{p.t}</option>)}</select>
+        <label class="f" for="th" style="margin-top:8px">Heures</label>
+        <input class="in" type="number" id="th" name="hours" value="8" min="0.5" step="0.5" style="width:100%" />
+        <button class="btn" type="submit" style="width:100%;margin-top:10px">Enregistrer</button>
+      </form>
+    </aside>
+  </div>
+</AdminLayout>

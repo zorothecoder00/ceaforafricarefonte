@@ -1,0 +1,49 @@
+---
+/* CEA OS — Mes demandes (prototype › pMoi) : congés, notes de frais, demandes d'achat, dépenses et contrats, avec le circuit
+   d'approbation de chacune et les motifs donnés par les approbateurs. */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import RequestDialogs from '../../../components/os/RequestDialogs.astro';
+import Steps from '../../../components/os/Steps.astro';
+import Tags from '../../../components/os/Tags.astro';
+import { desc, eq } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { osRequest } from '../../../db/schema/os';
+import { osContext, staffById, scopeState } from '../../../lib/os/core';
+import { thresholds, budgets } from '../../../lib/os/approvals';
+import { DK, PK, RTYPE, dstr, fcfa, type ReqType } from '../../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const me = os.me;
+const sc = scopeState(os, Astro.cookies);
+const [list, thr, bud, mgr] = me ? await Promise.all([
+  db.select().from(osRequest).where(eq(osRequest.byStaff, me.id)).orderBy(desc(osRequest.createdAt)),
+  thresholds(), budgets(), staffById(me.managerId),
+]) : [[], null, {}, null];
+---
+<AdminLayout title="Mes demandes" lead="Congés, notes de frais, demandes d'achat, dépenses et contrats">
+  <Fragment slot="actions">
+    <button class="btn ghost" type="button" data-dlg="dlg-conge">Congé</button>
+    <button class="btn ghost" type="button" data-dlg="dlg-ndf">Note de frais</button>
+    <button class="btn" type="button" data-dlg="dlg-achat">Demande d'achat</button>
+  </Fragment>
+  <div class="tw">
+    <table class="t">
+      <thead><tr><th>Demande</th><th>Objet</th><th>Montant</th><th>Date</th><th>Circuit</th><th>Statut</th></tr></thead>
+      <tbody>
+        {list.map((r) => (
+          <tr>
+            <td class="small"><b>{RTYPE[r.type as ReqType]}</b><br />{r.id}</td>
+            <td>{r.title}{(r.data as { just?: { name: string } }).just && <div class="xs"><a href={`/api/admin/os/justificatif?id=${r.id}`} target="_blank" rel="noopener">Justificatif</a></div>}</td>
+            <td class="num">{r.amount ? fcfa(r.amount) : '—'}</td>
+            <td class="small">{dstr(r.createdAt)}</td>
+            <td><Steps steps={r.steps} cur={r.cur} status={r.status} />{r.hist.filter((h) => h[3]).map((h) => <div class="xs muted">« {h[3]} » — {h[1]}</div>)}</td>
+            <td><Tags st={r.status} /></td>
+          </tr>
+        ))}
+        {!list.length && <tr><td colspan="6" class="muted">Aucune demande. Utilisez les boutons ci-dessus.</td></tr>}
+      </tbody>
+    </table>
+  </div>
+  {me && thr && <RequestDialogs me={me} managerName={mgr?.name ?? 'votre responsable'} thr={thr} budgets={bud} countries={PK.filter((p) => sc.inScope({ country: p }))} domains={DK.filter((d) => sc.inScope({ domain: d }))} />}
+</AdminLayout>

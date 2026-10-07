@@ -1,135 +1,86 @@
 ---
-/* Tableau de bord CEA OS (CDC §11) : files de travail selon les droits, indicateurs clés. */
+/* CEA OS — Accueil (prototype CEA OS › pHome) : salutation, actions rapides (congé, note de frais, achat, dépense, temps,
+   poste), chiffres clés, approbations attendues et demandes en cours. Les équipes sans fiche personnel voient les files
+   de travail du site. */
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import Money from '../../components/Money.astro';
-import { and, eq, gte, sql } from 'drizzle-orm';
+import LegacyBoard from '../../components/os/LegacyBoard.astro';
+import RequestDialogs from '../../components/os/RequestDialogs.astro';
+import Steps from '../../components/os/Steps.astro';
+import Tags from '../../components/os/Tags.astro';
+import { desc, eq } from 'drizzle-orm';
 import { db } from '../../lib/db';
-import { contactMessage, report, post, job, programmeApplication, payment, membership, project } from '../../db/schema/app';
-import { user } from '../../db/schema/auth';
-import { dossier, kycCheck, investorProfile } from '../../db/schema/kapital';
-import { can, ROLE_LABEL, type Role } from '../../lib/rbac';
-import { PIPELINE } from '../../lib/kapital';
-import { webVital } from '../../db/schema/ops';
+import { osRequest } from '../../db/schema/os';
+import { osContext, allStaff, scopeState } from '../../lib/os/core';
+import { pendingFor, thresholds, budgets, activeDelegations } from '../../lib/os/approvals';
+import { DK, PK, RTYPE, pn, refT, fcfa, type ReqType } from '../../lib/os/ref';
 
 export const prerender = false;
-const r = Astro.locals.user!.roles;
-// En-tête et actions rapides, comme l'accueil du prototype CEA OS
-const meName = Astro.locals.user!.name.split(' ')[0];
-const hour = Number(new Date().toLocaleString('fr-FR', { hour: '2-digit', hour12: false, timeZone: 'Africa/Lome' }));
-const greeting = `${hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir'} ${meName}`;
-const roleLine = r.filter((x) => x !== 'membre').map((x) => ROLE_LABEL[x as Role] ?? x).join(' · ');
-const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Africa/Lome' });
-const quick = ([
-  ['/admin/messages', 'Traiter les messages', 'Demandes, conversations en direct', can(r, 'messages_contact', 'M')],
-  ['/admin/moderation', 'Modérer', 'Publications, avis, fraude', can(r, 'moderation', 'M')],
-  ['/admin/emplois', 'Valider des offres', 'Annonces en attente', can(r, 'offre_emploi', 'M')],
-  ['/admin/membres', 'Créer un compte', 'Invitation par e-mail', can(r, 'membres', 'C')],
-  ['/admin/cms', 'Publier un contenu', 'Article, événement, cours, page', can(r, 'contenus', 'C')],
-  ['/admin/campagnes', 'Nouvelle campagne', 'E-mail, SMS, WhatsApp', can(r, 'campagnes', 'C')],
-  ['/admin/domaines?nouveau', 'Créer un domaine', 'Domaines d’intervention', can(r, 'parametres', 'C')],
-  ['/admin/rapports/impact', 'Rapport d’impact', 'Par programme ou partenaire', can(r, 'rapports', 'L')],
-] as [string, string, string, boolean][]).filter((q) => q[3]).slice(0, 8);
-const n = async (q: Promise<{ n: number }[]>) => (await q)[0]?.n ?? 0;
-const cnt = sql<number>`count(*)::int`;
-const since = new Date(Date.now() - 30 * 864e5);
+const os = await osContext(Astro.locals.user!);
+const me = os.me;
+const hour = Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hour12: false, timeZone: 'Africa/Lome' }).format(new Date()));
+const first = (me?.name ?? Astro.locals.user!.name).split(' ')[0];
+const title = `${hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir'} ${first}`;
+const today = new Date().toLocaleDateString('fr-FR', { timeZone: 'Africa/Lome' });
 
-const queues: [string, string, number][] = [];
-if (can(r, 'messages_contact', 'L')) queues.push(['Messages de contact à traiter', '/admin/messages', await n(db.select({ n: cnt }).from(contactMessage).where(eq(contactMessage.status, 'nouveau')))]);
-if (can(r, 'moderation', 'L')) {
-  queues.push(['Signalements ouverts', '/admin/messages?onglet=signalements', await n(db.select({ n: cnt }).from(report).where(eq(report.status, 'nouveau')))]);
-  queues.push(['Publications en modération', '/admin/moderation', await n(db.select({ n: cnt }).from(post).where(eq(post.status, 'en_moderation')))]);
+let data: null | {
+  pend: Awaited<ReturnType<typeof pendingFor>>; mine: (typeof osRequest.$inferSelect)[]; manager: string;
+  thr: Awaited<ReturnType<typeof thresholds>>; bud: Awaited<ReturnType<typeof budgets>>; countries: string[]; domains: string[];
+} = null;
+if (me) {
+  const [people, delegs] = await Promise.all([allStaff(), activeDelegations()]);
+  const sc = scopeState(os, Astro.cookies);
+  const [pend, mine, thr, bud] = await Promise.all([
+    pendingFor(me.id, { people, delegs }),
+    db.select().from(osRequest).where(eq(osRequest.byStaff, me.id)).orderBy(desc(osRequest.createdAt)),
+    thresholds(), budgets(),
+  ]);
+  data = {
+    pend, mine, thr, bud, manager: people.find((s) => s.id === me.managerId)?.name ?? 'votre responsable',
+    countries: PK.filter((p) => sc.inScope({ country: p })), domains: DK.filter((d) => sc.inScope({ domain: d })),
+  };
 }
-if (can(r, 'offre_emploi', 'V')) queues.push(["Offres d'emploi à valider", '/admin/emplois', await n(db.select({ n: cnt }).from(job).where(eq(job.status, 'en_moderation')))]);
-if (can(r, 'candidature', 'L')) queues.push(['Candidatures reçues', '/admin/candidatures', await n(db.select({ n: cnt }).from(programmeApplication).where(eq(programmeApplication.status, 'recue')))]);
-if (can(r, 'fiche_projet', 'L')) queues.push(['Projets soumis', '/admin/projets', await n(db.select({ n: cnt }).from(project).where(eq(project.status, 'soumis')))]);
-if (can(r, 'pieces_kyc', 'L')) {
-  queues.push(['Contrôles KYC en cours', '/admin/conformite', await n(db.select({ n: cnt }).from(kycCheck).where(eq(kycCheck.status, 'en_cours')))]);
-  queues.push(['Investisseurs à vérifier', '/admin/conformite', await n(db.select({ n: cnt }).from(investorProfile).where(eq(investorProfile.kycStatus, 'en_cours')))]);
-}
-const pipe = can(r, 'dossier_kapital', 'L') ? await db.select({ s: dossier.status, n: cnt }).from(dossier).groupBy(dossier.status) : [];
-const members = can(r, 'membres', 'L') ? await n(db.select({ n: cnt }).from(user)) : null;
-const newMembers = can(r, 'membres', 'L') ? await n(db.select({ n: cnt }).from(user).where(gte(user.createdAt, since))) : null;
-const active = can(r, 'membres', 'L') ? await n(db.select({ n: cnt }).from(membership).where(eq(membership.status, 'active'))) : null;
-const revenue = can(r, 'paiements', 'L') ? (await db.select({ s: sql<number>`coalesce(sum(${payment.amountXof}),0)::float` }).from(payment).where(and(eq(payment.status, 'reussi'), gte(payment.paidAt, since))))[0].s : null;
-// Graphiques du tableau de bord (prototype) : inscriptions des 6 dernières semaines, revenus par source sur 30 jours
-const weeks = members !== null ? await db.select({ w: sql<string>`to_char(date_trunc('week', ${user.createdAt}), 'YYYY-MM-DD')`, n: cnt }).from(user).where(gte(user.createdAt, new Date(Date.now() - 42 * 864e5))).groupBy(sql`1`).orderBy(sql`1`) : [];
-const weekBars = Array.from({ length: 6 }, (_, i) => {
-  const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - (5 - i) * 7);
-  const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const wk = Math.ceil(((d.getTime() - new Date(d.getFullYear(), 0, 1).getTime()) / 864e5 + 1) / 7);
-  return { l: `S${wk}`, n: weeks.find((x) => x.w === key)?.n ?? 0 };
-});
-const maxW = Math.max(1, ...weekBars.map((b) => b.n));
-const PURPOSE: Record<string, string> = { adhesion: 'Adhésions', cours: 'Formation', programme: 'Programmes', billet: 'Événements', sponsoring: 'Sponsoring', mastermind: 'Mastermind', expert: 'Experts', mise_en_avant: 'Recrutement', recherche: 'Kapital (recherche)' };
-const COLORS = ['#082B4C', '#5B8DB8', '#C9962B', '#1E7A4C', '#E7BD62', '#B23A2E', '#7A5A12', '#2B6CB0', '#9DB0C5'];
-const bySource = revenue !== null ? await db.select({ p: payment.purpose, s: sql<number>`coalesce(sum(${payment.amountXof}),0)::float` }).from(payment).where(and(eq(payment.status, 'reussi'), gte(payment.paidAt, since))).groupBy(payment.purpose) : [];
-const totalSrc = bySource.reduce((a, b) => a + b.s, 0);
-let acc = 0;
-const arcs = bySource.filter((x) => x.s > 0).map((x, i) => {
-  const a0 = (acc / totalSrc) * 2 * Math.PI; acc += x.s; const a1 = (acc / totalSrc) * 2 * Math.PI;
-  const P = (a: number, r: number) => `${(60 + r * Math.sin(a)).toFixed(2)} ${(60 - r * Math.cos(a)).toFixed(2)}`;
-  const big = a1 - a0 > Math.PI ? 1 : 0;
-  const d = a1 - a0 >= 2 * Math.PI - 1e-6 ? 'M 60 10 A 50 50 0 1 1 59.99 10 L 59.99 30 A 30 30 0 1 0 60 30 Z' : `M ${P(a0, 50)} A 50 50 0 ${big} 1 ${P(a1, 50)} L ${P(a1, 30)} A 30 30 0 ${big} 0 ${P(a0, 30)} Z`;
-  return { d, c: COLORS[i % COLORS.length], l: PURPOSE[x.p] ?? x.p, pc: Math.round((x.s / totalSrc) * 100) };
-});
-// Core Web Vitals de terrain (CDC §13.1) : 75e centile sur mobile, 28 derniers jours, comparé aux cibles
-const VITALS: Record<string, { target: number; unit: string; fmt: (v: number) => string }> = {
-  LCP: { target: 2500, unit: 's', fmt: (v) => `${(v / 1000).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} s` },
-  INP: { target: 200, unit: 'ms', fmt: (v) => `${Math.round(v)} ms` },
-  CLS: { target: 0.1, unit: '', fmt: (v) => v.toLocaleString('fr-FR', { maximumFractionDigits: 3 }) },
-};
-const vitals = can(r, 'rapports', 'L') ? await db.select({ m: webVital.metric, p75: sql<number>`percentile_cont(0.75) within group (order by ${webVital.value})::float`, n: cnt }).from(webVital).where(and(eq(webVital.mobile, true), gte(webVital.at, new Date(Date.now() - 28 * 864e5)))).groupBy(webVital.metric).catch(() => []) : null;
-const kpis: [string, string, string?][] = [];
-if (members !== null) kpis.push(['Membres', members.toLocaleString('fr-FR')], ['Inscrits sur 30 jours', `+${newMembers}`], ['Adhésions actives', String(active)]);
-for (const [l, h, v] of queues) kpis.push([l, String(v), h]);
+const canDep = me && ['rep', 'dirreg', 'chef', 'dg', 'agent', 'cond'].includes(me.prof);
 ---
-<AdminLayout title={greeting} lead={`${roleLine} · ${today} · vos files de travail selon vos droits ; toutes les actions sont tracées dans le journal d'audit.`} obj="contenus" hints={[]}>
-  {quick.length > 0 && <div class="quick" style="margin-bottom:16px">{quick.map(([href, label, sub]) => <a href={href}>{label}<small>{sub}</small></a>)}</div>}
-  <div class="grid g4">
-    {kpis.map(([l, v, h]) => h
-      ? <a class="panel kpi" href={h} style="text-decoration:none"><span class="small muted">{l}</span><b>{v}</b></a>
-      : <div class="panel kpi"><span class="small muted">{l}</span><b>{v}</b></div>)}
-    {revenue !== null && <div class="panel kpi"><span class="small muted">Revenus du mois</span><b><Money xof={revenue} /></b></div>}
-  </div>
-  {(members !== null || revenue !== null) && (
-    <div class="grid g2" style="margin-top:18px">
-      {members !== null && (
-        <div class="panel">
-          <h3>Inscriptions par semaine</h3>
-          <svg viewBox="0 0 300 170" role="img" aria-label={`Inscriptions par semaine : ${weekBars.map((b) => `${b.l} ${b.n}`).join(', ')}`} style="width:100%;height:auto">
-            {weekBars.map((b, i) => { const h = (b.n / maxW) * 120; return <><rect x={14 + i * 48} y={140 - h} width="32" height={h} rx="4" fill="#C9962B" /><text x={30 + i * 48} y="158" font-size="10" text-anchor="middle" fill="currentColor" opacity=".7">{b.l}</text><text x={30 + i * 48} y={134 - h} font-size="10" text-anchor="middle" fill="currentColor">{b.n}</text></>; })}
-          </svg>
-        </div>
-      )}
-      {revenue !== null && (
-        <div class="panel">
-          <h3>Revenus par source</h3>
-          {arcs.length ? (
-            <div class="row" style="gap:18px;align-items:center">
-              <svg viewBox="0 0 120 120" width="150" height="150" role="img" aria-label={arcs.map((a) => `${a.l} ${a.pc} %`).join(', ')}>{arcs.map((a) => <path d={a.d} fill={a.c} />)}</svg>
-              <div class="small" style="flex:1;min-width:160px">{arcs.map((a) => <div class="row between" style="padding:3px 0"><span class="row" style="gap:6px"><span style={`width:10px;height:10px;border-radius:3px;background:${a.c}`}></span>{a.l}</span><b>{a.pc} %</b></div>)}</div>
-            </div>
-          ) : <p class="small muted">Aucun paiement encaissé sur les 30 derniers jours.</p>}
-        </div>
-      )}
-    </div>
-  )}
-  <div class="row" style="margin-top:12px"><a class="btn btn-ghost btn-sm" href="/admin/rapports">Exporter (CSV)</a><a class="btn btn-ghost btn-sm" href="/admin/rapports">Exporter (XLSX)</a></div>
-  {vitals !== null && (
+<AdminLayout title={title} lead={me ? `${refT(me.poste)} · ${pn(me.country)} · ${today}` : `${today} · vos files de travail selon vos droits ; toutes les actions sont tracées dans le journal d'audit.`}>
+  {me && data ? (
     <>
-      <h2 style="font-size:1.2rem;margin-top:26px">Performances mesurées chez les visiteurs</h2>
-      <p class="small muted" style="margin:0 0 10px">Core Web Vitals, 75e centile sur mobile, 28 derniers jours (un visiteur sur quatre est mesuré, anonymement).</p>
-      <div class="grid g3">
-        {Object.entries(VITALS).map(([k, t]) => { const v = vitals.find((x) => x.m === k); const good = v ? v.p75 <= t.target : null; return (
-          <div class="panel kpi"><span class="small muted">{k} · cible ≤ {t.fmt(t.target)}</span><b style={good === false ? 'color:var(--bad)' : ''}>{v ? t.fmt(v.p75) : '—'}</b><span class="xs muted">{v ? `${v.n.toLocaleString('fr-FR')} mesures${good ? ' · objectif atteint' : ' · objectif non atteint'}` : 'Pas encore de mesure'}</span></div>
-        ); })}
+      <div class="quick grid" style="margin-bottom:16px">
+        <button type="button" data-dlg="dlg-conge">Demander un congé<small>Solde : {me.leaveDays} jours</small></button>
+        <button type="button" data-dlg="dlg-ndf">Note de frais<small>Avec photo du justificatif</small></button>
+        <button type="button" data-dlg="dlg-achat">Demande d'achat<small>Fournitures, matériel, prestations</small></button>
+        {canDep && <button type="button" data-dlg="dlg-dep">Dépense<small>Circuit selon le montant</small></button>}
+        <a href="/admin/moi/temps">Saisir mes temps<small>Semaine en cours</small></a>
+        <a href="/admin/poste">Mon poste<small>Fiche {me.poste} et indicateurs</small></a>
       </div>
+      <div class="grid g4">
+        <div class="card kpi"><div class="l">À approuver</div><div class="v num">{data.pend.length}</div>{data.pend.length > 0 && <div class="d down">Vous êtes attendu·e</div>}</div>
+        <div class="card kpi"><div class="l">Mes demandes en cours</div><div class="v num">{data.mine.filter((r) => r.status === 'En approbation').length}</div></div>
+        <div class="card kpi"><div class="l">Solde de congés</div><div class="v num">{me.leaveDays} j</div></div>
+      </div>
+      <div class="grid g2" style="margin-top:14px">
+        <div class="card">
+          <div class="row between"><h2>À approuver</h2><a class="small" href="/admin/approbations">Tout voir</a></div>
+          {data.pend.slice(0, 6).map((p) => <div class="small" style="padding:6px 0;border-bottom:1px solid var(--line)">{RTYPE[p.r.type as ReqType]} {p.r.id} — {p.r.title}{p.r.amount > 0 && <> · <b>{fcfa(p.r.amount)}</b></>}</div>)}
+          {!data.pend.length && <p class="small muted">Rien en attente.</p>}
+        </div>
+        <div class="card">
+          <div class="row between"><h2>Mes demandes</h2><a class="small" href="/admin/moi">Historique</a></div>
+          {data.mine.slice(0, 5).map((r) => (
+            <div style="padding:7px 0;border-bottom:1px solid var(--line)">
+              <div class="row between small"><b>{RTYPE[r.type as ReqType]} {r.id}</b><Tags st={r.status} /></div>
+              <div class="small">{r.title}{r.amount > 0 && ' · ' + fcfa(r.amount)}</div>
+              <Steps steps={r.steps} cur={r.cur} status={r.status} />
+            </div>
+          ))}
+          {!data.mine.length && <p class="small muted">Aucune demande.</p>}
+        </div>
+      </div>
+      <RequestDialogs me={me} managerName={data.manager} thr={data.thr} budgets={data.bud} countries={data.countries} domains={data.domains} />
     </>
-  )}
-  {pipe.length > 0 && (
+  ) : (
     <>
-      <h2 style="font-size:1.2rem;margin-top:26px">Pipeline Kapital</h2>
-      <div class="panel">{PIPELINE.map((s) => { const v = pipe.find((x) => x.s === s.key)?.n ?? 0; return <div class="list-row"><a class="small" href={`/admin/kapital?statut=${s.key}`}>{s.label}</a><b>{v}</b></div>; })}</div>
+      {os.superuser && <div class="watch" style="margin-bottom:14px">Votre compte n'est rattaché à aucune fiche du personnel : demandes, approbations et indicateurs personnels apparaissent dès que les ressources humaines créent votre fiche (Ressources humaines › Effectifs).</div>}
+      <LegacyBoard />
     </>
   )}
 </AdminLayout>

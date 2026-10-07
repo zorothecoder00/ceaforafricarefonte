@@ -3,21 +3,24 @@ import { eq } from 'drizzle-orm';
 import { auth } from './auth';
 import { db } from './db';
 import { userRole, auditLog, profile } from '../db/schema/app';
+import { staff } from '../db/schema/os';
 import { can, scope, type Obj, type Action } from './rbac';
 
-export type CurrentUser = { id: string; name: string; email: string; phoneNumber?: string | null; twoFactorEnabled?: boolean | null; roles: string[] };
+/* staffId : matricule du collaborateur CEA (CEA OS) rattaché au compte, s'il est actif et non suspendu. */
+export type CurrentUser = { id: string; name: string; email: string; phoneNumber?: string | null; twoFactorEnabled?: boolean | null; roles: string[]; staffId?: string | null };
 
 export async function getCurrentUser(headers: Headers): Promise<CurrentUser | null> {
   const s = await auth.api.getSession({ headers });
   if (!s) return null;
-  const [roleRows, [p]] = await Promise.all([
+  const [roleRows, [p], [st]] = await Promise.all([
     db.select({ role: userRole.role }).from(userRole).where(eq(userRole.userId, s.user.id)),
     db.select({ suspendedAt: profile.suspendedAt }).from(profile).where(eq(profile.userId, s.user.id)),
+    db.select({ id: staff.id, active: staff.active, suspended: staff.suspended }).from(staff).where(eq(staff.userId, s.user.id)).catch(() => []),
   ]);
   if (p?.suspendedAt) return null; // compte suspendu : traité comme déconnecté
   const roles = roleRows.map((r) => r.role as string);
   const u = s.user as typeof s.user & { phoneNumber?: string | null; twoFactorEnabled?: boolean | null };
-  return { id: u.id, name: u.name, email: u.email, phoneNumber: u.phoneNumber, twoFactorEnabled: u.twoFactorEnabled, roles };
+  return { id: u.id, name: u.name, email: u.email, phoneNumber: u.phoneNumber, twoFactorEnabled: u.twoFactorEnabled, roles, staffId: st?.active && !st.suspended ? st.id : null };
 }
 
 /** Réponse JSON standard. */

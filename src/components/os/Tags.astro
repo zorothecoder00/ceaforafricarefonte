@@ -1,0 +1,9 @@
+---
+/* Pastille de statut (st) ou de domaine d'intervention (dom), aux couleurs du prototype CEA OS. */
+import { DOM, stClass, type Dom } from '../../lib/os/ref';
+interface Props { st?: string; dom?: string | null; label?: string }
+const { st, dom, label } = Astro.props;
+const d = dom && dom in DOM ? DOM[dom as Dom] : null;
+---
+{st && <span class={`tag ${stClass(st)}`}>{label ?? st}</span>}
+{d && <span class="tag" style={`background:color-mix(in srgb,${d.c} 16%,transparent);color:${d.c}`}>{d.n.replace('CEA ', '')}</span>}

@@ -35,8 +35,9 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   }
   if (path.startsWith('/admin')) {
     if (!user) return login('admin');
-    if (!isStaff(user.roles)) return new Response('Accès réservé aux équipes CEA.', { status: 403 });
-    if (needs2fa(user.roles) && !user.twoFactorEnabled && !path.startsWith('/admin/securite')) return ctx.redirect('/espace/securite?motif=2fa');
+    // Équipes CEA : rôle du back-office, ou collaborateur dont la fiche personnel (CEA OS) est active
+    if (!isStaff(user.roles) && !user.staffId) return new Response('Accès réservé aux équipes CEA.', { status: 403 });
+    if ((needs2fa(user.roles) || user.staffId) && !user.twoFactorEnabled && !path.startsWith('/admin/securite')) return ctx.redirect('/espace/securite?motif=2fa');
   }
 
   let res = await next();

@@ -1,0 +1,58 @@
+---
+/* CEA OS — Annuaire du personnel et organigramme (prototype › pAnnuaire, orgChart). */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { allStaff, type Person } from '../../lib/os/core';
+import { PK, pn, refT, initials } from '../../lib/os/ref';
+
+export const prerender = false;
+const people = await allStaff();
+const actifs = people.filter((s) => s.active);
+const org = Astro.url.searchParams.has('org');
+const root = actifs.find((s) => s.prof === 'dg') ?? actifs.find((s) => !s.managerId);
+const kids = (s: Person) => actifs.filter((x) => x.managerId === s.id);
+// Arbre aplati (profondeur, personne) pour un rendu sans composant récursif
+const tree: [number, Person][] = [];
+const walk = (s: Person, d: number, seen: Set<string>) => { if (seen.has(s.id)) return; seen.add(s.id); tree.push([d, s]); kids(s).forEach((k) => walk(k, d + 1, seen)); };
+if (root) walk(root, 0, new Set());
+---
+<AdminLayout title="Annuaire du personnel" lead={`${actifs.length} collaborateurs dans ${new Set(people.map((s) => s.country)).size} pays`}>
+  <Fragment slot="actions">{org ? <a class="btn ghost" href="/admin/annuaire">Annuaire</a> : <a class="btn ghost" href="/admin/annuaire?org=1">Organigramme</a>}</Fragment>
+  {org ? (
+    <>
+      <a class="small" href="/admin/annuaire">← Retour à l'annuaire</a>
+      <div style="margin-top:10px">
+        {tree.map(([d, s]) => (
+          <div style={`margin-left:${d * 36}px;${d ? 'border-left:2px solid var(--line);padding-left:14px' : ''}`}>
+            <div class="card" style="display:inline-flex;gap:8px;align-items:center;padding:8px 10px;margin:4px 0"><span class="av s">{initials(s.name)}</span><span class="small"><b>{s.name}</b><br /><span class="muted">{refT(s.poste)}</span></span></div>
+          </div>
+        ))}
+        {!tree.length && <div class="empty">Aucun collaborateur enregistré.</div>}
+      </div>
+    </>
+  ) : (
+    <>
+      <div class="toolbar">
+        <input class="in" placeholder="Nom, poste, pays, département" style="flex:1;min-width:220px" aria-label="Rechercher" data-filter="#al" />
+        <select class="in" aria-label="Pays" id="ap"><option value="">Tous les pays</option>{PK.map((p) => <option value={pn(p)}>{pn(p)}</option>)}</select>
+      </div>
+      <div class="grid g3" id="al">
+        {actifs.map((s) => (
+          <div class="card row" style="align-items:flex-start" data-row={`${s.name} ${refT(s.poste)} ${s.department} ${pn(s.country)}`} data-pays={pn(s.country)}>
+            <span class="av">{initials(s.name)}</span>
+            <div style="flex:1;min-width:0">
+              <b>{s.name}</b>
+              <div class="small muted">{refT(s.poste)}</div>
+              <div class="xs muted">{s.department || '—'} · {pn(s.country)}</div>
+              <div class="xs" style="margin-top:4px"><a href={`mailto:${s.email}`}>{s.email}</a>{s.phone && <><br />{s.phone}</>}</div>
+            </div>
+          </div>
+        ))}
+        {!actifs.length && <div class="empty">Aucun collaborateur enregistré. Les fiches sont créées par les ressources humaines.</div>}
+      </div>
+    </>
+  )}
+</AdminLayout>
+<script>
+  const sel = document.getElementById('ap') as HTMLSelectElement | null;
+  sel?.addEventListener('change', () => document.querySelectorAll<HTMLElement>('#al [data-pays]').forEach((c) => { c.style.display = sel.value && c.dataset.pays !== sel.value ? 'none' : ''; }));
+</script>

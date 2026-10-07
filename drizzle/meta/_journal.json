@@ -246,6 +246,13 @@
       "when": 1791312050604,
       "tag": "0034_domaines",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1791361537940,
+      "tag": "0035_cea_os_socle",
+      "breakpoints": true
     }
   ]
 }

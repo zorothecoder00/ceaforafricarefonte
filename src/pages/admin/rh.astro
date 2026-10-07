@@ -1,0 +1,109 @@
+---
+/* CEA OS — Ressources humaines (prototype › pRH), profils dg et rh : effectifs (création des fiches et des comptes CEA OS,
+   départs), congés et absences, temps passés par domaine. La paie, le recrutement et les entretiens annuels arrivent
+   avec leurs modules. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Dlg from '../../components/os/Dlg.astro';
+import Steps from '../../components/os/Steps.astro';
+import Tags from '../../components/os/Tags.astro';
+import { desc, eq, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { osRequest, osTimesheet } from '../../db/schema/os';
+import { allStaff } from '../../lib/os/core';
+import { DK, GRADES, PK, REF, pn, refT, dstr, fcfa, mfcfa, fmt, gradeOf, BANDS } from '../../lib/os/ref';
+
+export const prerender = false;
+const tab = Astro.url.searchParams.get('t') ?? 'eff';
+const T: [string, string][] = [['eff', 'Effectifs'], ['abs', 'Congés et absences'], ['temps', 'Temps passés']];
+const people = await allStaff();
+const name = (id: string | null) => people.find((s) => s.id === id)?.name ?? '—';
+const leaves = tab === 'abs' ? await db.select().from(osRequest).where(eq(osRequest.type, 'conge')).orderBy(desc(osRequest.createdAt)) : [];
+const byDom = tab === 'temps' ? await db.select({ d: osTimesheet.domain, h: sql<number>`sum(${osTimesheet.hours})::float` }).from(osTimesheet).groupBy(osTimesheet.domain) : [];
+const totH = byDom.reduce((a, x) => a + x.h, 0);
+---
+<AdminLayout title="Ressources humaines et paie" lead={`${people.filter((s) => s.active).length} collaborateurs · ${new Set(people.map((s) => s.country)).size} pays`}>
+  <div class="tabs">{T.map(([k, l]) => <a href={`/admin/rh?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
+  {tab === 'eff' && (
+    <>
+      <div class="toolbar"><button class="btn" type="button" data-dlg="dlg-new">Nouveau collaborateur</button><a class="btn ghost" href="/api/admin/os/export?quoi=effectifs">Exporter</a></div>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Matricule</th><th>Nom</th><th>Poste</th><th>Grade</th><th>Pays</th><th>Responsable</th><th>Entrée</th><th>Salaire brut</th><th>Congés</th><th>Statut</th><th></th></tr></thead>
+          <tbody>
+            {people.map((s) => (
+              <tr>
+                <td class="small">{s.id}</td>
+                <td><b>{s.name}</b>{s.suspended && <> <span class="tag bad">Suspendu</span></>}{!s.userId && <div class="xs muted">Sans compte</div>}</td>
+                <td class="small"><span class="tag">{s.poste}</span> {refT(s.poste)}</td>
+                <td class="small">{s.grade}</td>
+                <td>{pn(s.country)}</td>
+                <td class="small">{name(s.managerId)}</td>
+                <td class="small">{dstr(s.hireDate)}</td>
+                <td class="num">{fcfa(s.salary)}</td>
+                <td class="num">{s.leaveDays} j</td>
+                <td><button class="toggle" type="button" role="switch" aria-checked={s.active ? 'true' : 'false'} aria-label={`Compte actif de ${s.name}`} data-post="/api/admin/os/personnel" data-body={JSON.stringify({ action: 'toggle', id: s.id })} data-confirm={s.active ? `Désactiver ${s.name} (départ) ? Ses accès seront révoqués immédiatement.` : undefined} data-reload></button></td>
+                <td><button class="btn ghost sm" type="button" data-dlg="dlg-edit" data-set-id={s.id} data-set-who={s.name} data-set-phone={s.phone} data-set-salary={String(s.salary)} data-set-leave-days={String(s.leaveDays)} data-set-manager-id={s.managerId ?? ''} data-set-grade={s.grade}>Modifier</button></td>
+              </tr>
+            ))}
+            {!people.length && <tr><td colspan="11" class="muted">Aucun collaborateur : créez la première fiche avec « Nouveau collaborateur ».</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <Dlg id="dlg-new" title="Nouveau collaborateur" api="/api/admin/os/personnel" submit="Créer" wide>
+        <input type="hidden" name="action" value="create" />
+        <div class="fg">
+          <div><label class="f" for="en">Nom complet</label><input class="in" id="en" name="name" required /></div>
+          <div><label class="f" for="ee">E-mail professionnel</label><input class="in" id="ee" name="email" type="email" placeholder="prenom.nom@cea4africa.com" /></div>
+          <div class="full"><label class="f" for="epc">Poste du référentiel (le profil d'accès en découle)</label><select class="in" id="epc" name="poste">{REF.filter((r) => r.c !== 'A1' || !people.some((p) => p.poste === 'A1' && p.active)).map((r) => <option value={r.c} data-grade={gradeOf(r.c)}>{r.c} — {r.t}</option>)}</select></div>
+          <div><label class="f" for="epa">Pays</label><select class="in" id="epa" name="country">{PK.map((p) => <option value={p}>{pn(p)}</option>)}</select></div>
+          <div><label class="f" for="eg">Grade</label><select class="in" id="eg" name="grade">{GRADES.map((g) => <option selected={g === 'Cadre'}>{g}</option>)}</select></div>
+          <div><label class="f" for="em">Responsable</label><select class="in" id="em" name="managerId"><option value="">— Aucun (Direction générale)</option>{people.filter((s) => s.active).map((s) => <option value={s.id}>{s.name}</option>)}</select></div>
+          <div><label class="f" for="es">Salaire brut mensuel</label><input class="in" type="number" id="es" name="salary" value="900000" min="0" /></div>
+          <div><label class="f" for="el">Solde de congés (jours)</label><input class="in" type="number" id="el" name="leaveDays" value="0" min="0" step="0.5" /></div>
+        </div>
+        <p class="small muted" style="margin-top:8px">Le compte CEA OS est créé avec les droits du profil choisi ; l'intéressé reçoit ses accès par e-mail.</p>
+      </Dlg>
+      <Dlg id="dlg-edit" title="Modifier la fiche" api="/api/admin/os/personnel" submit="Enregistrer" wide>
+        <input type="hidden" name="action" value="update" /><input type="hidden" name="id" value="" />
+        <p class="small"><b data-text="who"></b> — le poste se change dans « Organisation et postes ».</p>
+        <div class="fg">
+          <div><label class="f" for="xp">Téléphone</label><input class="in" id="xp" name="phone" /></div>
+          <div><label class="f" for="xs">Salaire brut mensuel</label><input class="in" type="number" id="xs" name="salary" min="0" required /></div>
+          <div><label class="f" for="xl">Solde de congés (jours)</label><input class="in" type="number" id="xl" name="leaveDays" min="0" step="0.5" required /></div>
+          <div><label class="f" for="xg">Grade</label><select class="in" id="xg" name="grade">{GRADES.map((g) => <option>{g}</option>)}</select></div>
+          <div><label class="f" for="xm">Responsable</label><select class="in" id="xm" name="managerId"><option value="">— Aucun (Direction générale)</option>{people.filter((s) => s.active).map((s) => <option value={s.id}>{s.name}</option>)}</select></div>
+        </div>
+      </Dlg>
+      <script type="application/json" id="bands" set:html={JSON.stringify(BANDS)} />
+      <script>
+        // Grade et salaire proposés d'après le poste choisi (fourchette du grade)
+        const b = JSON.parse(document.getElementById('bands')?.textContent || '{}');
+        const pc = document.getElementById('epc') as HTMLSelectElement | null, g = document.getElementById('eg') as HTMLSelectElement | null, s = document.getElementById('es') as HTMLInputElement | null;
+        const upd = () => { const gr = pc?.selectedOptions[0]?.dataset.grade; if (gr && g && s) { g.value = gr; s.value = String(b[gr]?.[0] ?? s.value); } };
+        pc?.addEventListener('change', upd); upd();
+      </script>
+    </>
+  )}
+  {tab === 'abs' && (
+    <div class="tw">
+      <table class="t">
+        <thead><tr><th>Demande</th><th>Collaborateur</th><th>Objet</th><th>Circuit</th><th>Statut</th></tr></thead>
+        <tbody>
+          {leaves.map((r) => <tr><td class="small">{r.id}</td><td>{name(r.byStaff)}</td><td>{r.title}</td><td><Steps steps={r.steps} cur={r.cur} status={r.status} /></td><td><Tags st={r.status} /></td></tr>)}
+          {!leaves.length && <tr><td colspan="5" class="muted">Aucune demande de congé.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  )}
+  {tab === 'temps' && (
+    <div class="split">
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Domaine</th><th>Heures</th><th>Part</th><th>Coût estimé</th></tr></thead>
+          <tbody>{DK.map((d) => { const h = byDom.find((x) => x.d === d)?.h ?? 0; return <tr><td><Tags dom={d} /></td><td class="num">{fmt(h)} h</td><td class="num">{Math.round((h / Math.max(1, totH)) * 100)} %</td><td class="num">{mfcfa(h * 7500)}</td></tr>; })}</tbody>
+        </table>
+      </div>
+      <aside><div class="card"><h3>Utilité</h3><p class="small">Le temps passé par domaine et par projet sert à facturer les bailleurs (coûts de personnel éligibles) et à calculer le coût complet de chaque activité.</p></div></aside>
+    </div>
+  )}
+</AdminLayout>

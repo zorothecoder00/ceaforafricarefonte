@@ -1,0 +1,63 @@
+---
+/* CEA OS — Approbations (prototype › pApprob) : éléments qui attendent la décision de l'utilisateur (titulaire ou délégataire),
+   approbation unitaire ou groupée, rejet avec motif obligatoire, dernières décisions. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Dlg from '../../components/os/Dlg.astro';
+import Steps from '../../components/os/Steps.astro';
+import Tags from '../../components/os/Tags.astro';
+import { desc, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { osRequest } from '../../db/schema/os';
+import { osContext, allStaff } from '../../lib/os/core';
+import { pendingFor, thresholds, activeDelegations } from '../../lib/os/approvals';
+import { RTYPE, pn, fcfa, type ReqType } from '../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const me = os.me;
+const [people, delegs, thr] = await Promise.all([allStaff(), activeDelegations(), thresholds()]);
+const list = me ? await pendingFor(me.id, { people, delegs }) : [];
+const done = me ? await db.select().from(osRequest).where(sql`${osRequest.steps} @> ${JSON.stringify([{ whoId: me.id }])}::jsonb`).orderBy(desc(osRequest.updatedAt)).limit(10) : [];
+const name = (id: string) => people.find((s) => s.id === id)?.name ?? '—';
+---
+<AdminLayout title="Approbations" lead={`${list.length} élément(s) attendent votre décision · seuils : pays ≤ ${fcfa(thr.pays)}, région ≤ ${fcfa(thr.reg)}, au-delà Direction générale`}>
+  <Fragment slot="actions">{list.length > 1 && <button class="btn ok" type="button" data-post="/api/admin/os/approbations" data-body='{"action":"all"}' data-reload>Tout approuver ({list.length})</button>}</Fragment>
+  {!me && <div class="watch" style="margin-bottom:14px">Votre compte n'est rattaché à aucune fiche du personnel : aucune approbation ne peut vous être adressée.</div>}
+  {list.length ? (
+    <div class="tw">
+      <table class="t">
+        <thead><tr><th>Objet</th><th>Demandeur</th><th>Votre niveau</th><th>Pays</th><th>Montant</th><th>Circuit</th><th></th></tr></thead>
+        <tbody>
+          {list.map(({ r, lvl }) => {
+            const just = (r.data as { just?: { name: string } }).just;
+            return (
+              <tr>
+                <td><b>{RTYPE[r.type as ReqType]} {r.id} — {r.title}</b>{just && <div class="xs muted">Justificatif : <a href={`/api/admin/os/justificatif?id=${r.id}`} target="_blank" rel="noopener">{just.name}</a></div>}</td>
+                <td class="small">{name(r.byStaff)}</td>
+                <td class="small">{lvl}</td>
+                <td>{pn(r.country)}</td>
+                <td class="num">{r.amount ? fcfa(r.amount) : '—'}</td>
+                <td><Steps steps={r.steps} cur={r.cur} status={r.status} /></td>
+                <td style="white-space:nowrap">
+                  <button class="btn ok sm" type="button" data-post="/api/admin/os/approbations" data-body={JSON.stringify({ action: 'decide', id: r.id, ok: true })} data-reload>Approuver</button>
+                  <button class="btn ghost sm" type="button" data-dlg="dlg-rejet" data-set-id={r.id} data-set-label={`${RTYPE[r.type as ReqType]} ${r.id} — ${r.title}`}>Rejeter</button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  ) : <div class="empty">Aucune approbation en attente pour vous.</div>}
+  <div class="card" style="margin-top:14px">
+    <h2>Mes dernières décisions</h2>
+    {done.map((r) => <div class="small" style="padding:5px 0;border-bottom:1px solid var(--line)"><b>{r.id}</b> — {r.title} <Tags st={r.status} /></div>)}
+    {!done.length && <p class="small muted">Aucune.</p>}
+  </div>
+  <Dlg id="dlg-rejet" title="Rejeter" api="/api/admin/os/approbations" submit="Rejeter" danger>
+    <input type="hidden" name="action" value="decide" /><input type="hidden" name="id" value="" /><input type="hidden" name="ok" value="false" />
+    <p class="small" data-text="label"></p>
+    <label class="f" for="rc">Motif (obligatoire)</label>
+    <textarea class="in" id="rc" name="com" required></textarea>
+  </Dlg>
+</AdminLayout>

@@ -1,0 +1,23 @@
+---
+/* Dialogue CEA OS (en-tête avec ✕, corps, pied d'actions), ouvert par un bouton data-dlg="id".
+   Avec api : le corps et le pied forment un formulaire envoyé en JSON (form data-api, rechargement) ;
+   avec upload : envoi multipart (pièces jointes). */
+interface Props { id: string; title: string; wide?: boolean; api?: string; upload?: string; submit?: string; danger?: boolean }
+const { id, title, wide, api, upload, submit = 'Enregistrer', danger } = Astro.props;
+const form = api || upload;
+---
+<dialog class:list={['os-dlg', { wide }]} id={id} aria-labelledby={`${id}-t`}>
+  {form ? (
+    <form data-api={api} data-upload={upload} data-reload={api ? '' : undefined}>
+      <div class="dh"><h3 id={`${id}-t`}>{title}</h3><button class="os-ib" type="button" data-close aria-label="Fermer">✕</button></div>
+      <div class="db"><slot /></div>
+      <div class="df"><slot name="foot"><button class="btn ghost" type="button" data-close>Annuler</button><button class:list={['btn', { bad: danger }]} type="submit">{submit}</button></slot></div>
+    </form>
+  ) : (
+    <>
+      <div class="dh"><h3 id={`${id}-t`}>{title}</h3><button class="os-ib" type="button" data-close aria-label="Fermer">✕</button></div>
+      <div class="db"><slot /></div>
+      <div class="df"><slot name="foot"><button class="btn" type="button" data-close>Fermer</button></slot></div>
+    </>
+  )}
+</dialog>

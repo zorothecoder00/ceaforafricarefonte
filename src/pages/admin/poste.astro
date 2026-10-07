@@ -1,0 +1,80 @@
+---
+/* CEA OS — Mon poste et mes indicateurs (prototype › pPoste) : indicateurs du poste calculés en direct, intégration des 90
+   premiers jours, fiche de poste complète, délégation de signature, rattachement hiérarchique. */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Dlg from '../../components/os/Dlg.astro';
+import Fiche from '../../components/os/Fiche.astro';
+import Onboarding from '../../components/os/Onboarding.astro';
+import { desc, or, eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { osDelegation } from '../../db/schema/os';
+import { osContext, allStaff, scopeState } from '../../lib/os/core';
+import { kpisOf, kpiState } from '../../lib/os/kpis';
+import { PROF, refT, dstr } from '../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const u = os.me;
+const people = await allStaff();
+const ks = u ? await kpisOf(u, people) : [];
+const my = u ? await db.select().from(osDelegation).where(or(eq(osDelegation.fromStaff, u.id), eq(osDelegation.toStaff, u.id))).orderBy(desc(osDelegation.createdAt)) : [];
+const name = (id: string | null) => people.find((s) => s.id === id)?.name ?? '—';
+const mgr = people.find((s) => s.id === u?.managerId);
+const sc = scopeState(os, Astro.cookies);
+---
+<AdminLayout title="Mon poste et mes indicateurs" lead={u ? `${refT(u.poste)} · poste ${u.poste} du référentiel · profil d'accès « ${PROF[u.prof]} » · périmètre : ${sc.label}` : ''}>
+  {u ? (
+    <>
+      <h2>Mes indicateurs, calculés en direct</h2>
+      <div class="grid g4">
+        {ks.map((x) => { const st = kpiState(x); return (
+          <div class="card kpi">
+            <div class="row between"><span class="l">{x.l}</span>{st && <span class="health" style={`background:var(--${st})`} title={st === 'ok' ? 'Conforme' : st === 'warn' ? 'À surveiller' : 'Hors cible'}></span>}</div>
+            <div class="v num">{x.v}</div>
+            {x.sub && <div class="d muted">{x.sub}</div>}
+          </div>
+        ); })}
+        {!ks.length && <div class="empty">Aucun indicateur calculable pour l'instant.</div>}
+      </div>
+      <p class="xs muted" style="margin-top:6px">Calculés à partir des données de CEA OS ; vert = cible atteinte, orange = à surveiller, rouge = hors cible.</p>
+      <div class="split" style="margin-top:14px">
+        <div>
+          {u.onboarding && <><Onboarding u={u} canTick /><div style="height:14px"></div></>}
+          <Fiche code={u.poste} full />
+        </div>
+        <aside>
+          <div class="card">
+            <h3>Ma délégation de signature</h3>
+            <p class="small muted">Pendant une absence, vos approbations sont aussi proposées à la personne désignée, jusqu'à la date de fin.</p>
+            {my.map((d) => {
+              const live = !d.revoked && new Date(d.until) >= new Date();
+              return (
+                <div class="small" style="padding:6px 0;border-bottom:1px solid var(--line)">
+                  {d.fromStaff === u.id ? 'Vers ' + name(d.toStaff) : 'Reçue de ' + name(d.fromStaff)} jusqu'au {dstr(d.until)}{' '}
+                  {d.revoked ? <span class="tag bad">Révoquée</span> : live ? <span class="tag ok">Active</span> : <span class="tag">Échue</span>}
+                  {d.fromStaff === u.id && live && <> <button class="btn ghost sm" type="button" data-post="/api/admin/os/delegations" data-body={JSON.stringify({ action: 'revoke', id: d.id })} data-reload>Révoquer</button></>}
+                </div>
+              );
+            })}
+            {!my.length && <p class="small muted">Aucune délégation.</p>}
+            <button class="btn sm" type="button" data-dlg="dlg-deleg" style="margin-top:10px">Déléguer mes approbations</button>
+          </div>
+          <div class="card" style="margin-top:14px">
+            <h3>Mon rattachement</h3>
+            <p class="small">Responsable : <b>{mgr?.name ?? '—'}</b><br />{mgr ? refT(mgr.poste) : ''}</p>
+            <p class="small">Équipe directe : {people.filter((s) => s.managerId === u.id && s.active).length} personne(s)</p>
+            <p class="small">Grade : {u.grade} · entrée le {dstr(u.hireDate)}</p>
+          </div>
+        </aside>
+      </div>
+      <Dlg id="dlg-deleg" title="Déléguer mes approbations" api="/api/admin/os/delegations" submit="Déléguer" wide>
+        <input type="hidden" name="action" value="create" />
+        <div class="fg">
+          <div><label class="f" for="dt">Délégataire</label><select class="in" id="dt" name="to">{people.filter((s) => s.active && s.id !== u.id).map((s) => <option value={s.id}>{s.name} — {refT(s.poste)}</option>)}</select></div>
+          <div><label class="f" for="du">Jusqu'au</label><input class="in" type="date" id="du" name="until" required /></div>
+        </div>
+        <p class="small muted" style="margin-top:8px">La délégation est inscrite au journal d'audit. Le délégataire ne peut pas approuver ses propres demandes.</p>
+      </Dlg>
+    </>
+  ) : <div class="empty">Votre compte n'est rattaché à aucune fiche du personnel.</div>}
+</AdminLayout>

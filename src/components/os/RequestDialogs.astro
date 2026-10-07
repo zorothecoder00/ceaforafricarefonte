@@ -1,0 +1,81 @@
+---
+/* Dialogues de demande du prototype CEA OS (Accueil, Mes demandes, Finance) : congé, note de frais, demande d'achat,
+   dépense. Le circuit d'approbation et le budget restant s'affichent en direct selon le montant et le domaine. */
+import Dlg from './Dlg.astro';
+import type { Person } from '../../lib/os/core';
+import { DOM, DK, PAYS, pn, fcfa, type Dom } from '../../lib/os/ref';
+import type { Thresholds } from '../../lib/os/approvals';
+
+interface Props { me: Person; managerName: string; thr: Thresholds; budgets: Record<string, { budget: number; engaged: number }>; countries: string[]; domains: string[] }
+const { me, managerName, thr, budgets, countries, domains } = Astro.props;
+const domOpts = (sel?: string | null, only?: string[]) => (only ?? DK).map((d) => ({ d, n: DOM[d as Dom].n, sel: d === sel }));
+---
+<Dlg id="dlg-conge" title="Demander un congé" upload="/api/admin/os/demandes" submit="Envoyer la demande">
+  <input type="hidden" name="type" value="conge" />
+  <div class="fg">
+    <div><label class="f" for="cf">Du</label><input class="in" type="date" id="cf" name="from" required /></div>
+    <div><label class="f" for="cn">Nombre de jours ouvrés</label><input class="in" type="number" id="cn" name="days" min="1" max="90" value="2" required /></div>
+    <div><label class="f" for="ct">Type</label><select class="in" id="ct" name="kind"><option>Congé annuel</option><option>Congé maladie</option><option>Événement familial</option><option>Sans solde</option></select></div>
+  </div>
+  <p class="small muted" style="margin-top:8px">Circuit : {managerName} (responsable) puis Ressources humaines. Solde actuel : {me.leaveDays} jours.</p>
+</Dlg>
+
+<Dlg id="dlg-ndf" title="Note de frais" upload="/api/admin/os/demandes" submit="Envoyer">
+  <input type="hidden" name="type" value="ndf" />
+  <div class="fg">
+    <div><label class="f" for="nl">Objet</label><input class="in" id="nl" name="title" placeholder="Taxi aéroport, repas client…" required /></div>
+    <div><label class="f" for="na">Montant (FCFA)</label><input class="in" type="number" id="na" name="amount" min="1" required /></div>
+    <div><label class="f" for="nc">Catégorie</label><select class="in" id="nc" name="cat"><option>Transport</option><option>Repas</option><option>Hébergement</option><option>Autre</option></select></div>
+    <div><label class="f" for="nd">Domaine</label><select class="in" id="nd" name="domain">{domOpts(me.domain).map((o) => <option value={o.d} selected={o.sel}>{o.n}</option>)}</select></div>
+    <div class="full"><label class="f" for="nj">Photo du justificatif</label><input class="in" type="file" accept="image/*,application/pdf" id="nj" name="file" required /></div>
+  </div>
+  <p class="small muted" style="margin-top:8px">Remboursement par Mobile Money après validation de votre responsable et de la finance.</p>
+</Dlg>
+
+<Dlg id="dlg-achat" title="Demande d'achat" upload="/api/admin/os/demandes" submit="Envoyer" wide>
+  <input type="hidden" name="type" value="achat" />
+  <div class="fg" data-circuit="achat">
+    <div class="full"><label class="f" for="al">Désignation</label><input class="in" id="al" name="title" required /></div>
+    <div><label class="f" for="aq">Quantité</label><input class="in" type="number" id="aq" name="qty" value="1" min="1" /></div>
+    <div><label class="f" for="aa">Montant estimé (FCFA)</label><input class="in" type="number" id="aa" name="amount" min="1" required data-amt /></div>
+    <div><label class="f" for="as">Fournisseur proposé</label><input class="in" id="as" name="supplier" /></div>
+    <div><label class="f" for="ad">Domaine (imputation)</label><select class="in" id="ad" name="domain" data-dom>{domOpts(me.domain).map((o) => <option value={o.d} selected={o.sel}>{o.n}</option>)}</select></div>
+  </div>
+  <div class="watch" style="margin-top:10px" data-watch="achat"></div>
+</Dlg>
+
+<Dlg id="dlg-dep" title="Nouvelle dépense" upload="/api/admin/os/demandes" submit="Soumettre" wide>
+  <input type="hidden" name="type" value="dep" />
+  <div class="fg" data-circuit="dep">
+    <div class="full"><label class="f" for="dl">Libellé</label><input class="in" id="dl" name="title" required /></div>
+    <div><label class="f" for="da">Montant (FCFA)</label><input class="in" type="number" id="da" name="amount" min="1" required data-amt /></div>
+    <div><label class="f" for="dd">Domaine</label><select class="in" id="dd" name="domain" data-dom>{domOpts(null, domains).map((o) => <option value={o.d}>{o.n}</option>)}</select></div>
+    <div><label class="f" for="dp">Pays</label><select class="in" id="dp" name="country">{countries.map((p) => <option value={p} selected={p === me.country}>{pn(p)}</option>)}</select></div>
+    <div><label class="f" for="dj">Justificatif</label><input class="in" type="file" id="dj" name="file" accept="image/*,application/pdf" /></div>
+  </div>
+  <div class="watch" style="margin-top:10px" data-watch="dep"></div>
+</Dlg>
+
+<script type="application/json" id="osCircuit" set:html={JSON.stringify({ thr, budgets, names: Object.fromEntries(DK.map((d) => [d, DOM[d].n])) })} />
+<script>
+  // Circuit et budget restant, recalculés à chaque saisie (mêmes règles que src/lib/os/approvals.ts › makeSteps)
+  const C = JSON.parse(document.getElementById('osCircuit')?.textContent || '{}');
+  const LVL: Record<string, string> = { manager: 'Responsable hiérarchique', pays: 'Représentant pays', reg: 'Directeur régional', dg: 'Direction générale', fin: 'Finance' };
+  const fcfa = (n: number) => Math.round(n).toLocaleString('fr-FR') + ' FCFA';
+  const steps = (t: string, a: number) => {
+    const s: string[] = [];
+    if (t === 'dep') { s.push('pays'); if (a > C.thr.pays) s.push('reg'); if (a > C.thr.reg) s.push('dg'); s.push('fin'); }
+    if (t === 'achat') { s.push('manager'); if (a > C.thr.reg) s.push('dg'); s.push('fin'); }
+    return s.map((l) => LVL[l]).join(' → ');
+  };
+  document.querySelectorAll<HTMLElement>('[data-circuit]').forEach((box) => {
+    const t = box.dataset.circuit!;
+    const w = document.querySelector<HTMLElement>(`[data-watch="${t}"]`)!;
+    const amt = box.querySelector<HTMLInputElement>('[data-amt]')!, dom = box.querySelector<HTMLSelectElement>('[data-dom]')!;
+    const upd = () => {
+      const a = Number(amt.value) || 0, b = C.budgets[dom.value] ?? { budget: 0, engaged: 0 }, rest = b.budget - b.engaged;
+      w.innerHTML = `Circuit : <b>${steps(t, a)}</b>${t === 'achat' ? ', puis bon de commande automatique' : ''}. Budget ${C.names[dom.value]} : ${t === 'dep' ? 'reste à engager' : 'reste'} ${fcfa(rest)}${t === 'dep' && a > rest ? ' <span class="tag bad">Dépassement</span>' : ''}.`;
+    };
+    amt.addEventListener('input', upd); dom.addEventListener('change', upd); upd();
+  });
+</script>
