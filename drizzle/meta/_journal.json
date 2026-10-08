@@ -323,6 +323,13 @@
       "when": 1791454784658,
       "tag": "0045_academie_cohortes_series_tests",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1791455997328,
+      "tag": "0046_communaute_parrainage_points_cafe",
+      "breakpoints": true
     }
   ]
 }

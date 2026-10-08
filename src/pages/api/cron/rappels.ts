@@ -22,6 +22,9 @@ import { closePreviousMonth } from '../../../lib/vp-contest';
 import { noticeExpiringAccess } from '../../../lib/kapital';
 import { sendForecastAlerts } from '../../../lib/event-forecast';
 import { remindStreaks } from '../../../lib/streaks';
+import { qualifyReferrals } from '../../../lib/referrals';
+import { syncPoints } from '../../../lib/points';
+import { matchWeek } from '../../../lib/coffee';
 import { agendaKey, siteUrl } from '../../../lib/agenda';
 
 export const prerender = false;
@@ -80,5 +83,10 @@ export const GET: APIRoute = async ({ request }) => {
   const frequentation = await sendForecastAlerts(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
   // Académie : rappel aux membres dont la série de jours d'apprentissage s'arrête ce soir
   const series = await remindStreaks(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-  return json({ ok: true, sent, failed, tickets, expiredJobs, followups, retention, concours, dataroom, frequentation, series });
+  // Communauté : filleuls devenus actifs, points de contribution, binômes du café virtuel (le lundi)
+  const err = (e: unknown) => ({ error: e instanceof Error ? e.message : String(e) });
+  const filleuls = await qualifyReferrals().catch(err);
+  const points = await syncPoints().catch(err);
+  const cafe = await matchWeek(now).catch(err);
+  return json({ ok: true, sent, failed, tickets, expiredJobs, followups, retention, concours, dataroom, frequentation, series, filleuls, points, cafe });
 };

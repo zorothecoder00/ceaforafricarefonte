@@ -1,0 +1,93 @@
+---
+/* Café virtuel (CDC §7.8) : inscription volontaire, binôme de la semaine (profil, visio, message), retour après l'échange,
+   historique. Les binômes sont tirés chaque lundi (src/lib/coffee.ts). */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { eq, inArray } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { coffeeOptin, profile } from '../../db/schema/app';
+import { user } from '../../db/schema/auth';
+import { matchesOf, mondayOf, coffeeVisio } from '../../lib/coffee';
+import { SUBS, country, dateFr } from '../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user;
+const [opt] = me ? await db.select().from(coffeeOptin).where(eq(coffeeOptin.userId, me.id)) : [];
+const matches = me ? await matchesOf(me.id) : [];
+const others = [...new Set(matches.map((m) => (m.userA === me!.id ? m.userB : m.userA)))];
+const people = others.length ? await db.select({ id: user.id, name: user.name, headline: profile.headline, c: profile.country, sector: profile.sector }).from(user).leftJoin(profile, eq(profile.userId, user.id)).where(inArray(user.id, others)) : [];
+const week = mondayOf();
+const current = matches.find((m) => m.week === week);
+const partner = (m: (typeof matches)[number]) => people.find((p) => p.id === (m.userA === me!.id ? m.userB : m.userA));
+const myMet = (m: (typeof matches)[number]) => (m.userA === me!.id ? m.metA : m.metB);
+const nextMonday = new Date(Date.parse(`${week}T00:00:00Z`) + 7 * 864e5).toISOString().slice(0, 10);
+---
+<BaseLayout title="Café virtuel">
+  <PageHead title="Café virtuel" lead="Chaque semaine, un entrepreneur de la communauté à rencontrer pendant 30 minutes en visio : pour échanger, s'entraider, élargir son réseau." crumbs={[['/communaute', 'Communauté'], ['', 'Café virtuel']]} subnav={SUBS.communaute} />
+  <section class="block">
+    <div class="wrap split">
+      <div>
+        {!me ? <div class="lock"><b>Connectez-vous pour participer.</b> <a href="/connexion?retour=/communaute/cafe">Se connecter</a></div>
+          : !opt ? (
+            <div class="panel">
+              <h3>Participer au café virtuel</h3>
+              <p class="small">Chaque lundi, vous recevez un binôme parmi les membres volontaires, avec un lien de visio. Vous fixez ensemble le moment qui vous convient dans la semaine. Vous pouvez faire une pause à tout moment.</p>
+              <button class="btn btn-primary btn-sm" type="button" data-post="/api/communaute/cafe" data-body={JSON.stringify({ action: 'participer' })} data-reload>Je participe</button>
+            </div>
+          ) : (
+            <>
+              {current && partner(current) ? (
+                <div class="panel" id={`m-${current.id}`}>
+                  <span class="tag ok">Semaine du {dateFr(week)}</span>
+                  <h3 style="margin:10px 0 4px">Votre binôme : {partner(current)!.name}</h3>
+                  <p class="small muted" style="margin:0">{[partner(current)!.headline, partner(current)!.sector, partner(current)!.c ? country(partner(current)!.c!) : null].filter(Boolean).join(' · ') || 'Membre de la communauté'}</p>
+                  <div class="row" style="gap:6px;margin-top:12px;flex-wrap:wrap">
+                    <a class="btn btn-primary btn-sm" href={coffeeVisio(current.id)} target="_blank" rel="noopener">Ouvrir la salle de visio</a>
+                  </div>
+                  <form data-api="/api/messages" data-reset style="margin-top:12px">
+                    <input type="hidden" name="to" value={partner(current)!.id} />
+                    <label class="f" for="cm">Proposer un créneau</label>
+                    <textarea class="in" id="cm" name="body" required minlength="2" maxlength="2000">Bonjour ! Nous sommes binômes du café virtuel CEA cette semaine. Quand êtes-vous disponible pour 30 minutes ?</textarea>
+                    <button class="btn btn-ghost btn-sm" type="submit">Envoyer le message</button>
+                  </form>
+                  <div class="row" style="gap:6px;margin-top:12px;align-items:center;flex-wrap:wrap">
+                    <span class="small">L'échange a-t-il eu lieu ?</span>
+                    <button class={`btn btn-sm ${myMet(current) === true ? 'btn-primary' : 'btn-ghost'}`} type="button" data-post="/api/communaute/cafe" data-body={JSON.stringify({ action: 'retour', matchId: current.id, met: true })} data-reload>Oui</button>
+                    <button class={`btn btn-sm ${myMet(current) === false ? 'btn-primary' : 'btn-ghost'}`} type="button" data-post="/api/communaute/cafe" data-body={JSON.stringify({ action: 'retour', matchId: current.id, met: false })} data-reload>Non</button>
+                  </div>
+                </div>
+              ) : <div class="panel"><b>{opt.paused ? 'Café virtuel en pause.' : 'Pas encore de binôme cette semaine.'}</b><p class="small muted" style="margin:6px 0 0">{opt.paused ? 'Reprenez pour recevoir un binôme dès lundi.' : `Prochain tirage le lundi ${dateFr(nextMonday)}.`}</p></div>}
+              {matches.filter((m) => m.week !== week).length > 0 && (
+                <>
+                  <h2 style="font-size:1.2rem;margin-top:24px">Mes rencontres précédentes</h2>
+                  <div class="panel">{matches.filter((m) => m.week !== week).map((m) => <div class="list-row"><span class="small"><b>{partner(m)?.name ?? 'Membre'}</b> · semaine du {dateFr(m.week)}</span><span class="xs muted">{myMet(m) === true ? 'Échange réalisé' : myMet(m) === false ? 'Pas d’échange' : ''}</span></div>)}</div>
+                </>
+              )}
+            </>
+          )}
+      </div>
+      <aside>
+        {opt && (
+          <div class="panel">
+            <h3>Ma participation</h3>
+            <p class="small" style="margin:0 0 10px">{opt.paused ? 'En pause.' : 'Active : un binôme chaque lundi.'}</p>
+            <div class="row" style="gap:6px;flex-wrap:wrap">
+              {opt.paused ? <button class="btn btn-primary btn-sm" type="button" data-post="/api/communaute/cafe" data-body={JSON.stringify({ action: 'reprendre' })} data-reload>Reprendre</button>
+                : <button class="btn btn-ghost btn-sm" type="button" data-post="/api/communaute/cafe" data-body={JSON.stringify({ action: 'pause' })} data-reload>Faire une pause</button>}
+              <button class="btn btn-ghost btn-sm" type="button" data-post="/api/communaute/cafe" data-body={JSON.stringify({ action: 'quitter' })} data-confirm="Ne plus participer au café virtuel ?" data-reload>Ne plus participer</button>
+            </div>
+          </div>
+        )}
+        <div class="panel" style="margin-top:14px">
+          <h3>Les règles</h3>
+          <ul class="small" style="margin:0;padding-left:18px">
+            <li>Un binôme par semaine, jamais le même avant 8 semaines.</li>
+            <li>30 minutes, sans démarchage commercial.</li>
+            <li>Un empêchement ? Prévenez votre binôme par message.</li>
+            <li>Un comportement inapproprié se signale depuis la messagerie.</li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+  </section>
+</BaseLayout>

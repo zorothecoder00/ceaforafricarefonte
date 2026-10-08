@@ -7,6 +7,7 @@ import { findRedirect } from './lib/redirects';
 import { loadRights } from './lib/rights';
 import { applySiteText, canEditSite, loadOverrides, pageScope, SITE } from './lib/site-text';
 import type { CurrentUser } from './lib/session';
+import { REF_COOKIE, attachReferral, validCode } from './lib/referrals';
 
 const SECURITY_HEADERS: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff',
@@ -28,6 +29,14 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   await loadRights(); // matrice des droits modifiée depuis le back-office
   ctx.locals.user = await getCurrentUser(ctx.request.headers).catch(() => null);
   const user = ctx.locals.user;
+  // Parrainage (CDC §7.8) : le code du lien /?parrain=CODE est retenu 30 jours, puis rattaché au compte créé entre-temps
+  const refCode = ctx.url.searchParams.get('parrain')?.toUpperCase();
+  if (refCode && validCode(refCode) && !user) ctx.cookies.set(REF_COOKIE, refCode, { path: '/', maxAge: 30 * 86400, httpOnly: true, sameSite: 'lax', secure: ctx.url.protocol === 'https:' });
+  const pendingRef = ctx.cookies.get(REF_COOKIE)?.value;
+  if (user && pendingRef) {
+    await attachReferral(user.id, pendingRef).catch(() => false);
+    ctx.cookies.delete(REF_COOKIE, { path: '/' });
+  }
   const login = (reason: string) => ctx.redirect(`/connexion?retour=${encodeURIComponent(ctx.url.pathname + ctx.url.search)}&motif=${reason}`);
 
   if (path.startsWith('/espace')) {

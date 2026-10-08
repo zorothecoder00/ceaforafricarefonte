@@ -1,0 +1,73 @@
+---
+/* Points de contribution, classement par pays et ambassadeurs (CDC §7.8). Noms abrégés (« Aïcha A. ») ; l'équipe nomme les
+   ambassadeurs pays parmi les contributeurs (droit M sur « membres »). */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { COUNTRIES, SUBS, country, dateFr } from '../../data/site';
+import { BAREME, ranking, pointsOf, ambassadors, shortName } from '../../lib/points';
+import { can } from '../../lib/rbac';
+
+export const prerender = false;
+const me = Astro.locals.user;
+const c = Astro.url.searchParams.get('pays') ?? '';
+const period = Astro.url.searchParams.get('periode') === 'tout' ? 'tout' : 'mois';
+const now = new Date();
+const since = period === 'mois' ? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)) : null;
+const all = await ranking({ country: c || null, since });
+const top = all.slice(0, 20);
+const mine = me ? all.find((r) => r.userId === me.id) : undefined;
+const myPts = me ? await pointsOf(me.id) : null;
+const amb = await ambassadors();
+const ambOf = (userId: string) => amb.filter((a) => a.userId === userId).map((a) => a.country);
+const manage = !!me && can(me.roles, 'membres', 'M');
+const monthLabel = now.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+---
+<BaseLayout title="Classement de la communauté">
+  <PageHead title="Points de contribution" lead="Publier, apprendre, transmettre, parrainer : chaque contribution à la communauté rapporte des points. Les plus actifs de chaque pays peuvent devenir ambassadeurs." crumbs={[['/communaute', 'Communauté'], ['', 'Classement']]} subnav={SUBS.communaute} />
+  <section class="block">
+    <div class="wrap split">
+      <div>
+        <form class="filters" method="get" style="margin-top:0">
+          <select class="in" name="pays" aria-label="Pays" onchange="this.form.submit()"><option value="">Tous les pays</option>{Object.entries(COUNTRIES).map(([k, v]) => <option value={k} selected={k === c}>{v}</option>)}</select>
+          <select class="in" name="periode" aria-label="Période" onchange="this.form.submit()"><option value="mois" selected={period === 'mois'}>Ce mois-ci ({monthLabel})</option><option value="tout" selected={period === 'tout'}>Depuis le début</option></select>
+        </form>
+        <div class="panel scroll-x" style="margin-top:12px">
+          {top.length ? (
+            <table class="t">
+              <thead><tr><th>#</th><th>Membre</th><th>Pays</th><th class="num">Points</th>{manage && c && <th></th>}</tr></thead>
+              <tbody>{top.map((r) => (
+                <tr style={r.userId === me?.id ? 'font-weight:700' : ''}>
+                  <td>{r.rank <= 3 ? ['🥇', '🥈', '🥉'][r.rank - 1] : r.rank}</td>
+                  <td>{shortName(r.name)}{ambOf(r.userId).length > 0 && <span class="tag gold xs" style="margin-left:6px" title={`Ambassadeur·rice : ${ambOf(r.userId).map(country).join(', ')}`}>Ambassadeur·rice</span>}</td>
+                  <td>{r.country ? country(r.country) : '—'}</td><td class="num">{r.points}</td>
+                  {manage && c && <td>{ambOf(r.userId).includes(c)
+                    ? <button class="btn btn-ghost btn-sm" type="button" data-post="/api/communaute/ambassadeurs" data-method="DELETE" data-body={JSON.stringify({ userId: r.userId, country: c })} data-confirm="Mettre fin à cette mission d’ambassadeur·rice ?" data-reload>Fin de mission</button>
+                    : <button class="btn btn-ghost btn-sm" type="button" data-post="/api/communaute/ambassadeurs" data-body={JSON.stringify({ userId: r.userId, country: c })} data-confirm={`Nommer ${r.name} ambassadeur·rice (${country(c)}) ?`} data-reload>Nommer ambassadeur·rice</button>}</td>}
+                </tr>
+              ))}</tbody>
+            </table>
+          ) : <p class="small muted" style="margin:0">Aucun point {period === 'mois' ? 'ce mois-ci' : 'pour le moment'}{c ? ` en ${country(c)}` : ''}. Les points sont mis à jour chaque matin.</p>}
+          {manage && !c && <p class="xs muted" style="margin:10px 0 0">Choisissez un pays pour nommer ses ambassadeurs parmi ses contributeurs.</p>}
+        </div>
+        <h2 style="font-size:1.2rem;margin-top:26px">Nos ambassadeurs</h2>
+        {amb.length ? <div class="grid g3">{amb.map((a) => <div class="panel"><b>{shortName(a.name)}</b><div class="small muted">{country(a.country)} · depuis le {dateFr(a.since.toISOString())}</div></div>)}</div>
+          : <p class="small muted">Les premiers ambassadeurs seront nommés parmi les membres les plus actifs de chaque pays.</p>}
+      </div>
+      <aside>
+        {me && myPts && (
+          <div class="panel">
+            <h3>Mes points</h3>
+            <b style="font-family:var(--display);font-size:2.2rem">{myPts.total}</b><span class="small muted"> au total</span>
+            {mine && <p class="small" style="margin:6px 0 0">{mine.rank}e {c ? `en ${country(c)}` : 'tous pays'} · {period === 'mois' ? 'ce mois-ci' : 'depuis le début'} ({mine.points} pts)</p>}
+            {myPts.byReason.length > 0 && <ul class="small" style="margin:10px 0 0;padding-left:18px">{myPts.byReason.map((r) => <li>{BAREME[r.reason as keyof typeof BAREME]?.label ?? r.reason} : {r.points} pts ({r.n})</li>)}</ul>}
+          </div>
+        )}
+        <div class="panel" style="margin-top:14px">
+          <h3>Comment gagner des points</h3>
+          <ul class="small" style="margin:0;padding-left:18px">{Object.values(BAREME).sort((a, b) => b.pts - a.pts).map((b) => <li>{b.label} : <b>{b.pts}</b></li>)}</ul>
+          <a class="small" href="/communaute/parrainage" style="display:block;margin-top:8px">Parrainer des entrepreneurs</a>
+        </div>
+      </aside>
+    </div>
+  </section>
+</BaseLayout>

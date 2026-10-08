@@ -642,6 +642,56 @@ export const postLike = pgTable('post_like', {
   userId: userRef('user_id').notNull(),
 }, (t) => [primaryKey({ columns: [t.postId, t.userId] })]);
 
+/* ===== Communauté : parrainage, points de contribution, ambassadeurs, café virtuel (CDC §7.8, V2/V3) ===== */
+/* Code de parrainage personnel (lien /?parrain=CODE) */
+export const referralCode = pgTable('referral_code', {
+  userId: userRef('user_id').primaryKey(),
+  code: text('code').notNull().unique(),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+/* Filleul rattaché à son parrain à l'inscription ; « actif » quand il complète son profil ou valide une première leçon */
+export const referral = pgTable('referral', {
+  refereeId: userRef('referee_id').primaryKey(),
+  referrerId: userRef('referrer_id').notNull(),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  qualifiedAt: ts('qualified_at'),
+}, (t) => [index('referral_referrer_idx').on(t.referrerId)]);
+
+/* Registre des points de contribution : une ligne par action récompensée (motif + référence uniques par membre) */
+export const contributionPoint = pgTable('contribution_point', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: userRef('user_id').notNull(),
+  points: integer('points').notNull(),
+  reason: text('reason').notNull(), // publication, cours, badge, evenement, mentorat, evaluation, parrainage, filleul
+  ref: text('ref').notNull(),
+  at: ts('at').notNull().defaultNow(),
+}, (t) => [uniqueIndex('contribution_point_unique').on(t.userId, t.reason, t.ref), index('contribution_point_at_idx').on(t.at)]);
+
+/* Ambassadeurs pays, nommés par l'équipe */
+export const countryAmbassador = pgTable('country_ambassador', {
+  userId: userRef('user_id').notNull(),
+  country: text('country').notNull(),
+  since: ts('since').notNull().defaultNow(),
+  appointedBy: text('appointed_by').references(() => user.id, { onDelete: 'set null' }),
+  endedAt: ts('ended_at'),
+}, (t) => [primaryKey({ columns: [t.userId, t.country] })]);
+
+/* Café virtuel : membres volontaires mis en relation deux par deux chaque semaine */
+export const coffeeOptin = pgTable('coffee_optin', {
+  userId: userRef('user_id').primaryKey(),
+  since: ts('since').notNull().defaultNow(),
+  paused: boolean('paused').notNull().default(false),
+});
+export const coffeeMatch = pgTable('coffee_match', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  week: date('week').notNull(), // lundi de la semaine (UTC)
+  userA: userRef('user_a').notNull(),
+  userB: userRef('user_b').notNull(),
+  metA: boolean('met_a'), // retour de chacun : la rencontre a-t-elle eu lieu ?
+  metB: boolean('met_b'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('coffee_match_week_idx').on(t.week)]);
+
 export const conversation = pgTable('conversation', {
   id: uuid('id').primaryKey().defaultRandom(),
   title: text('title'),
