@@ -1,0 +1,217 @@
+---
+/* Studio de capital — éditeur d'une table de capitalisation (CDC §7.5) : catégories d'actions, associés, opérations
+   (émissions, cessions, réserve et attributions de BSPCE, exercices), table à date, historique, scénarios côte à côte.
+   Calculs en direct dans le navigateur (src/lib/captable.ts), enregistrement sur le serveur. */
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import PageHead from '../../../components/PageHead.astro';
+import { and, eq } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { capTable } from '../../../db/schema/app';
+import { Model, emptyModel } from '../../../lib/captable';
+import { SUBS } from '../../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user;
+if (!me) return Astro.redirect(`/connexion?retour=${encodeURIComponent(Astro.url.pathname)}`);
+const id = Astro.params.id ?? '';
+if (!/^[0-9a-f-]{36}$/.test(id)) return new Response('Table introuvable', { status: 404 });
+const [t] = await db.select().from(capTable).where(and(eq(capTable.id, id), eq(capTable.ownerId, me.id)));
+if (!t) return new Response('Table introuvable', { status: 404 });
+const parsed = Model.safeParse(t.model);
+const state = { id: t.id, company: t.company, model: parsed.success ? parsed.data : emptyModel() };
+---
+<BaseLayout title={`Table de capitalisation — ${t.company}`}>
+  <PageHead title={t.company} lead="Table de capitalisation : tenez vos opérations sur titres, suivez la dilution et comparez vos scénarios de levée. Outil pédagogique, qui ne remplace ni le registre des mouvements de titres ni un conseil juridique." crumbs={[['/actionnariat', 'Actionnariat'], ['/actionnariat/studio', 'Studio de capital'], ['', t.company]]} subnav={SUBS.actionnariat} />
+  <section class="block" style="padding-top:24px">
+    <div class="wrap" id="ct">
+      <div class="panel row" style="gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <div style="flex:1;min-width:220px"><label class="f" for="co">Entreprise</label><input class="in" id="co" maxlength="120" style="margin:0" /></div>
+        <div><label class="f" for="at">Table à la date du</label><input class="in" id="at" type="date" style="margin:0" /></div>
+        <button class="btn btn-primary btn-sm" type="button" id="save">Enregistrer</button>
+        <button class="btn btn-ghost btn-sm" type="button" id="csv">Exporter (CSV)</button>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="window.print()">Imprimer</button>
+        <span class="xs muted" id="dirty" hidden>Modifications non enregistrées</span>
+      </div>
+      <div id="errs"></div>
+
+      <h2 class="ct-h">Table de capitalisation</h2>
+      <div class="panel scroll-x"><table class="t" id="tbl"></table><p class="xs muted" id="tblNote" style="margin:8px 0 0"></p></div>
+
+      <div class="grid g2" style="margin-top:18px">
+        <div class="panel"><h3>Catégories d'actions</h3><div id="classes"></div><button class="btn btn-ghost btn-sm" type="button" data-add="class">+ Ajouter une catégorie</button></div>
+        <div class="panel"><h3>Associés et bénéficiaires</h3><div id="holders"></div><button class="btn btn-ghost btn-sm" type="button" data-add="holder">+ Ajouter une personne</button></div>
+      </div>
+
+      <h2 class="ct-h">Opérations</h2>
+      <div class="panel">
+        <form id="opF" class="ct-op">
+          <select class="in" name="t" aria-label="Type d'opération">
+            <option value="emission">Émission d'actions</option><option value="cession">Cession d'actions</option>
+            <option value="reserve">Réserve de BSPCE</option><option value="bspce">Attribution de BSPCE</option><option value="exercice">Exercice de BSPCE</option>
+          </select>
+          <div id="opFields" class="ct-fields"></div>
+          <button class="btn btn-primary btn-sm" type="submit">Ajouter l'opération</button>
+        </form>
+        <ol id="hist" class="ct-hist"></ol>
+      </div>
+
+      <h2 class="ct-h">Scénarios de levée comparés</h2>
+      <p class="small muted">Jusqu'à trois scénarios : la réserve de BSPCE est complétée avant l'entrée de l'investisseur pour atteindre le pourcentage voulu après l'opération ; la sortie suppose des préférences de liquidation non participatives (multiple × montant investi) et l'exercice des BSPCE attribués (calcul simplifié).</p>
+      <div class="grid g3" id="scen"></div>
+      <button class="btn btn-ghost btn-sm" type="button" data-add="scenario" style="margin-top:10px">+ Ajouter un scénario</button>
+      <div class="panel scroll-x" style="margin-top:14px"><table class="t" id="cmp"></table></div>
+
+      <button class="btn btn-ghost btn-sm" type="button" id="del" style="margin-top:24px">Supprimer cette table</button>
+    </div>
+  </section>
+  <script type="application/json" id="ctData" set:html={JSON.stringify(state).replace(/</g, '\\u003c')} />
+</BaseLayout>
+<style is:global>
+  .ct-h{font-size:1.2rem;margin:26px 0 10px}
+  .ct-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px}
+  .ct-row .in{margin:0;min-width:90px}
+  .ct-op{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+  .ct-op .in{margin:0}
+  .ct-fields{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+  .ct-fields label{display:flex;flex-direction:column;font-size:.8rem;gap:2px}
+  .ct-fields .in{width:150px}
+  .ct-hist{margin:14px 0 0;padding-left:20px;font-size:.92rem}
+  .ct-hist li{padding:4px 0;border-bottom:1px solid var(--line)}
+  #tbl tfoot td{font-weight:700}
+  @media print{.ct-op,#ct button,#ct [data-add]{display:none!important}}
+</style>
+<script>
+  import { computeTable, runScenario, type Model, type Op } from '../../../lib/captable';
+  const S = JSON.parse(document.getElementById('ctData')!.textContent!) as { id: string; company: string; model: Model };
+  const m = S.model;
+  const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+  const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+  const nf = (x: number) => Math.round(x).toLocaleString('fr-FR');
+  const pc = (x: number) => (x * 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' %';
+  const mf = (x: number) => (x >= 1e9 ? (x / 1e9).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' Md' : x >= 1e6 ? (x / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' M' : nf(x)) + ' FCFA';
+  const uid = () => Math.random().toString(36).slice(2, 9);
+  const today = new Date().toISOString().slice(0, 10);
+  const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+  const KIND: Record<string, string> = { fondateur: 'Fondateur·rice', investisseur: 'Investisseur', salarie: 'Salarié·e', autre: 'Autre' };
+  ($('co') as HTMLInputElement).value = S.company;
+  ($('at') as HTMLInputElement).value = today;
+  let dirty = false;
+  const touch = () => { dirty = true; $('dirty').hidden = false; render(); };
+  addEventListener('beforeunload', (e) => { if (dirty) e.preventDefault(); });
+
+  const opts = (list: { id: string; name: string }[], sel?: string) => list.map((x) => `<option value="${esc(x.id)}"${x.id === sel ? ' selected' : ''}>${esc(x.name)}</option>`).join('');
+  const FIELDS: Record<Op['t'], [string, string, string][]> = {
+    emission: [['date', 'Date', 'date'], ['holder', 'Bénéficiaire', 'holder'], ['cls', 'Catégorie', 'cls'], ['shares', 'Nombre d’actions', 'num'], ['price', 'Prix par action (FCFA)', 'num']],
+    cession: [['date', 'Date', 'date'], ['from', 'Cédant', 'holder'], ['to', 'Acquéreur', 'holder'], ['cls', 'Catégorie', 'cls'], ['shares', 'Nombre d’actions', 'num'], ['price', 'Prix par action (FCFA)', 'num']],
+    reserve: [['date', 'Date', 'date'], ['options', 'Bons ajoutés à la réserve', 'num']],
+    bspce: [['date', 'Date', 'date'], ['holder', 'Bénéficiaire', 'holder'], ['options', 'Nombre de BSPCE', 'num'], ['strike', 'Prix d’exercice (FCFA)', 'num'], ['vesting', 'Acquisition (mois)', 'num'], ['cliff', 'Falaise (mois)', 'num']],
+    exercice: [['date', 'Date', 'date'], ['holder', 'Bénéficiaire', 'holder'], ['options', 'BSPCE exercés', 'num']],
+  };
+  const DEF: Record<string, string> = { date: today, vesting: '48', cliff: '12' };
+  function opFields() {
+    const t = ($('opF').querySelector('[name="t"]') as HTMLSelectElement).value as Op['t'];
+    $('opFields').innerHTML = FIELDS[t].map(([k, l, kind]) => `<label>${l}${kind === 'holder' ? `<select class="in" name="${k}" required>${opts(m.holders)}</select>` : kind === 'cls' ? `<select class="in" name="${k}" required>${opts(m.classes)}</select>` : `<input class="in" name="${k}" ${kind === 'date' ? 'type="date"' : 'type="number" min="0" step="any"'} value="${DEF[k] ?? ''}" required />`}</label>`).join('');
+  }
+  $('opF').querySelector('[name="t"]')!.addEventListener('change', opFields);
+  $('opF').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const f = $('opF') as HTMLFormElement;
+    if (!f.checkValidity()) return f.reportValidity();
+    const fd = new FormData(f), t = fd.get('t') as Op['t'];
+    if (FIELDS[t].some(([, , k]) => k === 'holder') && !m.holders.length) return toast('Ajoutez d’abord une personne.');
+    const op: Record<string, unknown> = { t };
+    for (const [k, , kind] of FIELDS[t]) op[k] = kind === 'num' ? Number(fd.get(k)) : String(fd.get(k));
+    if (t === 'cession' && op.from === op.to) return toast('Le cédant et l’acquéreur doivent être différents.');
+    m.ops.push(op as Op);
+    touch();
+  });
+
+  function render() {
+    const at = ($('at') as HTMLInputElement).value || today;
+    const t = computeTable(m, at);
+    // Erreurs de cohérence
+    $('errs').innerHTML = t.errors.length ? `<div class="lock" style="margin-top:12px;border-color:var(--bad)"><b>À vérifier :</b><ul style="margin:6px 0 0">${t.errors.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '';
+    // Table
+    const cls = m.classes.filter((c) => t.byClass[c.id]);
+    $('tbl').innerHTML = `<thead><tr><th>Associé</th>${cls.map((c) => `<th class="num">${esc(c.name)}</th>`).join('')}<th class="num">BSPCE (acquis)</th><th class="num">% capital</th><th class="num">% dilué</th><th class="num">Investi</th></tr></thead>
+      <tbody>${t.rows.filter((r) => r.shares || r.options).map((r) => `<tr><td><b>${esc(r.holder.name)}</b> <span class="xs muted">${KIND[r.holder.kind]}</span></td>${cls.map((c) => `<td class="num">${nf(r.byClass[c.id] ?? 0)}</td>`).join('')}<td class="num">${r.options ? `${nf(r.options)} (${nf(r.vestedOptions)})` : '—'}</td><td class="num">${pc(r.pctIssued)}</td><td class="num">${pc(r.pctFD)}</td><td class="num">${r.invested ? mf(r.invested) : '—'}</td></tr>`).join('')}
+      ${t.unallocated ? `<tr><td>Réserve BSPCE non attribuée</td>${cls.map(() => '<td></td>').join('')}<td class="num">${nf(t.unallocated)}</td><td></td><td class="num">${pc(t.unallocated / t.fd)}</td><td></td></tr>` : ''}</tbody>
+      <tfoot><tr><td>Total</td>${cls.map((c) => `<td class="num">${nf(t.byClass[c.id])}</td>`).join('')}<td class="num">${nf(t.outstanding + t.unallocated)}</td><td class="num">${t.issued ? '100 %' : '—'}</td><td class="num">${t.fd ? '100 %' : '—'}</td><td></td></tr></tfoot>`;
+    $('tblNote').textContent = t.issued ? `${nf(t.issued)} actions émises · ${nf(t.fd)} en totalement dilué (actions + BSPCE attribués + réserve non attribuée).` : 'Ajoutez une première émission d’actions (création de la société).';
+    // Catégories et personnes
+    $('classes').innerHTML = m.classes.map((c, i) => `<div class="ct-row"><input class="in" data-c="${i}" data-k="name" value="${esc(c.name)}" aria-label="Nom" style="flex:1" /><select class="in" data-c="${i}" data-k="kind" aria-label="Nature"><option value="ordinaire"${c.kind === 'ordinaire' ? ' selected' : ''}>Ordinaire</option><option value="preference"${c.kind === 'preference' ? ' selected' : ''}>Préférence</option></select>${c.kind === 'preference' ? `<label class="xs">Multiple <input class="in" type="number" min="0" max="5" step="0.5" data-c="${i}" data-k="multiple" value="${c.multiple}" style="width:70px" /></label>` : ''}${m.classes.length > 1 ? `<button class="btn btn-ghost btn-sm" type="button" data-delc="${i}" aria-label="Supprimer">✕</button>` : ''}</div>`).join('');
+    $('holders').innerHTML = m.holders.length ? m.holders.map((h, i) => `<div class="ct-row"><input class="in" data-h="${i}" data-k="name" value="${esc(h.name)}" aria-label="Nom" style="flex:1" /><select class="in" data-h="${i}" data-k="kind" aria-label="Qualité">${Object.entries(KIND).map(([k, l]) => `<option value="${k}"${h.kind === k ? ' selected' : ''}>${l}</option>`).join('')}</select><button class="btn btn-ghost btn-sm" type="button" data-delh="${i}" aria-label="Supprimer">✕</button></div>`).join('') : '<p class="small muted">Ajoutez les fondateurs, investisseurs et salariés.</p>';
+    // Historique (ordre chronologique, opérations à venir grisées)
+    const idx = new Map(t.history.map((h) => [h.op, h]));
+    $('hist').innerHTML = m.ops.map((op, i) => ({ op, i })).sort((a, b) => a.op.date.localeCompare(b.op.date) || a.i - b.i).map(({ op, i }) => {
+      const h = idx.get(op);
+      return `<li${h ? '' : ' style="opacity:.55"'}><span class="xs muted">${new Date(op.date + 'T00:00:00Z').toLocaleDateString('fr-FR', { timeZone: 'UTC' })}</span> — ${esc(h?.label ?? 'Opération postérieure à la date choisie')}${h ? ` <span class="xs muted">· ${nf(h.issuedAfter)} actions émises</span>` : ''} <button class="linkbtn xs" type="button" data-delo="${i}" aria-label="Supprimer l’opération">✕</button></li>`;
+    }).join('') || '<li class="muted small" style="list-style:none">Aucune opération.</li>';
+    // Scénarios
+    $('scen').innerHTML = m.scenarios.map((s, i) => {
+      const r = runScenario(m, t, s);
+      const field = (k: string, l: string, step = 'any') => `<label class="f">${l}<input class="in" type="number" min="0" step="${step}" data-s="${i}" data-k="${k}" value="${(s as Record<string, unknown>)[k]}" /></label>`;
+      return `<div class="panel"><div class="ct-row"><input class="in" data-s="${i}" data-k="name" value="${esc(s.name)}" aria-label="Nom du scénario" style="flex:1;font-weight:700" /><button class="btn btn-ghost btn-sm" type="button" data-dels="${i}" aria-label="Supprimer">✕</button></div>
+        ${field('preMoney', 'Valorisation avant levée (FCFA)')}${field('raise', 'Montant levé (FCFA)')}${field('poolPct', 'Réserve BSPCE visée après levée (%)', '0.5')}${field('multiple', 'Préférence de liquidation (multiple)', '0.5')}${field('exit', 'Valeur de sortie (FCFA)')}
+        ${r.error ? `<p class="small" style="color:var(--bad)">${esc(r.error)}</p>` : `<p class="xs muted" style="margin:6px 0 0">Prix par action : <b>${nf(r.price)} FCFA</b> · actions nouvelles : ${nf(r.newShares)} · réserve ajoutée : ${nf(r.poolTopUp)} · post-money : ${mf(r.postMoney)}</p>`}</div>`;
+    }).join('');
+    const res = m.scenarios.map((s) => runScenario(m, t, s));
+    const names = [...new Set(res.flatMap((r) => r.lines.map((l) => l.name)))];
+    $('cmp').innerHTML = res.length ? `<thead><tr><th>Associé</th><th class="num">Aujourd'hui (dilué)</th>${res.map((r) => `<th class="num">${esc(r.s.name)} : après</th><th class="num">${esc(r.s.name)} : à la sortie</th>`).join('')}</tr></thead>
+      <tbody>${names.map((nm) => { const first = res.map((r) => r.lines.find((l) => l.name === nm)); const before = first.find(Boolean)?.before ?? 0; return `<tr><td>${esc(nm)}</td><td class="num">${pc(before)}</td>${first.map((l) => `<td class="num">${l ? pc(l.after) : '—'}</td><td class="num">${l ? mf(l.exit) : '—'}</td>`).join('')}</tr>`; }).join('')}</tbody>` : '<tbody><tr><td class="muted small">Ajoutez un scénario pour comparer.</td></tr></tbody>';
+  }
+
+  const root = $('ct');
+  root.addEventListener('change', (e) => {
+    const el = e.target as HTMLInputElement;
+    if (el.id === 'at') return render();
+    if (el.id === 'co') { dirty = true; $('dirty').hidden = false; return; }
+    if (el.closest('#opF')) return;
+    const v = el.type === 'number' ? Number(el.value) : el.value;
+    if (el.dataset.c) (m.classes[+el.dataset.c] as Record<string, unknown>)[el.dataset.k!] = v;
+    else if (el.dataset.h) (m.holders[+el.dataset.h] as Record<string, unknown>)[el.dataset.k!] = v;
+    else if (el.dataset.s) (m.scenarios[+el.dataset.s] as Record<string, unknown>)[el.dataset.k!] = v;
+    else return;
+    if (el.dataset.c && el.dataset.k === 'kind') m.classes[+el.dataset.c].multiple = el.value === 'preference' ? 1 : 0;
+    touch();
+  });
+  root.addEventListener('click', (e) => {
+    const b = (e.target as Element).closest<HTMLButtonElement>('button');
+    if (!b) return;
+    const used = (hid: string) => m.ops.some((o) => Object.values(o).includes(hid));
+    if (b.dataset.add === 'class') { if (m.classes.length >= 10) return; m.classes.push({ id: uid(), name: 'Actions de préférence', kind: 'preference', multiple: 1 }); }
+    else if (b.dataset.add === 'holder') m.holders.push({ id: uid(), name: `Personne ${m.holders.length + 1}`, kind: 'fondateur' });
+    else if (b.dataset.add === 'scenario') { if (m.scenarios.length >= 3) return toast('Trois scénarios au plus.'); m.scenarios.push({ id: uid(), name: `Scénario ${m.scenarios.length + 1}`, preMoney: 500_000_000, raise: 150_000_000, poolPct: 10, multiple: 1, exit: 2_000_000_000 }); }
+    else if (b.dataset.delc) { const c = m.classes[+b.dataset.delc]; if (used(c.id)) return toast('Catégorie utilisée par des opérations.'); m.classes.splice(+b.dataset.delc, 1); }
+    else if (b.dataset.delh) { const h = m.holders[+b.dataset.delh]; if (used(h.id)) return toast('Cette personne figure dans des opérations : supprimez-les d’abord.'); m.holders.splice(+b.dataset.delh, 1); }
+    else if (b.dataset.delo) m.ops.splice(+b.dataset.delo, 1);
+    else if (b.dataset.dels) m.scenarios.splice(+b.dataset.dels, 1);
+    else return;
+    if (b.dataset.add === 'holder' || b.dataset.delh || b.dataset.add === 'class' || b.dataset.delc) { touch(); opFields(); return; }
+    touch();
+  });
+  $('save').addEventListener('click', async () => {
+    const res = await fetch('/api/actionnariat/tables', { method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: S.id, company: ($('co') as HTMLInputElement).value, model: m }) }).catch(() => null);
+    const d = res ? await res.json().catch(() => ({})) : {};
+    toast(d.message || d.error || 'Erreur réseau.');
+    if (d.ok) { dirty = false; $('dirty').hidden = true; }
+  });
+  $('csv').addEventListener('click', () => {
+    const t = computeTable(m, ($('at') as HTMLInputElement).value || today);
+    const cell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const lines = [['Associé', 'Qualité', ...m.classes.map((c) => c.name), 'BSPCE', 'BSPCE acquis', '% capital', '% dilué'].map(cell).join(';'),
+      ...t.rows.map((r) => [r.holder.name, KIND[r.holder.kind], ...m.classes.map((c) => r.byClass[c.id] ?? 0), r.options, r.vestedOptions, (r.pctIssued * 100).toFixed(2), (r.pctFD * 100).toFixed(2)].map(cell).join(';'))];
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+    a.download = `table-capitalisation-${S.company.replace(/[^\w-]+/g, '-')}.csv`;
+    a.click();
+  });
+  $('del').addEventListener('click', async () => {
+    if (!confirm('Supprimer définitivement cette table ?')) return;
+    const res = await fetch('/api/actionnariat/tables', { method: 'DELETE', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: S.id }) });
+    const d = await res.json().catch(() => ({}));
+    if (d.ok) { dirty = false; location.href = d.redirect; } else toast(d.error || 'Erreur.');
+  });
+  opFields();
+  render();
+</script>

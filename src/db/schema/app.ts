@@ -692,6 +692,17 @@ export const coffeeMatch = pgTable('coffee_match', {
   createdAt: ts('created_at').notNull().defaultNow(),
 }, (t) => [index('coffee_match_week_idx').on(t.week)]);
 
+/* Studio de capital (CDC §7.5, V2) : table de capitalisation d'une entreprise, tenue par son dirigeant.
+   Le modèle (catégories d'actions, associés, opérations, scénarios) est validé par src/lib/captable.ts. */
+export const capTable = pgTable('cap_table', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  ownerId: userRef('owner_id').notNull(),
+  company: text('company').notNull(),
+  model: jsonb('model').notNull(),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+}, (t) => [index('cap_table_owner_idx').on(t.ownerId)]);
+
 export const conversation = pgTable('conversation', {
   id: uuid('id').primaryKey().defaultRandom(),
   title: text('title'),

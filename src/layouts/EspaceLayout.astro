@@ -30,7 +30,7 @@ const groups: [string, [string, string, boolean?][]][] = [
     ['/espace/projets', 'Mes projets', has('entrepreneur', 'membre')], ['/espace/mentorat', 'Mentorat'], ['/espace/cercle', 'Mon cercle Mastermind'],
   ]],
   ['MES RÔLES', [
-    ['/espace/recruteur', 'Espace recruteur', has('employeur')], ['/espace/mentor', 'Espace mentor', has('mentor')], ['/espace/jury', 'Jury', !!isJury],
+    ['/espace/recruteur', 'Espace recruteur', has('employeur')], ['/espace/mentor', 'Espace mentor', has('mentor')], ['/espace/partenaire', 'Espace partenaire', has('partenaire')], ['/espace/jury', 'Jury', !!isJury],
     ['/kapital/entreprise', 'Kapital — entreprise', has('entrepreneur')], ['/kapital/investisseur', 'Kapital — investisseur', has('investisseur')],
     ['/admin', tfaMissing ? 'Back-office CEA OS (à activer)' : 'Back-office CEA OS', staff],
   ]],
@@ -39,7 +39,7 @@ const groups: [string, [string, string, boolean?][]][] = [
 const ICONS: Record<string, string> = {
   '/espace': 'home', '/espace/profil': 'user', '/espace/carte': 'card', '/espace/notifications': 'bell', '/espace/demandes': 'chat', '/espace/securite': 'lock', '/espace/confidentialite': 'shield',
   '/espace/apprentissage': 'learn', '/espace/programme': 'rocket', '/espace/candidatures': 'check', '/espace/billets': 'ticket', '/espace/messages': 'mail', '/espace/projets': 'proj', '/espace/mentorat': 'hand', '/espace/cercle': 'circle',
-  '/espace/recruteur': 'job', '/espace/mentor': 'star', '/espace/jury': 'gov', '/kapital/entreprise': 'fund', '/kapital/investisseur': 'chart', '/admin': 'gear',
+  '/espace/recruteur': 'job', '/espace/mentor': 'star', '/espace/partenaire': 'hand', '/espace/jury': 'gov', '/kapital/entreprise': 'fund', '/kapital/investisseur': 'chart', '/admin': 'gear',
 };
 const tabs: [string, string, string][] = [
   ['/espace', 'Accueil', 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z'],

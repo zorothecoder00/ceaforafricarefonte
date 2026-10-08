@@ -1,0 +1,97 @@
+---
+/* Espace Partenaire (CDC §9, V2) : conventions, programmes cofinancés, événements sponsorisés, livrables et indicateurs
+   d'impact de l'organisation partenaire. Indicateurs agrégés et anonymes (aucune cellule de moins de 10 personnes). */
+import EspaceLayout from '../../layouts/EspaceLayout.astro';
+import Money from '../../components/Money.astro';
+import { eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { user } from '../../db/schema/auth';
+import { orgsOf, deliverablesOf, isLate, DELIVERABLE_STATUS } from '../../lib/partners';
+import { partnerReport } from '../../lib/impact-reports';
+import { DEAL_KIND_LABEL } from '../../lib/crm';
+import { country, dateFr } from '../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user!;
+const orgs = await orgsOf(me.id);
+const org = orgs.find((o) => o.id === Astro.url.searchParams.get('org')) ?? orgs[0];
+const report = org ? await partnerReport(org.id) : null;
+const items = org ? await deliverablesOf(org.id) : [];
+const [contact] = org?.ownerId ? await db.select({ name: user.name, email: user.email }).from(user).where(eq(user.id, org.ownerId)) : [];
+const reached = report ? report.programmes.reduce((a, p) => a + p.participants, 0) : 0;
+const attendees = report ? report.events.reduce((a, e) => a + e.attendees, 0) : 0;
+const pending = items.filter((d) => d.status === 'livre' && !d.acknowledgedAt).length;
+const show = (v: number | null | string) => (v == null ? '—' : typeof v === 'number' ? v.toLocaleString('fr-FR') : v);
+---
+<EspaceLayout title="Espace partenaire" lead={org ? `${org.name}${org.country ? ` · ${country(org.country)}` : ''}` : 'Aucune organisation rattachée à votre compte.'}>
+  {!org || !report ? (
+    <div class="empty">Votre compte n'est rattaché à aucune organisation partenaire. L'équipe CEA FOR AFRICA ouvre cet espace aux représentants de ses partenaires.</div>
+  ) : (
+    <>
+      {orgs.length > 1 && <form class="filters" method="get" style="margin-top:0"><select class="in" name="org" onchange="this.form.submit()" aria-label="Organisation">{orgs.map((o) => <option value={o.id} selected={o.id === org.id}>{o.name}</option>)}</select></form>}
+      <div class="grid g4">
+        <div class="panel kpi"><span class="small muted">Engagement total</span><b><Money xof={report.committed} /></b><span class="xs muted">{report.deals.length} convention{report.deals.length > 1 ? 's' : ''}</span></div>
+        <div class="panel kpi"><span class="small muted">Entrepreneurs accompagnés</span><b>{show(reached)}</b><span class="xs muted">{report.programmes.length} programme{report.programmes.length > 1 ? 's' : ''} cofinancé{report.programmes.length > 1 ? 's' : ''}</span></div>
+        <div class="panel kpi"><span class="small muted">Participants aux événements</span><b>{show(attendees)}</b><span class="xs muted">{report.events.length} événement{report.events.length > 1 ? 's' : ''} sponsorisé{report.events.length > 1 ? 's' : ''}</span></div>
+        <div class="panel kpi"><span class="small muted">Livrables</span><b>{items.filter((d) => d.status === 'livre').length} / {items.length}</b><span class="xs muted">{pending ? `${pending} à confirmer` : 'livrés'}</span></div>
+      </div>
+
+      <h2 style="font-size:1.2rem;margin-top:24px">Conventions et livrables</h2>
+      {report.deals.length ? report.deals.map((d) => {
+        const dealItems = items.filter((x) => x.dealId === d.id);
+        return (
+          <div class="panel" style="margin-bottom:12px">
+            <div class="row between"><b>{d.title}</b><span class="small">{d.amountXof ? <Money xof={d.amountXof} /> : ''}</span></div>
+            <div class="xs muted">{DEAL_KIND_LABEL[d.kind] ?? d.kind}{d.programme ? ` · programme ${d.programme}` : ''}{d.event ? ` · ${d.event}` : ''}</div>
+            {dealItems.length ? (
+              <table class="t" style="margin-top:10px">
+                <thead><tr><th>Livrable</th><th>Échéance</th><th>Statut</th><th></th></tr></thead>
+                <tbody>{dealItems.map((x) => (
+                  <tr>
+                    <td>{x.title}{x.note && <div class="xs muted">{x.note}</div>}{x.link && <div class="xs"><a href={x.link} target="_blank" rel="noopener">Ouvrir le document</a></div>}</td>
+                    <td class="small">{x.dueOn ? dateFr(x.dueOn) : '—'}</td>
+                    <td><span class={`tag ${x.status === 'livre' ? 'ok' : isLate(x) ? 'bad' : x.status === 'en_cours' ? 'info' : ''}`}>{isLate(x) ? 'En retard' : DELIVERABLE_STATUS[x.status]}</span></td>
+                    <td>{x.status === 'livre' && (x.acknowledgedAt ? <span class="xs muted">Reçu le {dateFr(x.acknowledgedAt.toISOString())}</span> : <button class="btn btn-primary btn-sm" type="button" data-post="/api/partenaire" data-body={JSON.stringify({ id: x.id })} data-reload>Confirmer la réception</button>)}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            ) : <p class="small muted" style="margin:8px 0 0">Aucun livrable défini pour cette convention.</p>}
+          </div>
+        );
+      }) : <div class="empty">Aucune convention conclue pour le moment.</div>}
+
+      {report.programmes.length > 0 && (
+        <>
+          <h2 style="font-size:1.2rem;margin-top:24px">Programmes cofinancés</h2>
+          <div class="grid g2">{report.programmes.map((p) => p && (
+            <div class="panel">
+              <h3 style="margin-top:0">{p.name}</h3>
+              <div class="grid g3" style="gap:8px">
+                <div class="kpi"><span class="xs muted">Candidatures</span><b>{show(p.applications)}</b></div>
+                <div class="kpi"><span class="xs muted">Participants</span><b>{show(p.participants)}</b></div>
+                <div class="kpi"><span class="xs muted">Diplômés</span><b>{show(p.graduated)}</b></div>
+                <div class="kpi"><span class="xs muted">Assiduité</span><b>{p.attendance == null ? '—' : `${p.attendance} %`}</b></div>
+                <div class="kpi"><span class="xs muted">Femmes</span><b>{p.womenPct == null ? '—' : `${p.womenPct} %`}</b></div>
+                <div class="kpi"><span class="xs muted">Emplois (anciens)</span><b>{show(p.employees)}</b></div>
+              </div>
+              <p class="xs muted" style="margin:8px 0 0">{p.cohorts.length} cohorte{p.cohorts.length > 1 ? 's' : ''} · fonds levés par les anciens : {typeof p.fundsRaised === 'number' ? <Money xof={p.fundsRaised} /> : show(p.fundsRaised)}</p>
+            </div>
+          ))}</div>
+        </>
+      )}
+
+      {report.events.length > 0 && (
+        <>
+          <h2 style="font-size:1.2rem;margin-top:24px">Événements sponsorisés</h2>
+          <div class="panel">{report.events.map((e) => <div class="list-row"><span class="small"><b>{e.title}</b> · {dateFr(e.date)} · {e.city}</span><span class="small">{e.tickets} inscrits · {e.attendees} présents</span></div>)}</div>
+        </>
+      )}
+
+      <div class="row between" style="margin-top:20px;flex-wrap:wrap;gap:10px">
+        <p class="xs muted" style="margin:0">Indicateurs agrégés et anonymes, calculés le {dateFr(report.generatedAt.toISOString())} ; « — » : moins de 10 personnes concernées (protection contre la réidentification).</p>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="window.print()">Imprimer le tableau de bord</button>
+      </div>
+      {contact && <p class="small" style="margin-top:12px">Votre interlocuteur : <b>{contact.name}</b> · <a href={`mailto:${contact.email}`}>{contact.email}</a></p>}
+    </>
+  )}
+</EspaceLayout>

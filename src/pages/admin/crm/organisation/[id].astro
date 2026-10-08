@@ -5,7 +5,8 @@ import Money from '../../../../components/Money.astro';
 import { desc, eq } from 'drizzle-orm';
 import { db } from '../../../../lib/db';
 import { user } from '../../../../db/schema/auth';
-import { crmOrg, crmContact, crmDeal, crmInteraction, crmOrgKindEnum } from '../../../../db/schema/crm';
+import { crmOrg, crmContact, crmDeal, crmInteraction, crmOrgKindEnum, partnerAccess } from '../../../../db/schema/crm';
+import { deliverablesOf, isLate, DELIVERABLE_STATUS } from '../../../../lib/partners';
 import { can } from '../../../../lib/rbac';
 import { countriesFor } from '../../../../lib/admin';
 import { STAGES, STAGE_LABEL, ORG_KIND_LABEL, INTERACTION_LABEL, DEAL_KIND_LABEL } from '../../../../lib/crm';
@@ -27,6 +28,10 @@ const deals = await db.select().from(crmDeal).where(eq(crmDeal.orgId, id)).order
 const interactions = await db.select({ i: crmInteraction, who: user.name }).from(crmInteraction).leftJoin(user, eq(user.id, crmInteraction.authorId)).where(eq(crmInteraction.orgId, id)).orderBy(desc(crmInteraction.at)).limit(100);
 const events = await allEvents({ hidden: true });
 const programmes = await programmeNames();
+// Espace partenaire : comptes ayant accès au tableau de bord, livrables des conventions conclues
+const partnerUsers = await db.select({ id: user.id, name: user.name, email: user.email }).from(partnerAccess).innerJoin(user, eq(user.id, partnerAccess.userId)).where(eq(partnerAccess.orgId, id));
+const deliverables = await deliverablesOf(id);
+const wonDeals = deals.filter((d) => d.stage === 'gagne');
 const countryList = Object.entries(COUNTRIES).filter(([c]) => !scope || scope.includes(c));
 const fmt = (d: Date) => d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
 const won = deals.filter((d) => d.stage === 'gagne').reduce((n, d) => n + (d.amountXof ?? 0), 0);
@@ -81,6 +86,46 @@ const won = deals.filter((d) => d.stage === 'gagne').reduce((n, d) => n + (d.amo
           </details>
         )}
       </div>
+
+      <h2 style="font-size:1.1rem;margin-top:20px">Espace partenaire</h2>
+      <div class="panel">
+        <p class="small muted" style="margin-top:0">Le représentant du partenaire suit ses conventions, livrables et indicateurs depuis <b>Mon espace › Espace partenaire</b>.</p>
+        {partnerUsers.length ? partnerUsers.map((p) => <div class="list-row"><span class="small"><b>{p.name}</b> · {p.email}</span>{canM && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/admin/partenaires" data-body={JSON.stringify({ action: 'retirer', orgId: o.id, userId: p.id })} data-confirm="Retirer l’accès à l’espace partenaire ?" data-reload>Retirer</button>}</div>) : <p class="small muted">Aucun accès ouvert.</p>}
+        {canM && (
+          <form class="row" data-api="/api/admin/partenaires" data-reset data-reload style="gap:8px;margin-top:10px;align-items:flex-end;flex-wrap:wrap">
+            <input type="hidden" name="action" value="acces" /><input type="hidden" name="orgId" value={o.id} />
+            <div><label class="f" for="pa">E-mail du représentant (compte membre)</label><input class="in" id="pa" name="email" type="email" required style="margin:0" /></div>
+            <button class="btn btn-primary btn-sm" type="submit">Ouvrir l'espace</button>
+          </form>
+        )}
+        <h3 style="margin-top:18px">Livrables des conventions</h3>
+        {wonDeals.length ? wonDeals.map((d) => (
+          <div style="margin-bottom:12px">
+            <b class="small">{d.title}</b>
+            {deliverables.filter((x) => x.dealId === d.id).map((x) => (
+              <div class="list-row" style="align-items:flex-start">
+                <span class="small">{x.title}{x.dueOn && <span class="xs muted"> · échéance {new Date(`${x.dueOn}T00:00:00Z`).toLocaleDateString('fr-FR', { timeZone: 'UTC' })}</span>}{isLate(x) && <span class="tag bad xs" style="margin-left:6px">En retard</span>}{x.acknowledgedAt && <span class="tag ok xs" style="margin-left:6px">Réception confirmée</span>}</span>
+                {canM ? (
+                  <form class="row" data-api="/api/admin/partenaires" data-reload style="gap:4px;flex-wrap:wrap">
+                    <input type="hidden" name="action" value="statut" /><input type="hidden" name="id" value={x.id} />
+                    <select class="in" name="status" aria-label="Statut" style="width:auto;margin:0;padding:3px 6px;font-size:.85rem">{Object.entries(DELIVERABLE_STATUS).map(([k, l]) => <option value={k} selected={k === x.status}>{l}</option>)}</select>
+                    <input class="in" name="link" type="url" value={x.link ?? ''} placeholder="Lien du document" aria-label="Lien du document" style="width:170px;margin:0;padding:3px 6px;font-size:.85rem" />
+                    <button class="btn btn-ghost btn-sm" type="submit">OK</button>
+                  </form>
+                ) : <span class="xs">{DELIVERABLE_STATUS[x.status]}</span>}
+              </div>
+            ))}
+            {canM && (
+              <form class="row" data-api="/api/admin/partenaires" data-reset data-reload style="gap:6px;margin-top:6px;flex-wrap:wrap;align-items:flex-end">
+                <input type="hidden" name="action" value="livrable" /><input type="hidden" name="dealId" value={d.id} />
+                <input class="in" name="title" required minlength="3" maxlength="160" placeholder="Nouveau livrable (rapport, visibilité…)" aria-label="Intitulé du livrable" style="flex:1;min-width:180px;margin:0" />
+                <input class="in" name="dueOn" type="date" aria-label="Échéance" style="width:auto;margin:0" />
+                <button class="btn btn-ghost btn-sm" type="submit">Ajouter</button>
+              </form>
+            )}
+          </div>
+        )) : <p class="small muted" style="margin:0">Les livrables se rattachent aux opportunités gagnées (conventions conclues).</p>}
+      </div>
     </div>
     <aside>
       <div class="panel">
@@ -94,7 +139,7 @@ const won = deals.filter((d) => d.stage === 'gagne').reduce((n, d) => n + (d.amo
           </form>
         )}
         <ol class="timeline" style="max-height:600px;overflow:auto">
-          {interactions.map(({ i, who }) => <li><b class="small">{INTERACTION_LABEL[i.kind] ?? i.kind}</b> <span class="xs muted">{fmt(i.at)} · {who ?? '—'}</span><div class="small" style="white-space:pre-wrap">{i.summary}</div></li>)}
+          {interactions.map(({ i, who }) => <li><i></i><div><b class="small">{INTERACTION_LABEL[i.kind] ?? i.kind}</b> <span class="xs muted">{fmt(i.at)} · {who ?? '—'}</span><div class="small" style="white-space:pre-wrap">{i.summary}</div></div></li>)}
           {!interactions.length && <li class="small muted">Aucune interaction.</li>}
         </ol>
       </div>

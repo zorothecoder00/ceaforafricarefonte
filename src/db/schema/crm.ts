@@ -1,7 +1,7 @@
 /* CRM 360° et campagnes (CDC §12).
    Les membres sont des contacts à part entière (user + profile) ; crm_contact ne porte que les personnes sans compte
    (partenaires, sponsors, presse, institutions), avec la base légale de leur consentement. */
-import { pgTable, pgEnum, text, boolean, integer, bigint, timestamp, uuid, jsonb, index, uniqueIndex, date } from 'drizzle-orm/pg-core';
+import { pgTable, pgEnum, text, boolean, integer, bigint, timestamp, uuid, jsonb, index, uniqueIndex, date, primaryKey } from 'drizzle-orm/pg-core';
 import { user } from './auth';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true });
@@ -71,6 +71,29 @@ export const crmDeal = pgTable('crm_deal', {
   createdAt: ts('created_at').notNull().defaultNow(),
   updatedAt: ts('updated_at').notNull().defaultNow(),
 }, (t) => [index('crm_deal_stage_idx').on(t.stage)]);
+
+/* Espace Partenaire (CDC §9, V2) : accès d'un compte membre au tableau de bord de son organisation, ouvert par l'équipe */
+export const partnerAccess = pgTable('partner_access', {
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  orgId: uuid('org_id').notNull().references(() => crmOrg.id, { onDelete: 'cascade' }),
+  createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.userId, t.orgId] })]);
+
+/* Livrables d'une convention (opportunité gagnée) : suivis par l'équipe, réception confirmée par le partenaire */
+export const partnerDeliverable = pgTable('partner_deliverable', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  dealId: uuid('deal_id').notNull().references(() => crmDeal.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  dueOn: date('due_on'),
+  status: text('status').notNull().default('a_faire'), // a_faire, en_cours, livre
+  note: text('note'),
+  link: text('link'), // document livré (lien)
+  deliveredAt: ts('delivered_at'),
+  acknowledgedAt: ts('acknowledged_at'),
+  acknowledgedBy: text('acknowledged_by').references(() => user.id, { onDelete: 'set null' }),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('partner_deliverable_deal_idx').on(t.dealId)]);
 
 /* Segments dynamiques : des règles (pas une liste figée), évaluées au moment de l'envoi — voir src/lib/segments.ts */
 export const crmSegment = pgTable('crm_segment', {

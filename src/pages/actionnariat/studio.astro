@@ -2,8 +2,14 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import PageHead from '../../components/PageHead.astro';
 import { SUBS } from '../../data/site';
+import { desc, eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { capTable } from '../../db/schema/app';
 
 export const prerender = false;
+// Tables de capitalisation du membre (studio complet : opérations, BSPCE, scénarios comparés)
+const me = Astro.locals.user;
+const tables = me ? await db.select({ id: capTable.id, company: capTable.company, updatedAt: capTable.updatedAt }).from(capTable).where(eq(capTable.ownerId, me.id)).orderBy(desc(capTable.updatedAt)) : [];
 ---
 <BaseLayout title="Studio de capital">
   <PageHead title="Studio de capital" lead="Simulez une levée et voyez son effet sur la répartition du capital. Outil pédagogique : il ne remplace pas un conseil professionnel." crumbs={[['/actionnariat', 'Actionnariat'], ['', 'Studio de capital']]} subnav={SUBS.actionnariat} />
@@ -23,6 +29,23 @@ export const prerender = false;
           <svg id="donut" viewBox="0 0 42 42" width="200" height="200" role="img" aria-label="Répartition du capital"></svg>
           <div id="capt" style="flex:1;min-width:200px"></div>
         </div>
+      </div>
+    </div>
+  </section>
+  <section class="block" style="padding-top:0">
+    <div class="wrap">
+      <div class="panel">
+        <h2 style="font-size:1.2rem;margin-top:0">Ma table de capitalisation</h2>
+        <p class="small muted">Tenez la table réelle de votre entreprise : associés, catégories d'actions, émissions et cessions, réserve et attributions de BSPCE avec acquisition progressive, historique, et jusqu'à trois scénarios de levée comparés côte à côte.</p>
+        {me ? (
+          <>
+            {tables.map((t) => <a class="list-row" href={`/actionnariat/studio/${t.id}`}><b>{t.company}</b><span class="xs muted">modifiée le {t.updatedAt.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}</span></a>)}
+            <form class="row" data-api="/api/actionnariat/tables" style="gap:8px;margin-top:10px;align-items:flex-end;flex-wrap:wrap">
+              <div><label class="f" for="nco">Entreprise</label><input class="in" id="nco" name="company" required minlength="2" maxlength="120" style="margin:0" /></div>
+              <button class="btn btn-primary btn-sm" type="submit">Créer une table</button>
+            </form>
+          </>
+        ) : <a class="btn btn-primary btn-sm" href="/connexion?retour=/actionnariat/studio">Se connecter pour créer sa table</a>}
       </div>
     </div>
   </section>

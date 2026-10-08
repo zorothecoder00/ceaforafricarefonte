@@ -330,6 +330,13 @@
       "when": 1791455997328,
       "tag": "0046_communaute_parrainage_points_cafe",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1791456893789,
+      "tag": "0047_capital_partenaires",
+      "breakpoints": true
     }
   ]
 }

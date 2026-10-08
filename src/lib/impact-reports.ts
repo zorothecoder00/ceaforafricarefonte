@@ -80,7 +80,7 @@ export async function partnerReport(orgId: string) {
   const tickets = eventIds.length ? await db.select({ e: eventTicket.eventId, n: sql<number>`count(*)::int`, inside: sql<number>`count(${eventTicket.checkedInAt})::int` }).from(eventTicket).where(inArray(eventTicket.eventId, eventIds)).groupBy(eventTicket.eventId) : [];
   return {
     org, generatedAt: new Date(),
-    deals: deals.map((d) => ({ title: d.title, kind: d.kind, amountXof: d.amountXof, programme: d.programme, event: events.find((e) => e.id === d.eventId)?.t ?? null })),
+    deals: deals.map((d) => ({ id: d.id, title: d.title, kind: d.kind, amountXof: d.amountXof, programme: d.programme, event: events.find((e) => e.id === d.eventId)?.t ?? null })),
     committed: deals.reduce((n, d) => n + (d.amountXof ?? 0), 0),
     programmes: await Promise.all(programmes.map((p) => programmeReport(p))),
     events: events.map((e) => ({ title: e.t, date: e.date, city: e.city, tickets: tickets.find((t) => t.e === e.id)?.n ?? 0, attendees: tickets.find((t) => t.e === e.id)?.inside ?? 0 })),
