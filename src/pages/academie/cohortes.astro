@@ -1,0 +1,64 @@
+---
+/* Cohortes de l'Académie (CDC §7.6) : suivre un cours avec une promotion, des sessions en direct, des devoirs et
+   l'évaluation par les pairs. L'équipe y crée les cohortes. */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { asc, eq, gte, sql } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { academyCohort, academyCohortMember } from '../../db/schema/app';
+import { allCourses } from '../../lib/catalog';
+import { canManageCohorts } from '../../lib/cohorts';
+import { SUBS, dateFr } from '../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user;
+const today = new Date().toISOString().slice(0, 10);
+const courses = await allCourses({ hidden: true });
+const rows = await db.select({ c: academyCohort, n: sql<number>`(select count(*) from academy_cohort_member m where m.cohort_id = ${academyCohort.id})::int` })
+  .from(academyCohort).where(gte(academyCohort.endsOn, today)).orderBy(asc(academyCohort.startsOn));
+const mine = me ? new Set((await db.select({ id: academyCohortMember.cohortId }).from(academyCohortMember).where(eq(academyCohortMember.userId, me.id))).map((x) => x.id)) : new Set<string>();
+const manage = !!me && canManageCohorts(me.roles);
+const title = (id: string) => courses.find((c) => c.id === id)?.t ?? id;
+---
+<BaseLayout title="Cohortes">
+  <PageHead title="Apprendre en cohorte" lead="Suivez un cours avec une promotion : sessions en direct avec le formateur, devoirs pratiques et retours de vos pairs." crumbs={[['/academie', 'Académie'], ['', 'Cohortes']]} subnav={SUBS.academie} />
+  <section class="block">
+    <div class="wrap">
+      {rows.length ? (
+        <div class="grid g3">
+          {rows.map(({ c, n }) => {
+            const left = c.seats == null ? null : Math.max(0, c.seats - n);
+            const started = c.startsOn <= today;
+            return (
+              <div class="panel" style="display:flex;flex-direction:column">
+                <div class="row between"><span class={`tag ${started ? 'ok' : 'info'}`}>{started ? 'En cours' : 'Prochainement'}</span><span class="xs muted">{n} membre{n > 1 ? 's' : ''}{left != null ? ` · ${left} place${left > 1 ? 's' : ''}` : ''}</span></div>
+                <h3 style="margin:10px 0 4px">{c.name}</h3>
+                <p class="small muted" style="flex:1;margin:0 0 10px">{title(c.courseId)} · du {dateFr(c.startsOn)} au {dateFr(c.endsOn)}</p>
+                {mine.has(c.id) ? <a class="btn btn-ghost btn-sm" href={`/academie/cohorte/${c.id}`}>Ouvrir ma cohorte</a>
+                  : !me ? <a class="btn btn-primary btn-sm" href="/connexion?retour=/academie/cohortes">Se connecter pour rejoindre</a>
+                  : left === 0 ? <span class="small muted">Complet</span>
+                  : <button class="btn btn-primary btn-sm" type="button" data-post="/api/academie/cohortes" data-body={JSON.stringify({ action: 'rejoindre', cohortId: c.id })}>Rejoindre la cohorte</button>}
+                {manage && !mine.has(c.id) && <a class="small" href={`/academie/cohorte/${c.id}`} style="margin-top:6px">Gérer</a>}
+              </div>
+            );
+          })}
+        </div>
+      ) : <div class="empty">Aucune cohorte programmée pour le moment. Les cours restent accessibles à votre rythme dans le <a href="/academie">catalogue</a>.</div>}
+
+      {manage && (
+        <form class="panel" data-api="/api/academie/cohortes" style="margin-top:24px">
+          <input type="hidden" name="action" value="creer" />
+          <h3>Créer une cohorte</h3>
+          <div class="grid g3" style="gap:0 12px">
+            <div><label class="f" for="cc">Cours</label><select class="in" id="cc" name="courseId" required>{courses.map((c) => <option value={c.id}>{c.t}</option>)}</select></div>
+            <div><label class="f" for="cn">Nom de la cohorte</label><input class="in" id="cn" name="name" required minlength="3" maxlength="120" placeholder="Promotion de novembre 2026" /></div>
+            <div><label class="f" for="cs">Places (vide = sans limite)</label><input class="in" id="cs" name="seats" type="number" min="2" max="1000" /></div>
+            <div><label class="f" for="cd">Début</label><input class="in" id="cd" name="startsOn" type="date" required /></div>
+            <div><label class="f" for="cf">Fin</label><input class="in" id="cf" name="endsOn" type="date" required /></div>
+          </div>
+          <button class="btn btn-primary btn-sm" type="submit">Créer</button>
+        </form>
+      )}
+    </div>
+  </section>
+</BaseLayout>

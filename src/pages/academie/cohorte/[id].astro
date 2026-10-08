@@ -1,0 +1,168 @@
+---
+/* Espace d'une cohorte de l'Académie (CDC §7.6) : sessions en direct (visio), devoirs à rendre, évaluation par les pairs
+   (travaux attribués, note de 1 à 5 et commentaire, évaluateurs anonymes), membres. L'équipe y planifie sessions et devoirs. */
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import PageHead from '../../../components/PageHead.astro';
+import { asc, eq, inArray } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { academyCohort, academyCohortMember, academySession, academyAssignment, academySubmission, academyReview } from '../../../db/schema/app';
+import { user } from '../../../db/schema/auth';
+import { findCourse } from '../../../lib/catalog';
+import { canManageCohorts, isMember, seatsLeft, sessionVisio } from '../../../lib/cohorts';
+import { SUBS, dateFr } from '../../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user;
+const id = Astro.params.id ?? '';
+if (!/^[0-9a-f-]{36}$/.test(id)) return new Response('Cohorte introuvable', { status: 404 });
+const [c] = await db.select().from(academyCohort).where(eq(academyCohort.id, id));
+if (!c) return new Response('Cohorte introuvable', { status: 404 });
+const course = await findCourse(c.courseId, { hidden: true });
+const member = !!me && (await isMember(c.id, me.id));
+const manage = !!me && canManageCohorts(me.roles);
+const inside = member || manage;
+const left = await seatsLeft(c);
+const now = Date.now();
+const fmt = (d: Date) => d.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' });
+
+const [sessions, assignments, members] = inside ? await Promise.all([
+  db.select().from(academySession).where(eq(academySession.cohortId, c.id)).orderBy(asc(academySession.startsAt)),
+  db.select().from(academyAssignment).where(eq(academyAssignment.cohortId, c.id)).orderBy(asc(academyAssignment.dueAt)),
+  db.select({ id: user.id, name: user.name }).from(academyCohortMember).innerJoin(user, eq(user.id, academyCohortMember.userId)).where(eq(academyCohortMember.cohortId, c.id)).orderBy(asc(user.name)),
+]) : [[], [], []];
+const aIds = assignments.map((a) => a.id);
+const subs = aIds.length ? await db.select({ s: academySubmission, name: user.name }).from(academySubmission).innerJoin(user, eq(user.id, academySubmission.userId)).where(inArray(academySubmission.assignmentId, aIds)) : [];
+const sIds = subs.map((x) => x.s.id);
+const reviews = sIds.length ? await db.select().from(academyReview).where(inArray(academyReview.submissionId, sIds)) : [];
+const mySub = (aid: string) => subs.find((x) => x.s.assignmentId === aid && x.s.userId === me?.id)?.s;
+const reviewsOn = (sid: string) => reviews.filter((r) => r.submissionId === sid && r.doneAt);
+const myGiven = (aid: string) => reviews.filter((r) => r.reviewerId === me?.id && subs.some((x) => x.s.id === r.submissionId && x.s.assignmentId === aid));
+const avg = (rs: { score: number | null }[]) => (rs.length ? (rs.reduce((a, r) => a + (r.score ?? 0), 0) / rs.length).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) : null);
+---
+<BaseLayout title={c.name}>
+  <PageHead title={c.name} lead={`${course?.t ?? c.courseId} · du ${dateFr(c.startsOn)} au ${dateFr(c.endsOn)} · ${members.length || ''}${members.length ? ` membre${members.length > 1 ? 's' : ''}` : ''}`} crumbs={[['/academie', 'Académie'], ['/academie/cohortes', 'Cohortes'], ['', c.name]]} subnav={SUBS.academie} />
+  <section class="block">
+    <div class="wrap">
+      {!inside ? (
+        <div class="panel" style="max-width:640px">
+          <p>Cette cohorte suit le cours <a href={`/academie/${c.courseId}`}>{course?.t}</a> avec des sessions en direct, des devoirs et des retours entre pairs.</p>
+          {!me ? <a class="btn btn-primary btn-sm" href={`/connexion?retour=/academie/cohorte/${c.id}`}>Se connecter pour rejoindre</a>
+            : left === 0 ? <p class="small muted">Cohorte complète.</p>
+            : <button class="btn btn-primary btn-sm" type="button" data-post="/api/academie/cohortes" data-body={JSON.stringify({ action: 'rejoindre', cohortId: c.id })}>Rejoindre la cohorte</button>}
+        </div>
+      ) : (
+        <div class="split">
+          <div>
+            <h2 style="font-size:1.2rem">Sessions en direct</h2>
+            {sessions.length ? sessions.map((s) => {
+              const end = s.startsAt.getTime() + s.minutes * 60_000, live = now >= s.startsAt.getTime() - 15 * 60_000 && now <= end;
+              return (
+                <div class="panel" style="margin-bottom:10px">
+                  <div class="row between"><b>{s.title}</b>{live ? <span class="tag bad">En direct</span> : now > end ? <span class="tag">Terminée</span> : <span class="tag info">À venir</span>}</div>
+                  <div class="small muted">{fmt(s.startsAt)} (GMT) · {s.minutes} min</div>
+                  <div class="row" style="gap:6px;margin-top:8px">
+                    {now <= end && <a class="btn btn-primary btn-sm" href={sessionVisio(s)} target="_blank" rel="noopener">Rejoindre la visio</a>}
+                    {s.replay && <a class="btn btn-ghost btn-sm" href={s.replay} target="_blank" rel="noopener">Revoir</a>}
+                    {manage && <button class="btn btn-ghost btn-sm" type="button" data-post="/api/academie/cohortes" data-body={JSON.stringify({ action: 'retirer', kind: 'session', id: s.id })} data-confirm="Retirer cette session ?" data-reload>Retirer</button>}
+                  </div>
+                </div>
+              );
+            }) : <p class="small muted">Aucune session planifiée pour le moment.</p>}
+
+            <h2 id="devoirs" style="font-size:1.2rem;margin-top:26px">Devoirs</h2>
+            {assignments.length ? assignments.map((a) => {
+              const s = mySub(a.id), open = a.dueAt.getTime() > now, given = myGiven(a.id), pending = given.find((r) => !r.doneAt), doneN = given.filter((r) => r.doneAt).length;
+              const received = s ? reviewsOn(s.id) : [];
+              const target = pending ? subs.find((x) => x.s.id === pending.submissionId)?.s : null;
+              return (
+                <div class="panel" style="margin-bottom:14px">
+                  <div class="row between"><b>{a.title}</b><span class={`tag ${open ? 'info' : ''}`}>{open ? `À rendre avant le ${fmt(a.dueAt)}` : 'Clos'}</span></div>
+                  <p class="small" style="white-space:pre-wrap">{a.instructions}</p>
+                  {member && (
+                    <>
+                      {open ? (
+                        <form data-api="/api/academie/cohortes" data-reload>
+                          <input type="hidden" name="action" value="rendre" /><input type="hidden" name="assignmentId" value={a.id} />
+                          <label class="f" for={`b-${a.id}`}>{s ? 'Mon travail (modifiable jusqu’à la date limite)' : 'Mon travail'}</label>
+                          <textarea class="in" id={`b-${a.id}`} name="body" required minlength="30" maxlength="8000" rows="6">{s?.body ?? ''}</textarea>
+                          <label class="f" for={`l-${a.id}`}>Lien (document partagé, facultatif)</label>
+                          <input class="in" id={`l-${a.id}`} name="link" type="url" value={s?.link ?? ''} placeholder="https://…" />
+                          <button class="btn btn-primary btn-sm" type="submit">{s ? 'Mettre à jour' : 'Rendre mon travail'}</button>
+                        </form>
+                      ) : s ? <p class="small"><b>Mon travail</b> — rendu le {fmt(s.submittedAt)}.</p> : <p class="small muted">Travail non rendu.</p>}
+                      {s && a.reviewsRequired > 0 && (
+                        <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
+                          <b class="small">Évaluation par les pairs : {doneN}/{a.reviewsRequired} rendue{doneN > 1 ? 's' : ''}</b>
+                          {target && pending ? (
+                            <form data-api="/api/academie/cohortes" data-reload style="margin-top:8px">
+                              <input type="hidden" name="action" value="noter" /><input type="hidden" name="reviewId" value={pending.id} />
+                              <div class="panel small" style="background:var(--surface-2);white-space:pre-wrap">{target.body}{target.link && <><br /><a href={target.link} target="_blank" rel="noopener nofollow">{target.link}</a></>}</div>
+                              <label class="f" for={`sc-${pending.id}`}>Note (1 = à reprendre, 5 = excellent)</label>
+                              <select class="in" id={`sc-${pending.id}`} name="score" data-type="number" required style="max-width:200px">{[5, 4, 3, 2, 1].map((n) => <option value={n}>{n}</option>)}</select>
+                              <label class="f" for={`cm-${pending.id}`}>Commentaire constructif</label>
+                              <textarea class="in" id={`cm-${pending.id}`} name="comment" required minlength="20" maxlength="2000" placeholder="Ce qui est réussi, ce qui peut être amélioré…"></textarea>
+                              <button class="btn btn-primary btn-sm" type="submit">Envoyer mon évaluation</button>
+                            </form>
+                          ) : doneN < a.reviewsRequired ? <button class="btn btn-ghost btn-sm" type="button" style="margin-top:8px" data-post="/api/academie/cohortes" data-body={JSON.stringify({ action: 'evaluer', assignmentId: a.id })} data-reload>Évaluer le travail d'un pair</button>
+                            : <p class="xs muted" style="margin:4px 0 0">Merci, vos évaluations sont rendues.</p>}
+                          {received.length > 0 && (
+                            <div style="margin-top:10px">
+                              <b class="small">Retours reçus ({received.length}) · moyenne {avg(received)}/5</b>
+                              {received.map((r) => <p class="small" style="margin:6px 0 0;border-left:3px solid var(--gold);padding-left:10px"><b>{r.score}/5</b> — {r.comment}</p>)}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {manage && (
+                    <details style="margin-top:10px">
+                      <summary class="small" style="cursor:pointer">Travaux rendus ({subs.filter((x) => x.s.assignmentId === a.id).length}/{members.length})</summary>
+                      {subs.filter((x) => x.s.assignmentId === a.id).map((x) => { const rs = reviewsOn(x.s.id); return <div class="list-row" style="display:block"><b class="small">{x.name}</b> <span class="xs muted">· {fmt(x.s.submittedAt)} · {rs.length} évaluation{rs.length > 1 ? 's' : ''}{rs.length ? ` · moyenne ${avg(rs)}/5` : ''}</span><p class="xs" style="margin:4px 0 0;white-space:pre-wrap">{x.s.body.slice(0, 400)}{x.s.body.length > 400 ? '…' : ''}</p></div>; })}
+                      <button class="btn btn-ghost btn-sm" type="button" style="margin-top:8px" data-post="/api/academie/cohortes" data-body={JSON.stringify({ action: 'retirer', kind: 'devoir', id: a.id })} data-confirm="Retirer ce devoir et les travaux rendus ?" data-reload>Retirer le devoir</button>
+                    </details>
+                  )}
+                </div>
+              );
+            }) : <p class="small muted">Aucun devoir pour le moment.</p>}
+          </div>
+
+          <aside>
+            <div class="panel">
+              <h3>Le cours</h3>
+              <p class="small" style="margin:0 0 8px">{course?.t}</p>
+              <a class="btn btn-ghost btn-sm" href={`/academie/${c.courseId}`}>Ouvrir les leçons</a>
+            </div>
+            <div class="panel" style="margin-top:14px">
+              <h3>Membres ({members.length})</h3>
+              <ul class="small" style="margin:0;padding-left:18px">{members.map((m) => <li>{m.name}</li>)}</ul>
+              {member && <button class="btn btn-ghost btn-sm" type="button" style="margin-top:10px" data-post="/api/academie/cohortes" data-body={JSON.stringify({ action: 'quitter', cohortId: c.id })} data-confirm="Quitter cette cohorte ?">Quitter la cohorte</button>}
+            </div>
+            {manage && (
+              <>
+                <form class="panel" data-api="/api/academie/cohortes" data-reset data-reload style="margin-top:14px">
+                  <input type="hidden" name="action" value="session" /><input type="hidden" name="cohortId" value={c.id} />
+                  <h3>Planifier une session</h3>
+                  <label class="f" for="st">Titre</label><input class="in" id="st" name="title" required minlength="3" maxlength="160" />
+                  <label class="f" for="sa">Début (heure GMT)</label><input class="in" id="sa" name="startsAt" type="datetime-local" required />
+                  <label class="f" for="sm">Durée (minutes)</label><input class="in" id="sm" name="minutes" type="number" min="15" max="480" value="60" required />
+                  <label class="f" for="sl">Lien de visio (vide = salle Jitsi générée)</label><input class="in" id="sl" name="link" type="url" placeholder="https://…" />
+                  <button class="btn btn-primary btn-sm" type="submit">Ajouter</button>
+                </form>
+                <form class="panel" data-api="/api/academie/cohortes" data-reset data-reload style="margin-top:14px">
+                  <input type="hidden" name="action" value="devoir" /><input type="hidden" name="cohortId" value={c.id} />
+                  <h3>Publier un devoir</h3>
+                  <label class="f" for="dt">Titre</label><input class="in" id="dt" name="title" required minlength="3" maxlength="160" />
+                  <label class="f" for="di">Consignes</label><textarea class="in" id="di" name="instructions" required minlength="10" maxlength="4000" rows="4"></textarea>
+                  <label class="f" for="dd">À rendre avant (heure GMT)</label><input class="in" id="dd" name="dueAt" type="datetime-local" required />
+                  <label class="f" for="dr">Évaluations de pairs par membre</label><input class="in" id="dr" name="reviewsRequired" type="number" min="0" max="5" value="2" required />
+                  <button class="btn btn-primary btn-sm" type="submit">Publier</button>
+                </form>
+              </>
+            )}
+          </aside>
+        </div>
+      )}
+    </div>
+  </section>
+</BaseLayout>

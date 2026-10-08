@@ -28,7 +28,8 @@ if (type === 'carte') {
   const [r] = await db.select({ c: certificate, name: user.name }).from(certificate).innerJoin(user, eq(user.id, certificate.userId)).where(eq(certificate.number, id));
   if (r) {
     ok = !r.c.revokedAt;
-    title = ok ? 'Certificat authentique' : 'Certificat révoqué';
+    const isBadge = r.c.subject.startsWith('test:'); // badge de compétence (test réussi sur CEA Talents)
+    title = isBadge ? (ok ? 'Badge de compétence vérifié' : 'Badge révoqué') : ok ? 'Certificat authentique' : 'Certificat révoqué';
     lines = [['Titulaire', r.name], ['Intitulé', r.c.title], ['Délivré le', dateFr(r.c.issuedAt.toISOString())], ['Numéro', r.c.number]];
     if (ok) {
       const v = verifyUrl(Astro.url.origin, 'certificat', r.c.number);

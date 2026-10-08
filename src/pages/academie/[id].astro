@@ -7,6 +7,9 @@ import KapitalAd from '../../components/KapitalAd.astro';
 import Money from '../../components/Money.astro';
 import CmsBody from '../../components/CmsBody.astro';
 import MediaPlayer from '../../components/MediaPlayer.astro';
+import { and, asc, eq, gte } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { academyCohort } from '../../db/schema/app';
 import { PASS_MARK } from '../../data/course-content';
 import { allCourses } from '../../lib/catalog';
 import { getLang } from '../../i18n/ui';
@@ -20,6 +23,8 @@ const content = c.content;
 const meta = c.meta;
 const finance = c.th === 'Finance' || c.th === 'Levée de fonds';
 const last = c.ls.length - 1;
+// Cohortes à venir ou en cours pour ce cours (CDC §7.6, apprentissage en cohorte)
+const cohorts = await db.select().from(academyCohort).where(and(eq(academyCohort.courseId, c.id), gte(academyCohort.endsOn, new Date().toISOString().slice(0, 10)))).orderBy(asc(academyCohort.startsOn)).limit(3);
 const related = COURSES.filter((x) => x.id !== c.id && (x.th === c.th || x.lv === c.lv)).slice(0, 3);
 ---
 <BaseLayout title={c.t}>
@@ -119,6 +124,13 @@ const related = COURSES.filter((x) => x.id !== c.id && (x.th === c.th || x.lv ==
           <p class="small" id="prog" style="margin:8px 0 0"></p>
           <a class="btn btn-ghost btn-sm" href="/espace/apprentissage" style="margin-top:10px">Mon apprentissage</a>
         </div>
+        {cohorts.length > 0 && (
+          <div class="panel" style="margin-top:16px">
+            <h3>Suivre ce cours en cohorte</h3>
+            <p class="small muted" style="margin:0 0 6px">Sessions en direct, devoirs et retours de vos pairs.</p>
+            {cohorts.map((k) => <a class="small" href={`/academie/cohorte/${k.id}`} style="display:block;padding:4px 0">{k.name} — dès le {new Date(`${k.startsOn}T00:00:00Z`).toLocaleDateString('fr-FR', { timeZone: 'UTC' })}</a>)}
+          </div>
+        )}
         {related.length > 0 && <div class="panel" style="margin-top:16px"><h3>Pour aller plus loin</h3>{related.map((r) => <a class="small" href={`/academie/${r.id}`} style="display:block;padding:4px 0">{r.t}</a>)}</div>}
         <div style="margin-top:16px"><KapitalAd variant={finance ? 0 : 2} /></div>
       </aside>

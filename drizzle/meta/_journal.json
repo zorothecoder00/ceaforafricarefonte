@@ -316,6 +316,13 @@
       "when": 1791453831905,
       "tag": "0044_evenements_badges_sponsors",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1791454784658,
+      "tag": "0045_academie_cohortes_series_tests",
+      "breakpoints": true
     }
   ]
 }

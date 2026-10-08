@@ -1,13 +1,14 @@
 ---
 /* Espace recruteur (CDC §7.4) : publier une offre (modération, mise en avant payante), trier les candidatures, déclarer les embauches, rechercher des talents visibles. */
 import EspaceLayout from '../../layouts/EspaceLayout.astro';
-import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, like, or, sql } from 'drizzle-orm';
 import { db } from '../../lib/db';
-import { job, jobApplication, hireDeclaration, profile, jobTypeEnum, jobRecruiter, jobApplicationNote, jobInterview, recruiterTemplate } from '../../db/schema/app';
+import { job, jobApplication, hireDeclaration, profile, jobTypeEnum, jobRecruiter, jobApplicationNote, jobInterview, recruiterTemplate, certificate } from '../../db/schema/app';
 import { user } from '../../db/schema/auth';
 import { COUNTRIES, country } from '../../data/site';
 import { STUDY_LEVELS } from '../../data/etudes';
 import { DEFAULT_TEMPLATES, INTERVIEW_MODES, interviewPlace } from '../../lib/recruiting';
+import { findTest } from '../../data/skill-tests';
 
 export const prerender = false;
 const me = Astro.locals.user!;
@@ -18,6 +19,10 @@ const apps = ids.length ? await db.select({ a: jobApplication, name: user.name, 
 const hires = await db.select().from(hireDeclaration).where(eq(hireDeclaration.employerId, me.id)).orderBy(desc(hireDeclaration.hiredOn));
 const sk = (Astro.url.searchParams.get('competence') ?? '').trim();
 const talents = sk ? await db.select({ id: user.id, name: user.name, headline: profile.headline, country: profile.country, skills: profile.skills }).from(profile).innerJoin(user, eq(user.id, profile.userId)).where(and(eq(profile.recruiterVisible, true), sql`exists(select 1 from unnest(${profile.skills}) s where s ilike ${'%' + sk + '%'})`)).limit(30) : [];
+// Badges de compétence vérifiés (tests CEA Talents) des candidats et des talents affichés
+const badgeOwners = [...new Set([...apps.map((x) => x.a.userId), ...talents.map((t) => t.id)])];
+const badgeRows = badgeOwners.length ? await db.select({ userId: certificate.userId, number: certificate.number, subject: certificate.subject }).from(certificate).where(and(inArray(certificate.userId, badgeOwners), like(certificate.subject, 'test:%'), isNull(certificate.revokedAt))) : [];
+const badgesOf = (userId: string) => badgeRows.filter((b) => b.userId === userId).map((b) => ({ number: b.number, label: findTest(b.subject.slice(5))?.skill ?? b.subject.slice(5) }));
 const ST: Record<string, string> = { brouillon: 'Brouillon', en_moderation: 'En modération', publiee: 'Publiée', fermee: 'Fermée', refusee: 'Refusée' };
 const COLS: [string, string][] = [['envoyee', 'Reçues'], ['vue', 'Vues'], ['entretien', 'Entretien'], ['offre', 'Offre'], ['refus', 'Non retenues']];
 // Outils du recruteur : notes d'équipe, entretiens, équipe de chaque offre, réponses types
@@ -49,6 +54,7 @@ const soon = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10) + 'T10
               <div class="xs muted">{jobs.find((j) => j.id === x.a.jobId)?.title}</div>
               {x.headline && <div class="xs">{x.headline}</div>}
               {x.skills?.length ? <div class="xs muted">{x.skills.slice(0, 4).join(', ')}</div> : null}
+              {badgesOf(x.a.userId).map((b) => <a class="tag ok xs" href={`/verifier/certificat/${b.number}`} target="_blank" rel="noopener" title="Badge de compétence vérifié" style="margin:4px 4px 0 0;display:inline-block">✓ {b.label}</a>)}
               <select class="in" aria-label="Statut" style="margin:6px 0 0;padding:3px;font-size:.8rem" data-app={x.a.id}>{COLS.map(([v, t]) => <option value={v} selected={v === k}>{t}</option>)}</select>
               {(() => { const myNotes = notes.filter((n) => n.n.applicationId === x.a.id); const ivs = interviews.filter((i) => i.applicationId === x.a.id && !i.cancelledAt); const jt = jobs.find((j) => j.id === x.a.jobId); return (
                 <>
@@ -164,7 +170,7 @@ const soon = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10) + 'T10
   <h2 style="font-size:1.2rem;margin-top:26px">Rechercher des talents</h2>
   <form method="get" class="row" style="gap:6px"><input class="in" name="competence" value={sk} placeholder="Compétence (ex. comptabilité, React)" aria-label="Compétence" style="flex:1;margin:0" /><button class="btn btn-primary btn-sm" type="submit">Rechercher</button></form>
   <p class="xs muted">Seuls les talents ayant choisi d'être visibles des recruteurs apparaissent.</p>
-  {sk && (talents.length ? <div class="grid g3">{talents.map((t) => <div class="panel"><b>{t.name}</b><div class="small muted">{t.headline ?? ''}{t.country ? ` · ${country(t.country)}` : ''}</div><div class="xs" style="margin-top:6px">{(t.skills ?? []).join(', ')}</div></div>)}</div> : <p class="small muted">Aucun talent visible pour « {sk} ».</p>)}
+  {sk && (talents.length ? <div class="grid g3">{talents.map((t) => <div class="panel"><b>{t.name}</b><div class="small muted">{t.headline ?? ''}{t.country ? ` · ${country(t.country)}` : ''}</div><div class="xs" style="margin-top:6px">{(t.skills ?? []).join(', ')}</div>{badgesOf(t.id).map((b) => <a class="tag ok xs" href={`/verifier/certificat/${b.number}`} target="_blank" rel="noopener" title="Badge de compétence vérifié" style="margin:6px 4px 0 0;display:inline-block">✓ {b.label}</a>)}</div>)}</div> : <p class="small muted">Aucun talent visible pour « {sk} ».</p>)}
   <script type="application/json" id="tplData" set:html={JSON.stringify(templates).replace(/</g, '\\u003c')} />
 </EspaceLayout>
 <script>

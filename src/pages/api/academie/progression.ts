@@ -10,6 +10,7 @@ import { PASS_MARK } from '../../../data/course-content';
 import { findCourse } from '../../../lib/catalog';
 import { json, fail, requireUser, reference, audit } from '../../../lib/session';
 import { notify } from '../../../lib/notify';
+import { recordLearning } from '../../../lib/streaks';
 
 export const prerender = false;
 
@@ -53,6 +54,8 @@ export const POST: APIRoute = async ({ locals, request }) => {
     done = p.data.done ? [...new Set([...done, p.data.lesson])].sort((a, b) => a - b) : done.filter((x) => x !== p.data.lesson);
   }
   const complete = done.length === course.ls.length;
+  // Série de jours d'apprentissage : une leçon validée ou un quiz tenté compte pour aujourd'hui
+  if (p.data.quiz || (p.data.lesson !== undefined && p.data.done)) await recordLearning(u.id).catch(() => {});
   await db.update(enrollment).set({ completedLessons: done, completedAt: complete ? (e.completedAt ?? new Date()) : null }).where(and(eq(enrollment.userId, u.id), eq(enrollment.courseId, course.id)));
   let cert: string | null = null;
   if (complete) {

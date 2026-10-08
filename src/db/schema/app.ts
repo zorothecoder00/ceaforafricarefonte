@@ -125,6 +125,82 @@ export const certificate = pgTable('certificate', {
   revokedAt: ts('revoked_at'),
 });
 
+/* Séries de jours d'apprentissage (CDC §7.6, ludification) : un jour = au moins une leçon ou un quiz validé ce jour-là (UTC) */
+export const learningDay = pgTable('learning_day', {
+  userId: userRef('user_id').notNull(),
+  day: date('day').notNull(),
+  actions: integer('actions').notNull().default(1),
+}, (t) => [primaryKey({ columns: [t.userId, t.day] })]);
+
+/* Tests de compétences et badges vérifiés (CDC §7.4) : questions tirées et corrigées côté serveur, durée limitée.
+   Le badge obtenu est un certificat (sujet « test:<id> »), vérifiable par QR comme les certificats de cours. */
+export const skillTestAttempt = pgTable('skill_test_attempt', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: userRef('user_id').notNull(),
+  testId: text('test_id').notNull(),
+  questions: integer('questions').array().notNull(), // indices des questions tirées, dans l'ordre présenté
+  startedAt: ts('started_at').notNull().defaultNow(),
+  submittedAt: ts('submitted_at'),
+  score: integer('score'),
+  passed: boolean('passed'),
+}, (t) => [index('skill_test_attempt_user_idx').on(t.userId, t.testId)]);
+
+/* Apprentissage en cohorte (CDC §7.6) : promotion d'un cours avec sessions en direct, devoirs et évaluation par les pairs */
+export const academyCohort = pgTable('academy_cohort', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  courseId: text('course_id').notNull(),
+  name: text('name').notNull(),
+  startsOn: date('starts_on').notNull(),
+  endsOn: date('ends_on').notNull(),
+  seats: integer('seats'),
+  createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('academy_cohort_course_idx').on(t.courseId)]);
+
+export const academyCohortMember = pgTable('academy_cohort_member', {
+  cohortId: uuid('cohort_id').notNull().references(() => academyCohort.id, { onDelete: 'cascade' }),
+  userId: userRef('user_id').notNull(),
+  joinedAt: ts('joined_at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.cohortId, t.userId] })]);
+
+export const academySession = pgTable('academy_session', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  cohortId: uuid('cohort_id').notNull().references(() => academyCohort.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  startsAt: ts('starts_at').notNull(),
+  minutes: integer('minutes').notNull().default(60),
+  link: text('link'), // visio fournie ; sinon salle Jitsi générée
+  replay: text('replay'),
+});
+
+export const academyAssignment = pgTable('academy_assignment', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  cohortId: uuid('cohort_id').notNull().references(() => academyCohort.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  instructions: text('instructions').notNull(),
+  dueAt: ts('due_at').notNull(),
+  reviewsRequired: integer('reviews_required').notNull().default(2), // évaluations de pairs que chacun doit rendre
+});
+
+export const academySubmission = pgTable('academy_submission', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  assignmentId: uuid('assignment_id').notNull().references(() => academyAssignment.id, { onDelete: 'cascade' }),
+  userId: userRef('user_id').notNull(),
+  body: text('body').notNull(),
+  link: text('link'),
+  submittedAt: ts('submitted_at').notNull().defaultNow(),
+}, (t) => [uniqueIndex('academy_submission_unique').on(t.assignmentId, t.userId)]);
+
+export const academyReview = pgTable('academy_review', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  submissionId: uuid('submission_id').notNull().references(() => academySubmission.id, { onDelete: 'cascade' }),
+  reviewerId: userRef('reviewer_id').notNull(),
+  score: integer('score'), // 1 à 5 ; null tant que l'évaluation attribuée n'est pas rendue
+  comment: text('comment'),
+  assignedAt: ts('assigned_at').notNull().defaultNow(),
+  doneAt: ts('done_at'),
+}, (t) => [uniqueIndex('academy_review_unique').on(t.submissionId, t.reviewerId)]);
+
 /* ===== Programmes et candidatures (CDC §7.6) ===== */
 export const applicationStatusEnum = pgEnum('application_status', ['brouillon', 'recue', 'en_evaluation', 'entretien', 'admise', 'liste_attente', 'refusee', 'retiree']);
 export const programmeApplication = pgTable('programme_application', {

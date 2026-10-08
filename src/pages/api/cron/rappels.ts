@@ -21,6 +21,7 @@ import { runRetention } from '../../../lib/retention';
 import { closePreviousMonth } from '../../../lib/vp-contest';
 import { noticeExpiringAccess } from '../../../lib/kapital';
 import { sendForecastAlerts } from '../../../lib/event-forecast';
+import { remindStreaks } from '../../../lib/streaks';
 import { agendaKey, siteUrl } from '../../../lib/agenda';
 
 export const prerender = false;
@@ -77,5 +78,7 @@ export const GET: APIRoute = async ({ request }) => {
   const dataroom = await noticeExpiringAccess(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
   // Événements : alertes de complet prévu ou de surréservation (une fois par événement et par alerte)
   const frequentation = await sendForecastAlerts(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-  return json({ ok: true, sent, failed, tickets, expiredJobs, followups, retention, concours, dataroom, frequentation });
+  // Académie : rappel aux membres dont la série de jours d'apprentissage s'arrête ce soir
+  const series = await remindStreaks(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+  return json({ ok: true, sent, failed, tickets, expiredJobs, followups, retention, concours, dataroom, frequentation, series });
 };

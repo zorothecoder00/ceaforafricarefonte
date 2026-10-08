@@ -1,0 +1,86 @@
+---
+/* Tests de compétences et badges vérifiés (CDC §7.4) : passage chronométré, questions et réponses mélangées à chaque passage,
+   correction côté serveur ; le badge obtenu est vérifiable par QR et s'affiche sur le profil talent (visible des recruteurs). */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHead from '../../components/PageHead.astro';
+import { SUBS } from '../../data/site';
+import { SKILL_TESTS, DRAW, PASS, RETRY_DAYS } from '../../data/skill-tests';
+import { statusFor } from '../../lib/skill-tests';
+
+export const prerender = false;
+const me = Astro.locals.user;
+const status = me ? await statusFor(me.id) : SKILL_TESTS.map((test) => ({ test, badge: null, open: null, retryOn: null, last: null }));
+const d = (x: Date) => x.toLocaleDateString('fr-FR', { timeZone: 'UTC' });
+---
+<BaseLayout title="Tests de compétences">
+  <PageHead title="Tests de compétences" lead={`Prouvez vos compétences : ${DRAW} questions chronométrées, ${Math.round(PASS * 100)} % de bonnes réponses pour obtenir un badge vérifiable, ajouté à votre profil talent et visible des recruteurs.`} crumbs={[['/opportunites', 'Opportunités'], ['', 'Tests de compétences']]} subnav={SUBS.opps} />
+  <section class="block">
+    <div class="wrap">
+      {!me && <div class="lock" style="margin-bottom:18px"><b>Connectez-vous pour passer un test.</b> <a href="/connexion?retour=/opportunites/tests">Se connecter</a></div>}
+      <div class="grid g3" id="tests">
+        {status.map(({ test, badge, open, retryOn, last }) => (
+          <div class="panel" style="display:flex;flex-direction:column">
+            <div class="row between"><span class="tag info">{test.level}</span><span class="xs muted">{test.minutes} min · {DRAW} questions</span></div>
+            <h3 style="margin:10px 0 4px">{test.title}</h3>
+            <p class="small muted" style="flex:1">{test.intro}</p>
+            {badge ? <p class="small" style="margin:0"><span class="tag ok">Badge obtenu</span> <a href={`/verifier/certificat/${badge}`}>Voir le badge vérifiable</a></p>
+              : retryOn ? <p class="small muted" style="margin:0">Dernier passage : {last?.score}/{last?.questions.length}. Nouvelle tentative le {d(retryOn)}.</p>
+              : me ? <button class="btn btn-primary btn-sm" type="button" data-start={test.id}>{open ? 'Reprendre le test' : 'Passer le test'}</button>
+              : null}
+          </div>
+        ))}
+      </div>
+      <p class="xs muted" style="margin-top:14px">Règles : un passage à la fois, temps limité, pas de retour en arrière une fois le test rendu ; après un échec, nouvelle tentative au bout de {RETRY_DAYS} jours. Les questions et l'ordre des réponses changent à chaque passage.</p>
+
+      <form class="panel" id="run" hidden style="margin-top:18px">
+        <div class="row between"><h2 style="margin:0;font-size:1.2rem" id="runT"></h2><b id="clock" aria-live="polite"></b></div>
+        <ol id="qs" style="padding-left:20px"></ol>
+        <button class="btn btn-primary" type="submit">Rendre le test</button>
+      </form>
+      <div id="out" aria-live="polite" style="margin-top:14px"></div>
+    </div>
+  </section>
+</BaseLayout>
+<script>
+  const run = document.getElementById('run') as HTMLFormElement;
+  const qs = document.getElementById('qs')!, clock = document.getElementById('clock')!, out = document.getElementById('out')!;
+  const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+  const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+  let attemptId = '', timer = 0, n = 0, sent = false;
+  const post = (body: unknown) => fetch('/api/talents/tests', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json()).catch(() => ({ ok: false, error: 'Erreur réseau.' }));
+
+  async function submit() {
+    if (sent) return;
+    sent = true; clearInterval(timer);
+    const answers = Array.from({ length: n }, (_, i) => Number((run.querySelector(`input[name="q${i}"]:checked`) as HTMLInputElement | null)?.value ?? -1));
+    const d = await post({ action: 'rendre', attemptId, answers });
+    run.hidden = true;
+    out.innerHTML = `<div class="lock" style="${d.passed ? 'background:var(--ok-soft);border-color:var(--ok)' : ''}"><b>${esc(d.message || d.error || 'Erreur.')}</b>${d.badge ? ` <a href="/verifier/certificat/${encodeURIComponent(d.badge)}">Voir mon badge</a>` : ''}</div>`;
+    setTimeout(() => location.reload(), d.passed ? 4000 : 3000);
+  }
+  document.querySelectorAll<HTMLButtonElement>('[data-start]').forEach((b) => b.addEventListener('click', async () => {
+    b.disabled = true;
+    const d = await post({ action: 'commencer', testId: b.dataset.start });
+    b.disabled = false;
+    if (!d.ok) return toast(d.error);
+    attemptId = d.attemptId; n = d.questions.length; sent = false;
+    document.getElementById('runT')!.textContent = b.closest('.panel')!.querySelector('h3')!.textContent;
+    qs.innerHTML = d.questions.map((q: { q: string; o: string[] }, i: number) => `<li style="margin-bottom:14px"><b>${esc(q.q)}</b>${q.o.map((o, j) => `<label class="row small" style="margin-top:6px;align-items:flex-start"><input type="radio" name="q${i}" value="${j}" style="margin-top:3px" /> ${esc(o)}</label>`).join('')}</li>`).join('');
+    run.hidden = false; out.innerHTML = '';
+    run.scrollIntoView({ behavior: 'smooth' });
+    const end = Date.parse(d.deadline);
+    const tick = () => {
+      const left = Math.max(0, Math.round((end - Date.now()) / 1000));
+      clock.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+      clock.style.color = left < 60 ? 'var(--bad)' : '';
+      if (!left) submit();
+    };
+    clearInterval(timer); tick(); timer = window.setInterval(tick, 1000);
+  }));
+  run.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const missing = Array.from({ length: n }, (_, i) => i).filter((i) => !run.querySelector(`input[name="q${i}"]:checked`)).length;
+    if (missing && !confirm(`${missing} question(s) sans réponse. Rendre quand même ?`)) return;
+    submit();
+  });
+</script>

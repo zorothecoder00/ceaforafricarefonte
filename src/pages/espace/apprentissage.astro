@@ -3,7 +3,8 @@
 import EspaceLayout from '../../layouts/EspaceLayout.astro';
 import { desc, eq } from 'drizzle-orm';
 import { db } from '../../lib/db';
-import { enrollment, certificate, diagnostic } from '../../db/schema';
+import { enrollment, certificate, diagnostic, academyCohort, academyCohortMember } from '../../db/schema';
+import { userStreak, MILESTONES } from '../../lib/streaks';
 import { PATHS } from '../../data/site';
 import { allCourses } from '../../lib/catalog';
 
@@ -12,6 +13,10 @@ const COURSES = await allCourses({ hidden: true });
 const user = Astro.locals.user!;
 const enrolls = await db.select().from(enrollment).where(eq(enrollment.userId, user.id)).orderBy(desc(enrollment.startedAt));
 const certs = await db.select().from(certificate).where(eq(certificate.userId, user.id)).orderBy(desc(certificate.issuedAt));
+// Série de jours d'apprentissage et cohortes du membre
+const streak = await userStreak(user.id);
+const nextMilestone = MILESTONES.find((m) => m > streak.current);
+const cohorts = await db.select({ c: academyCohort }).from(academyCohortMember).innerJoin(academyCohort, eq(academyCohort.id, academyCohortMember.cohortId)).where(eq(academyCohortMember.userId, user.id)).orderBy(desc(academyCohort.startsOn));
 const [diag] = await db.select().from(diagnostic).where(eq(diagnostic.userId, user.id)).orderBy(desc(diagnostic.createdAt)).limit(1);
 const pct = (id: string, done: number[]) => Math.round((done.length / (COURSES.find((c) => c.id === id)?.ls.length ?? 1)) * 100);
 const finished = new Set(enrolls.filter((e) => e.completedAt).map((e) => e.courseId));
@@ -51,9 +56,19 @@ const reco = [...new Set(weak)].filter((id) => !enrolls.some((e) => e.courseId =
       </div>
     </div>
     <aside>
-      <div class="panel">
+      <div class="panel streak">
+        <h3>Série d'apprentissage</h3>
+        <div class="row" style="gap:14px;align-items:baseline"><b style="font-family:var(--display);font-size:2.4rem;line-height:1">{streak.current}</b><span class="small">jour{streak.current > 1 ? 's' : ''} d'affilée{streak.current > 0 ? (streak.today ? ' · aujourd’hui validé' : ' · à prolonger aujourd’hui') : ''}</span></div>
+        <p class="xs muted" style="margin:8px 0 0">Record : {streak.best} jour{streak.best > 1 ? 's' : ''} · {streak.total} jour{streak.total > 1 ? 's' : ''} d'apprentissage au total{nextMilestone ? ` · prochain palier : ${nextMilestone} jours` : ''}.</p>
+        <p class="xs muted" style="margin:4px 0 0">Une leçon validée ou un quiz suffit pour compter la journée.</p>
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <h3>Mes cohortes</h3>
+        {cohorts.length ? cohorts.map(({ c }) => <a class="small" href={`/academie/cohorte/${c.id}`} style="display:block;padding:4px 0">{c.name}</a>) : <p class="small muted" style="margin:0">Apprenez avec une promotion : <a href="/academie/cohortes">voir les cohortes</a>.</p>}
+      </div>
+      <div class="panel" style="margin-top:16px">
         <h3>Mes certificats</h3>
-        {certs.length ? certs.map((c) => <div class="list-row"><span>🎓 {c.title}</span><a class="small" href={`/verifier/certificat/${c.number}`}>Vérifier</a></div>) : <p class="small muted" style="margin:0">Terminez un cours pour obtenir votre premier certificat vérifiable.</p>}
+        {certs.length ? certs.map((c) => <div class="list-row"><span>{c.subject.startsWith('test:') ? '✓' : '🎓'} {c.title}</span><a class="small" href={`/verifier/certificat/${c.number}`}>Vérifier</a></div>) : <p class="small muted" style="margin:0">Terminez un cours pour obtenir votre premier certificat vérifiable.</p>}
       </div>
       <div class="panel" style="margin-top:16px">
         <h3>Recommandés pour vous</h3>
