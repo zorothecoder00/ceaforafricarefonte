@@ -23,9 +23,9 @@ const frPath = (stripLang(Astro.url.pathname).replace(/\/$/, '') || '/');
 const translated = lang === 'fr' || TRANSLATED.has(frPath);
 // Devises actives, taux et devise/fuseau de chaque pays : Paramétrage › Pays, langues, devises
 const loc = await getLocalisation();
-// Univers de la page (CDC §5.2) : couleur secondaire d'orientation pour l'Académie, Talents et Events (Kapital a son propre thème)
+// Univers de la page (CDC §5.2) : couleur secondaire d'orientation pour l'Académie, Talents, Events et Kapital (doré, sur son thème sombre)
 const section = frPath.split('/')[1] ?? '';
-const univers = ({ academie: 'academie', programmes: 'academie', opportunites: 'talents', evenements: 'events' } as Record<string, string>)[section];
+const univers = ({ academie: 'academie', programmes: 'academie', opportunites: 'talents', evenements: 'events', kapital: 'kapital' } as Record<string, string>)[section];
 const alt = (l: 'fr' | 'en') => new URL(lp(l, frPath === '/' ? '/' : frPath + '/'), Astro.site).href;
 
 // Contenu de la page : en anglais, les liens internes sont réécrits vers /en/…

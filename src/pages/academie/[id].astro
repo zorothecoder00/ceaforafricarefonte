@@ -6,6 +6,7 @@ import PageHead from '../../components/PageHead.astro';
 import KapitalAd from '../../components/KapitalAd.astro';
 import Money from '../../components/Money.astro';
 import CmsBody from '../../components/CmsBody.astro';
+import MediaPlayer from '../../components/MediaPlayer.astro';
 import { PASS_MARK } from '../../data/course-content';
 import { allCourses } from '../../lib/catalog';
 import { getLang } from '../../i18n/ui';
@@ -26,9 +27,9 @@ const related = COURSES.filter((x) => x.id !== c.id && (x.th === c.th || x.lv ==
   <section class="block" style="padding-top:28px">
     <div class="wrap split" id="course" data-course={c.id} data-last={last}>
       <div>
-        <div class="player" id="intro">
-          {meta?.trailer && <video controls preload="none" playsinline style="width:100%;border-radius:12px" aria-label={`Bande-annonce : ${c.t}`}><source src={meta.trailer} />{meta.captions && <track kind="captions" src={meta.captions} srclang="fr" label="Français" default />}</video>}
-          <div style="text-align:center;padding:20px" hidden={!!meta?.trailer}>
+        {meta?.trailer && <div style="margin-bottom:12px"><MediaPlayer title={`Présentation : ${c.t}`} url={meta.trailer} captions={meta.captions} ratio="16/9" /></div>}
+        <div class="player" id="intro" style={meta?.trailer ? 'aspect-ratio:auto' : undefined}>
+          <div style="text-align:center;padding:20px">
             <h2 style="color:#fff">{c.t}</h2>
             <p style="color:#C9D6E5">{c.ls.length - 1} leçons de moins de 15 minutes + quiz final · certificat vérifiable</p>
             <button class="btn btn-gold" type="button" id="enroll">S'inscrire — <Money xof={c.price} /></button>
@@ -40,6 +41,7 @@ const related = COURSES.filter((x) => x.id !== c.id && (x.th === c.th || x.lv ==
           <article class="panel lesson" data-lesson={i} hidden={i !== 0} style="margin-top:18px">
             <span class="tag info">Leçon {i + 1} sur {last}</span>
             <h2 style="font-size:1.3rem;margin:10px 0">{l}</h2>
+            {content?.lessons[i]?.video && <div style="margin:0 0 14px"><MediaPlayer title={`Leçon ${i + 1} : ${l}`} url={content.lessons[i].video} ratio="16/9" /></div>}
             <p>{content?.lessons[i]?.s}</p>
             <h3 style="font-size:1rem">À retenir</h3>
             <ul>{content?.lessons[i]?.k.map((k) => <li>{k}</li>)}</ul>
@@ -137,6 +139,14 @@ const related = COURSES.filter((x) => x.id !== c.id && (x.th === c.th || x.lv ==
   function show(i: number, scroll = true) {
     if (i < 0 || i > last) return;
     lessons.forEach((l) => (l.hidden = Number(l.dataset.lesson) !== i));
+    // La vidéo d'une leçon quittée s'arrête (fichier, YouTube ou Vimeo)
+    lessons.filter((l) => l.hidden).forEach((l) => {
+      l.querySelectorAll('video').forEach((v) => v.pause());
+      l.querySelectorAll('iframe').forEach((f) => {
+        const o = new URL(f.src).origin;
+        f.contentWindow?.postMessage(o.includes('vimeo') ? { method: 'pause' } : JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }), o);
+      });
+    });
     items.forEach((li, k) => li.classList.toggle('cur', k === i));
     try { localStorage.setItem(`cea-course-${id}-at`, String(i)); } catch { /* ignoré */ }
     if (scroll) lessons[i]?.scrollIntoView({ behavior: 'smooth', block: 'start' });

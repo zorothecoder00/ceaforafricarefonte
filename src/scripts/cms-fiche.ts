@@ -48,9 +48,12 @@ export const SPECS: Record<string, Section[]> = {
       { k: 'duration', label: 'Durée (ex. 2 h 10)', kind: 'text' }, { k: 'price', label: 'Prix (FCFA, 0 = gratuit)', kind: 'number' },
       { k: 'by', label: 'Formateur ou formatrice', kind: 'text' }, { k: 'langs', label: 'Langues (séparées par des virgules)', kind: 'csv' },
       { k: 'trainer.role', label: 'Fonction du formateur', kind: 'text', wide: true }, { k: 'trainer.bio', label: 'Biographie', kind: 'textarea', wide: true },
+      { k: 'trailer', label: 'Vidéo de présentation (facultatif)', kind: 'text', wide: true, hint: 'Lien YouTube, Vimeo ou fichier .mp4 en https://' },
     ] },
-    { title: 'Leçons', list: { k: 'lessons', label: 'leçon', add: () => ({ title: '', s: '', k: [] }), title: (x, i) => `Leçon ${i + 1} — ${x.title || 'sans titre'}`, item: [
-      { k: 'title', label: 'Titre', kind: 'text', wide: true }, { k: 's', label: 'Contenu', kind: 'textarea', wide: true },
+    { title: 'Leçons', list: { k: 'lessons', label: 'leçon', add: () => ({ title: '', video: '', s: '', k: [] }), title: (x, i) => `Leçon ${i + 1} — ${x.title || 'sans titre'}`, item: [
+      { k: 'title', label: 'Titre', kind: 'text', wide: true },
+      { k: 'video', label: 'Vidéo de la leçon (facultatif)', kind: 'text', wide: true, hint: 'Lien YouTube, Vimeo ou fichier .mp4 en https://' },
+      { k: 's', label: 'Contenu', kind: 'textarea', wide: true },
       { k: 'k', label: 'À retenir (une ligne par point)', kind: 'lines', wide: true },
     ] } },
     { title: 'Quiz final (corrigé par le serveur, réponses jamais envoyées au navigateur)', list: { k: 'quiz', label: 'question', add: () => ({ q: '', o: ['', ''], a: 0 }), title: (_x, i) => `Question ${i + 1}`, item: [

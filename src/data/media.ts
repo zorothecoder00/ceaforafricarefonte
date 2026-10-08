@@ -11,7 +11,7 @@ export const LIVE_STREAM = 'Direct — salle principale';
 /** Adresse d'intégration respectueuse de la vie privée pour YouTube et Vimeo, sinon null (fichier lu nativement). */
 export function embedUrl(url: string): string | null {
   const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|live\/)|youtu\.be\/)([\w-]{11})/);
-  if (yt) return `https://www.youtube-nocookie.com/embed/${yt[1]}?autoplay=1&rel=0&cc_load_policy=1`;
+  if (yt) return `https://www.youtube-nocookie.com/embed/${yt[1]}?autoplay=1&rel=0&cc_load_policy=1&enablejsapi=1`;
   const vm = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
   if (vm) return `https://player.vimeo.com/video/${vm[1]}?autoplay=1&dnt=1`;
   return null;

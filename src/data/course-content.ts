@@ -1,6 +1,6 @@
 /* Contenu des leçons et quiz finals de CEA Academy (CDC §7.6). Contenu de démonstration à faire relire par les formateurs.
    Les bonnes réponses (« a ») ne sont jamais envoyées au navigateur : seule l'API /api/academie/progression les lit. */
-export type Lesson = { s: string; k: string[] };
+export type Lesson = { s: string; k: string[]; video?: string };
 export type Question = { q: string; o: string[]; a: number };
 export const PASS_MARK = 0.7;
 

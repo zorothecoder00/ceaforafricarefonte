@@ -15,6 +15,8 @@ import type { KbDoc } from './kb';
 /* ----- Données propres à chaque type de contenu (colonne cms_content.data) ----- */
 const hm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Heure au format HH:MM');
 const str = (max: number) => z.string().trim().max(max);
+// Lien vidéo facultatif : YouTube, Vimeo ou fichier .mp4/.webm en https
+const videoUrl = str(500).refine((u) => !u || /^https:\/\/\S+$/.test(u), 'Lien vidéo : adresse en https:// attendue').optional();
 export const EventData = z.object({
   city: str(80).min(1, 'Ville requise'),
   country: z.string().length(2),
@@ -39,7 +41,8 @@ export const CourseData = z.object({
   by: str(120).min(1),
   langs: z.array(str(30)).min(1).max(8),
   trainer: z.object({ role: str(160), bio: str(600) }),
-  lessons: z.array(z.object({ title: str(160).min(1), s: str(6000), k: z.array(str(400)).max(12) })).min(1, 'Au moins une leçon').max(40),
+  trailer: videoUrl,
+  lessons: z.array(z.object({ title: str(160).min(1), video: videoUrl, s: str(6000), k: z.array(str(400)).max(12) })).min(1, 'Au moins une leçon').max(40),
   quiz: z.array(z.object({ q: str(400).min(1), o: z.array(str(200).min(1)).min(2).max(6), a: z.number().int().min(0) })).min(1, 'Au moins une question de quiz').max(30)
     .refine((qs) => qs.every((q) => q.a < q.o.length), 'Chaque question doit désigner une bonne réponse existante'),
 });
@@ -69,7 +72,7 @@ function toCourse(r: Row): CourseFull {
   const d = r.data as CourseData;
   return {
     id: r.slug, t: r.title, th: d.theme, lv: d.level, dur: d.duration, price: d.price, by: d.by, ls: [...d.lessons.map((l) => l.title), 'Quiz final'],
-    content: { lessons: d.lessons.map((l) => ({ s: l.s, k: l.k })), quiz: d.quiz }, meta: { langs: d.langs, trainer: d.trainer },
+    content: { lessons: d.lessons.map((l) => ({ s: l.s, k: l.k, video: l.video || undefined })), quiz: d.quiz }, meta: { langs: d.langs, trainer: d.trainer, trailer: d.trailer || undefined },
     body: r.blocks as Block[], coverId: r.coverId, fromCms: true,
   };
 }
@@ -144,8 +147,8 @@ export function staticCourseData(id: string): { title: string; excerpt: string; 
   return {
     title: c.t, excerpt: '',
     data: {
-      theme: c.th, level: c.lv as CourseData['level'], duration: c.dur, price: c.price, by: c.by, langs: meta?.langs ?? ['Français'], trainer: meta?.trainer ?? { role: '', bio: '' },
-      lessons: c.ls.slice(0, -1).map((t, i) => ({ title: t, s: content?.lessons[i]?.s ?? '', k: content?.lessons[i]?.k ?? [] })),
+      theme: c.th, level: c.lv as CourseData['level'], duration: c.dur, price: c.price, by: c.by, langs: meta?.langs ?? ['Français'], trainer: meta?.trainer ?? { role: '', bio: '' }, trailer: meta?.trailer ?? '',
+      lessons: c.ls.slice(0, -1).map((t, i) => ({ title: t, video: content?.lessons[i]?.video ?? '', s: content?.lessons[i]?.s ?? '', k: content?.lessons[i]?.k ?? [] })),
       quiz: content?.quiz ?? [],
     },
   };

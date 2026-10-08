@@ -2,10 +2,11 @@
 /* Lecteur vidéo ou audio : lit le média publié (src/data/media.ts), ou affiche « à venir » s'il n'est pas encore en ligne.
    Les vidéos YouTube/Vimeo ne sont chargées qu'au clic (aucun cookie tiers avant lecture). */
 import { MEDIA, embedUrl } from '../data/media';
-/* url : lien direct (prioritaire sur la médiathèque), par exemple un tutoriel renseigné dans le back-office */
-interface Props { title: string; kind?: 'video' | 'audio'; cap?: string; live?: boolean; ratio?: string; soon?: string; url?: string }
-const { title, kind = 'video', cap, live = false, ratio = '16/10', soon, url } = Astro.props;
-const m = url ? { url } as (typeof MEDIA)[string] : MEDIA[title];
+/* url : lien direct (prioritaire sur la médiathèque), par exemple un tutoriel renseigné dans le back-office ou la vidéo d'une leçon ;
+   captions : sous-titres .vtt en français de ce lien */
+interface Props { title: string; kind?: 'video' | 'audio'; cap?: string; live?: boolean; ratio?: string; soon?: string; url?: string; captions?: string }
+const { title, kind = 'video', cap, live = false, ratio = '16/10', soon, url, captions } = Astro.props;
+const m: (typeof MEDIA)[string] | undefined = url ? { url, captions: captions ? [{ lang: 'fr', label: 'Français', src: captions }] : undefined } : MEDIA[title];
 const embed = m ? embedUrl(m.url) : null;
 const pending = soon ?? (kind === 'audio' ? 'Épisode à venir' : live ? 'Le direct démarre à l’heure prévue' : 'Vidéo bientôt en ligne');
 ---
@@ -29,11 +30,13 @@ const pending = soon ?? (kind === 'audio' ? 'Épisode à venir' : live ? 'Le dir
   document.querySelectorAll<HTMLButtonElement>('[data-play-embed]').forEach((b) => b.addEventListener('click', () => {
     const box = b.closest<HTMLElement>('[data-embed]')!;
     const f = document.createElement('iframe');
-    f.src = box.dataset.embed!;
+    // origin : YouTube accepte alors les commandes des outils du lecteur (vitesse, notes horodatées)
+    f.src = box.dataset.embed! + (box.dataset.embed!.includes('youtube') ? '&origin=' + encodeURIComponent(location.origin) : '');
     f.title = b.getAttribute('aria-label') ?? 'Vidéo';
     f.allow = 'autoplay; fullscreen; picture-in-picture';
     f.allowFullscreen = true;
     f.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;border-radius:inherit';
     box.replaceChildren(f);
+    box.dispatchEvent(new Event('cea:embed'));
   }));
 </script>

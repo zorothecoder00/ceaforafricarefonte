@@ -643,11 +643,68 @@ $$<HTMLButtonElement>('[data-listen]').forEach((b) => {
   addEventListener('pagehide', stop);
 });
 
-/* ===== Outils du lecteur vidéo (CDC §7.6) : vitesse de lecture, mode audio seul, notes horodatées (enregistrées sur l'appareil) ===== */
-$$<HTMLVideoElement>('video').forEach((v, n) => {
-  if (v.dataset.tools === 'off' || !v.controls) return; // caméra du scanner, vidéos décoratives
-  const key = 'cea-vnotes:' + (v.currentSrc || v.querySelector('source')?.getAttribute('src') || v.getAttribute('src') || location.pathname + '#' + n);
+/* ===== Outils du lecteur vidéo (CDC §7.6) : vitesse de lecture, mode audio seul, notes horodatées (enregistrées sur l'appareil).
+   Fichiers vidéo (<video>) et vidéos YouTube / Vimeo intégrées, pilotées par messages (postMessage), sans script tiers. ===== */
+type VCtl = { key: string; host: HTMLElement; time: () => number; rate: (r: number) => void; seek: (t: number) => void; pause: () => void };
+
+function fileCtl(v: HTMLVideoElement, n: number): VCtl {
+  return {
+    key: v.currentSrc || v.querySelector('source')?.getAttribute('src') || v.getAttribute('src') || location.pathname + '#' + n,
+    // Le lecteur est parfois positionné en absolu dans un cadre : la barre se place après ce cadre
+    host: v.closest<HTMLElement>('.player') ?? v,
+    time: () => v.currentTime,
+    rate: (r) => { v.playbackRate = r; },
+    seek: (t) => { v.currentTime = t; v.play().catch(() => {}); },
+    pause: () => v.pause(),
+  };
+}
+
+function embedCtl(box: HTMLElement): VCtl {
+  const vimeo = box.dataset.embed!.includes('vimeo.com');
+  let now = 0, speed = 1, pending: number | null = null;
+  const frame = () => box.querySelector('iframe');
+  const send = (yt: string, args: unknown[], vm: Record<string, unknown>) => {
+    const f = frame();
+    if (f?.contentWindow) f.contentWindow.postMessage(vimeo ? vm : JSON.stringify({ event: 'command', func: yt, args }), new URL(f.src).origin);
+  };
+  const setRate = () => send('setPlaybackRate', [speed], { method: 'setPlaybackRate', value: speed });
+  const ready = () => { // le lecteur vient de démarrer : vitesse choisie et saut demandé avant la lecture
+    if (speed !== 1) setRate();
+    if (pending != null) { send('seekTo', [pending, true], { method: 'setCurrentTime', value: pending }); pending = null; }
+  };
+  addEventListener('message', (e) => {
+    const f = frame();
+    if (!f || e.source !== f.contentWindow) return;
+    let d = e.data as { event?: string; info?: { currentTime?: number }; data?: { seconds?: number } } | string;
+    if (typeof d === 'string') { try { d = JSON.parse(d); } catch { return; } }
+    if (typeof d !== 'object' || !d) return;
+    if (vimeo) {
+      if (d.event === 'ready') { send('', [], { method: 'addEventListener', value: 'timeupdate' }); ready(); }
+      else if (d.event === 'timeupdate' && typeof d.data?.seconds === 'number') now = d.data.seconds;
+    } else {
+      if (d.event === 'onReady') ready();
+      if (typeof d.info?.currentTime === 'number') now = d.info.currentTime;
+    }
+  });
+  // YouTube n'envoie la position de lecture qu'après une demande d'écoute, une fois l'iframe chargée
+  box.addEventListener('cea:embed', () => frame()?.addEventListener('load', () => {
+    const f = frame();
+    if (!vimeo && f?.contentWindow) f.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), new URL(f.src).origin);
+  }));
+  return {
+    key: box.dataset.embed!, host: box, time: () => now,
+    rate: (r) => { speed = r; setRate(); },
+    seek: (t) => {
+      if (frame()) { send('seekTo', [t, true], { method: 'setCurrentTime', value: t }); send('playVideo', [], { method: 'play' }); }
+      else { pending = t; box.querySelector<HTMLButtonElement>('[data-play-embed]')?.click(); }
+    },
+    pause: () => send('pauseVideo', [], { method: 'pause' }),
+  };
+}
+
+function videoTools(c: VCtl) {
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  const key = 'cea-vnotes:' + c.key;
   const bar = document.createElement('div');
   bar.className = 'vtools';
   bar.innerHTML = `
@@ -655,16 +712,14 @@ $$<HTMLVideoElement>('video').forEach((v, n) => {
     <button class="btn btn-ghost btn-sm" type="button" data-audio aria-pressed="false">${EN ? 'Audio only' : 'Audio seul'}</button>
     <button class="btn btn-ghost btn-sm" type="button" data-addnote>${EN ? 'Add a note here' : 'Noter à ce moment'}</button>
     <ul class="vnotes" data-notes></ul>`;
-  // Le lecteur est parfois positionné en absolu dans un cadre : la barre se place après ce cadre
-  const host = v.closest('.player') ?? v;
-  host.after(bar);
+  c.host.after(bar);
   const speed = $<HTMLSelectElement>('[data-speed]', bar)!;
-  speed.addEventListener('change', () => { v.playbackRate = Number(speed.value); });
+  speed.addEventListener('change', () => c.rate(Number(speed.value)));
   const audio = $<HTMLButtonElement>('[data-audio]', bar)!;
   audio.addEventListener('click', () => {
     const on = audio.getAttribute('aria-pressed') !== 'true';
     audio.setAttribute('aria-pressed', String(on));
-    host.classList.toggle('audio-only', on);
+    c.host.classList.toggle('audio-only', on);
   });
   type Note = { t: number; text: string };
   const read = (): Note[] => { try { return JSON.parse(store(key) || '[]'); } catch { return []; } };
@@ -674,7 +729,7 @@ $$<HTMLVideoElement>('video').forEach((v, n) => {
     read().sort((a, b) => a.t - b.t).forEach((x, i, all) => {
       const li = document.createElement('li');
       const go = document.createElement('button'); go.type = 'button'; go.className = 'linkbtn'; go.textContent = fmt(x.t);
-      go.addEventListener('click', () => { v.currentTime = x.t; v.play().catch(() => {}); });
+      go.addEventListener('click', () => c.seek(x.t));
       const del = document.createElement('button'); del.type = 'button'; del.className = 'linkbtn xs'; del.textContent = '✕'; del.setAttribute('aria-label', EN ? 'Delete note' : 'Supprimer la note');
       del.addEventListener('click', () => { store(key, JSON.stringify(all.filter((_, j) => j !== i))); render(); });
       li.append(go, document.createTextNode(' ' + x.text + ' '), del);
@@ -682,12 +737,17 @@ $$<HTMLVideoElement>('video').forEach((v, n) => {
     });
   };
   $('[data-addnote]', bar)!.addEventListener('click', () => {
-    const t = v.currentTime;
-    v.pause();
+    const t = c.time();
+    c.pause();
     const text = prompt((EN ? 'Note at ' : 'Note à ') + fmt(t));
     if (!text?.trim()) return;
     store(key, JSON.stringify([...read(), { t, text: text.trim().slice(0, 500) }]));
     render();
   });
   render();
+}
+$$<HTMLVideoElement>('video').forEach((v, n) => {
+  if (v.dataset.tools === 'off' || !v.controls) return; // caméra du scanner, vidéos décoratives
+  videoTools(fileCtl(v, n));
 });
+$$('.player[data-embed]').forEach((box) => videoTools(embedCtl(box)));

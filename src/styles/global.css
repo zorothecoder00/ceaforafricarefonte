@@ -595,8 +595,10 @@ label.row > input[type=checkbox]:first-child{flex-shrink:0;margin-top:.25em}
 body[data-univers="academie"]{--u:#0E7C6B}
 body[data-univers="talents"]{--u:#6B3FA0}
 body[data-univers="events"]{--u:#B4492D}
+body[data-univers="kapital"]{--u:var(--gold)}
 body[data-univers] .page-head{border-top:4px solid var(--u)}
 body[data-univers] .subnav a[aria-current="page"]{background:var(--u);border-color:var(--u);color:#fff}
+body[data-univers="kapital"] .subnav a[aria-current="page"]{color:#1B1305}
 /* Squelettes de chargement (CDC §5.2) : blocs gris animés pendant qu'un contenu arrive */
 .skel{display:block;border-radius:8px;background:linear-gradient(90deg,var(--surface-2) 25%,var(--line) 50%,var(--surface-2) 75%);background-size:200% 100%;min-height:12px}
 .skel + .skel{margin-top:8px}
@@ -614,6 +616,7 @@ body[data-univers] .subnav a[aria-current="page"]{background:var(--u);border-col
 .linkbtn{background:none;border:0;padding:0 2px;color:var(--navy);font:inherit;font-weight:700;text-decoration:underline;cursor:pointer}
 .audio-only{aspect-ratio:auto!important;min-height:0!important}
 .audio-only video{position:static!important;height:54px!important;background:var(--navy)!important}
+.audio-only[data-embed]{height:64px}
 .listen-btn{margin-top:4px}
 .listen-btn svg{flex:none}
 /* Accueil personnalisé d'un membre connecté */
