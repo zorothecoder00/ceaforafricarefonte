@@ -309,6 +309,13 @@
       "when": 1791452409955,
       "tag": "0043_kapital_concours_qr_page",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1791453831905,
+      "tag": "0044_evenements_badges_sponsors",
+      "breakpoints": true
     }
   ]
 }

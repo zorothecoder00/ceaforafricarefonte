@@ -1,0 +1,94 @@
+---
+/* Stand d'un sponsor (CDC §7.3) : son représentant scanne les badges des visiteurs. Nom et e-mail ne s'affichent que pour les
+   participants qui ont accepté de les partager (« Mes billets ») ; retirer son accord les masque aussitôt. Export CSV. */
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import PageHead from '../../../components/PageHead.astro';
+import { eventById } from '../../../lib/events';
+import { activeAccess, leadsOf } from '../../../lib/event-leads';
+import { dateFr } from '../../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user;
+const e = await eventById(Astro.params.id ?? '');
+if (!e) return new Response('Événement introuvable', { status: 404 });
+if (!me) return Astro.redirect(`/connexion?retour=${encodeURIComponent(Astro.url.pathname)}`);
+const a = await activeAccess(me.id, e.id);
+const leads = a ? await leadsOf(a.id) : [];
+const withConsent = leads.filter((l) => l.consent).length;
+---
+<BaseLayout title={`Stand — ${e.t}`}>
+  <PageHead title={a ? `Stand ${a.sponsorName}` : 'Stand sponsor'} lead={`${e.t} · ${dateFr(e.date)} · ${e.city}`} crumbs={[['/evenements', 'Événements'], [`/evenements/${e.id}`, e.t], ['', 'Stand']]} />
+  <section class="block">
+    {!a ? (
+      <div class="wrap" style="max-width:640px"><div class="lock"><b>Accès réservé aux représentants des sponsors.</b> L'équipe de l'événement ouvre cet accès à votre compte ; contactez-la si vous tenez un stand.</div></div>
+    ) : (
+      <div class="wrap grid g2">
+        <form class="panel" id="standF" data-event={e.id}>
+          <div class="player" id="cam" style="aspect-ratio:4/3;background:#000">
+            <video id="vid" data-tools="off" playsinline muted style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" hidden></video>
+            <button class="btn btn-gold btn-sm" type="button" id="camOn" style="position:relative;z-index:1">Activer la caméra</button>
+            <div class="cap" id="camCap" style="text-align:center"></div>
+          </div>
+          <label class="f" for="bc" style="margin-top:14px">Code du badge</label>
+          <input class="in" id="bc" placeholder="TKT-E1-AB12CD" autocomplete="off" autocapitalize="characters" />
+          <label class="f" for="bn">Note (facultatif)</label>
+          <input class="in" id="bn" maxlength="500" placeholder="Intéressé par l'offre PME, rappeler en novembre…" />
+          <button class="btn btn-primary" type="submit">Enregistrer le contact</button>
+          <div id="res" style="margin-top:14px" aria-live="assertive"></div>
+        </form>
+        <div class="panel">
+          <div class="row between"><h3 style="margin:0">Contacts ({withConsent} sur {leads.length} badge{leads.length > 1 ? 's' : ''} scanné{leads.length > 1 ? 's' : ''})</h3>{withConsent > 0 && <a class="btn btn-ghost btn-sm" href={`/api/evenements/contacts?event=${e.id}&format=csv`}>Exporter (CSV)</a>}</div>
+          {leads.length ? leads.map((l) => (
+            <div class="list-row" style="display:block">
+              {l.consent ? <b class="small">{l.name}</b> : <span class="small muted">Participant (coordonnées non partagées)</span>}
+              <div class="xs muted">{l.consent && l.email ? `${l.email} · ` : ''}{l.type} · {l.at.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'UTC' })} (GMT)</div>
+              {l.note && <div class="xs">{l.note}</div>}
+            </div>
+          )) : <p class="small muted">Aucun badge scanné pour le moment.</p>}
+          <p class="xs muted" style="margin-top:12px">Utilisez ces contacts uniquement pour donner suite à l'échange sur votre stand. Chaque scan et chaque export sont enregistrés dans le journal d'audit.</p>
+        </div>
+      </div>
+    )}
+  </section>
+</BaseLayout>
+<script>
+  const form = document.getElementById('standF') as HTMLFormElement | null;
+  if (form) {
+    const $ = (id: string) => document.getElementById(id)!;
+    const code = $('bc') as HTMLInputElement, note = $('bn') as HTMLInputElement, res = $('res');
+    const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+    const STYLE: Record<string, string> = { contact: 'background:var(--ok-soft);border-color:var(--ok)', sans_accord: '', inconnu: 'background:var(--bad-soft);border-color:var(--bad)' };
+    let dirty = false;
+    async function submit(raw: string) {
+      if (!raw.trim()) return;
+      const r = await fetch('/api/evenements/contacts', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId: form!.dataset.event, code: raw, note: note.value || undefined }) }).catch(() => null);
+      const d = r ? await r.json().catch(() => ({})) : { error: 'Hors connexion : réessayez dans un instant.' };
+      if (!d.ok) { res.innerHTML = `<div class="lock">${esc(d.error ?? 'Erreur.')}</div>`; return; }
+      res.innerHTML = `<div class="lock" style="${STYLE[d.result] ?? ''}"><b>${esc(d.message)}</b>${d.contact ? ` — ${esc(d.contact.name ?? '')} · ${esc(d.contact.email ?? '')}` : ''}</div>`;
+      if (navigator.vibrate) navigator.vibrate(d.result === 'contact' ? 80 : [60, 60, 60]);
+      code.value = ''; note.value = ''; dirty = true;
+    }
+    form.addEventListener('submit', (e) => { e.preventDefault(); submit(code.value); });
+    // La liste est rechargée quand on quitte la saisie (évite de recharger pendant une série de scans)
+    addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && dirty) location.reload(); });
+
+    const BD = (window as unknown as { BarcodeDetector?: new (o: { formats: string[] }) => { detect: (v: HTMLVideoElement) => Promise<{ rawValue: string }[]> } }).BarcodeDetector;
+    const camCap = $('camCap');
+    if (!BD) { ($('camOn') as HTMLButtonElement).hidden = true; camCap.textContent = 'Scan par caméra indisponible sur ce navigateur : saisissez le code du badge.'; }
+    else $('camOn').addEventListener('click', async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        const vid = $('vid') as HTMLVideoElement;
+        vid.srcObject = stream; vid.hidden = false; await vid.play();
+        $('camOn').hidden = true; camCap.textContent = 'Présentez le QR code du badge.';
+        const det = new BD({ formats: ['qr_code'] });
+        let last = '', at = 0;
+        const loop = async () => {
+          try { const [hit] = await det.detect(vid); if (hit && (hit.rawValue !== last || Date.now() - at > 4000)) { last = hit.rawValue; at = Date.now(); await submit(hit.rawValue); } } catch { /* image non exploitable */ }
+          setTimeout(loop, 350);
+        };
+        loop();
+      } catch { camCap.textContent = 'Accès à la caméra refusé : autorisez-le dans le navigateur, ou saisissez le code.'; }
+    });
+  }
+</script>

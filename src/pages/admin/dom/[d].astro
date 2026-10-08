@@ -216,7 +216,7 @@ const KCOLS = KAP_STEPS.filter((s) => !['incomplet', 'preselectionne'].includes(
               <td><b>{e.t}</b></td><td>{pn(e.c)}</td><td class="small">{dstr(e.date)}</td><td class="num">{fmt(ins)}</td>
               <td class="num">{pres ? `${fmt(pres)} (${Math.round((pres / Math.max(1, ins)) * 100)} %)` : '—'}</td><td class="num">{spons}</td>
               <td class="num">{mfcfa(bud)}</td><td class="num">{mfcfa(rec)}</td><td class:list={['num', mg < 0 ? 'down' : 'up']}>{mfcfa(mg)}</td>
-              <td><button class="btn ghost sm" type="button" data-dlg="dlg-evb" data-set-event-id={e.id} data-set-budget={String(bud)} data-set-sponsors={String(spons)} data-set-label={e.t}>Budget</button></td>
+              <td style="white-space:nowrap"><a class="btn ghost sm" href={`/admin/evenement/${e.id}`}>Prévision et sponsors</a> <button class="btn ghost sm" type="button" data-dlg="dlg-evb" data-set-event-id={e.id} data-set-budget={String(bud)} data-set-sponsors={String(spons)} data-set-label={e.t}>Budget</button></td>
             </tr>; })}
           </tbody>
         </table>

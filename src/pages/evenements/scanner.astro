@@ -46,6 +46,10 @@ const current = events.find((e) => e.date >= today) ?? events[events.length - 1]
           <h4 style="margin-top:16px">Dernières entrées</h4>
           <div id="last"><p class="small muted">Aucune entrée enregistrée.</p></div>
           <p class="xs muted" style="margin-top:12px">Actualisé toutes les 15 secondes. Chaque entrée est tracée dans le journal d'audit.</p>
+          <div class="row" style="gap:8px;margin-top:12px">
+            <a class="btn btn-ghost btn-sm" id="allBadges" href={`/evenements/badges?event=${current.id}`} target="_blank" rel="noopener">Imprimer tous les badges</a>
+            <a class="btn btn-ghost btn-sm" id="evAdmin" href={`/admin/evenement/${current.id}`}>Prévision et sponsors</a>
+          </div>
         </div>
       </div>
     )}
@@ -74,7 +78,8 @@ const current = events.find((e) => e.date >= today) ?? events[events.length - 1]
       try { d = await check(code, ev.value); }
       catch { writeQ([...readQ(), { code, event: ev.value }]); sr.innerHTML = `<div class="lock"><b>Hors connexion</b> — ${esc(code)} gardé, validé au retour du réseau.</div>`; return; }
       if (!d.ok) { sr.innerHTML = `<div class="lock">${esc(d.error ?? 'Erreur.')}</div>`; return; }
-      sr.innerHTML = `<div class="lock" style="${STYLE[d.result] ?? ''}"><b>${esc(d.message)}</b>${d.ticket ? ` — ${esc(d.ticket.name ?? '')} · ${esc(d.ticket.type)} · ${esc(d.ticket.code)}` : ` — ${esc(code)}`}</div>`;
+      const badge = d.ticket ? ` <a href="/evenements/badges?event=${encodeURIComponent(ev.value)}&amp;code=${encodeURIComponent(d.ticket.code)}" target="_blank" rel="noopener">Imprimer le badge</a>` : '';
+      sr.innerHTML = `<div class="lock" style="${STYLE[d.result] ?? ''}"><b>${esc(d.message)}</b>${d.ticket ? ` — ${esc(d.ticket.name ?? '')} · ${esc(d.ticket.type)} · ${esc(d.ticket.code)}` : ` — ${esc(code)}`}${badge}</div>`;
       if (navigator.vibrate) navigator.vibrate(d.result === 'valide' ? 80 : [60, 60, 60]);
       tc.value = '';
       refresh();
@@ -95,7 +100,11 @@ const current = events.find((e) => e.date >= today) ?? events[events.length - 1]
       $('last').innerHTML = d.last.length ? d.last.map((x: { code: string; name: string | null; type: string; at: string }) => `<div class="small">✓ ${new Date(x.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · ${esc(x.name ?? '—')} · ${esc(x.type)}</div>`).join('') : '<p class="small muted">Aucune entrée enregistrée.</p>';
     }
     form.addEventListener('submit', (e) => { e.preventDefault(); submit(tc.value); });
-    ev.addEventListener('change', refresh);
+    ev.addEventListener('change', () => {
+      ($('allBadges') as HTMLAnchorElement).href = `/evenements/badges?event=${encodeURIComponent(ev.value)}`;
+      ($('evAdmin') as HTMLAnchorElement).href = `/admin/evenement/${encodeURIComponent(ev.value)}`;
+      refresh();
+    });
     addEventListener('online', flush);
     setInterval(refresh, 15000);
     showQ(); refresh(); flush();

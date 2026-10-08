@@ -1,0 +1,90 @@
+---
+/* Impression des badges sur place (CDC §7.3), par l'équipe d'accueil (droit L sur controle_acces).
+   ?event=<id>             → tous les badges (billets valides ou utilisés), 8 par feuille A4, triés par nom
+   ?event=<id>&code=<code> → un seul badge (impression à l'entrée, juste après le scan)
+   Le QR code du badge est celui du billet : il sert au contrôle d'accès et à la collecte de contacts des sponsors. */
+import { and, eq, inArray } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { eventTicket, profile } from '../../db/schema/app';
+import { user } from '../../db/schema/auth';
+import { can } from '../../lib/rbac';
+import { findEvent } from '../../lib/catalog';
+import { qrSvg, verifyUrl } from '../../lib/qr';
+import { country, dateFr } from '../../data/site';
+
+export const prerender = false;
+const me = Astro.locals.user;
+if (!me) return Astro.redirect(`/connexion?retour=${encodeURIComponent(Astro.url.pathname + Astro.url.search)}`);
+if (!can(me.roles, 'controle_acces', 'L')) return new Response('Accès réservé à l’équipe d’accueil.', { status: 403 });
+const e = await findEvent(Astro.url.searchParams.get('event') ?? '', { hidden: true });
+if (!e) return new Response('Événement introuvable', { status: 404 });
+const code = Astro.url.searchParams.get('code')?.trim().toUpperCase();
+const rows = await db.select({ t: eventTicket, uname: user.name, company: profile.companyName, c: profile.country }).from(eventTicket)
+  .leftJoin(user, eq(user.id, eventTicket.userId)).leftJoin(profile, eq(profile.userId, eventTicket.userId))
+  .where(and(eq(eventTicket.eventId, e.id), inArray(eventTicket.status, ['valide', 'utilise']), ...(code ? [eq(eventTicket.code, code)] : [])));
+const badges = await Promise.all(rows
+  .map((r) => ({ ...r, name: r.t.holderName ?? r.uname ?? 'Participant' }))
+  .sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+  .map(async (r) => ({ ...r, qr: await qrSvg(verifyUrl(Astro.url.origin, 'billet', r.t.code)) })));
+const single = !!code;
+---
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Badges — {e.t}</title>
+  <style>
+    :root{--navy:#082B4C;--gold:#C9962B}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#0B1B2B;background:#EEF1F5}
+    .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 16px;background:#fff;border-bottom:1px solid #D5DCE4}
+    .bar button,.bar a{font:inherit;font-weight:700;border-radius:999px;padding:8px 16px;border:1px solid var(--navy);background:var(--navy);color:#fff;cursor:pointer;text-decoration:none}
+    .bar a{background:#fff;color:var(--navy)}
+    .sheet{display:grid;grid-template-columns:repeat(2,95mm);gap:6mm;justify-content:center;padding:10mm 0}
+    .single .sheet{grid-template-columns:95mm}
+    .badge{width:95mm;height:65mm;background:#fff;border:1px dashed #9AA8B8;border-radius:3mm;display:grid;grid-template-columns:1fr 26mm;grid-template-rows:auto 1fr auto;overflow:hidden;break-inside:avoid}
+    .badge .top{grid-column:1/-1;background:var(--navy);color:#fff;padding:2.5mm 4mm;font-size:8.5pt;display:flex;justify-content:space-between;gap:3mm;border-bottom:1.2mm solid var(--gold)}
+    .badge .top b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .badge .who{padding:4mm;display:flex;flex-direction:column;justify-content:center;min-width:0}
+    .badge .name{font-size:17pt;font-weight:800;line-height:1.1;color:var(--navy);overflow-wrap:anywhere}
+    .badge .org{font-size:10pt;margin-top:1.5mm;color:#33475B}
+    .badge .qr{padding:3mm 3mm 0 0;align-self:center}
+    .badge .qr svg{width:100%;height:auto;display:block}
+    .badge .type{grid-column:1/-1;background:#F7EBD3;color:#5A410C;font-weight:800;text-transform:uppercase;letter-spacing:.06em;font-size:9pt;text-align:center;padding:2mm}
+    .empty{text-align:center;padding:40px;color:#33475B}
+    @page{size:A4;margin:10mm}
+    @media print{
+      body{background:#fff}
+      .bar{display:none}
+      .sheet{padding:0}
+      .badge{border-color:#C5CED8}
+      .single .sheet{justify-content:start}
+    }
+  </style>
+</head>
+<body class={single ? 'single' : ''}>
+  <div class="bar">
+    <b>{e.t}</b><span>{dateFr(e.date)} · {e.city}</span><span>{badges.length} badge{badges.length > 1 ? 's' : ''}</span>
+    <button type="button" onclick="print()">Imprimer</button>
+    <a href="/evenements/scanner">Retour au contrôle d'accès</a>
+  </div>
+  {badges.length ? (
+    <div class="sheet">
+      {badges.map((b) => (
+        <div class="badge">
+          <div class="top"><b>{e.t}</b><span>{dateFr(e.date)}</span></div>
+          <div class="who">
+            <div class="name">{b.name}</div>
+            {(b.company || b.c) && <div class="org">{[b.company, b.c ? country(b.c) : null].filter(Boolean).join(' · ')}</div>}
+          </div>
+          <div class="qr" set:html={b.qr} />
+          <div class="type">{b.t.ticketType}</div>
+        </div>
+      ))}
+    </div>
+  ) : <p class="empty">Aucun billet valide{code ? ` avec le code ${code}` : ''} pour cet événement.</p>}
+  {single && badges.length > 0 && <script is:inline>addEventListener('load', () => setTimeout(() => print(), 300));</script>}
+</body>
+</html>

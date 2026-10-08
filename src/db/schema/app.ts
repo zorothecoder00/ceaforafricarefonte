@@ -54,7 +54,7 @@ export const profile = pgTable('profile', {
 });
 
 /* Consentements séparés et révocables (CDC §15.1) */
-export const consentKindEnum = pgEnum('consent_kind', ['compte', 'profil_public', 'marketing', 'partage_investisseurs', 'cookies_mesure']);
+export const consentKindEnum = pgEnum('consent_kind', ['compte', 'profil_public', 'marketing', 'partage_investisseurs', 'cookies_mesure', 'contacts_sponsors']);
 export const consent = pgTable('consent', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: userRef('user_id').notNull(),
@@ -171,8 +171,37 @@ export const eventTicket = pgTable('event_ticket', {
   status: ticketStatusEnum('status').notNull().default('valide'),
   paymentId: uuid('payment_id').references(() => payment.id, { onDelete: 'set null' }),
   checkedInAt: ts('checked_in_at'),
+  // Accord du participant : les sponsors qui scannent son badge reçoivent son nom et son e-mail (retirable à tout moment)
+  sponsorConsent: boolean('sponsor_consent').notNull().default(false),
   createdAt: ts('created_at').notNull().defaultNow(),
 }, (t) => [index('event_ticket_event_idx').on(t.eventId)]);
+
+/* Collecte de contacts par les sponsors (CDC §7.3) : l'équipe ouvre un accès « stand » à un représentant de chaque sponsor ;
+   il scanne les badges ; les coordonnées ne lui sont montrées que si le participant a donné son accord (sponsorConsent). */
+export const eventSponsorAccess = pgTable('event_sponsor_access', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  eventId: text('event_id').notNull(),
+  sponsorName: text('sponsor_name').notNull(),
+  userId: userRef('user_id').notNull(), // représentant du sponsor (compte membre)
+  createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+  revokedAt: ts('revoked_at'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [uniqueIndex('event_sponsor_access_unique').on(t.eventId, t.userId)]);
+
+export const eventLead = pgTable('event_lead', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  accessId: uuid('access_id').notNull().references(() => eventSponsorAccess.id, { onDelete: 'cascade' }),
+  ticketId: uuid('ticket_id').notNull().references(() => eventTicket.id, { onDelete: 'cascade' }),
+  note: text('note'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [uniqueIndex('event_lead_unique').on(t.accessId, t.ticketId)]);
+
+/* Alertes de fréquentation déjà envoyées à l'équipe (une par événement et par type), pour ne pas les répéter chaque jour */
+export const eventAlert = pgTable('event_alert', {
+  eventId: text('event_id').notNull(),
+  kind: text('kind').notNull(), // complet_prevu, surreservation
+  at: ts('at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.eventId, t.kind] })]);
 
 /* Programme personnel, rencontres B2B et après-événement (CDC §7.3) */
 export const eventAgenda = pgTable('event_agenda', {
