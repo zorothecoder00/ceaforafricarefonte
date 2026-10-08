@@ -18,6 +18,8 @@ import { runEscalations } from '../../../lib/escalations';
 import { closeExpiredJobs } from '../../../lib/jobs';
 import { sendFollowupRequests } from '../../../lib/followups';
 import { runRetention } from '../../../lib/retention';
+import { closePreviousMonth } from '../../../lib/vp-contest';
+import { noticeExpiringAccess } from '../../../lib/kapital';
 import { agendaKey, siteUrl } from '../../../lib/agenda';
 
 export const prerender = false;
@@ -69,5 +71,8 @@ export const GET: APIRoute = async ({ request }) => {
   const followups = await sendFollowupRequests(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
   // Durées de conservation de la politique de confidentialité : suppression ou anonymisation automatique (CDC §15.1)
   const retention = await runRetention(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-  return json({ ok: true, sent, failed, tickets, expiredJobs, followups, retention });
+  // Kapital : classement du concours de portefeuille virtuel figé au début du mois ; préavis d'expiration des accès aux data rooms
+  const concours = await closePreviousMonth(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+  const dataroom = await noticeExpiringAccess(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+  return json({ ok: true, sent, failed, tickets, expiredJobs, followups, retention, concours, dataroom });
 };

@@ -1,9 +1,12 @@
 ---
 import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
-import { STOCKS, fmt } from '../../data/site';
+import { fmt } from '../../data/site';
+import { stocksAt } from '../../lib/marche-simule';
 
 export const prerender = false;
+// Sociétés fictives au cours simulé du dernier jour de bourse (en attendant des cours réels sous licence)
+const STOCKS = stocksAt();
 
 const exchanges = [...new Set(STOCKS.map((s) => s.ex))];
 ---

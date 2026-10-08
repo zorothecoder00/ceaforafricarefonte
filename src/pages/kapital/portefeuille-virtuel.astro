@@ -1,64 +1,167 @@
 ---
+/* Portefeuille virtuel et concours mensuel (CDC §8.6) : 10 M FCFA fictifs par mois, sociétés fictives au cours simulé du jour
+   (src/lib/marche-simule.ts). Membre connecté : portefeuille enregistré côté serveur et classement sous pseudonyme ;
+   visiteur : entraînement libre dans le navigateur. Aucun gain financier. */
 import KapitalLayout from '../../layouts/KapitalLayout.astro';
 import PageHead from '../../components/PageHead.astro';
-import { STOCKS, fmt } from '../../data/site';
+import { and, desc, eq } from 'drizzle-orm';
+import { db } from '../../lib/db';
+import { vpAccount, vpTrade } from '../../db/schema/kapital';
+import { stocksAt, dayOf, lastTradingDay } from '../../lib/marche-simule';
+import { START_CASH, monthKey, ofMonth, previousMonth, portfolioValue, perfPct, ranking } from '../../lib/vp-contest';
+import { fmt } from '../../data/site';
 
 export const prerender = false;
+const me = Astro.locals.user;
+const now = new Date();
+const STOCKS = stocksAt(now);
+const prices = Object.fromEntries(STOCKS.map((s) => [s.n, s.p]));
+const quoteDay = new Date(lastTradingDay(dayOf(now)) * 864e5).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+const month = monthKey(now), prev = previousMonth(month);
+const [board, prevBoard] = await Promise.all([ranking(month, now), ranking(prev, now)]);
+const [account] = me ? await db.select().from(vpAccount).where(and(eq(vpAccount.userId, me.id), eq(vpAccount.month, month))) : [];
+const trades = account ? await db.select().from(vpTrade).where(and(eq(vpTrade.userId, me!.id), eq(vpTrade.month, month))).orderBy(desc(vpTrade.at)).limit(10) : [];
+const value = account ? portfolioValue(account, prices) : 0;
+const invested = account ? value - account.cash : 0;
+const perf = account ? perfPct(value) : 0;
+const mine = me ? board.find((r) => r.userId === me.id) : undefined;
+const top = board.slice(0, 10);
+const podium = prevBoard.slice(0, 3);
+const m = (n: number) => `${Math.round(n).toLocaleString('fr-FR')} FCFA`;
+const pc = (n: number) => `${n >= 0 ? '+' : ''}${n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} %`;
+const defaultPseudo = me ? `${me.name.split(' ')[0]} ${(me.name.split(' ')[1] ?? '').slice(0, 1)}`.trim() + (me.name.split(' ')[1] ? '.' : '') : '';
 ---
 <KapitalLayout title="Portefeuille virtuel" risk={false}>
-  <PageHead title="Portefeuille virtuel" lead="10 millions de FCFA fictifs pour s'entraîner, sans aucun risque. Classement mensuel entre membres." crumbs={[['/kapital', 'Kapital Invest'], ['', 'Portefeuille virtuel']]} />
+  <PageHead title="Portefeuille virtuel" lead={`10 millions de FCFA fictifs chaque mois pour s'entraîner, sans aucun risque. Concours ${ofMonth(month)} entre membres : classement sous pseudonyme, aucun gain financier.`} crumbs={[['/kapital', 'Kapital Invest'], ['', 'Portefeuille virtuel']]} />
   <section class="block">
-    <div class="wrap" id="vp" data-stocks={JSON.stringify(STOCKS.map((s) => ({ n: s.n, p: s.p })))}>
-      <div class="grid g3">
-        <div class="panel kpi"><span class="small muted">Liquidités</span><b id="vCash"></b></div>
-        <div class="panel kpi"><span class="small muted">Valeur des titres</span><b id="vVal"></b></div>
-        <div class="panel kpi"><span class="small muted">Performance</span><b id="vPerf"></b></div>
+    <div class="wrap split">
+      <div>
+        {me && !account && (
+          <form class="panel" data-api="/api/kapital/concours" data-reload style="margin-bottom:18px">
+            <input type="hidden" name="action" value="inscription" />
+            <h3>Participer au concours {ofMonth(month)}</h3>
+            <p class="small">Vous recevez {m(START_CASH)} fictifs. Vos ordres sont exécutés au cours simulé du jour ; le classement est figé à la fin du mois et chacun reçoit son rang.</p>
+            <label class="f" for="ps">Pseudo affiché au classement</label>
+            <input class="in" id="ps" name="pseudo" required minlength="2" maxlength="30" value={defaultPseudo} style="max-width:280px" />
+            <button class="btn btn-primary btn-sm" type="submit">Ouvrir mon portefeuille du mois</button>
+          </form>
+        )}
+        {!me && <div class="panel" style="margin-bottom:18px"><b>Mode entraînement</b> : votre portefeuille reste dans ce navigateur. <a href="/connexion?retour=/kapital/portefeuille-virtuel">Connectez-vous</a> pour participer au concours mensuel.</div>}
+
+        <div id="vp" data-mode={account ? 'concours' : me ? 'attente' : 'local'} data-stocks={JSON.stringify(STOCKS.map((s) => ({ n: s.n, p: s.p })))}>
+          {(account || !me) && (
+            <div class="grid g4">
+              <div class="panel kpi"><span class="small muted">Liquidités</span><b id="vCash">{account ? m(account.cash) : ''}</b></div>
+              <div class="panel kpi"><span class="small muted">Valeur des titres</span><b id="vVal">{account ? m(invested) : ''}</b></div>
+              <div class="panel kpi"><span class="small muted">Performance{mine ? ` · ${mine.rank}e sur ${board.length}` : ''}</span><b id="vPerf" class={account ? (perf >= 0 ? 'up' : 'down') : ''}>{account ? pc(perf) : ''}</b></div>
+            </div>
+          )}
+          <div class="panel scroll-x" style="margin-top:18px">
+            <p class="xs muted" style="margin:0 0 8px">Sociétés fictives · cours simulés du {quoteDay} (un cours par jour de bourse, du lundi au vendredi).</p>
+            <table class="t">
+              <thead><tr><th>Société (fictive)</th><th>Cours</th><th>Var.</th><th>Détenu</th>{(account || !me) && <><th>Quantité</th><th></th></>}</tr></thead>
+              <tbody>
+                {STOCKS.map((s, i) => (
+                  <tr>
+                    <td>{s.n}</td><td class="num">{fmt(s.p)}</td><td class={`num ${s.ch >= 0 ? 'up' : 'down'}`}>{s.ch >= 0 ? '+' : ''}{s.ch.toLocaleString('fr-FR')} %</td>
+                    <td class="num" data-held={i}>{account ? (account.positions[s.n] ?? 0) : 0}</td>
+                    {(account || !me) && <><td><input class="in" type="number" min="1" value="10" data-q={i} style="width:90px;margin:0" aria-label={`Quantité — ${s.n}`} /></td><td style="white-space:nowrap"><button class="btn btn-primary btn-sm" type="button" data-b={i}>Acheter</button> <button class="btn btn-ghost btn-sm" type="button" data-s={i}>Vendre</button></td></>}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {!me && <button class="btn btn-ghost btn-sm" type="button" style="margin-top:12px" id="vReset">Réinitialiser le portefeuille</button>}
+        </div>
+
+        {account && (
+          <div class="panel" style="margin-top:18px">
+            <h3>Mes derniers ordres</h3>
+            {trades.length ? trades.map((t) => <div class="list-row"><span class="small">{t.qty > 0 ? 'Achat' : 'Vente'} de {Math.abs(t.qty)} × {t.stock}</span><span class="small muted">{fmt(t.price)} FCFA · {t.at.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}</span></div>) : <p class="small muted" style="margin:0">Aucun ordre pour le moment.</p>}
+          </div>
+        )}
       </div>
-      <div class="panel scroll-x" style="margin-top:18px">
-        <table class="t">
-          <thead><tr><th>Société (fictive)</th><th>Cours</th><th>Détenu</th><th>Quantité</th><th></th></tr></thead>
-          <tbody>
-            {STOCKS.map((s, i) => (
-              <tr><td>{s.n}</td><td class="num">{fmt(s.p)}</td><td class="num" data-held={i}>0</td><td><input class="in" type="number" min="1" value="10" data-q={i} style="width:90px;margin:0" aria-label="Quantité" /></td><td style="white-space:nowrap"><button class="btn btn-primary btn-sm" type="button" data-b={i}>Acheter</button> <button class="btn btn-ghost btn-sm" type="button" data-s={i}>Vendre</button></td></tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <button class="btn btn-ghost btn-sm" type="button" style="margin-top:12px" id="vReset">Réinitialiser le portefeuille</button>
+
+      <aside>
+        <div class="panel">
+          <h3>Classement {ofMonth(month)}</h3>
+          {top.length ? (
+            <ol class="vp-rank">{top.map((r) => <li class={r.userId === me?.id ? 'me' : ''}><span>{r.rank}. {r.pseudo}</span><b class={r.perf >= 0 ? 'up' : 'down'}>{pc(r.perf)}</b></li>)}</ol>
+          ) : <p class="small muted">Aucun participant pour le moment : soyez le premier !</p>}
+          {mine && mine.rank > 10 && <p class="small" style="margin:8px 0 0">Vous : <b>{mine.rank}e</b> sur {board.length} ({pc(mine.perf)})</p>}
+          <p class="xs muted" style="margin:10px 0 0">{board.length} participant{board.length > 1 ? 's' : ''} · valeur aux cours du jour · égalité départagée par l'ancienneté d'inscription.</p>
+        </div>
+        {podium.length > 0 && (
+          <div class="panel" style="margin-top:18px">
+            <h3>Podium {ofMonth(prev)}</h3>
+            <ol class="vp-rank">{podium.map((r) => <li><span>{['🥇', '🥈', '🥉'][r.rank - 1]} {r.pseudo}</span><b class={r.perf >= 0 ? 'up' : 'down'}>{pc(r.perf)}</b></li>)}</ol>
+          </div>
+        )}
+        <div class="panel" style="margin-top:18px">
+          <h3>Règles</h3>
+          <ul class="small" style="margin:0;padding-left:18px">
+            <li>Un portefeuille de {m(START_CASH)} fictifs par membre et par mois.</li>
+            <li>Ordres exécutés au cours simulé du jour, sans frais.</li>
+            <li>Classement par valeur totale (liquidités + titres) ; figé à la fin du mois.</li>
+            <li>Sociétés et cours fictifs : un exercice pédagogique, aucun conseil en investissement, aucun gain.</li>
+          </ul>
+        </div>
+      </aside>
     </div>
   </section>
 </KapitalLayout>
+<style>
+  .vp-rank{list-style:none;margin:0;padding:0}
+  .vp-rank li{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:.92rem}
+  .vp-rank li.me{font-weight:700}
+</style>
 <script>
   const root = document.getElementById('vp')!;
+  const mode = root.dataset.mode;
   const stocks: { n: string; p: number }[] = JSON.parse(root.dataset.stocks!);
-  const START = 10_000_000;
-  type V = { cash: number; pos: Record<string, number> };
-  let v: V = { cash: START, pos: {} };
-  try { v = JSON.parse(localStorage.getItem('cea-vport') || 'null') || v; } catch {}
-  const toast = (t: string) => (window as any).toast(t);
-  const m = (n: number) => Math.round(n).toLocaleString('fr-FR') + ' FCFA';
-  function draw() {
-    const val = stocks.reduce((a, s) => a + (v.pos[s.n] || 0) * s.p, 0);
-    const perf = ((v.cash + val) / START - 1) * 100;
-    document.getElementById('vCash')!.textContent = m(v.cash);
-    document.getElementById('vVal')!.textContent = m(val);
-    const pe = document.getElementById('vPerf')!;
-    pe.textContent = perf.toFixed(2) + ' %';
-    pe.className = perf >= 0 ? 'up' : 'down';
-    stocks.forEach((s, i) => (root.querySelector(`[data-held="${i}"]`)!.textContent = String(v.pos[s.n] || 0)));
-    try { localStorage.setItem('cea-vport', JSON.stringify(v)); } catch {}
+  const toast = (t: string) => (window as unknown as { toast: (t: string) => void }).toast(t);
+  const qty = (i: string) => Math.max(1, Math.floor(Number(root.querySelector<HTMLInputElement>(`[data-q="${i}"]`)!.value) || 0));
+
+  if (mode === 'concours') {
+    // Ordres enregistrés côté serveur, puis page rechargée (cours, classement et historique à jour)
+    const order = async (i: string, sign: 1 | -1, b: HTMLButtonElement) => {
+      b.disabled = true;
+      const res = await fetch('/api/kapital/concours', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'ordre', stock: stocks[Number(i)].n, qty: sign * qty(i) }) });
+      const d = await res.json().catch(() => ({}));
+      toast(d.message || d.error || 'Erreur réseau.');
+      if (d.ok) setTimeout(() => location.reload(), 600); else b.disabled = false;
+    };
+    root.querySelectorAll<HTMLButtonElement>('[data-b]').forEach((b) => b.addEventListener('click', () => order(b.dataset.b!, 1, b)));
+    root.querySelectorAll<HTMLButtonElement>('[data-s]').forEach((b) => b.addEventListener('click', () => order(b.dataset.s!, -1, b)));
+  } else if (mode === 'local') {
+    // Entraînement d'un visiteur : portefeuille dans le navigateur, aux mêmes cours simulés
+    const START = 10_000_000;
+    type V = { cash: number; pos: Record<string, number> };
+    let v: V = { cash: START, pos: {} };
+    try { v = JSON.parse(localStorage.getItem('cea-vport') || 'null') || v; } catch {}
+    const m = (n: number) => Math.round(n).toLocaleString('fr-FR') + ' FCFA';
+    const draw = () => {
+      const val = stocks.reduce((a, s) => a + (v.pos[s.n] || 0) * s.p, 0);
+      const perf = ((v.cash + val) / START - 1) * 100;
+      document.getElementById('vCash')!.textContent = m(v.cash);
+      document.getElementById('vVal')!.textContent = m(val);
+      const pe = document.getElementById('vPerf')!;
+      pe.textContent = (perf >= 0 ? '+' : '') + perf.toFixed(2).replace('.', ',') + ' %';
+      pe.className = perf >= 0 ? 'up' : 'down';
+      stocks.forEach((s, i) => (root.querySelector(`[data-held="${i}"]`)!.textContent = String(v.pos[s.n] || 0)));
+      try { localStorage.setItem('cea-vport', JSON.stringify(v)); } catch {}
+    };
+    root.querySelectorAll<HTMLButtonElement>('[data-b]').forEach((b) => b.addEventListener('click', () => {
+      const s = stocks[Number(b.dataset.b)], q = qty(b.dataset.b!);
+      if (q * s.p > v.cash) return toast('Liquidités insuffisantes.');
+      v.cash -= q * s.p; v.pos[s.n] = (v.pos[s.n] || 0) + q; draw(); toast(`Achat fictif de ${q} titres.`);
+    }));
+    root.querySelectorAll<HTMLButtonElement>('[data-s]').forEach((b) => b.addEventListener('click', () => {
+      const s = stocks[Number(b.dataset.s)], q = qty(b.dataset.s!);
+      if ((v.pos[s.n] || 0) < q) return toast('Vous ne détenez pas assez de titres.');
+      v.cash += q * s.p; v.pos[s.n] -= q; draw(); toast(`Vente fictive de ${q} titres.`);
+    }));
+    document.getElementById('vReset')!.addEventListener('click', () => { v = { cash: START, pos: {} }; draw(); });
+    draw();
   }
-  const qty = (i: string) => Math.max(1, Number(root.querySelector<HTMLInputElement>(`[data-q="${i}"]`)!.value) || 0);
-  root.querySelectorAll<HTMLButtonElement>('[data-b]').forEach((b) => b.addEventListener('click', () => {
-    const s = stocks[Number(b.dataset.b)], q = qty(b.dataset.b!);
-    if (q * s.p > v.cash) return toast('Liquidités insuffisantes.');
-    v.cash -= q * s.p; v.pos[s.n] = (v.pos[s.n] || 0) + q; draw(); toast(`Achat fictif de ${q} titres.`);
-  }));
-  root.querySelectorAll<HTMLButtonElement>('[data-s]').forEach((b) => b.addEventListener('click', () => {
-    const s = stocks[Number(b.dataset.s)], q = qty(b.dataset.s!);
-    if ((v.pos[s.n] || 0) < q) return toast('Vous ne détenez pas assez de titres.');
-    v.cash += q * s.p; v.pos[s.n] -= q; draw(); toast(`Vente fictive de ${q} titres.`);
-  }));
-  document.getElementById('vReset')!.addEventListener('click', () => { v = { cash: START, pos: {} }; draw(); });
-  draw();
 </script>

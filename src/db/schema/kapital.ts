@@ -35,6 +35,8 @@ export const dossier = kapital.table('dossier', {
   investorReadyScore: integer('investor_ready_score'),
   shareConsent: boolean('share_consent').notNull().default(false), // privé par défaut, partage révocable
   published: boolean('published').notNull().default(false), // résumé visible des investisseurs vérifiés
+  page: jsonb('page'), // page d'opportunité composée par l'entreprise (vidéo, équipe, traction, fonds…) — src/lib/opportunity-page.ts
+  accessDays: integer('access_days').notNull().default(90), // durée d'accès à la data room après signature de l'accord
   createdAt: ts('created_at').notNull().defaultNow(),
   updatedAt: ts('updated_at').notNull().defaultNow(),
 }, (t) => [index('dossier_status_idx').on(t.status), index('dossier_owner_idx').on(t.ownerId)]);
@@ -97,7 +99,23 @@ export const nda = kapital.table('nda', {
   signedAt: ts('signed_at').notNull().defaultNow(),
   signatureRef: text('signature_ref'),
   revokedAt: ts('revoked_at'),
+  expiresAt: ts('expires_at'), // accès à la data room fermé après cette date (prolongeable par l'entreprise)
+  expiryNoticeAt: ts('expiry_notice_at'), // préavis d'expiration envoyé à l'investisseur
 }, (t) => [uniqueIndex('nda_unique').on(t.dossierId, t.investorId)]);
+
+/* Questions-réponses de la data room (CDC §8.9) : un investisseur sous accord pose une question, l'entreprise ou l'équipe répond ;
+   une réponse partagée est visible de tous les investisseurs sous accord, sans le nom de l'auteur de la question. */
+export const dataRoomQuestion = kapital.table('data_room_question', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  dossierId: uuid('dossier_id').notNull().references(() => dossier.id, { onDelete: 'cascade' }),
+  investorId: text('investor_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  question: text('question').notNull(),
+  answer: text('answer'),
+  answeredBy: text('answered_by').references(() => user.id, { onDelete: 'set null' }),
+  answeredAt: ts('answered_at'),
+  shared: boolean('shared').notNull().default(false),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('data_room_question_dossier_idx').on(t.dossierId)]);
 
 export const dataRoomFolderEnum = kapital.enum('data_room_folder', ['juridique', 'financier', 'commercial', 'technique', 'rh', 'fiscal', 'esg']);
 export const dataRoomDocument = kapital.table('data_room_document', {
@@ -134,6 +152,30 @@ export const watchlist = kapital.table('watchlist', {
   alertPct: integer('alert_pct'),
   createdAt: ts('created_at').notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.userId, t.item] })]);
+
+/* Concours mensuel de portefeuille virtuel (CDC §8.6) : 10 M FCFA fictifs par membre et par mois, ordres exécutés côté serveur
+   au cours simulé du jour (src/lib/marche-simule.ts). Aucun gain financier. */
+export const vpAccount = kapital.table('vp_account', {
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  month: text('month').notNull(), // AAAA-MM
+  cash: bigint('cash', { mode: 'number' }).notNull(),
+  positions: jsonb('positions').$type<Record<string, number>>().notNull().default({}),
+  pseudo: text('pseudo').notNull(), // nom affiché au classement (choisi par le membre)
+  finalRank: integer('final_rank'), // rang définitif, fixé au début du mois suivant
+  finalValue: bigint('final_value', { mode: 'number' }),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.userId, t.month] }), index('vp_account_month_idx').on(t.month)]);
+
+export const vpTrade = kapital.table('vp_trade', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  month: text('month').notNull(),
+  stock: text('stock').notNull(),
+  qty: integer('qty').notNull(), // positif = achat, négatif = vente
+  price: integer('price').notNull(),
+  at: ts('at').notNull().defaultNow(),
+}, (t) => [index('vp_trade_user_idx').on(t.userId, t.month)]);
 
 /* Comité d'investissement */
 export const committeeDecisionEnum = kapital.enum('committee_decision_kind', ['favorable', 'defavorable', 'ajourne']);

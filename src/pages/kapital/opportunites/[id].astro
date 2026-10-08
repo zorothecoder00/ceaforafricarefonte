@@ -6,10 +6,12 @@ import PageHead from '../../../components/PageHead.astro';
 import Money from '../../../components/Money.astro';
 import Icon from '../../../components/Icon.astro';
 import Lock from '../../../components/Lock.astro';
-import { and, asc, eq } from 'drizzle-orm';
+import MediaPlayer from '../../../components/MediaPlayer.astro';
+import { and, asc, desc, eq, isNull, or } from 'drizzle-orm';
 import { db } from '../../../lib/db';
-import { dossier, dataRoomDocument, interest, watchlist } from '../../../db/schema/kapital';
+import { dossier, dataRoomDocument, dataRoomQuestion, interest, nda, watchlist } from '../../../db/schema/kapital';
 import { accessLevel, isVerifiedInvestor, INSTRUMENT_LABEL, VERIF_LABEL } from '../../../lib/kapital';
+import { readPage } from '../../../lib/opportunity-page';
 import { country } from '../../../data/site';
 
 export const prerender = false;
@@ -24,6 +26,15 @@ const docs = ['dataroom', 'proprietaire', 'equipe'].includes(level) ? await db.s
 const [mine] = me ? await db.select().from(interest).where(and(eq(interest.dossierId, id), eq(interest.investorId, me.id))) : [];
 const [followed] = me ? await db.select().from(watchlist).where(and(eq(watchlist.userId, me.id), eq(watchlist.item, `dossier:${id}`))) : [];
 const facts: [string, string][] = [['Secteur', d.sector ?? '—'], ['Pays', country(d.country)], ['Stade', d.stage ?? '—'], ['Instrument', d.instrument ? INSTRUMENT_LABEL[d.instrument] : '—'], ['Équipe', d.team ?? '—'], ['Vérification', VERIF_LABEL[d.verification]]];
+const page = readPage(d.page);
+const inRoom = ['dataroom', 'proprietaire', 'equipe'].includes(level);
+// Accès limité dans le temps : date de fin affichée à l'investisseur
+const [myNda] = me && level === 'dataroom' ? await db.select({ until: nda.expiresAt }).from(nda).where(and(eq(nda.dossierId, id), eq(nda.investorId, me.id), isNull(nda.revokedAt))) : [];
+// Questions-réponses : l'investisseur voit les siennes et les réponses partagées ; l'entreprise et l'équipe voient tout
+const questions = !inRoom ? [] : await db.select().from(dataRoomQuestion)
+  .where(level === 'dataroom' ? and(eq(dataRoomQuestion.dossierId, id), or(eq(dataRoomQuestion.investorId, me!.id), eq(dataRoomQuestion.shared, true))) : eq(dataRoomQuestion.dossierId, id))
+  .orderBy(desc(dataRoomQuestion.createdAt));
+const canAnswer = level === 'proprietaire' || level === 'equipe';
 const FOLDERS: Record<string, string> = { juridique: 'Juridique', financier: 'Financier', commercial: 'Commercial', technique: 'Technique', rh: 'RH', fiscal: 'Fiscal', esg: 'ESG' };
 ---
 <KapitalLayout title={d.companyName} group="investir">
@@ -31,9 +42,19 @@ const FOLDERS: Record<string, string> = { juridique: 'Juridique', financier: 'Fi
   <section class="block">
     <div class="wrap split">
       <div>
+        {page?.tagline && <p class="op-tagline">{page.tagline}</p>}
+        {page?.video && <div style="margin-bottom:18px"><MediaPlayer title={`Présentation : ${d.companyName}`} url={page.video} ratio="16/9" /></div>}
         <div class="grid g3">{facts.map(([k, v]) => <div class="panel"><div class="small muted">{k}</div><b>{v}</b></div>)}</div>
-        <div class="panel" style="margin-top:18px"><h3>Traction</h3><p style="margin:0">{d.traction ?? 'Information communiquée dans la data room.'}</p></div>
-        <div class="panel" style="margin-top:18px"><h3>Utilisation des fonds</h3><p style="margin:0">{d.useOfFunds ?? '—'}</p></div>
+        {page && page.highlights.length > 0 && <div class="panel" style="margin-top:18px"><h3>Points forts</h3><ul style="margin:0">{page.highlights.map((h) => <li>{h}</li>)}</ul></div>}
+        {page && page.kpis.length > 0
+          ? <div style="margin-top:18px"><h3>Traction</h3><div class="grid g4">{page.kpis.map((k) => <div class="panel kpi"><span class="small muted">{k.label}</span><b>{k.value}</b></div>)}</div>{d.traction && <p class="small" style="margin:10px 0 0">{d.traction}</p>}</div>
+          : <div class="panel" style="margin-top:18px"><h3>Traction</h3><p style="margin:0">{d.traction ?? 'Information communiquée dans la data room.'}</p></div>}
+        {page && page.team.length > 0 && <div style="margin-top:18px"><h3>L'équipe</h3><div class="grid g2">{page.team.map((t) => <div class="panel"><b>{t.name}</b>{t.role && <div class="small muted">{t.role}</div>}{t.bio && <p class="small" style="margin:6px 0 0">{t.bio}</p>}</div>)}</div></div>}
+        <div class="panel" style="margin-top:18px"><h3>Utilisation des fonds</h3>
+          {page && page.funds.length > 0 && <div class="op-funds">{page.funds.map((f) => <div><div class="row between small"><span>{f.label}</span><b>{f.pct} %</b></div><div class="progress"><span style={`width:${f.pct}%`}></span></div></div>)}</div>}
+          {d.useOfFunds ? <p class={page?.funds.length ? 'small' : ''} style={page?.funds.length ? 'margin:10px 0 0' : 'margin:0'}>{d.useOfFunds}</p> : !page?.funds.length && <p style="margin:0">—</p>}
+        </div>
+        {page && page.milestones.length > 0 && <div class="panel" style="margin-top:18px"><h3>Jalons</h3><ol class="timeline">{page.milestones.map((x) => <li><b>{x.when}</b> — {x.label}</li>)}</ol></div>}
         <div class="panel" style="margin-top:18px">
           <h3>Risques propres à cette opportunité</h3>
           <ul class="small">
@@ -46,7 +67,7 @@ const FOLDERS: Record<string, string> = { juridique: 'Juridique', financier: 'Fi
         </div>
 
         <h2 style="margin-top:28px">Data room</h2>
-        {['dataroom', 'proprietaire', 'equipe'].includes(level) ? (
+        {inRoom ? (
           docs.length ? (
             <div class="panel">{docs.map((doc) => <div class="list-row"><span class="row"><Icon name="doc" size={16} /> <span class="tag">{FOLDERS[doc.folder]}</span> {doc.name} <span class="xs muted">v{doc.version}</span></span><a class="small" href={`/kapital/dataroom/${doc.id}`}>Consulter</a></div>)}</div>
           ) : <div class="empty">La data room est en cours de constitution.</div>
@@ -60,6 +81,37 @@ const FOLDERS: Record<string, string> = { juridique: 'Juridique', financier: 'Fi
           </form>
         ) : (
           <div class="lock"><Icon name="lock" size={20} /><div><b>Réservé aux investisseurs vérifiés</b><br />Faites vérifier votre profil, puis signez l'accord de confidentialité pour accéder au dossier complet. <a href="/kapital/devenir-investisseur">Devenir investisseur vérifié</a></div></div>
+        )}
+        {myNda?.until && <p class="xs muted" style="margin:8px 0 0">Votre accès à la data room est ouvert jusqu'au {myNda.until.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}. L'entreprise peut le prolonger.</p>}
+
+        {inRoom && (
+          <section id="questions" style="margin-top:28px">
+            <h2>Questions à l'entreprise</h2>
+            {level === 'dataroom' && (
+              <form class="panel" data-api="/api/kapital/questions" data-reset data-reload>
+                <input type="hidden" name="dossierId" value={d.id} />
+                <label class="f" for="qq">Votre question</label>
+                <textarea class="in" id="qq" name="question" required minlength="10" maxlength="2000" placeholder="Hypothèses du plan d'affaires, contrats clés, structure du capital…"></textarea>
+                <button class="btn btn-primary btn-sm" type="submit">Envoyer la question</button>
+                <p class="xs muted" style="margin:6px 0 0">L'entreprise peut publier sa réponse pour tous les investisseurs sous accord ; votre nom n'est alors pas affiché.</p>
+              </form>
+            )}
+            {questions.length ? questions.map((q) => (
+              <div class="panel" style="margin-top:12px">
+                <div class="row between"><b class="small">{level === 'dataroom' && q.investorId !== me!.id ? 'Question d’un autre investisseur' : 'Question'}</b><span class="xs muted">{q.createdAt.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}{q.shared ? ' · réponse partagée' : ''}</span></div>
+                <p style="margin:6px 0">{q.question}</p>
+                {q.answer ? <div class="op-answer"><b class="small">Réponse de l'entreprise</b><p style="margin:4px 0 0">{q.answer}</p></div>
+                  : canAnswer ? (
+                    <form data-api="/api/kapital/questions" data-method="PATCH" data-reload>
+                      <input type="hidden" name="id" value={q.id} />
+                      <textarea class="in" name="answer" required minlength="2" maxlength="4000" aria-label="Réponse" placeholder="Votre réponse"></textarea>
+                      <label class="row small"><input type="checkbox" name="shared" /> Publier la réponse pour tous les investisseurs sous accord (sans le nom de l'auteur)</label>
+                      <button class="btn btn-primary btn-sm" type="submit">Répondre</button>
+                    </form>
+                  ) : <p class="xs muted" style="margin:0">En attente de réponse.</p>}
+              </div>
+            )) : <p class="small muted">Aucune question pour le moment.</p>}
+          </section>
         )}
         <div style="margin-top:16px"><Lock feature="kap_sub" country={d.country} text="Avant agrément, Kapital Invest ne propose que des manifestations d’intérêt : aucun paiement, aucune souscription." /></div>
       </div>
@@ -83,3 +135,8 @@ const FOLDERS: Record<string, string> = { juridique: 'Juridique', financier: 'Fi
     </div>
   </section>
 </KapitalLayout>
+<style>
+  .op-tagline{font-size:1.2rem;font-weight:600;margin:0 0 16px}
+  .op-funds{display:grid;gap:10px}
+  .op-answer{border-left:3px solid var(--gold);padding:6px 0 6px 12px;margin-top:8px}
+</style>

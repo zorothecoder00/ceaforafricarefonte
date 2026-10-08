@@ -1,6 +1,7 @@
 /* Règles métier de CEA KAPITAL INVEST (CDC §8) : pipeline des dossiers, interrupteurs réglementaires par pays, accès gradué. */
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from './db';
+import { notify } from './notify';
 import * as s from '../db/schema';
 
 export type DossierStatus = (typeof s.dossierStatusEnum.enumValues)[number];
@@ -79,5 +80,19 @@ export async function accessLevel(userId: string | undefined, dossierId: string)
   if (roles.some((r) => ['analyste', 'comite', 'conformite', 'admin', 'direction'].includes(r))) return 'equipe';
   if (!(await isVerifiedInvestor(userId))) return 'resume';
   const [nda] = await db.select().from(s.nda).where(and(eq(s.nda.dossierId, dossierId), eq(s.nda.investorId, userId), isNull(s.nda.revokedAt)));
-  return nda ? 'dataroom' : 'resume';
+  // Accès limité dans le temps (durée choisie par l'entreprise, prolongeable) : un accord expiré ferme la data room
+  return nda && (!nda.expiresAt || nda.expiresAt > new Date()) ? 'dataroom' : 'resume';
+}
+
+/** Préavis aux investisseurs dont l'accès à une data room expire dans les 7 jours (appelé chaque jour par /api/cron/rappels). */
+export async function noticeExpiringAccess(now = new Date()) {
+  const soon = new Date(now.getTime() + 7 * 864e5);
+  const rows = await db.select({ id: s.nda.id, investor: s.nda.investorId, until: s.nda.expiresAt, dossierId: s.dossier.id, company: s.dossier.companyName })
+    .from(s.nda).innerJoin(s.dossier, eq(s.dossier.id, s.nda.dossierId))
+    .where(and(isNull(s.nda.revokedAt), isNull(s.nda.expiryNoticeAt), sql`${s.nda.expiresAt} > ${now} and ${s.nda.expiresAt} <= ${soon}`));
+  for (const r of rows) {
+    await notify(r.investor, `Votre accès à la data room de ${r.company} expire le ${r.until!.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}. Demandez une prolongation à l'entreprise si vous poursuivez votre analyse.`, `/kapital/opportunites/${r.dossierId}`, { email: true });
+    await db.update(s.nda).set({ expiryNoticeAt: now }).where(eq(s.nda.id, r.id));
+  }
+  return rows.length;
 }
