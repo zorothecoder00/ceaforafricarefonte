@@ -28,7 +28,7 @@ const rows = await db.select({ p: project, owner: user.name, ownerEmail: user.em
 ---
 <AdminLayout title="Projets" lead="Ouvrez la fiche d'un projet pour changer son statut, lui affecter un chargé de programme ou corriger ses informations ; l'espace de travail sert à la revue d'expert." obj="fiche_projet">
   {canC && (
-    <details class="panel" style="margin-bottom:14px">
+    <details class="panel" style="margin-bottom:14px" data-create="Créer un projet">
       <summary style="cursor:pointer"><b>+ Créer un projet pour un porteur</b></summary>
       <form data-api="/api/admin/projets" style="margin-top:12px">
         <input type="hidden" name="action" value="create" />

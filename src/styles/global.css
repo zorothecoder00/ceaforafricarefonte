@@ -334,6 +334,17 @@ html.side-min .side-toggle .st-open{display:none}
 html.side-min .side-toggle .st-closed{display:inline}
 .side a[aria-current="page"]{background:rgba(255,255,255,.12);color:#fff;box-shadow:inset 3px 0 0 var(--gold)}
 .side h5{font-family:var(--display);font-size:.75rem;color:#E2B65A;margin:16px 12px 4px;text-transform:uppercase;letter-spacing:.06em}
+/* Groupes du menu latéral repliables (Mon espace, CEA OS) : le titre du groupe est un bouton ; replié, seuls les titres restent */
+.sg-h{display:flex;align-items:center;gap:6px;width:100%;background:none;border:0;padding:0;margin:0;font:inherit;color:inherit;text-transform:inherit;letter-spacing:inherit;text-align:left;cursor:pointer}
+.sg-h:hover{color:#fff}
+.sg-h:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:4px}
+.sg-c{margin-left:auto;width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);transition:transform .15s;opacity:.8;flex:none}
+.sg.closed .sg-c{transform:rotate(-45deg)}
+.sg.closed .sg-l{display:none}
+.sg-n{width:7px;height:7px;border-radius:50%;background:var(--gold);display:none;flex:none}
+.sg.closed .sg-n{display:inline-block}
+html.side-min body:not(.os) .sg.closed .sg-l{display:block}
+@media (max-width:860px){body:not(.os) .sg,body:not(.os) .sg .sg-l{display:contents}}
 @media (max-width:860px){.dash,html.side-min .dash{grid-template-columns:minmax(0,1fr);min-height:0}.dash-main{padding:20px 16px 32px}.side,html.side-min .side{position:static;height:auto;max-height:none;overflow:visible;padding:8px}.side-toggle{display:none}.side-body,html.side-min .side-body{display:flex;overflow-x:auto;gap:4px}.side a{white-space:nowrap}html.side-min .side a{padding:9px 12px}html.side-min .side .sl{display:inline}.side-body > div,html.side-min .side-body > div{display:none}.side-body{align-items:center}.side-logout{margin-top:0;width:auto;white-space:nowrap}.side h5{display:none}}
 .kanban{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:12px;overflow-x:auto}
 .kanban.k4{grid-template-columns:repeat(4,minmax(200px,1fr))}
@@ -702,7 +713,7 @@ html.side-min .os-logo img{height:26px}
 .os-ib:hover{border-color:var(--gold)}
 .os-ib .badge{position:absolute;top:-6px;right:-6px;background:var(--bad);color:#fff;border-radius:99px;font-size:.66rem;font-weight:700;min-width:18px;height:18px;display:flex;align-items:center;justify-content:center;padding:0 4px}
 .os-menu{display:none}
-.os-user{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 10px 3px 3px;text-decoration:none;color:var(--ink);max-width:260px}
+.os-user{font:inherit;cursor:pointer;display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 10px 3px 3px;text-decoration:none;color:var(--ink);max-width:260px}
 .os-user .av{width:30px;height:30px;border-radius:50%;background:#0F3A63;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-family:var(--display);font-weight:700;font-size:.74rem;flex-shrink:0}
 .os-user .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.85rem;font-weight:600}
 .os-content{padding:22px 24px 60px;max-width:1500px;width:100%}
@@ -772,3 +783,28 @@ body.os .quick{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1
 body.os .quick a{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:14px;font-weight:600;text-decoration:none;color:var(--ink)}
 body.os .quick a:hover{border-color:var(--gold)}
 body.os .quick small{display:block;font-weight:400;color:var(--muted);font-size:.78rem;margin-top:2px}
+
+/* Menu du compte (en-tête du site et barre de CEA OS) : carte avec identité, raccourcis, paramètres et déconnexion */
+.umenu{position:relative;flex-shrink:0}
+.um-btn{gap:6px}
+.um-av{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.22);font-size:.66rem;font-weight:800;letter-spacing:.02em;flex:none}
+.um-av.lg{width:40px;height:40px;font-size:.9rem;background:#082B4C;color:#fff}
+.um-panel{position:absolute;right:0;top:calc(100% + 8px);z-index:90;width:min(300px,calc(100vw - 24px));background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:12px;box-shadow:0 18px 48px rgba(0,0,0,.2);padding:8px}
+.um-panel[hidden]{display:none}
+.um-id{display:flex;gap:10px;align-items:center;padding:8px 8px 12px;border-bottom:1px solid var(--line);margin-bottom:6px}
+.um-id b{display:block;overflow-wrap:anywhere}
+.um-mail{overflow-wrap:anywhere}
+.um-panel a,.um-panel button{display:block;width:100%;text-align:left;padding:8px 10px;border-radius:8px;text-decoration:none;color:var(--ink);font:inherit;font-size:.92rem;font-weight:500;background:none;border:0;cursor:pointer}
+.um-panel a:hover,.um-panel button:hover,.um-panel a:focus-visible,.um-panel button:focus-visible{background:var(--surface-2)}
+.um-panel button[data-logout]{color:var(--bad)}
+.um-panel hr{border:0;border-top:1px solid var(--line);margin:6px 0}
+@media (max-width:520px){.um-btn [data-username],.um-btn svg{display:none}.um-btn{padding:6px}.um-btn .um-av{width:24px;height:24px}}
+.os-user svg{flex:none;color:var(--muted)}
+body.os .um-id .av{width:40px;height:40px;font-size:.85rem}
+/* Bandeau « Revenir à Mon espace » sur les pages du site ouvertes depuis l'espace connecté */
+.backbar{background:var(--gold-soft,#F8EDD5);border-bottom:1px solid var(--line);position:sticky;top:76px;z-index:45}
+.backbar .wrap{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:8px;padding-bottom:8px}
+.backbar a{font-weight:700;color:var(--gold-ink,#8A6416);text-decoration:none;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.backbar a:hover{text-decoration:underline}
+.backbar button{background:none;border:0;color:var(--muted);cursor:pointer;font:inherit;padding:2px 6px;flex:none}
+html:not([data-themable]) #themeBtn{display:none}

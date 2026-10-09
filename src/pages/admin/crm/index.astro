@@ -89,7 +89,7 @@ const sum = (s: string) => deals.filter((x) => x.d.stage === s).reduce((n, x) =>
       </div>
       <p class="xs muted">Au plus 100 membres et 100 contacts externes par recherche : affinez avec les filtres.</p>
       {canC && (
-        <details class="panel" style="margin-top:14px">
+        <details class="panel" style="margin-top:14px" data-create="Nouveau contact">
           <summary><b>Nouveau contact externe</b> <span class="xs muted">(partenaire, sponsor, presse… sans compte sur la plateforme)</span></summary>
           <form data-api="/api/admin/crm" style="margin-top:10px">
             <input type="hidden" name="action" value="contact.save" />
@@ -122,7 +122,7 @@ const sum = (s: string) => deals.filter((x) => x.d.stage === s).reduce((n, x) =>
         )}
       </div>
       {canC && (
-        <details class="panel" style="margin-top:14px"><summary><b>Nouvelle organisation</b></summary>
+        <details class="panel" style="margin-top:14px" data-create="Nouvelle organisation"><summary><b>Nouvelle organisation</b></summary>
           <form data-api="/api/admin/crm" style="margin-top:10px">
             <input type="hidden" name="action" value="org.save" />
             <div class="grid g2" style="gap:0 12px">
@@ -157,7 +157,7 @@ const sum = (s: string) => deals.filter((x) => x.d.stage === s).reduce((n, x) =>
         ))}
       </div></div>
       {canC && orgs.length > 0 && (
-        <details class="panel" style="margin-top:14px"><summary><b>Nouvelle opportunité</b></summary>
+        <details class="panel" style="margin-top:14px" data-create="Nouvelle opportunité"><summary><b>Nouvelle opportunité</b></summary>
           <form data-api="/api/admin/crm" data-reload style="margin-top:10px">
             <input type="hidden" name="action" value="deal.save" />
             <div class="grid g2" style="gap:0 12px">

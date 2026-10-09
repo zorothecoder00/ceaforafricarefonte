@@ -66,7 +66,7 @@ const state = { id: c.id, type, version: c.version, locked, blocks: c.blocks, da
           <summary><b>Référencement (SEO)</b></summary>
           <label class="f" for="st">Titre pour les moteurs de recherche <span class="xs muted" data-count="st">0/70</span></label><input class="in" id="st" name="seoTitle" maxlength="70" value={c.seoTitle ?? ''} placeholder={c.title} />
           <label class="f" for="sd">Description <span class="xs muted" data-count="sd">0/170</span></label><textarea class="in" id="sd" name="seoDescription" maxlength="170" rows="2" placeholder={c.excerpt}>{c.seoDescription ?? ''}</textarea>
-          <div class="panel xs" style="margin-top:8px"><div style="color:#1a0dab" id="serpT">{c.seoTitle || c.title}</div><div style="color:#006621">cea4africa.com{publicUrl}</div><div class="muted" id="serpD">{c.seoDescription || c.excerpt}</div></div>
+          <div class="panel xs" style="margin-top:8px;background:#fff;color:#4d5156"><div style="color:#1a0dab" id="serpT">{c.seoTitle || c.title}</div><div style="color:#006621">cea4africa.com{publicUrl}</div><div id="serpD">{c.seoDescription || c.excerpt}</div></div>
         </details>
       </fieldset>
       {!locked && <div class="row between" style="margin-top:16px;position:sticky;bottom:0;background:var(--surface);padding:8px 0"><span class="xs muted" id="dirty"></span><button class="btn btn-primary" type="submit">Enregistrer</button></div>}

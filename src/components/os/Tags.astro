@@ -6,4 +6,4 @@ const { st, dom, label } = Astro.props;
 const d = dom && dom in DOM ? DOM[dom as Dom] : null;
 ---
 {st && <span class={`tag ${stClass(st)}`}>{label ?? st}</span>}
-{d && <span class="tag" style={`background:color-mix(in srgb,${d.c} 16%,transparent);color:${d.c}`}>{d.n.replace('CEA ', '')}</span>}
+{d && <span class="tag" style={`background:color-mix(in srgb,${d.c} 16%,transparent);color:color-mix(in srgb,${d.c} 70%,var(--ink))`}>{d.n.replace('CEA ', '')}</span>}

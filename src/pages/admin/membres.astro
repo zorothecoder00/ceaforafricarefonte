@@ -39,7 +39,7 @@ const countryOpts = Object.entries(COUNTRIES);
 <AdminLayout title="Membres et rôles" lead="L'attribution d'un rôle sensible impose la double authentification à la personne concernée. Chaque action est inscrite au journal d'audit." obj="membres">
   <p class="small" style="margin:-6px 0 14px">Ce que chaque rôle peut faire se règle dans la <a href="/admin/droits">Matrice des droits</a>.</p>
   {canC && (
-    <details class="panel" style="margin-bottom:14px">
+    <details class="panel" style="margin-bottom:14px" data-create="Créer un compte">
       <summary class="row between" style="cursor:pointer"><b>+ Créer un compte</b><span class="xs muted">invitation par e-mail, valable {INVITE_DAYS} jours</span></summary>
       <form class="mform" data-members style="margin-top:12px">
         <input type="hidden" name="action" value="create" />

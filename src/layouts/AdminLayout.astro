@@ -59,15 +59,17 @@ const roleLine = me.roles.filter((r) => r !== 'membre').map((r) => ROLE_LABEL[r 
       <a class="os-logo" href="/admin"><img src="/logo.png" alt="CEA FOR AFRICA" width="68" height="38" /><span>CEA OS<small>Connecter • Entreprendre • Accélérer</small></span></a>
       <div class="side-body" id="sideBody">
         {groups.map(([g, items]) => (
-          <>
-            <h6>{g}</h6>
-            {items.map((i) => <a href={i.href} title={i.label} aria-current={isCurrent(i.href) ? 'page' : undefined}>{i.dom && <span class="dot" style={`background:${DOM[i.dom].c}`}></span>}<span class="sl">{i.label}</span>{COUNT[i.href] ? <span class="cnt" aria-label={`${COUNT[i.href]} à traiter`}>{COUNT[i.href]}</span> : null}</a>)}
-          </>
+          <section class="sg" data-sg={`os:${g}`}>
+            <h6><button class="sg-h" type="button" aria-expanded="true">{g}{items.some((i) => COUNT[i.href]) && <span class="sg-n" aria-hidden="true"></span>}<span class="sg-c" aria-hidden="true"></span></button></h6>
+            <div class="sg-l">{items.map((i) => <a href={i.href} title={i.label} aria-current={isCurrent(i.href) ? 'page' : undefined}>{i.dom && <span class="dot" style={`background:${DOM[i.dom].c}`}></span>}<span class="sl">{i.label}</span>{COUNT[i.href] ? <span class="cnt" aria-label={`${COUNT[i.href]} à traiter`}>{COUNT[i.href]}</span> : null}</a>)}</div>
+          </section>
         ))}
-        <h6>Raccourcis</h6>
-        <a href="/espace" title="Mon espace membre"><span class="sl">Mon espace membre</span></a>
-        <a href="/" title="Site public"><span class="sl">Site public</span></a>
+        <section class="sg" data-sg="os:Raccourcis">
+          <h6><button class="sg-h" type="button" aria-expanded="true">Raccourcis<span class="sg-c" aria-hidden="true"></span></button></h6>
+          <div class="sg-l"><a href="/espace" title="Mon espace membre"><span class="sl">Mon espace membre</span></a><a href="/" title="Site public"><span class="sl">Site public</span></a></div>
+        </section>
       </div>
+      <script is:inline>/* Groupes repliés (choix mémorisé), appliqués avant l'affichage pour éviter un saut */try{var k=JSON.parse(localStorage.getItem('cea-sg')||'[]');document.querySelectorAll('#sideNav .sg').forEach(function(s){if(k.indexOf(s.dataset.sg)>-1&&!s.querySelector('[aria-current=page]')){s.classList.add('closed');s.querySelector('.sg-h').setAttribute('aria-expanded','false')}})}catch(e){}</script>
       <div class="os-foot">
         <span class="sl"><b>{os.me?.name ?? me.name}</b><br />{os.me ? <>{refT(os.me.poste)}<br />{pn(os.me.country)}</> : roleLine}</span>
         <div class="row" style="gap:6px;margin-top:8px"><button class="os-ghost" type="button" id="themeBtn" title="Thème clair / sombre">Thème</button><button class="os-ghost" type="button" data-logout title="Se déconnecter">Déconnexion</button></div>
@@ -84,7 +86,22 @@ const roleLine = me.roles.filter((r) => r !== 'membre').map((r) => ROLE_LABEL[r 
         {os.me && <a class="os-ib" href="/admin/approbations" aria-label={`Approbations : ${pending}`}>✓ <span class="hide-s">Approbations</span>{pending > 0 && <span class="badge">{pending > 99 ? '99+' : pending}</span>}</a>}
         <a class="os-ib" href="/espace/notifications" aria-label="Notifications">🔔<span class="badge" data-unread hidden></span></a>
         <button class="os-ib" type="button" id="copB" aria-label="Ouvrir CEA Copilot" aria-controls="cop">✦ <span class="hide-s">Copilot</span></button>
-        <a class="os-user" href={os.me ? '/admin/poste' : '/espace/profil'} title="Mon compte"><span class="av">{initials(os.me?.name ?? me.name)}</span><span class="t hide-s">{os.me?.name ?? me.name}</span></a>
+        <div class="umenu">
+          <button class="os-user um-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="umPanel" title="Mon compte"><span class="av">{initials(os.me?.name ?? me.name)}</span><span class="t hide-s">{os.me?.name ?? me.name}</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></button>
+          <div class="um-panel" id="umPanel" hidden>
+            <div class="um-id"><span class="av">{initials(os.me?.name ?? me.name)}</span><div style="min-width:0"><b>{os.me?.name ?? me.name}</b><div class="xs muted um-mail">{me.email}</div><div class="xs">{os.me ? `${refT(os.me.poste)} · ${pn(os.me.country)}` : roleLine}</div></div></div>
+            {os.me && <a href="/admin/poste">Mon poste et mes indicateurs</a>}
+            {os.me && <a href="/admin/moi">Mes demandes (congés, frais…)</a>}
+            <a href="/espace">Mon espace membre</a>
+            <a href="/espace/profil">Mon profil</a>
+            <hr />
+            <a href="/espace/securite">Sécurité et mot de passe</a>
+            <a href="/espace/notifications">Préférences de notification</a>
+            <button type="button" data-theme-proxy>Thème clair / sombre</button>
+            <hr />
+            <button type="button" data-logout>Se déconnecter</button>
+          </div>
+        </div>
       </header>
       <div class="os-content">
         {crumbs && <div class="crumbs">{crumbs.map(([l, h], i) => <>{i > 0 && ' / '}{h ? <a href={h}>{l}</a> : l}</>)}</div>}
@@ -125,4 +142,34 @@ const roleLine = me.roles.filter((r) => r !== 'membre').map((r) => ROLE_LABEL[r 
   side?.addEventListener('click', (e) => { if ((e.target as Element).closest('a')) set(false); });
   document.addEventListener('click', (e) => { if (side?.classList.contains('open') && !side.contains(e.target as Node)) set(false); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') set(false); });
+  // « Thème clair / sombre » du menu du compte : même bascule que le bouton Thème du menu latéral
+  document.querySelector('[data-theme-proxy]')?.addEventListener('click', () => document.getElementById('themeBtn')?.click());
+
+  /* Formulaires de création (<details data-create="Libellé">) : bouton « + Libellé » dans l'en-tête de la page, qui ouvre le
+     formulaire dans une fenêtre ; il n'est plus à chercher en bas de la page. */
+  const actions = document.querySelector('.ph > .row');
+  document.querySelectorAll<HTMLDetailsElement>('details[data-create]').forEach((d, i) => {
+    if (!actions) return;
+    const label = d.dataset.create!;
+    const sum = d.querySelector(':scope > summary');
+    const note = sum?.querySelector('.xs')?.textContent?.trim().replace(/^\((.*)\)$/, '$1');
+    const dlg = document.createElement('dialog');
+    dlg.className = 'os-dlg wide';
+    dlg.id = 'create-' + i;
+    dlg.setAttribute('aria-labelledby', dlg.id + '-t');
+    dlg.innerHTML = '<div class="dh"><h3></h3><button class="os-ib" type="button" data-close aria-label="Fermer">✕</button></div><div class="db"></div>';
+    dlg.querySelector('h3')!.id = dlg.id + '-t';
+    dlg.querySelector('h3')!.textContent = label;
+    const body = dlg.querySelector('.db')!;
+    if (note) { const p = document.createElement('p'); p.className = 'small muted'; p.textContent = note.charAt(0).toUpperCase() + note.slice(1); body.append(p); }
+    sum?.remove();
+    body.append(...d.childNodes);
+    d.replaceWith(dlg);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn';
+    b.textContent = '+ ' + label;
+    b.addEventListener('click', () => { dlg.showModal(); dlg.querySelector<HTMLElement>('input:not([type=hidden]),select,textarea')?.focus(); });
+    actions.append(b);
+  });
 </script>

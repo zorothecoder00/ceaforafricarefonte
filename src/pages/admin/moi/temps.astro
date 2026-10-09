@@ -1,5 +1,5 @@
 ---
-/* CEA OS — Mes temps (prototype › pTemps) : temps passé par semaine, domaine et projet ; sert à facturer les bailleurs et à
+/* CEA OS — Ma feuille de temps (prototype › pTemps) : temps passé par semaine, domaine et projet ; sert à facturer les bailleurs et à
    mesurer le coût complet des activités. */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import Tags from '../../../components/os/Tags.astro';
@@ -19,7 +19,7 @@ const cur = mine.filter((t) => t.week === wk).reduce((a, t) => a + t.hours, 0);
 // Projets proposés : projets suivis sur la plateforme (Project Studio)
 const projects = await db.select({ t: project.name }).from(project).orderBy(desc(project.createdAt)).limit(40).catch(() => []);
 ---
-<AdminLayout title="Mes temps" lead={`Semaine ${wk} · le temps passé par domaine sert à facturer les bailleurs et à mesurer les coûts`}>
+<AdminLayout title="Ma feuille de temps" lead={`Semaine ${wk} · le temps passé par domaine sert à facturer les bailleurs et à mesurer les coûts`}>
   <div class="split">
     <div class="tw">
       <table class="t">

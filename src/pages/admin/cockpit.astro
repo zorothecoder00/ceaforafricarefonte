@@ -5,14 +5,14 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 import LegacyBoard from '../../components/os/LegacyBoard.astro';
 import Bars from '../../components/os/Bars.astro';
 import Tags from '../../components/os/Tags.astro';
-import { and, desc, eq, notInArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, notInArray, sql, type Column } from 'drizzle-orm';
 import { db } from '../../lib/db';
 import { invoice } from '../../db/schema/finance';
-import { payment, membership } from '../../db/schema/app';
+import { payment, membership, profile } from '../../db/schema/app';
 import { dossier } from '../../db/schema/kapital';
 import { osDecision, osTask, osContract, osStockItem, osInscription, osSite, osSiteLot } from '../../db/schema/os';
 import { marge } from '../../lib/os/domaines';
-import { osContext, allStaff, scopeState } from '../../lib/os/core';
+import { osContext, allStaff, scopeState, scopeCountries } from '../../lib/os/core';
 import { pendingFor, budgets } from '../../lib/os/approvals';
 import { allOkrs, okrProg } from '../../lib/os/pilotage';
 import { isStaff } from '../../lib/rbac';
@@ -21,19 +21,22 @@ import { DK, DOM, fmt, mfcfa, dstr, type Dom } from '../../lib/os/ref';
 export const prerender = false;
 const os = await osContext(Astro.locals.user!);
 const sc = scopeState(os, Astro.cookies);
+// Périmètre appliqué à tous les chiffres : pays de la facture, du membre, du dossier, de la tâche ou du chantier
+const cs = scopeCountries(sc);
+const inC = (col: Column) => (cs ? inArray(col, cs) : undefined);
 const people = await allStaff();
 const year = new Date().getFullYear();
 const today = new Date().toISOString().slice(0, 10);
 const n = sql<number>`coalesce(sum(${invoice.totalXof}),0)::float`;
 const [[enc], [due], late, bud, [mem], [kap], decisions, lateTasks, pend] = await Promise.all([
-  db.select({ s: n }).from(invoice).where(and(eq(invoice.kind, 'facture'), eq(invoice.status, 'payee'), eq(invoice.year, year))),
-  db.select({ s: n }).from(invoice).where(and(eq(invoice.kind, 'facture'), eq(invoice.status, 'a_payer'))),
-  db.select({ number: invoice.number, total: invoice.totalXof }).from(invoice).where(and(eq(invoice.kind, 'facture'), eq(invoice.status, 'a_payer'), sql`${invoice.dueOn} < ${today}`)),
+  db.select({ s: n }).from(invoice).where(and(eq(invoice.kind, 'facture'), eq(invoice.status, 'payee'), eq(invoice.year, year), inC(invoice.country))),
+  db.select({ s: n }).from(invoice).where(and(eq(invoice.kind, 'facture'), eq(invoice.status, 'a_payer'), inC(invoice.country))),
+  db.select({ number: invoice.number, total: invoice.totalXof }).from(invoice).where(and(eq(invoice.kind, 'facture'), eq(invoice.status, 'a_payer'), sql`${invoice.dueOn} < ${today}`, inC(invoice.country))),
   budgets(year),
-  db.select({ n: sql<number>`count(*)::int` }).from(membership).where(eq(membership.status, 'active')),
-  db.select({ n: sql<number>`count(*)::int` }).from(dossier).where(notInArray(dossier.status, ['finance', 'cloture'])),
+  db.select({ n: sql<number>`count(*)::int` }).from(membership).leftJoin(profile, eq(profile.userId, membership.userId)).where(and(eq(membership.status, 'active'), inC(profile.country))),
+  db.select({ n: sql<number>`count(*)::int` }).from(dossier).where(and(notInArray(dossier.status, ['finance', 'cloture']), inC(dossier.country))),
   db.select().from(osDecision).orderBy(desc(osDecision.at)).limit(6),
-  db.select({ n: sql<number>`count(*)::int` }).from(osTask).where(and(sql`${osTask.due} < now()`, sql`${osTask.status} <> 'Terminé'`)),
+  db.select({ n: sql<number>`count(*)::int` }).from(osTask).where(and(sql`${osTask.due} < now()`, sql`${osTask.status} <> 'Terminé'`, inC(osTask.country))),
   os.me ? pendingFor(os.me.id, { people }) : Promise.resolve([]),
 ]);
 const okrs = await allOkrs();
@@ -44,7 +47,7 @@ const eng = ds.reduce((a, d) => a + (bud[d]?.engaged ?? 0), 0), bt = ds.reduce((
 const lateSum = late.reduce((a, x) => a + x.total, 0);
 // Encaissements par domaine : objet du paiement rattaché au domaine d'intervention
 const PURPOSE_DOM: Record<string, Dom> = { adhesion: 'voix', billet: 'evt', cours: 'aca', programme: 'aca', mastermind: 'mm', expert: 'prj', mise_en_avant: 'tal', recherche: 'kap', sponsoring: 'evt' };
-const byPurpose = await db.select({ p: payment.purpose, s: sql<number>`coalesce(sum(${payment.amountXof}),0)::float` }).from(payment).where(and(eq(payment.status, 'reussi'), sql`extract(year from ${payment.paidAt}) = ${year}`)).groupBy(payment.purpose);
+const byPurpose = await db.select({ p: payment.purpose, s: sql<number>`coalesce(sum(${payment.amountXof}),0)::float` }).from(payment).leftJoin(profile, eq(profile.userId, payment.userId)).where(and(eq(payment.status, 'reussi'), sql`extract(year from ${payment.paidAt}) = ${year}`, inC(profile.country))).groupBy(payment.purpose);
 const byDom = ds.map((d) => byPurpose.filter((x) => PURPOSE_DOM[x.p] === d).reduce((a, x) => a + x.s, 0));
 const insAll = (await db.select({ c: osInscription.country, d: osInscription.domains, st: osInscription.status, f: osInscription.slaFrom }).from(osInscription)).filter((x) => sc.inScope({ country: x.c, domain: x.d }));
 const insV = insAll.filter((x) => x.st === 'Validée').length, insP = insAll.filter((x) => x.st === 'En attente').length;
@@ -53,7 +56,7 @@ const staffN = people.filter((s) => s.active && sc.inScope({ country: s.country 
 // Chantiers BTP : facturé (situations), marges à terminaison
 const [sites, sLots] = await Promise.all([db.select().from(osSite), db.select().from(osSiteLot)]);
 const sitesV = sites.filter((x) => sc.inScope({ country: x.country })).map((x) => ({ x, m: marge(x.amount, sLots.filter((l) => l.siteId === x.id)) }));
-const btpCa = Number(((await db.execute(sql`select coalesce(sum(amount),0)::float s from os_site_statement`)).rows[0] as { s: number }).s);
+const btpCa = Number(((await db.execute(sql`select coalesce(sum(st.amount),0)::float s from os_site_statement st join os_site si on si.id = st.site_id where ${cs ? sql`si.country in (${sql.join(cs.map((c) => sql`${c}`), sql`, `)})` : sql`true`}`)).rows[0] as { s: number }).s);
 const [expiring, lowStock] = await Promise.all([
   db.select({ title: osContract.title, country: osContract.country, domain: osContract.domain }).from(osContract).where(sql`${osContract.status} = 'En vigueur' and ${osContract.end} < now() + interval '60 days'`),
   db.select({ label: osStockItem.label, country: osStockItem.country }).from(osStockItem).where(sql`${osStockItem.qty} < ${osStockItem.min}`),

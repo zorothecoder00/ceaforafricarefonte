@@ -56,8 +56,23 @@ const chev = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke
       <a class="icon-btn" href="/espace/notifications" data-auth="in" hidden aria-label={t('notifs')}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10 21a2 2 0 0 0 4 0" /></svg><span class="dotn" data-unread hidden></span></a>
       <a class="btn btn-gold btn-sm" href={L('/kapital')} aria-label="CEA Kapital Invest"><span class="kfull">Kapital Invest</span><span class="kshort">Kapital</span></a>
       <a class="btn btn-primary btn-sm" id="loginBtn" href={L('/connexion')} data-auth="out">{t('login')}</a>
-      <a class="btn btn-primary btn-sm" href="/espace" data-auth="in" hidden><span data-username>{t('mySpace')}</span></a>
-      <button class="btn btn-ghost btn-sm top-logout" type="button" data-auth="in" data-logout hidden title={t('logout')} aria-label={t('logout')}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></svg><span class="lo-txt">{t('logout')}</span></button>
+      <div class="umenu" data-auth="in" hidden>
+        <button class="btn btn-primary btn-sm um-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="umPanel" title={en ? 'My account' : 'Mon compte'}><span class="um-av" data-userinit aria-hidden="true"></span><span data-username>{t('mySpace')}</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></button>
+        <div class="um-panel" id="umPanel" hidden>
+          <div class="um-id"><span class="um-av lg" data-userinit aria-hidden="true"></span><div style="min-width:0"><b data-userfull></b><div class="xs muted um-mail" data-useremail></div><div class="xs" data-userroles></div></div></div>
+          <a href="/espace">{en ? 'My dashboard' : 'Mon tableau de bord'}</a>
+          <a href="/espace/profil">{en ? 'My profile' : 'Mon profil'}</a>
+          <a href="/espace/carte">{en ? 'Membership card' : 'Carte de membre'}</a>
+          <a href="/espace/demandes">{en ? 'My requests' : 'Mes demandes'}</a>
+          <a href="/espace/notifications">{en ? 'Notifications' : 'Notifications'}</a>
+          <hr />
+          <a href="/espace/securite">{en ? 'Security and password' : 'Sécurité et mot de passe'}</a>
+          <a href="/espace/confidentialite">{en ? 'Privacy and my data' : 'Confidentialité et mes données'}</a>
+          <a href="/admin" data-staff hidden>{en ? 'CEA OS back office' : 'Back-office CEA OS'}</a>
+          <hr />
+          <button type="button" data-logout>{t('logout')}</button>
+        </div>
+      </div>
       <button class="icon-btn menu-btn" id="menuBtn" type="button" aria-label={t('menu')} aria-expanded="false" aria-controls="drawer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18" /></svg></button>
     </div>
   </div>

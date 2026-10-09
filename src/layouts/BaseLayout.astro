@@ -26,6 +26,9 @@ const loc = await getLocalisation();
 // Univers de la page (CDC §5.2) : couleur secondaire d'orientation pour l'Académie, Talents, Events et Kapital (doré, sur son thème sombre)
 const section = frPath.split('/')[1] ?? '';
 const univers = ({ academie: 'academie', programmes: 'academie', opportunites: 'talents', evenements: 'events', kapital: 'kapital' } as Record<string, string>)[section];
+// Thème sombre (CDC §5.1) : proposé dans les espaces connectés (Mon espace, CEA OS) et sur CEA Kapital Invest ; le site public
+// reste toujours clair (il alterne déjà fonds clairs et blocs bleu nuit)
+const themable = os || ['espace', 'admin', 'kapital'].includes(section);
 const alt = (l: 'fr' | 'en') => new URL(lp(l, frPath === '/' ? '/' : frPath + '/'), Astro.site).href;
 
 // Contenu de la page : en anglais, les liens internes sont réécrits vers /en/…
@@ -44,7 +47,7 @@ const searchIndex = ([
 ] as SearchEntry[]).map((e) => ({ ...e, h: lp(lang, e.h) }));
 ---
 <!doctype html>
-<html lang={lang}>
+<html lang={lang} data-theme={themable ? undefined : 'light'} data-themable={themable ? '' : undefined}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -69,7 +72,7 @@ const searchIndex = ([
     {os && <meta name="robots" content="noindex" />}
     <script is:inline>
       try {
-        var t = localStorage.getItem('cea-theme'); if (t) document.documentElement.dataset.theme = t;
+        var t = localStorage.getItem('cea-theme'); if (t && document.documentElement.hasAttribute('data-themable')) document.documentElement.dataset.theme = t;
         var f = localStorage.getItem('cea-fs'); if (f) document.documentElement.style.setProperty('--fs', f + 'px');
         if (localStorage.getItem('cea-lite') === '1') document.documentElement.classList.add('lite');
         if (localStorage.getItem('cea-side') === 'min') document.documentElement.classList.add('side-min');

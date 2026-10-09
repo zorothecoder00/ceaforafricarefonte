@@ -42,7 +42,7 @@ const STATE_TONE: Record<string, string> = { brouillon: '', a_venir: 'gold', ouv
     )}
   </div>
   {canC && (
-    <details class="panel" style="margin-top:12px"><summary><b>Nouvel appel à candidatures</b></summary>
+    <details class="panel" style="margin-top:12px" data-create="Nouvel appel à candidatures"><summary><b>Nouvel appel à candidatures</b></summary>
       <form id="newCall" style="margin-top:10px">
         <div class="grid g2" style="gap:0 12px">
           <div><label class="f" for="t">Titre</label><input class="in" id="t" name="title" required minlength="3" maxlength="160" placeholder="Incubation — Cohorte 2027" /></div>
@@ -72,7 +72,7 @@ const STATE_TONE: Record<string, string> = { brouillon: '', a_venir: 'gold', ouv
     )}
   </div>
   {canC && (
-    <details class="panel" style="margin-top:12px"><summary><b>Nouvelle cohorte</b></summary>
+    <details class="panel" style="margin-top:12px" data-create="Nouvelle cohorte"><summary><b>Nouvelle cohorte</b></summary>
       <form data-api="/api/admin/programmes" style="margin-top:10px">
         <input type="hidden" name="action" value="cohort.save" />
         <div class="grid g2" style="gap:0 12px">

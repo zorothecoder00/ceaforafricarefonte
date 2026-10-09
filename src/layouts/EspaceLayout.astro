@@ -56,13 +56,14 @@ const tabs: [string, string, string][] = [
       <div class="side-body" id="sideBody">
         <div class="small" style="padding:0 12px 8px"><b>{user.name}</b><br /><span class="muted xs">{roles.map((r) => ROLE_LABEL[r] ?? r).join(' · ')}</span></div>
         {groups.map(([h, links]) => (
-          <>
-            <h5>{h}</h5>
-            {links.filter((l) => l[2] !== false).map(([href, label]) => <a href={href} title={label} aria-current={path === href ? 'page' : undefined}><Icon name={ICONS[href] ?? 'info'} size={18} /><span class="sl">{label}</span></a>)}
-          </>
+          <section class="sg" data-sg={`es:${h}`}>
+            <h5><button class="sg-h" type="button" aria-expanded="true">{h}<span class="sg-c" aria-hidden="true"></span></button></h5>
+            <div class="sg-l">{links.filter((l) => l[2] !== false).map(([href, label]) => <a href={href} title={label} aria-current={path === href ? 'page' : undefined}><Icon name={ICONS[href] ?? 'info'} size={18} /><span class="sl">{label}</span></a>)}</div>
+          </section>
         ))}
         <button class="side-logout" type="button" data-logout title="Se déconnecter"><Icon name="logout" size={18} /><span class="sl">Se déconnecter</span></button>
       </div>
+      <script is:inline>/* Groupes repliés (choix mémorisé), appliqués avant l'affichage pour éviter un saut */try{var k=JSON.parse(localStorage.getItem('cea-sg')||'[]');document.querySelectorAll('#sideNav .sg').forEach(function(s){if(k.indexOf(s.dataset.sg)>-1&&!s.querySelector('[aria-current=page]')){s.classList.add('closed');s.querySelector('.sg-h').setAttribute('aria-expanded','false')}})}catch(e){}</script>
     </nav>
     <div class="dash-main">
       {tfaMissing && !path.startsWith('/espace/securite') && (

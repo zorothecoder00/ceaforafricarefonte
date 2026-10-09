@@ -67,7 +67,7 @@ const today = new Date().toISOString().slice(0, 10), monthStart = today.slice(0,
         )}
       </div>
       {canC && (
-        <details class="panel" style="margin-top:14px"><summary><b>Facture manuelle</b> <span class="xs muted">(sponsoring, prestation réglée par virement…)</span></summary>
+        <details class="panel" style="margin-top:14px" data-create="Facture manuelle"><summary><b>Facture manuelle</b> <span class="xs muted">(sponsoring, prestation réglée par virement…)</span></summary>
           <form id="manF" style="margin-top:10px">
             <div class="grid g2" style="gap:0 12px">
               <div><label class="f" for="mo">Organisation du CRM</label><select class="in" id="mo" name="orgId"><option value="">—</option>{orgs.map((o) => <option value={o.id}>{o.name}</option>)}</select></div>

@@ -67,6 +67,35 @@ if (sideBtn) {
     sync();
   });
 }
+/* Groupes du menu latéral repliables (titre cliquable), choix mémorisé ; le menu garde sa position d'une page à l'autre
+   et fait toujours apparaître le lien de la page courante. */
+const sideNav = $<HTMLElement>('#sideNav');
+if (sideNav) {
+  const SG = 'cea-sg';
+  const closed = (): string[] => { try { return JSON.parse(store(SG) || '[]'); } catch { return []; } };
+  $$<HTMLButtonElement>('.sg-h', sideNav).forEach((b) => b.addEventListener('click', () => {
+    const s = b.closest<HTMLElement>('.sg')!;
+    const shut = s.classList.toggle('closed');
+    b.setAttribute('aria-expanded', String(!shut));
+    const k = s.dataset.sg!;
+    store(SG, JSON.stringify(shut ? [...new Set([...closed(), k])] : closed().filter((x) => x !== k)));
+  }));
+  const POS = 'cea-side-pos:' + (document.body.classList.contains('os') ? 'os' : 'es');
+  try { const p = Number(sessionStorage.getItem(POS)); if (p) sideNav.scrollTop = p; } catch {}
+  addEventListener('pagehide', () => { try { sessionStorage.setItem(POS, String(sideNav.scrollTop)); } catch {} });
+  const cur = $<HTMLElement>('[aria-current="page"]', sideNav);
+  if (cur) {
+    // Centre le lien courant dans le conteneur qui défile (vertical sur ordinateur, horizontal sur mobile) s'il n'y est pas visible
+    const show = (box: HTMLElement) => {
+      const b = box.getBoundingClientRect(), r = cur.getBoundingClientRect();
+      if (box.scrollHeight > box.clientHeight + 1 && (r.top < b.top + 60 || r.bottom > b.bottom - 60)) box.scrollTop += r.top - b.top - (b.height - r.height) / 2;
+      if (box.scrollWidth > box.clientWidth + 1 && (r.left < b.left || r.right > b.right)) box.scrollLeft += r.left - b.left - (b.width - r.width) / 2;
+    };
+    show(sideNav);
+    const body = $<HTMLElement>('#sideBody', sideNav);
+    if (body) show(body);
+  }
+}
 const withLang = (p: string) => (EN && p.startsWith('/') && !p.startsWith('/en/') ? '/en' + p : p);
 
 /* ===== méga-menus (CDC §5.3) ===== */
@@ -517,18 +546,68 @@ if (import.meta.env.PROD && 'PerformanceObserver' in window && Math.random() < 0
 /* ===== état de connexion dans l'en-tête (pages statiques) ===== */
 fetch('/api/moi', { credentials: 'same-origin' })
   .then((r) => (r.ok ? r.json() : null))
-  .then((d: { user: { name: string } | null; unread?: number } | null) => {
+  .then((d: { user: { name: string; email?: string; roleLabels?: string[]; staff?: boolean } | null; unread?: number } | null) => {
     const inside = !!d?.user;
     $$('[data-auth="out"]').forEach((el) => (el.hidden = inside));
     $$('[data-auth="in"]').forEach((el) => (el.hidden = !inside));
     if (!d?.user) return;
     const first = d.user.name.split(' ')[0];
     $$('[data-username]').forEach((el) => (el.textContent = first.length > 14 ? (EN ? 'My space' : 'Mon espace') : first));
+    // Menu du compte : identité, rôles, accès au back-office pour l'équipe
+    const ini = d.user.name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+    $$('[data-userinit]').forEach((el) => (el.textContent = ini));
+    $$('[data-userfull]').forEach((el) => (el.textContent = d.user!.name));
+    $$('[data-useremail]').forEach((el) => (el.textContent = d.user!.email ?? ''));
+    $$('[data-userroles]').forEach((el) => (el.textContent = (d.user!.roleLabels ?? []).join(' · ')));
+    $$('[data-staff]').forEach((el) => (el.hidden = !d.user!.staff));
     const n = d.unread ?? 0;
     $$('[data-unread]').forEach((el) => { el.hidden = n === 0; el.textContent = n > 9 ? '9+' : String(n); });
   })
   .catch(() => {});
+/* Retour à l'espace connecté : quand on passe de Mon espace (ou de CEA OS) à une page du site — diagnostic, centre d'aide,
+   catalogue… —, un bandeau sous l'en-tête ramène à la page de départ, tant qu'on navigue sur le site depuis là. */
+{
+  const BK = 'cea-back';
+  const app = (p: string) => /^\/(en\/)?(espace|admin)(\/|$)/.test(p);
+  if (app(location.pathname)) {
+    try { sessionStorage.setItem(BK, JSON.stringify({ h: location.pathname + location.search, t: /^\/(en\/)?(espace|admin)\/?$/.test(location.pathname) ? (EN ? 'Dashboard' : 'Accueil') : document.title.split(' — ')[0] })); } catch {}
+  } else {
+    let ref: URL | null = null;
+    try { ref = document.referrer ? new URL(document.referrer) : null; } catch {}
+    const same = ref?.origin === location.origin;
+    let back: { h: string; t: string } | null = null;
+    try { back = JSON.parse(sessionStorage.getItem(BK) || 'null'); } catch {}
+    if (back && same && !location.pathname.startsWith('/connexion')) {
+      const os = /^\/(en\/)?admin/.test(back.h);
+      const bar = document.createElement('div');
+      bar.className = 'backbar';
+      bar.innerHTML = '<div class="wrap"><a></a><button type="button"></button></div>';
+      const a = bar.querySelector('a')!;
+      a.href = back.h;
+      a.textContent = `← ${os ? (EN ? 'Back to CEA OS' : 'Revenir à CEA OS') : (EN ? 'Back to My space' : 'Revenir à Mon espace')}${back.t ? ' · ' + back.t : ''}`;
+      const x = bar.querySelector('button')!;
+      x.textContent = '✕';
+      x.setAttribute('aria-label', EN ? 'Hide' : 'Masquer');
+      x.addEventListener('click', () => { bar.remove(); try { sessionStorage.removeItem(BK); } catch {} });
+      $('#app')?.prepend(bar);
+      // Collé sous l'en-tête : il reste visible même quand la page s'ouvre sur une ancre (/aide#ticket…)
+      const top = $('#top');
+      if (top) bar.style.top = `${top.getBoundingClientRect().height}px`;
+    }
+  }
+}
+
+/* Menu du compte (en-tête du site, barre de CEA OS) : ouverture au clic, fermeture par un clic à côté ou Échap */
+$$<HTMLElement>('.umenu').forEach((m) => {
+  const btn = $<HTMLButtonElement>('.um-btn', m), panel = $<HTMLElement>('.um-panel', m);
+  if (!btn || !panel) return;
+  const set = (open: boolean) => { panel.hidden = !open; btn.setAttribute('aria-expanded', String(open)); };
+  btn.addEventListener('click', (e) => { e.stopPropagation(); set(!!panel.hidden); if (!panel.hidden) $<HTMLElement>('a,button', panel)?.focus(); });
+  document.addEventListener('click', (e) => { if (!panel.hidden && !m.contains(e.target as Node)) set(false); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden) { set(false); btn.focus(); } });
+});
 $$('[data-logout]').forEach((b) => b.addEventListener('click', async () => {
+  try { sessionStorage.removeItem('cea-back'); } catch {}
   await fetch('/api/auth/sign-out', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {});
   location.href = EN ? '/en/' : '/';
 }));

@@ -35,7 +35,7 @@ const post = (body: object) => JSON.stringify(body);
 ---
 <AdminLayout title="Offres d'emploi" lead="Vérifier l'employeur, l'absence de critère discriminatoire et la réalité du poste. Une offre reste visible 60 jours, prolongeables." obj="offre_emploi">
   {canC && (
-    <details class="panel" style="margin-bottom:14px">
+    <details class="panel" style="margin-bottom:14px" data-create="Saisir une offre">
       <summary style="cursor:pointer"><b>+ Saisir une offre</b> <span class="xs muted">(offre reçue par e-mail, offre d'un partenaire… publiée directement)</span></summary>
       <div style="margin-top:12px"><JobForm action="create" /></div>
     </details>

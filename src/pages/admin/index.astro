@@ -14,6 +14,7 @@ import { osRequest, osTask, osMeeting, osDecision } from '../../db/schema/os';
 import { osContext, allStaff, scopeState, canUse, MANAGERS, type Person } from '../../lib/os/core';
 import { pendingFor, thresholds, budgets, activeDelegations } from '../../lib/os/approvals';
 import { myChannels } from '../../lib/os/collab';
+import { escalatedFor } from '../../lib/os/relations';
 import { DK, PK, RTYPE, pn, refT, fcfa, dstr, type ReqType } from '../../lib/os/ref';
 
 export const prerender = false;
@@ -28,13 +29,13 @@ let people: Person[] = [];
 let data: null | {
   pend: Awaited<ReturnType<typeof pendingFor>>; mine: (typeof osRequest.$inferSelect)[]; manager: string;
   thr: Awaited<ReturnType<typeof thresholds>>; bud: Awaited<ReturnType<typeof budgets>>; countries: string[]; domains: string[];
-  tasks: (typeof osTask.$inferSelect)[]; decs: (typeof osDecision.$inferSelect)[]; meet: (typeof osMeeting.$inferSelect)[]; chans: Awaited<ReturnType<typeof myChannels>>;
+  tasks: (typeof osTask.$inferSelect)[]; decs: (typeof osDecision.$inferSelect)[]; esc: Awaited<ReturnType<typeof escalatedFor>>; meet: (typeof osMeeting.$inferSelect)[]; chans: Awaited<ReturnType<typeof myChannels>>;
 } = null;
 if (me) {
   const [ps, delegs] = await Promise.all([allStaff(), activeDelegations()]);
   people = ps;
   const sc = scopeState(os, Astro.cookies);
-  const [pend, mine, thr, bud, tasks, meet, chans, decs] = await Promise.all([
+  const [pend, mine, thr, bud, tasks, meet, chans, decs, esc] = await Promise.all([
     pendingFor(me.id, { people, delegs }),
     db.select().from(osRequest).where(eq(osRequest.byStaff, me.id)).orderBy(desc(osRequest.createdAt)),
     thresholds(), budgets(),
@@ -42,14 +43,23 @@ if (me) {
     db.select().from(osMeeting).where(and(sql`${osMeeting.participants} @> ${JSON.stringify([me.id])}::jsonb`, gte(osMeeting.at, new Date(Date.now() - 864e5)))).orderBy(asc(osMeeting.at)).limit(4),
     myChannels(me, people),
     me.prof === 'dg' ? db.select().from(osDecision).where(eq(osDecision.status, 'En attente')) : Promise.resolve([]),
+    escalatedFor(me).catch(() => []),
   ]);
   data = {
-    pend, mine, thr, bud, tasks, meet, chans, decs, manager: people.find((s) => s.id === me.managerId)?.name ?? 'votre responsable',
+    pend, mine, thr, bud, tasks, meet, chans, decs, esc, manager: people.find((s) => s.id === me.managerId)?.name ?? 'votre responsable',
     countries: PK.filter((p) => sc.inScope({ country: p })), domains: DK.filter((d) => sc.inScope({ domain: d })),
   };
 }
 const canDep = me && ['rep', 'dirreg', 'chef', 'dg', 'agent', 'cond'].includes(me.prof);
 const name = (id: string) => people.find((s) => s.id === id)?.name ?? '—';
+const RTYPES: Record<ReqType, string> = { dep: 'Dépenses', ndf: 'Notes de frais', conge: 'Congés', achat: "Demandes d'achat", contrat: 'Contrats', recrut: 'Recrutements', offre: 'Offres hors fourchette' };
+// Ce qui attend la décision de l'utilisateur, détaillé par nature (même total que le compteur « Approbations » du menu)
+const toApprove = data ? data.pend.length + data.decs.length + data.esc.length : 0;
+const approveDetail = data ? [
+  ...Object.entries(data.pend.reduce<Record<string, number>>((a, p) => ({ ...a, [p.r.type]: (a[p.r.type] ?? 0) + 1 }), {})).map(([t, n]) => `${n} ${(n > 1 ? RTYPES : RTYPE)[t as ReqType].toLowerCase()}`),
+  data.decs.length ? `${data.decs.length} décision${data.decs.length > 1 ? 's' : ''} de réunion` : '',
+  data.esc.length ? `${data.esc.length} inscription${data.esc.length > 1 ? 's' : ''} en retard` : '',
+].filter(Boolean).join(' · ') : '';
 ---
 <AdminLayout title={title} lead={me ? `${refT(me.poste)} · ${pn(me.country)} · ${today}` : `${today} · vos files de travail selon vos droits ; toutes les actions sont tracées dans le journal d'audit.`}>
   <Fragment slot="actions">{canUse(MANAGERS, os) && <a class="btn ghost" href="/admin/cockpit">Ouvrir le cockpit</a>}</Fragment>
@@ -61,11 +71,11 @@ const name = (id: string) => people.find((s) => s.id === id)?.name ?? '—';
         <button type="button" data-dlg="dlg-achat">Demande d'achat<small>Fournitures, matériel, prestations</small></button>
         {canDep && <button type="button" data-dlg="dlg-dep">Dépense<small>Circuit selon le montant</small></button>}
         <button type="button" data-dlg="dlg-meet">Planifier une réunion<small>Avec compte rendu</small></button>
-        <a href="/admin/moi/temps">Saisir mes temps<small>Semaine en cours</small></a>
+        <a href="/admin/moi/temps">Feuille de temps<small>Heures de la semaine en cours</small></a>
         <a href="/admin/poste">Mon poste<small>Fiche {me.poste} et indicateurs</small></a>
       </div>
       <div class="grid g4">
-        <div class="card kpi"><div class="l">À approuver</div><div class="v num">{data.pend.length + data.decs.length}</div>{data.pend.length + data.decs.length > 0 && <div class="d down">Vous êtes attendu·e</div>}</div>
+        <a class="card kpi kpi-link" href="/admin/approbations" title="Demandes de vos collègues (congés, notes de frais, achats, dépenses…) qui attendent votre visa"><div class="l">Demandes à approuver par vous</div><div class="v num">{toApprove}</div><div class:list={['d', { down: toApprove > 0, muted: !toApprove }]}>{toApprove ? approveDetail : 'Aucune demande en attente de votre visa'}</div></a>
         <div class="card kpi"><div class="l">Mes tâches ouvertes</div><div class="v num">{data.tasks.length}</div></div>
         <div class="card kpi"><div class="l">Mes demandes en cours</div><div class="v num">{data.mine.filter((r) => r.status === 'En approbation').length}</div></div>
         <div class="card kpi"><div class="l">Solde de congés</div><div class="v num">{me.leaveDays} j</div></div>
@@ -77,10 +87,11 @@ const name = (id: string) => people.find((s) => s.id === id)?.name ?? '—';
           {!data.tasks.length && <p class="small muted">Aucune tâche ouverte.</p>}
         </div>
         <div class="card">
-          <div class="row between"><h2>À approuver</h2><a class="small" href="/admin/approbations">Tout voir</a></div>
+          <div class="row between"><h2>Demandes à approuver</h2><a class="small" href="/admin/approbations">Tout voir</a></div>
           {data.pend.slice(0, 6).map((p) => <div class="small" style="padding:6px 0;border-bottom:1px solid var(--line)">{RTYPE[p.r.type as ReqType]} {p.r.id} — {p.r.title}{p.r.amount > 0 && <> · <b>{fcfa(p.r.amount)}</b></>}</div>)}
           {data.decs.slice(0, 3).map((d) => <div class="small" style="padding:6px 0;border-bottom:1px solid var(--line)">Décision : {d.text}</div>)}
-          {!data.pend.length && !data.decs.length && <p class="small muted">Rien en attente.</p>}
+          {data.esc.slice(0, 3).map((x) => <div class="small" style="padding:6px 0;border-bottom:1px solid var(--line)">Inscription en retard (plus de 48 h) : {x.name}</div>)}
+          {!toApprove && <p class="small muted">Rien en attente.</p>}
         </div>
         <div class="card">
           <div class="row between"><h2>Prochaines réunions</h2><a class="small" href="/admin/agenda">Agenda</a></div>

@@ -69,7 +69,7 @@ export const MODS: [string, NavItem[]][] = [
     { href: '/admin', label: 'Accueil' },
     { href: '/admin/poste', label: 'Mon poste et mes indicateurs', spec: ALL, staff: true },
     { href: '/admin/moi', label: 'Mes demandes', spec: ALL, staff: true },
-    { href: '/admin/moi/temps', label: 'Mes temps', spec: ALL, staff: true },
+    { href: '/admin/moi/temps', label: 'Ma feuille de temps', spec: ALL, staff: true },
     { href: '/admin/moi/paie', label: 'Mes bulletins de paie', spec: ALL, staff: true },
     { href: '/admin/messagerie', label: 'Messagerie', spec: ALL, staff: true },
     { href: '/admin/agenda', label: 'Agenda et réunions', spec: ALL, staff: true },
@@ -179,5 +179,11 @@ export function scopeState(c: Pick<OsCtx, 'me' | 'superuser'>, cookies: AstroCoo
     return true;
   };
   return { sc, scope, opts, label, inScope };
+}
+/** Pays couverts par le périmètre affiché (null = toute l'organisation), pour filtrer en SQL les chiffres agrégés. */
+export function scopeCountries(sc: Pick<ScopeState, 'sc'>): string[] | null {
+  if (sc.sc.startsWith('p:')) return [sc.sc.slice(2)];
+  if (sc.sc.startsWith('r:')) return PK.filter((p) => regOf(p) === sc.sc.slice(2));
+  return null;
 }
 export { PAYS };

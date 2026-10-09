@@ -18,7 +18,7 @@ const show = (v: string) => v || '—';
 <AdminLayout title="Matrice des droits" lead="L = lecture · C = création · M = modification · V = validation · * = limité aux éléments propres, partagés ou assignés · — = aucun accès. Cette matrice est celle qu'applique la plateforme." obj="contenus" hints={['parametres']}>
   {canM && (
     <div class="panel small" style="margin-bottom:14px;border-left:4px solid var(--gold)">
-      <b>Modifier un droit :</b> cliquez sur une case. Les cases <span style="background:#FFF3D6;padding:0 4px;border-radius:4px">surlignées</span> s'écartent du cahier des charges ; 🔒 = case verrouillée. Les rôles restent ceux du cahier des charges ; seuls leurs droits changent. La modification s'applique en moins d'une minute sur tout le site et est inscrite au journal d'audit.
+      <b>Modifier un droit :</b> cliquez sur une case. Les cases <span style="background:var(--gold-soft);padding:0 4px;border-radius:4px">surlignées</span> s'écartent du cahier des charges ; 🔒 = case verrouillée. Les rôles restent ceux du cahier des charges ; seuls leurs droits changent. La modification s'applique en moins d'une minute sur tout le site et est inscrite au journal d'audit.
     </div>
   )}
   <div class="panel matrix-scroll" tabindex="0" aria-label="Matrice des droits (défilement horizontal et vertical)">
@@ -28,7 +28,7 @@ const show = (v: string) => v || '—';
         <tr><th class="small obj" scope="row">{OBJ_LABEL[o]}</th>{ROLES.map((r) => {
           const v = rightsOf(r, o), def = MATRIX[r][o] ?? '', lock = lockReason(r, o), diff = v !== def;
           return (
-            <td class="xs" style={`text-align:center;padding:0;${diff ? 'background:#FFF3D6;' : ''}`}>
+            <td class="xs" style={`text-align:center;padding:0;${diff ? 'background:var(--gold-soft);' : ''}`}>
               {canM && !lock
                 ? <button type="button" class="cell" data-role={r} data-obj={o} data-v={v} data-def={def} data-label={`${ROLE_LABEL[r]} · ${OBJ_LABEL[o]}`} title={diff ? `Cahier des charges : ${show(def)}` : 'Modifier'} style={v ? 'font-weight:600' : 'color:var(--muted)'}>{show(v)}</button>
                 : <span class="cell" title={lock ?? undefined} style={v ? 'font-weight:600' : 'color:var(--muted)'}>{show(v)}{canM && lock ? ' 🔒' : ''}</span>}

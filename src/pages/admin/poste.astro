@@ -22,9 +22,10 @@ const name = (id: string | null) => people.find((s) => s.id === id)?.name ?? '�
 const mgr = people.find((s) => s.id === u?.managerId);
 const sc = scopeState(os, Astro.cookies);
 ---
-<AdminLayout title="Mon poste et mes indicateurs" lead={u ? `${refT(u.poste)} · poste ${u.poste} du référentiel · profil d'accès « ${PROF[u.prof]} » · périmètre : ${sc.label}` : ''}>
+<AdminLayout title="Mon poste et mes indicateurs" lead={u ? `${refT(u.poste)} · poste ${u.poste} du référentiel · profil d'accès « ${PROF[u.prof]} » · périmètre du poste : ${sc.opts[0][1].trim()}` : ''}>
   {u ? (
     <>
+      <div class="watch" style="margin-bottom:14px">Votre fiche de collaborateur dans CEA OS : <b>vos indicateurs</b> (ce sur quoi votre poste est évalué), <b>votre fiche de poste</b> (missions, responsabilités, droits d'accès), <b>votre délégation de signature</b> pendant une absence et <b>votre rattachement</b> hiérarchique. C'est le poste qui donne les droits : changer de poste change les accès.</div>
       <h2>Mes indicateurs, calculés en direct</h2>
       <div class="grid g4">
         {ks.map((x) => { const st = kpiState(x); return (
@@ -36,7 +37,7 @@ const sc = scopeState(os, Astro.cookies);
         ); })}
         {!ks.length && <div class="empty">Aucun indicateur calculable pour l'instant.</div>}
       </div>
-      <p class="xs muted" style="margin-top:6px">Calculés à partir des données de CEA OS ; vert = cible atteinte, orange = à surveiller, rouge = hors cible.</p>
+      <p class="xs muted" style="margin-top:6px">Calculés à partir des données de CEA OS sur tout le périmètre de votre poste (le sélecteur « Périmètre » du haut ne les change pas) ; vert = cible atteinte, orange = à surveiller, rouge = hors cible.</p>
       <div class="split" style="margin-top:14px">
         <div>
           {u.onboarding && <><Onboarding u={u} canTick /><div style="height:14px"></div></>}

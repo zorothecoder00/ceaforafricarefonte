@@ -52,7 +52,16 @@ const en = lang === 'en';
     else if (read() && (window as unknown as { _paq?: unknown })._paq) location.reload(); // retrait : décharger le traceur
   }
   const c = read();
-  if (!c) { banner.hidden = false; reserve(); }
+  if (!c) {
+    // Membre connecté qui a déjà choisi (sur un autre appareil ou une autre adresse du site) : son choix enregistré s'applique
+    fetch('/api/consentements', { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((d: { consents?: Record<string, boolean> } | null) => {
+      const known = d?.consents?.cookies_mesure;
+      if (typeof known === 'boolean') {
+        try { localStorage.setItem(KEY, JSON.stringify({ mesure: known, at: new Date().toISOString() })); } catch { /* stockage indisponible */ }
+        if (known) loadMatomo();
+      } else { banner.hidden = false; reserve(); }
+    });
+  }
   else if (c.mesure) loadMatomo();
   banner.querySelectorAll<HTMLButtonElement>('[data-consent]').forEach((b) => b.addEventListener('click', () => choose(b.dataset.consent === '1')));
   document.querySelectorAll('[data-cookie-settings]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); banner.hidden = false; banner.querySelector('button')?.focus(); }));
