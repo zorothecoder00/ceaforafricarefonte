@@ -1,0 +1,158 @@
+---
+/* CEA OS — fiche d'un dossier du moteur de workflow : phases du workflow universel, propriétés obligatoires (responsable,
+   échéance, prochaine action, preuve), circuit de validation avec échéances et escalades, pièces (★ critiques), journal
+   immuable des décisions, tâches d'exécution. Actions selon le rôle : approbateur (approuver, rejeter, demander une
+   modification), auteur (compléter, soumettre à nouveau), responsable (faire avancer, clore, capitaliser). Les liens des
+   notifications mènent ici (WFL-13). */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Dlg from '../../../components/os/Dlg.astro';
+import Tags from '../../../components/os/Tags.astro';
+import { asc, eq, like } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { osRequest, osWfDecision, osTask } from '../../../db/schema/os';
+import { osContext, inUserScope } from '../../../lib/os/core';
+import { approvers, canSee, wfConfig, wfEnv } from '../../../lib/os/approvals';
+import { PHASE_LABEL, ROLE, circuitLabel, missingCritical, nextPhase, type Phase, type Role } from '../../../lib/os/workflow-core';
+import { pn, fcfa, dstr, dtstr } from '../../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const me = os.me;
+const id = Astro.params.id ?? '';
+const [[r], cfg, e] = await Promise.all([db.select().from(osRequest).where(eq(osRequest.id, id)), wfConfig(), wfEnv()]);
+if (!r) return Astro.redirect('/os/flux');
+const visible = canSee(me, os.superuser, r, e, (x) => inUserScope(os, x));
+const [log, tasks] = visible ? await Promise.all([
+  db.select().from(osWfDecision).where(eq(osWfDecision.requestId, r.id)).orderBy(asc(osWfDecision.at)),
+  db.select().from(osTask).where(like(osTask.title, `[${r.id}]%`)).orderBy(asc(osTask.due)),
+]) : [[], []];
+const t = cfg.types.get(r.type);
+const name = (sid: string | null | undefined) => e.people.find((s) => s.id === sid)?.name ?? '—';
+const cur = r.steps[r.cur];
+const curAp = r.status === 'En approbation' && cur ? approvers(cur, r, e.people, e.delegs, e.organs) : null;
+const iApprove = !!me && !!curAp?.ids.includes(me.id);
+const iOwn = !!me && (r.owner === me.id || r.byStaff === me.id);
+const ownerP = e.people.find((s) => s.id === r.owner);
+const iManage = !!me && (iOwn || ownerP?.managerId === me.id || me.prof === 'dg');
+const waitsAuthor = ['À modifier', 'À corriger', 'Pièces demandées'].includes(r.status);
+const nxt = t ? nextPhase(t, r.phase) : null;
+const canAdvance = iOwn && !!nxt && r.status !== 'En approbation' && !waitsAuthor && !(r.status === 'Rejetée');
+const miss = t ? missingCritical(t.checklist, r.pieces) : [];
+const open = !['Clôturé', 'Capitalisé', 'Rejetée'].includes(r.status);
+const now = new Date();
+const DEC: Record<string, string> = {
+  cree: 'Création', soumis: 'Soumission', resoumis: 'Nouvelle soumission', pieces_manquantes: 'Pièces manquantes', approuve: 'Approbation', rejete: 'Rejet',
+  modifier: 'Modification demandée', escalade: 'Escalade', rappel: 'Rappel', sla_suspendu: 'Délai suspendu', valide: 'Validation finale', phase: 'Changement de phase', proprietes: 'Propriétés',
+};
+---
+<AdminLayout title={`${r.id} — ${r.title}`} lead={`${t?.label ?? r.type} · ${pn(r.country)}${r.countries.length > 1 ? ` et ${r.countries.filter((x) => x !== r.country).map(pn).join(', ')}` : ''} · créé par ${name(r.byStaff)} le ${dstr(r.createdAt)} · version ${r.version}`} crumbs={[['Dossiers et validations', '/os/flux'], [r.id]]}>
+  {!visible ? <div class="empty">Ce dossier ne fait pas partie de votre périmètre{r.conf !== 'Interne' ? ` (${r.conf.toLowerCase()})` : ''}.</div> : (
+    <>
+      <div class="steps2" style="margin-bottom:14px">{(t?.phases ?? [r.phase]).map((p, i) => { const pi = (t?.phases ?? []).indexOf(r.phase as Phase); return <>{i > 0 && <span class="muted xs">›</span>}<span class={`tag ${i < pi ? 'ok' : i === pi ? 'warn' : ''}`}>{PHASE_LABEL[p as Phase] ?? p}</span></>; })}</div>
+      <div class="split">
+        <div>
+          {iApprove && (
+            <div class="card" style="margin-bottom:14px;border-color:var(--gold)">
+              <h2 style="margin-top:0">Votre décision — {ROLE[cur!.l as Role] ?? cur!.l}{curAp!.via.get(me!.id) ? ` (par délégation de ${name(curAp!.via.get(me!.id))})` : ''}</h2>
+              <p class="small muted">Échéance de l'étape : {dtstr(cur!.due)}{cur!.why ? ` · étape requise car : ${cur!.why}` : ''}</p>
+              <div class="row">
+                <button class="btn ok" type="button" data-post="/api/admin/os/flux" data-body={JSON.stringify({ action: 'decide', id: r.id, decision: 'approuve' })} data-reload>Approuver</button>
+                <button class="btn ghost" type="button" data-dlg="dlg-dec" data-set-decision="modifier">Demander une modification</button>
+                <button class="btn bad" type="button" data-dlg="dlg-dec" data-set-decision="rejete">Rejeter</button>
+              </div>
+            </div>
+          )}
+          {waitsAuthor && iOwn && (
+            <div class="watch" style="margin-bottom:14px">
+              <b>{r.status}.</b> {r.nextAction}
+              <form data-upload="/api/admin/os/flux" style="margin-top:8px">
+                <input type="hidden" name="action" value="resubmit" /><input type="hidden" name="id" value={r.id} />
+                {(t?.checklist ?? []).map((x) => <div style="margin-bottom:6px"><label class="xs" for={`rs-${x.k}`}>{x.critical ? '★ ' : ''}{x.label}{r.pieces[x.k] ? ' (déjà fournie, remplacer ?)' : ''}</label><input class="in" type="file" id={`rs-${x.k}`} name={`piece_${x.k}`} accept="image/*,application/pdf,.docx,.xlsx,.pptx" style="width:100%" /></div>)}
+                <button class="btn" type="submit">Soumettre à nouveau{r.status !== 'Pièces demandées' ? ` (version ${r.version + 1})` : ''}</button>
+              </form>
+            </div>
+          )}
+          <div class="card">
+            <h2 style="margin-top:0">Circuit de validation {r.circuit && <span class="xs muted">· {r.circuit} — {cfg.circuits.get(r.circuit)?.name}</span>}</h2>
+            {r.steps.length ? (
+              <table class="t">
+                <thead><tr><th>Étape</th><th>Approbateur(s)</th><th>Échéance</th><th>Décision</th></tr></thead>
+                <tbody>{r.steps.map((s, i) => {
+                  const ap = i === r.cur && r.status === 'En approbation' ? approvers(s, r, e.people, e.delegs, e.organs).ids : [];
+                  return (
+                    <tr>
+                      <td><b>{ROLE[s.l as Role] ?? s.l}</b>{s.why && <div class="xs muted">{s.why}</div>}</td>
+                      <td class="small">{s.whoId ? s.who : ap.length ? ap.map(name).join(', ') : '—'}{(s.esc ?? []).length > 0 && <div class="xs down">Escalade : {s.esc!.map(name).join(', ')}</div>}</td>
+                      <td class:list={['small', { down: i === r.cur && r.status === 'En approbation' && s.due && new Date(s.due) < now }]}>{s.due ? dtstr(s.due) : `${s.sla ?? '—'} h`}</td>
+                      <td class="small">{s.st === 'ok' ? <span class="tag ok">Approuvé</span> : s.st === 'rejet' ? <span class="tag bad">Rejeté</span> : s.st === 'modifier' ? <span class="tag info">Modification</span> : i === r.cur && r.status === 'En approbation' ? <span class="tag warn">En attente</span> : <span class="tag">À venir</span>}{s.at && <div class="xs muted">{dtstr(s.at)}</div>}{s.com && <div class="xs">« {s.com} »</div>}</td>
+                    </tr>
+                  );
+                })}</tbody>
+              </table>
+            ) : <p class="small muted">Le circuit sera calculé à l'entrée en validation : {t ? circuitLabel((cfg.circuits.get(t.circuit)?.steps ?? []).filter((s) => !s.if?.length)) : '—'} (étapes conditionnelles selon le montant, la portée, le risque et la confidentialité).</p>}
+          </div>
+          {r.description && <div class="card" style="margin-top:14px"><h3 style="margin-top:0">Description</h3><p class="small" style="white-space:pre-wrap">{r.description}</p></div>}
+          <div class="card" style="margin-top:14px">
+            <h2 style="margin-top:0">Journal des décisions</h2>
+            <p class="xs muted">Journal immuable : chaque entrée conserve l'auteur, la date, la version et le motif ; aucune ne peut être modifiée ni supprimée.</p>
+            <ul class="timeline">{log.map((l) => <li><i></i><div class="small"><b>{DEC[l.decision] ?? l.decision}</b>{l.level ? ` — ${ROLE[l.level as Role] ?? l.level}` : ''} · {l.byName}{l.delegant ? ` (délégation de ${name(l.delegant)})` : ''} · v{l.version} · <span class="muted">{dtstr(l.at)}</span>{l.threshold && <div class="xs muted">Seuil ou condition : {l.threshold}</div>}{l.motif && <div class="xs">{l.motif}</div>}{l.proof && <div class="xs">Preuve : {l.proof}</div>}</div></li>)}</ul>
+          </div>
+        </div>
+        <aside>
+          <div class="card">
+            <h3 style="margin-top:0">Dossier</h3>
+            <p class="small"><Tags st={r.status} /> {r.conf !== 'Interne' && <span class="tag warn">{r.conf}</span>} {r.strategic && <span class="tag bad">Stratégique</span>} {r.risk !== 'normal' && <span class="tag">Risque {r.risk}</span>}</p>
+            <p class="small">Responsable : <b>{name(r.owner)}</b>{!r.owner && open && <span class="tag bad">à désigner</span>}<br />Échéance : <b class:list={{ down: r.due && r.due < now && open }}>{dstr(r.due)}</b><br />Prochaine action : <b>{r.nextAction ?? '—'}</b>{!r.nextAction && open && <span class="tag bad">à définir</span>}</p>
+            {r.amount > 0 && <p class="small">Montant : <b>{fcfa(r.amount)}</b></p>}
+            {r.proof && <p class="small">Preuve de réalisation : {r.proof}</p>}
+            {typeof r.data.lecon === 'string' && <p class="small">Enseignement capitalisé : {r.data.lecon}</p>}
+            {iManage && open && <button class="btn ghost sm" type="button" data-dlg="dlg-props">Modifier responsable, échéance, prochaine action</button>}
+            {canAdvance && (nxt === 'cloture' || nxt === 'capitalisation'
+              ? <button class="btn sm" type="button" data-dlg="dlg-adv" style="margin-top:6px">{nxt === 'cloture' ? 'Clore le dossier' : 'Capitaliser'}</button>
+              : <button class="btn sm" type="button" style="margin-top:6px" data-post="/api/admin/os/flux" data-body={JSON.stringify({ action: 'advance', id: r.id })} data-reload>{nxt === 'validation' ? 'Soumettre à la validation' : `Passer à « ${PHASE_LABEL[nxt!]} »`}</button>)}
+          </div>
+          <div class="card" style="margin-top:14px">
+            <h3 style="margin-top:0">Pièces</h3>
+            {(t?.checklist ?? []).map((x) => <div class="chk small">{r.pieces[x.k] ? <span class="tag ok">✓</span> : <span class={`tag ${x.critical ? 'bad' : ''}`}>{x.critical ? '★' : '○'}</span>} {x.label}</div>)}
+            {!(t?.checklist ?? []).length && <p class="small muted">Aucune pièce exigée pour ce type.</p>}
+            {miss.length > 0 && <p class="xs down">Pièce(s) critique(s) manquante(s) : le dossier ne peut pas entrer en validation.</p>}
+            {iOwn && open && (t?.checklist ?? []).length > 0 && !waitsAuthor && (
+              <form data-upload="/api/admin/os/flux" style="margin-top:8px">
+                <input type="hidden" name="action" value="pieces" /><input type="hidden" name="id" value={r.id} />
+                <select class="in" style="width:100%;margin-bottom:6px" aria-label="Pièce" onchange="this.nextElementSibling.name='piece_'+this.value">{t!.checklist.map((x) => <option value={x.k}>{x.label}</option>)}</select>
+                <input class="in" type="file" name={`piece_${t!.checklist[0].k}`} required accept="image/*,application/pdf,.docx,.xlsx,.pptx" style="width:100%" />
+                <button class="btn ghost sm" type="submit" style="margin-top:6px">Ajouter la pièce</button>
+              </form>
+            )}
+          </div>
+          {tasks.length > 0 && (
+            <div class="card" style="margin-top:14px">
+              <h3 style="margin-top:0">Tâches d'exécution</h3>
+              {tasks.map((k) => <div class="chk small"><span class={`tag ${k.status === 'Terminé' ? 'ok' : k.due < now ? 'bad' : ''}`}>{k.status}</span> {k.title.replace(`[${r.id}] `, '')} <span class="muted xs">· {name(k.owner)} · {dstr(k.due)}</span></div>)}
+              <a class="xs" href="/os/taches">Gérer dans Tâches</a>
+            </div>
+          )}
+        </aside>
+      </div>
+      <Dlg id="dlg-dec" title="Décision motivée" api="/api/admin/os/flux" submit="Enregistrer la décision">
+        <input type="hidden" name="action" value="decide" /><input type="hidden" name="id" value={r.id} /><input type="hidden" name="decision" value="rejete" />
+        <label class="f" for="dc">Motif (obligatoire, visible de l'auteur)</label><textarea class="in" id="dc" name="com" required minlength="3"></textarea>
+        <p class="xs muted">« Demander une modification » renvoie le dossier à son auteur ; un rejet {t?.rejectTo === 'corrige' ? 'le renvoie à corriger' : 'le clôt définitivement'}.</p>
+      </Dlg>
+      <Dlg id="dlg-props" title="Propriétés obligatoires" api="/api/admin/os/flux" submit="Enregistrer">
+        <input type="hidden" name="action" value="props" /><input type="hidden" name="id" value={r.id} />
+        <div class="fg">
+          <div><label class="f" for="po">Responsable (un seul)</label><select class="in" id="po" name="owner">{e.people.filter((s) => s.active).map((s) => <option value={s.id} selected={s.id === r.owner}>{s.name}</option>)}</select></div>
+          <div><label class="f" for="pd">Échéance</label><input class="in" type="date" id="pd" name="due" value={r.due ? r.due.toISOString().slice(0, 10) : ''} /></div>
+          <div class="full"><label class="f" for="pn">Prochaine action</label><input class="in" id="pn" name="nextAction" maxlength="300" value={r.nextAction ?? ''} /></div>
+        </div>
+      </Dlg>
+      <Dlg id="dlg-adv" title={nxt === 'cloture' ? 'Clore le dossier' : 'Capitaliser'} api="/api/admin/os/flux" submit={nxt === 'cloture' ? 'Clore' : 'Capitaliser'}>
+        <input type="hidden" name="action" value="advance" /><input type="hidden" name="id" value={r.id} />
+        {nxt === 'cloture'
+          ? <><label class="f" for="ap">Preuve de réalisation (obligatoire)</label><input class="in" id="ap" name="proof" required maxlength="1000" placeholder="Livrable, rapport, référence du document archivé…" style="width:100%" /><p class="xs muted">Les tâches d'exécution doivent être terminées.</p></>
+          : <><label class="f" for="al">Enseignement à capitaliser (obligatoire)</label><textarea class="in" id="al" name="lesson" required maxlength="2000"></textarea></>}
+      </Dlg>
+    </>
+  )}
+</AdminLayout>

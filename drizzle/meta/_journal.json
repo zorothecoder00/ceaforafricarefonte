@@ -337,6 +337,13 @@
       "when": 1791456893789,
       "tag": "0047_capital_partenaires",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1791566000954,
+      "tag": "0048_os_workflow",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,7 @@
 ---
 /* CEA OS — Mes demandes (prototype › pMoi) : congés, notes de frais, demandes d'achat, dépenses et contrats, avec le circuit
    d'approbation de chacune et les motifs donnés par les approbateurs. */
+import { typeName } from '../../../lib/os/workflow-defaults';
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import RequestDialogs from '../../../components/os/RequestDialogs.astro';
 import Steps from '../../../components/os/Steps.astro';
@@ -10,7 +11,7 @@ import { db } from '../../../lib/db';
 import { osRequest } from '../../../db/schema/os';
 import { osContext, staffById, scopeState } from '../../../lib/os/core';
 import { thresholds, budgets } from '../../../lib/os/approvals';
-import { DK, PK, RTYPE, dstr, fcfa, type ReqType } from '../../../lib/os/ref';
+import { DK, PK, dstr, fcfa } from '../../../lib/os/ref';
 
 export const prerender = false;
 const os = await osContext(Astro.locals.user!);
@@ -33,7 +34,7 @@ const [list, thr, bud, mgr] = me ? await Promise.all([
       <tbody>
         {list.map((r) => (
           <tr>
-            <td class="small"><b>{RTYPE[r.type as ReqType]}</b><br />{r.id}</td>
+            <td class="small"><b>{typeName(r.type)}</b><br />{r.id}</td>
             <td>{r.title}{(r.data as { just?: { name: string } }).just && <div class="xs"><a href={`/api/admin/os/justificatif?id=${r.id}`} target="_blank" rel="noopener">Justificatif</a></div>}</td>
             <td class="num">{r.amount ? fcfa(r.amount) : '—'}</td>
             <td class="small">{dstr(r.createdAt)}</td>

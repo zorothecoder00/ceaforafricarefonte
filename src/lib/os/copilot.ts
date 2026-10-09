@@ -3,6 +3,7 @@
    managers et la finance : encaissements, factures en retard, membres, inscriptions, chantiers, budgets du périmètre).
    Sans IA disponible, des réponses locales couvrent les questions courantes. Les rédactions (synthèse de la semaine, rapport
    d'impact, rapport bailleur, analyse des propositions) sont construites côté serveur à partir des données réelles. */
+import { typeName } from './workflow-defaults';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { invoice } from '../../db/schema/finance';
@@ -13,7 +14,7 @@ import { pendingFor, budgets } from './approvals';
 import { memberBase } from './relations';
 import { marge } from './domaines';
 import { computeImpact } from '../impact';
-import { DK, DOM, PK, RTYPE, pn, fcfa, mfcfa, refT, type ReqType } from './ref';
+import { DK, DOM, PK, pn, fcfa, mfcfa, refT } from './ref';
 import type { Person } from './core';
 
 type Sc = ReturnType<typeof scopeState>;
@@ -40,7 +41,7 @@ export async function contextText(os: OsCtx, sc: Sc, people: Person[]) {
     ]);
     const mgr = people.find((s) => s.id === me.managerId);
     lines.push(`Utilisateur : ${me.name}, ${refT(me.poste)} (${pn(me.country)}). Responsable : ${mgr?.name ?? 'aucun'}. Périmètre affiché : ${sc.label}.`);
-    lines.push(`Ses demandes en cours : ${reqs.map((r) => `${RTYPE[r.type as ReqType] ?? r.type} ${r.id} (${r.title})`).join(', ') || 'aucune'}. Solde de congés : ${me.leaveDays} jours.`);
+    lines.push(`Ses demandes en cours : ${reqs.map((r) => `${typeName(r.type)} ${r.id} (${r.title})`).join(', ') || 'aucune'}. Solde de congés : ${me.leaveDays} jours.`);
     lines.push(`Ses tâches ouvertes : ${tasks.map((t) => t.title).join(' ; ') || 'aucune'}. Approbations qui l'attendent : ${pend.length}.`);
   } else lines.push(`Utilisateur : ${os.user.name}, administrateur de la plateforme (sans fiche de personnel). Périmètre : ${sc.label}.`);
   if (canUse(MANAGERS + ' fin', os)) {

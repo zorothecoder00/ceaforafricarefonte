@@ -1,5 +1,7 @@
-/* CEA OS — délégation de signature (prototype : Mon poste › Ma délégation de signature).
-   POST { action: 'create', to, until (AAAA-MM-JJ) } · { action: 'revoke', id } */
+/* CEA OS — délégation de signature (Mon poste › Ma délégation de signature ; WFL-09 : début, fin, périmètre, autorisation).
+   POST { action: 'create', to, start? (AAAA-MM-JJ, aujourd'hui par défaut), until (AAAA-MM-JJ), scope? (types de dossiers, vide = tous) }
+        { action: 'revoke', id }
+   La délégation est autorisée par son auteur (le délégant) et notifiée à son responsable hiérarchique ; elle expire seule. */
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
@@ -8,13 +10,17 @@ import { osDelegation } from '../../../../db/schema/os';
 import { json, fail, audit } from '../../../../lib/session';
 import { osApi, type WithMe } from '../../../../lib/os/guard';
 import { staffById } from '../../../../lib/os/core';
-import { notifyStaff } from '../../../../lib/os/approvals';
+import { notifyStaff, wfConfig } from '../../../../lib/os/approvals';
 import { dstr } from '../../../../lib/os/ref';
 
 export const prerender = false;
 
 const Body = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('create'), to: z.string().regex(/^EMP\d{3,6}$/), until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Indiquez la date de fin.') }),
+  z.object({
+    action: z.literal('create'), to: z.string().regex(/^EMP\d{3,6}$/), start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal('')),
+    until: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Indiquez la date de fin.'),
+    scope: z.preprocess((v) => (Array.isArray(v) ? v : typeof v === 'string' && v ? [v] : []), z.array(z.string().min(2).max(30)).max(30)).optional().default([]),
+  }),
   z.object({ action: z.literal('revoke'), id: z.uuid() }),
 ]);
 
@@ -32,11 +38,18 @@ export const POST: APIRoute = async ({ locals, request }) => {
     return json({ ok: true, message: 'Délégation révoquée.' });
   }
   const until = new Date(b.until + 'T23:59:00');
+  const start = b.start ? new Date(b.start + 'T00:00:00') : new Date();
   if (until < new Date()) return fail('La date de fin doit être dans le futur.');
+  if (start >= until) return fail('La date de début doit précéder la date de fin.');
   const to = await staffById(b.to);
   if (!to || !to.active || to.id === me.id) return fail('Délégataire invalide.');
-  await db.insert(osDelegation).values({ fromStaff: me.id, toStaff: to.id, until });
-  await notifyStaff([to.id], `Délégation reçue de ${me.name} jusqu'au ${dstr(until)}`, '/os/approbations');
-  await audit(me.userId, 'os.delegation.creation', to.id, { jusqua: b.until });
+  const cfg = await wfConfig();
+  const bad = b.scope.filter((t) => !cfg.types.has(t));
+  if (bad.length) return fail(`Type de dossier inconnu : ${bad.join(', ')}.`);
+  await db.insert(osDelegation).values({ fromStaff: me.id, toStaff: to.id, start, until, scope: b.scope, authorizedBy: me.id });
+  const sur = b.scope.length ? ` pour : ${b.scope.map((t) => cfg.types.get(t)!.label).join(', ')}` : '';
+  await notifyStaff([to.id], `Délégation reçue de ${me.name} du ${dstr(start)} au ${dstr(until)}${sur}`, '/os/approbations');
+  if (me.managerId) await notifyStaff([me.managerId], `${me.name} a délégué ses approbations à ${to.name} du ${dstr(start)} au ${dstr(until)}${sur}`, '/os/organisation?t=hist');
+  await audit(me.userId, 'os.delegation.creation', to.id, { debut: start.toISOString().slice(0, 10), jusqua: b.until, perimetre: b.scope.join(',') || 'tous' });
   return json({ ok: true, message: 'Délégation active.' });
 };

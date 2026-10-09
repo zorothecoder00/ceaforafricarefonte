@@ -60,7 +60,7 @@ export const POST: APIRoute = async ({ locals, request, cookies }) => {
   if (b.type === 'ndf') data.cat = b.cat;
   if (b.type === 'achat') Object.assign(data, { supplier: b.supplier, item: b.item, qty: b.qty });
   if (b.type === 'contrat') Object.assign(data, { party: b.party, ctype: b.ctype, end: b.end || null });
-  const r = await createRequest(me, b.type, { title: b.title, amount: b.amount, domain: b.domain, country: b.type === 'dep' ? b.country : me.country, data });
+  const r = await createRequest(me, b.type, { title: b.title, amount: b.amount, domain: b.domain, country: b.type === 'dep' ? b.country : me.country, data, pieces: just ? { justificatif: just.key } : {} });
   if (b.type === 'dep') await engageBudget(b.domain, b.amount); // dépense engagée dès la soumission
   return json({ ok: true, id: r.id, message: `${RTYPE[b.type]} ${r.id} (${fcfa(b.amount)}) ${b.type === 'contrat' ? 'soumis' : 'soumise'} : ${circuit(r.steps)}${b.type === 'contrat' ? ', puis signature' : ''}.` });
 };

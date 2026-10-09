@@ -1,6 +1,7 @@
 ---
 /* CEA OS — Finance et trésorerie (prototype › pFinance) : dépenses et notes de frais, factures clients, rapprochement des
    encaissements Mobile Money, budgets par domaine, trésorerie et prévision à 13 semaines. Analytique par domaine et pays. */
+import { typeName } from '../../lib/os/workflow-defaults';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import Dlg from '../../components/os/Dlg.astro';
 import Steps from '../../components/os/Steps.astro';
@@ -14,7 +15,7 @@ import { osContext, allStaff, scopeState } from '../../lib/os/core';
 import { budgets, thresholds } from '../../lib/os/approvals';
 import { suggest } from '../../lib/os/gestion';
 import { ACCOUNTS, PURPOSE_DOM } from '../../lib/os/ledger';
-import { DK, DOM, PK, RTYPE, pn, fcfa, mfcfa, dstr, dtstr, type ReqType } from '../../lib/os/ref';
+import { DK, DOM, PK, pn, fcfa, mfcfa, dstr, dtstr } from '../../lib/os/ref';
 
 export const prerender = false;
 const os = await osContext(Astro.locals.user!);
@@ -53,7 +54,7 @@ const [thr] = me && tab === 'dep' ? await Promise.all([thresholds()]) : [null];
         <table class="t">
           <thead><tr><th>Référence</th><th>Objet</th><th>Demandeur</th><th>Domaine</th><th>Pays</th><th>Montant</th><th>Circuit</th><th>Statut</th></tr></thead>
           <tbody>
-            {deps.map((r) => <tr><td class="small"><b>{RTYPE[r.type as ReqType]}</b><br />{r.id}</td><td>{r.title}<div class="xs muted">{dstr(r.createdAt)}</div></td><td class="small">{name(r.byStaff)}</td><td><Tags dom={r.domain} /></td><td>{pn(r.country)}</td><td class="num">{fcfa(r.amount)}</td><td><Steps steps={r.steps} cur={r.cur} status={r.status} /></td><td><Tags st={r.status} /></td></tr>)}
+            {deps.map((r) => <tr><td class="small"><b>{typeName(r.type)}</b><br />{r.id}</td><td>{r.title}<div class="xs muted">{dstr(r.createdAt)}</div></td><td class="small">{name(r.byStaff)}</td><td><Tags dom={r.domain} /></td><td>{pn(r.country)}</td><td class="num">{fcfa(r.amount)}</td><td><Steps steps={r.steps} cur={r.cur} status={r.status} /></td><td><Tags st={r.status} /></td></tr>)}
             {!deps.length && <tr><td colspan="8" class="muted">Aucune dépense dans le périmètre.</td></tr>}
           </tbody>
         </table>

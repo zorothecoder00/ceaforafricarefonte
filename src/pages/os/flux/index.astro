@@ -1,0 +1,131 @@
+---
+/* CEA OS — Dossiers et validations (cahier des charges CEA OS, section 4) : tous les dossiers soumis au moteur de workflow que
+   l'utilisateur peut voir (ABAC : participants, périmètre, confidentialité), avec phase du workflow universel, statut,
+   responsable, échéance et prochaine action (signalés quand ils manquent), circuit de validation. Création d'un dossier générique
+   (tâche, document, publication, projet, investissement, partenariat, changement, audit, événement, cohorte, sélection) avec
+   aperçu du circuit calculé pendant la saisie. */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Dlg from '../../../components/os/Dlg.astro';
+import Tags from '../../../components/os/Tags.astro';
+import Steps from '../../../components/os/Steps.astro';
+import { desc } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { osRequest } from '../../../db/schema/os';
+import { osContext, scopeState, inUserScope } from '../../../lib/os/core';
+import { canSee, pendingFor, wfConfig, wfEnv } from '../../../lib/os/approvals';
+import { PHASE_LABEL, type Phase } from '../../../lib/os/workflow-core';
+import { DK, DOM, PAYS, PK, pn, dstr } from '../../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const me = os.me;
+const sc = scopeState(os, Astro.cookies);
+const q = Astro.url.searchParams;
+const vue = q.get('vue') ?? 'a_valider';
+const tf = q.get('type') ?? '';
+const [cfg, e, rows] = await Promise.all([wfConfig(), wfEnv(), db.select().from(osRequest).orderBy(desc(osRequest.updatedAt)).limit(1500)]);
+const mineAp = new Set((await pendingFor(me?.id, { people: e.people, delegs: e.delegs })).map((p) => p.r.id));
+// Visibles (ABAC, périmètre du poste), puis restreints au périmètre choisi dans la barre du haut
+const visible = rows.filter((r) => canSee(me, os.superuser, r, e, (x) => inUserScope(os, x)) && r.countries.concat(r.country).some((country) => sc.inScope({ country, domain: r.domain })));
+const OPEN = (r: (typeof rows)[number]) => !['Clôturé', 'Capitalisé', 'Rejetée'].includes(r.status) && r.phase !== 'cloture' && r.phase !== 'capitalisation';
+const list = visible.filter((r) => (vue === 'a_valider' ? mineAp.has(r.id) : vue === 'mes' ? me && (r.byStaff === me.id || r.owner === me.id) : vue === 'ouverts' ? OPEN(r) : true) && (!tf || r.type === tf));
+const name = (id: string | null) => e.people.find((s) => s.id === id)?.name ?? '—';
+const now = new Date();
+const flags = (r: (typeof rows)[number]) => (OPEN(r) ? [!r.owner && 'Sans responsable', !r.nextAction && 'Sans prochaine action', r.due && r.due < now && 'Échéance dépassée', r.status === 'En approbation' && r.stepDue && r.stepDue < now && 'Validation en retard'].filter(Boolean) as string[] : []);
+const VUES: [string, string][] = [['a_valider', `À valider par moi (${mineAp.size})`], ['mes', 'Mes dossiers'], ['ouverts', 'Dossiers ouverts'], ['tous', 'Tous']];
+const generic = [...cfg.types.values()].filter((t) => t.generic && t.active);
+const countries = PK.filter((p) => sc.inScope({ country: p }));
+// Données de l'aperçu du circuit (calcul identique au serveur : workflow-core.ts)
+const preview = {
+  circuits: Object.fromEntries([...cfg.circuits].map(([k, v]) => [k, v])), types: Object.fromEntries(generic.map((t) => [t.code, { circuit: t.circuit, sla: t.sla }])),
+  thr: cfg.thr, general: cfg.general, regions: Object.fromEntries(PK.map((p) => [p, PAYS[p][1]])),
+};
+---
+<AdminLayout title="Dossiers et validations" lead={`${visible.length} dossier(s) visibles dans votre périmètre (${sc.label}) · chaque dossier a un responsable, une échéance et une prochaine action`}>
+  <Fragment slot="actions">{me && <button class="btn" type="button" data-dlg="dlg-new">+ Nouveau dossier</button>}</Fragment>
+  <div class="tabs">{VUES.map(([k, l]) => <a href={`?vue=${k}${tf ? `&type=${tf}` : ''}`} aria-selected={k === vue ? 'true' : 'false'}>{l}</a>)}</div>
+  <div class="toolbar">
+    <select class="in" data-go aria-label="Type de dossier"><option value={`?vue=${vue}`}>Tous les types</option>{[...cfg.types.values()].map((t) => <option value={`?vue=${vue}&type=${t.code}`} selected={t.code === tf}>{t.label}</option>)}</select>
+    <input class="in" data-filter="#fluxT" placeholder="Filtrer (référence, intitulé, personne…)" aria-label="Filtrer" style="flex:1;min-width:200px" />
+  </div>
+  {list.length ? (
+    <div class="tw">
+      <table class="t" id="fluxT">
+        <thead><tr><th>Dossier</th><th>Phase</th><th>Statut</th><th>Responsable</th><th>Échéance</th><th>Prochaine action</th><th>Circuit</th></tr></thead>
+        <tbody>{list.map((r) => { const f = flags(r); return (
+          <tr>
+            <td><a href={`/os/flux/${r.id}`}><b>{r.id}</b></a> — {r.title}<div class="xs muted">{cfg.types.get(r.type)?.label ?? r.type} · {pn(r.country)}{r.countries.length > 1 ? ` +${r.countries.length - 1}` : ''}{r.conf !== 'Interne' ? ` · ${r.conf}` : ''}{r.strategic ? ' · stratégique' : ''}</div>{f.length > 0 && <div>{f.map((x) => <span class="tag bad" style="margin:3px 4px 0 0">{x}</span>)}</div>}</td>
+            <td class="small">{PHASE_LABEL[r.phase as Phase] ?? r.phase}</td>
+            <td><Tags st={r.status} /></td>
+            <td class="small">{name(r.owner)}</td>
+            <td class:list={['small', { down: r.due && r.due < now && OPEN(r) }]}>{dstr(r.due)}</td>
+            <td class="small">{r.nextAction ?? '—'}</td>
+            <td>{r.steps.length ? <Steps steps={r.steps} cur={r.cur} status={r.status} /> : <span class="xs muted">pas encore soumis</span>}</td>
+          </tr>
+        ); })}</tbody>
+      </table>
+    </div>
+  ) : <div class="empty">{vue === 'a_valider' ? 'Aucun dossier n’attend votre validation.' : 'Aucun dossier.'}</div>}
+
+  {me && (
+    <Dlg id="dlg-new" title="Nouveau dossier" upload="/api/admin/os/flux" submit="Créer le dossier" wide>
+      <input type="hidden" name="action" value="create" />
+      <div class="fg">
+        <div class="full"><label class="f" for="ft">Type de dossier</label><select class="in" id="ft" name="type" data-wf-type>{generic.map((t) => <option value={t.code}>{t.label} — circuit {t.circuit}</option>)}</select></div>
+        <div class="full"><label class="f" for="fl">Intitulé</label><input class="in" id="fl" name="title" required minlength="3" maxlength="200" /></div>
+        <div class="full"><label class="f" for="fd">Description</label><textarea class="in" id="fd" name="description" maxlength="4000"></textarea></div>
+        <div><label class="f" for="fa">Montant ou budget (FCFA)</label><input class="in" type="number" id="fa" name="amount" min="0" value="0" data-wf-amount /></div>
+        <div><label class="f" for="fc">Pays principal</label><select class="in" id="fc" name="country" data-wf-country>{countries.map((p) => <option value={p} selected={p === me.country}>{pn(p)}</option>)}</select></div>
+        <div><label class="f" for="fdo">Domaine</label><select class="in" id="fdo" name="domain">{DK.map((d) => <option value={d} selected={d === (me.domain ?? 'prj')}>{DOM[d].n}</option>)}</select></div>
+        <div><label class="f" for="fe">Échéance</label><input class="in" type="date" id="fe" name="due" /></div>
+        <div><label class="f" for="fcf">Confidentialité</label><select class="in" id="fcf" name="conf" data-wf-conf><option>Public</option><option selected>Interne</option><option>Confidentiel</option><option>Strictement confidentiel</option></select></div>
+        <div><label class="f" for="fr">Risque</label><select class="in" id="fr" name="risk" data-wf-risk><option value="faible">Faible</option><option value="normal" selected>Normal</option><option value="eleve">Élevé</option><option value="critique">Critique</option></select></div>
+        <div><label class="f" for="fo">Responsable</label><select class="in" id="fo" name="owner">{e.people.filter((s) => s.active).map((s) => <option value={s.id} selected={s.id === me.id}>{s.name}</option>)}</select></div>
+        <div style="align-self:end"><label class="row small"><input type="checkbox" name="strategic" data-wf-strat /> Sujet stratégique (circuit renforcé)</label></div>
+        <div class="full"><span class="f">Autres pays concernés</span><div class="pick">{countries.map((p) => <label><input type="checkbox" name="countries" value={p} data-wf-multi /> {pn(p)}</label>)}</div></div>
+        {generic.map((t) => (
+          <div class="full" data-pieces={t.code} hidden>
+            {t.checklist.length > 0 && <span class="f">Pièces {t.checklist.some((x) => x.critical) && '(★ obligatoires avant la validation)'}</span>}
+            {t.checklist.map((x) => <div style="margin-bottom:6px"><label class="xs" for={`p-${t.code}-${x.k}`}>{x.critical ? '★ ' : ''}{x.label}</label><input class="in" type="file" id={`p-${t.code}-${x.k}`} name={`piece_${x.k}`} accept="image/*,application/pdf,.docx,.xlsx,.pptx" style="width:100%" /></div>)}
+          </div>
+        ))}
+      </div>
+      <div class="watch" style="margin-top:10px" data-wf-preview></div>
+    </Dlg>
+  )}
+  <script type="application/json" id="wfPreview" set:html={JSON.stringify(preview)} />
+</AdminLayout>
+<script>
+  // Aperçu du circuit pendant la saisie (mêmes règles que le serveur) et pièces propres au type choisi
+  import { buildSteps, circuitLabel, thresholdsFor, type Circuit } from '../../../lib/os/workflow-core';
+  const P = JSON.parse(document.getElementById('wfPreview')?.textContent || '{}');
+  const dlg = document.getElementById('dlg-new');
+  const $ = <T extends HTMLElement>(s: string) => dlg?.querySelector<T>(s);
+  const upd = () => {
+    const type = $<HTMLSelectElement>('[data-wf-type]')?.value ?? '';
+    dlg?.querySelectorAll<HTMLElement>('[data-pieces]').forEach((b) => {
+      const on = b.dataset.pieces === type;
+      b.hidden = !on;
+      b.querySelectorAll('input').forEach((i) => (i.disabled = !on));
+    });
+    const t = P.types?.[type], c: Circuit | undefined = t && P.circuits[t.circuit];
+    const out = $('[data-wf-preview]');
+    if (!out || !c) return;
+    const country = $<HTMLSelectElement>('[data-wf-country]')!.value;
+    const countries = [...(dlg?.querySelectorAll<HTMLInputElement>('[data-wf-multi]:checked') ?? [])].map((i) => i.value);
+    const thr = thresholdsFor(type, country, P.regions[country] ?? null, P.thr, P.general);
+    const steps = buildSteps(c, {
+      amount: Number($<HTMLInputElement>('[data-wf-amount]')!.value) || 0, country, countries, regionOf: (x: string) => P.regions[x] ?? null,
+      strategic: !!$<HTMLInputElement>('[data-wf-strat]')?.checked, conf: $<HTMLSelectElement>('[data-wf-conf]')!.value, risk: $<HTMLSelectElement>('[data-wf-risk]')!.value,
+    }, thr, t.sla);
+    out.innerHTML = '';
+    const b = document.createElement('b');
+    b.textContent = circuitLabel(steps);
+    out.append(`Circuit ${c.code} prévu à la validation : `, b);
+    const why = steps.filter((s) => s.why).map((s) => s.why);
+    if (why.length) out.append(` (${[...new Set(why)].join(' ; ')})`);
+  };
+  dlg?.addEventListener('input', upd);
+  dlg?.addEventListener('change', upd);
+  upd();
+</script>

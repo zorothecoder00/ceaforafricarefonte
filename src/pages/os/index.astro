@@ -2,6 +2,7 @@
 /* CEA OS — Accueil (prototype CEA OS › pHome) : salutation, actions rapides (congé, note de frais, achat, dépense, réunion,
    temps, poste), chiffres clés, mes tâches, approbations attendues, prochaines réunions, demandes en cours, messagerie.
    Sans fiche personnel (direction), un renvoi vers le back-office du site. */
+import { typeName } from '../../lib/os/workflow-defaults';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import RequestDialogs from '../../components/os/RequestDialogs.astro';
 import MeetingDialog from '../../components/os/MeetingDialog.astro';
@@ -14,7 +15,7 @@ import { osContext, allStaff, scopeState, canUse, MANAGERS, type Person } from '
 import { pendingFor, thresholds, budgets, activeDelegations } from '../../lib/os/approvals';
 import { myChannels } from '../../lib/os/collab';
 import { escalatedFor } from '../../lib/os/relations';
-import { DK, PK, RTYPE, pn, refT, fcfa, dstr, type ReqType } from '../../lib/os/ref';
+import { DK, PK, pn, refT, fcfa, dstr, type ReqType } from '../../lib/os/ref';
 
 export const prerender = false;
 const os = await osContext(Astro.locals.user!);
@@ -55,7 +56,7 @@ const RTYPES: Record<ReqType, string> = { dep: 'Dépenses', ndf: 'Notes de frais
 // Ce qui attend la décision de l'utilisateur, détaillé par nature (même total que le compteur « Approbations » du menu)
 const toApprove = data ? data.pend.length + data.decs.length + data.esc.length : 0;
 const approveDetail = data ? [
-  ...Object.entries(data.pend.reduce<Record<string, number>>((a, p) => ({ ...a, [p.r.type]: (a[p.r.type] ?? 0) + 1 }), {})).map(([t, n]) => `${n} ${(n > 1 ? RTYPES : RTYPE)[t as ReqType].toLowerCase()}`),
+  ...Object.entries(data.pend.reduce<Record<string, number>>((a, p) => ({ ...a, [p.r.type]: (a[p.r.type] ?? 0) + 1 }), {})).map(([t, n]) => `${n} ${((n > 1 ? RTYPES[t as ReqType] : undefined) ?? typeName(t)).toLowerCase()}`),
   data.decs.length ? `${data.decs.length} décision${data.decs.length > 1 ? 's' : ''} de réunion` : '',
   data.esc.length ? `${data.esc.length} inscription${data.esc.length > 1 ? 's' : ''} en retard` : '',
 ].filter(Boolean).join(' · ') : '';
@@ -87,7 +88,7 @@ const approveDetail = data ? [
         </div>
         <div class="card">
           <div class="row between"><h2>Demandes à approuver</h2><a class="small" href="/os/approbations">Tout voir</a></div>
-          {data.pend.slice(0, 6).map((p) => <div class="small" style="padding:6px 0;border-bottom:1px solid var(--line)">{RTYPE[p.r.type as ReqType]} {p.r.id} — {p.r.title}{p.r.amount > 0 && <> · <b>{fcfa(p.r.amount)}</b></>}</div>)}
+          {data.pend.slice(0, 6).map((p) => <a href={`/os/flux/${p.r.id}`} class="small" style="display:block;text-decoration:none;color:inherit;padding:6px 0;border-bottom:1px solid var(--line)">{typeName(p.r.type)} {p.r.id} — {p.r.title}{p.r.amount > 0 && <> · <b>{fcfa(p.r.amount)}</b></>}</a>)}
           {data.decs.slice(0, 3).map((d) => <div class="small" style="padding:6px 0;border-bottom:1px solid var(--line)">Décision : {d.text}</div>)}
           {data.esc.slice(0, 3).map((x) => <div class="small" style="padding:6px 0;border-bottom:1px solid var(--line)">Inscription en retard (plus de 48 h) : {x.name}</div>)}
           {!toApprove && <p class="small muted">Rien en attente.</p>}
@@ -103,7 +104,7 @@ const approveDetail = data ? [
           <div class="row between"><h2>Mes demandes</h2><a class="small" href="/os/moi">Historique</a></div>
           {data.mine.slice(0, 5).map((r) => (
             <div style="padding:7px 0;border-bottom:1px solid var(--line)">
-              <div class="row between small"><b>{RTYPE[r.type as ReqType]} {r.id}</b><Tags st={r.status} /></div>
+              <div class="row between small"><b>{typeName(r.type)} {r.id}</b><Tags st={r.status} /></div>
               <div class="small">{r.title}{r.amount > 0 && ' · ' + fcfa(r.amount)}</div>
               <Steps steps={r.steps} cur={r.cur} status={r.status} />
             </div>

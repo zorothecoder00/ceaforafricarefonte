@@ -4,7 +4,7 @@
 import Dlg from './Dlg.astro';
 import type { Person } from '../../lib/os/core';
 import { DOM, DK, PAYS, pn, fcfa, type Dom } from '../../lib/os/ref';
-import type { Thresholds } from '../../lib/os/approvals';
+import { wfConfig, type Thresholds } from '../../lib/os/approvals';
 import { asc } from 'drizzle-orm';
 import { db } from '../../lib/db';
 import { osStockItem, osSupplier } from '../../db/schema/os';
@@ -14,6 +14,9 @@ const { me, managerName, thr, budgets, countries, domains } = Astro.props;
 // Articles en stock et fournisseurs vérifiés (achats)
 const [items, sups] = await Promise.all([db.select().from(osStockItem).orderBy(asc(osStockItem.label)), db.select().from(osSupplier).orderBy(asc(osSupplier.name))]);
 const domOpts = (sel?: string | null, only?: string[]) => (only ?? DK).map((d) => ({ d, n: DOM[d as Dom].n, sel: d === sel }));
+// Circuits paramétrés (Processus et seuils) pour l'aperçu en direct : même calcul que le serveur (workflow-core.ts)
+const cfg = await wfConfig();
+const wf = Object.fromEntries(['dep', 'achat'].map((t) => { const ty = cfg.types.get(t); return [t, { circuit: ty ? cfg.circuits.get(ty.circuit) : null, sla: ty?.sla ?? 48 }]; }));
 ---
 <Dlg id="dlg-conge" title="Demander un congé" upload="/api/admin/os/demandes" submit="Envoyer la demande">
   <input type="hidden" name="type" value="conge" />
@@ -62,17 +65,17 @@ const domOpts = (sel?: string | null, only?: string[]) => (only ?? DK).map((d) =
   <div class="watch" style="margin-top:10px" data-watch="dep"></div>
 </Dlg>
 
-<script type="application/json" id="osCircuit" set:html={JSON.stringify({ thr, budgets, names: Object.fromEntries(DK.map((d) => [d, DOM[d].n])) })} />
+<script type="application/json" id="osCircuit" set:html={JSON.stringify({ thr, wf, rows: cfg.thr, country: me.country, budgets, names: Object.fromEntries(DK.map((d) => [d, DOM[d].n])), regions: Object.fromEntries(Object.entries(PAYS).map(([k, v]) => [k, v[1]])) })} />
 <script>
-  // Circuit et budget restant, recalculés à chaque saisie (mêmes règles que src/lib/os/approvals.ts › makeSteps)
+  // Circuit et budget restant, recalculés à chaque saisie avec les circuits et seuils paramétrés (même calcul que le serveur)
+  import { buildSteps, circuitLabel, thresholdsFor } from '../../lib/os/workflow-core';
   const C = JSON.parse(document.getElementById('osCircuit')?.textContent || '{}');
-  const LVL: Record<string, string> = { manager: 'Responsable hiérarchique', pays: 'Représentant pays', reg: 'Directeur régional', dg: 'Direction générale', fin: 'Finance' };
   const fcfa = (n: number) => Math.round(n).toLocaleString('fr-FR') + ' FCFA';
-  const steps = (t: string, a: number) => {
-    const s: string[] = [];
-    if (t === 'dep') { s.push('pays'); if (a > C.thr.pays) s.push('reg'); if (a > C.thr.reg) s.push('dg'); s.push('fin'); }
-    if (t === 'achat') { s.push('manager'); if (a > C.thr.reg) s.push('dg'); s.push('fin'); }
-    return s.map((l) => LVL[l]).join(' → ');
+  const steps = (t: string, a: number, country: string) => {
+    const w = C.wf?.[t];
+    if (!w?.circuit) return '—';
+    const thr = thresholdsFor(t, country, C.regions[country] ?? null, C.rows ?? [], { dg: 50_000_000, ...C.thr });
+    return circuitLabel(buildSteps(w.circuit, { amount: a, country, regionOf: (x: string) => C.regions[x] ?? null }, thr, w.sla));
   };
   document.querySelectorAll<HTMLElement>('[data-circuit]').forEach((box) => {
     const t = box.dataset.circuit!;
@@ -80,12 +83,13 @@ const domOpts = (sel?: string | null, only?: string[]) => (only ?? DK).map((d) =
     const amt = box.querySelector<HTMLInputElement>('[data-amt]')!, dom = box.querySelector<HTMLSelectElement>('[data-dom]')!;
     const upd = () => {
       const a = Number(amt.value) || 0, b = C.budgets[dom.value] ?? { budget: 0, engaged: 0 }, rest = b.budget - b.engaged;
-      w.innerHTML = `Circuit : <b>${steps(t, a)}</b>${t === 'achat' ? ', puis bon de commande automatique' : ''}. Budget ${C.names[dom.value]} : ${t === 'dep' ? 'reste à engager' : 'reste'} ${fcfa(rest)}${t === 'dep' && a > rest ? ' <span class="tag bad">Dépassement</span>' : ''}.`;
+      w.innerHTML = `Circuit : <b>${steps(t, a, box.querySelector<HTMLSelectElement>('[name="country"]')?.value ?? C.country)}</b>${t === 'achat' ? ', puis bon de commande automatique' : ''}. Budget ${C.names[dom.value]} : ${t === 'dep' ? 'reste à engager' : 'reste'} ${fcfa(rest)}${t === 'dep' && a > rest ? ' <span class="tag bad">Dépassement</span>' : ''}.`;
     };
     // Article en stock : montant estimé = coût unitaire × quantité, tant que le montant n'a pas été saisi à la main
     const item = box.querySelector<HTMLSelectElement>('[data-item]'), qty = box.querySelector<HTMLInputElement>('[data-qty]');
     const est = () => { const cu = Number(item?.selectedOptions[0]?.dataset.cu || 0); if (cu && !amt.dataset.m) amt.value = String(cu * (Number(qty?.value) || 0)); upd(); };
     item?.addEventListener('change', est); qty?.addEventListener('input', est);
-    amt.addEventListener('input', () => { amt.dataset.m = '1'; upd(); }); dom.addEventListener('change', upd); upd();
+    amt.addEventListener('input', () => { amt.dataset.m = '1'; upd(); }); dom.addEventListener('change', upd);
+    box.querySelector('[name="country"]')?.addEventListener('change', upd); upd();
   });
 </script>

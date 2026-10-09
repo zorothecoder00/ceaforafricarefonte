@@ -80,6 +80,7 @@ export const MODS: [string, NavItem[]][] = [
   ['Pilotage', [
     { href: '/os/cockpit', label: 'Cockpit', spec: MANAGERS },
     { href: '/os/approbations', label: 'Approbations', spec: ALL },
+    { href: '/os/flux', label: 'Dossiers et validations', spec: ALL },
     { href: '/os/okr', label: 'Objectifs (OKR)', spec: ALL },
     { href: '/os/impact', label: 'CEA Impact Lab', spec: 'dg adg ops chef dirreg rep com agent:prj' },
     { href: '/os/risques', label: 'Risques et audit interne', spec: 'dg ops conf jur chef dirreg' },
@@ -169,6 +170,14 @@ export function userScope(c: Pick<OsCtx, 'me' | 'superuser'>): Scope {
   if (p === 'dirreg') return { reg: regOf(u.country) ?? undefined };
   if (p === 'rep') return { pays: u.country };
   return { pays: u.country, dom: u.domain ?? undefined };
+}
+/** Une ligne (pays, domaine) est-elle dans le périmètre propre au poste, indépendamment du sélecteur affiché ? */
+export function inUserScope(c: Pick<OsCtx, 'me' | 'superuser'>, row: { country?: string | null; domain?: string | null }): boolean {
+  const s = userScope(c);
+  if (s.dom && row.domain && row.domain !== s.dom) return false;
+  if (s.pays && row.country && row.country !== s.pays) return false;
+  if (s.reg && row.country && regOf(row.country) !== s.reg) return false;
+  return true;
 }
 /** Options du sélecteur de périmètre : [valeur, libellé]. */
 export function scopeOpts(c: Pick<OsCtx, 'me' | 'superuser'>): [string, string][] {

@@ -118,3 +118,30 @@ export function weekKey(d = new Date()) {
   const y = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
   return t.getUTCFullYear() + '-S' + Math.ceil(((t.getTime() - y.getTime()) / 864e5 + 1) / 7);
 }
+
+/* ===== Structure institutionnelle (cahier des charges CEA OS, section 3) ===== */
+/** Organes de gouvernance et comités ; leurs membres sont des collaborateurs (Organisation et postes › Organes). */
+export const ORGANS = { bp: 'Bureau panafricain (N1)', cc: 'Conseil consultatif (N0-C)', bii: 'Bureau des investisseurs indépendants (N0-I)', ci: "Comité d'investissement", cs: 'Comité de sélection' } as const;
+export type Organ = keyof typeof ORGANS;
+/** Niveaux hiérarchiques N0 à N7 (PO-08 : les postes du référentiel sont rattachés à un niveau d'après leur profil). */
+export const NIVEAUX = {
+  'N0-C': 'Bureau du Conseil consultatif', 'N0-I': 'Bureau des investisseurs indépendants', N1: 'Bureau panafricain', N2: 'Direction générale et panafricaine',
+  N3: 'Bureaux régionaux', N4: 'Bureaux de représentation pays', N5: 'Chefs de départements', N6: 'Bureau gestionnaires et corps de métiers', N7: 'Collaborateurs et contributeurs',
+} as const;
+export type Niveau = keyof typeof NIVEAUX;
+const NIV_OF: Record<Prof, Niveau> = { dg: 'N2', adg: 'N2', ops: 'N2', dirreg: 'N3', rep: 'N4', chef: 'N5', fin: 'N6', rh: 'N6', jur: 'N6', conf: 'N6', com: 'N6', it: 'N6', analyste: 'N7', cond: 'N7', agent: 'N7' };
+/** Niveau d'un collaborateur : celui de son poste, ou de l'organe le plus élevé dont il est membre. */
+export function niveauOf(p: Prof, organs: string[] = []): Niveau {
+  if (organs.includes('bp')) return 'N1';
+  return NIV_OF[p] ?? 'N7';
+}
+/** Boîtes à outils T0 à T5 (section 3.3) accessibles à un profil. */
+export const TOOLBOXES = { T0: 'Générale', T1: 'Métier', T2: 'Manager', T3: 'Contrôle', T4: 'Direction', T5: 'Système' } as const;
+export function toolboxesOf(p: Prof, organs: string[] = []): (keyof typeof TOOLBOXES)[] {
+  const t: (keyof typeof TOOLBOXES)[] = ['T0', 'T1'];
+  if (['dg', 'adg', 'ops', 'chef', 'dirreg', 'rep', 'fin', 'rh'].includes(p)) t.push('T2');
+  if (['conf', 'jur'].includes(p)) t.push('T3');
+  if (['dg', 'adg', 'ops'].includes(p) || organs.includes('bp')) t.push('T4');
+  if (p === 'it') t.push('T5');
+  return t;
+}

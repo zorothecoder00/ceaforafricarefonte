@@ -10,7 +10,8 @@ import { db } from '../../lib/db';
 import { osDelegation } from '../../db/schema/os';
 import { osContext, allStaff, scopeState } from '../../lib/os/core';
 import { kpisOf, kpiState } from '../../lib/os/kpis';
-import { PROF, refT, dstr } from '../../lib/os/ref';
+import { PROF, NIVEAUX, TOOLBOXES, niveauOf, toolboxesOf, refT, dstr } from '../../lib/os/ref';
+import { organMembers, wfConfig } from '../../lib/os/approvals';
 
 export const prerender = false;
 const os = await osContext(Astro.locals.user!);
@@ -21,6 +22,9 @@ const my = u ? await db.select().from(osDelegation).where(or(eq(osDelegation.fro
 const name = (id: string | null) => people.find((s) => s.id === id)?.name ?? '—';
 const mgr = people.find((s) => s.id === u?.managerId);
 const sc = scopeState(os, Astro.cookies);
+const [organs, cfg] = await Promise.all([organMembers(), wfConfig()]);
+const myOrgans = u ? organs.filter((o) => o.staffId === u.id).map((o) => o.organ) : [];
+const niv = u ? niveauOf(u.prof, myOrgans) : null;
 ---
 <AdminLayout title="Mon poste et mes indicateurs" lead={u ? `${refT(u.poste)} · poste ${u.poste} du référentiel · profil d'accès « ${PROF[u.prof]} » · périmètre du poste : ${sc.opts[0][1].trim()}` : ''}>
   {u ? (
@@ -51,7 +55,7 @@ const sc = scopeState(os, Astro.cookies);
               const live = !d.revoked && new Date(d.until) >= new Date();
               return (
                 <div class="small" style="padding:6px 0;border-bottom:1px solid var(--line)">
-                  {d.fromStaff === u.id ? 'Vers ' + name(d.toStaff) : 'Reçue de ' + name(d.fromStaff)} jusqu'au {dstr(d.until)}{' '}
+                  {d.fromStaff === u.id ? 'Vers ' + name(d.toStaff) : 'Reçue de ' + name(d.fromStaff)} du {dstr(d.start)} au {dstr(d.until)}{d.scope.length ? ` · ${d.scope.map((x) => cfg.types.get(x)?.label ?? x).join(', ')}` : ' · tous les dossiers'}{' '}
                   {d.revoked ? <span class="tag bad">Révoquée</span> : live ? <span class="tag ok">Active</span> : <span class="tag">Échue</span>}
                   {d.fromStaff === u.id && live && <> <button class="btn ghost sm" type="button" data-post="/api/admin/os/delegations" data-body={JSON.stringify({ action: 'revoke', id: d.id })} data-reload>Révoquer</button></>}
                 </div>
@@ -65,6 +69,7 @@ const sc = scopeState(os, Astro.cookies);
             <p class="small">Responsable : <b>{mgr?.name ?? '—'}</b><br />{mgr ? refT(mgr.poste) : ''}</p>
             <p class="small">Équipe directe : {people.filter((s) => s.managerId === u.id && s.active).length} personne(s)</p>
             <p class="small">Grade : {u.grade} · entrée le {dstr(u.hireDate)}</p>
+            <p class="small">Niveau : <b>{niv}</b> — {niv && NIVEAUX[niv]}<br />Boîtes à outils : {toolboxesOf(u.prof, myOrgans).map((t) => `${t} ${TOOLBOXES[t]}`).join(' · ')}</p>
           </div>
         </aside>
       </div>
@@ -72,9 +77,11 @@ const sc = scopeState(os, Astro.cookies);
         <input type="hidden" name="action" value="create" />
         <div class="fg">
           <div><label class="f" for="dt">Délégataire</label><select class="in" id="dt" name="to">{people.filter((s) => s.active && s.id !== u.id).map((s) => <option value={s.id}>{s.name} — {refT(s.poste)}</option>)}</select></div>
+          <div><label class="f" for="dsd">À partir du</label><input class="in" type="date" id="dsd" name="start" /></div>
           <div><label class="f" for="du">Jusqu'au</label><input class="in" type="date" id="du" name="until" required /></div>
+          <div class="full"><span class="f">Périmètre (aucune case = tous les dossiers)</span><div class="pick">{[...cfg.types.values()].filter((t) => t.active).map((t) => <label><input type="checkbox" name="scope" value={t.code} /> {t.label}</label>)}</div></div>
         </div>
-        <p class="small muted" style="margin-top:8px">La délégation est inscrite au journal d'audit. Le délégataire ne peut pas approuver ses propres demandes.</p>
+        <p class="small muted" style="margin-top:8px">La délégation est inscrite au journal d'audit et signalée à votre responsable ; elle expire seule à la date de fin. Les décisions prises par le délégataire indiquent qu'elles le sont en votre nom. Le délégataire ne peut pas approuver ses propres dossiers.</p>
       </Dlg>
     </>
   ) : <div class="empty">Votre compte n'est rattaché à aucune fiche du personnel.</div>}

@@ -11,13 +11,14 @@ import { auditLog } from '../../db/schema/app';
 import { user } from '../../db/schema/auth';
 import { osContext, allStaff, type Person } from '../../lib/os/core';
 import { currentReview } from '../../lib/os/pilotage';
-import { REF, REGIONS, PROF, PK, PDOM, DOM, pn, regOf, refT, gradeOf, profOf, dtstr, dstr, initials, type Region } from '../../lib/os/ref';
+import { organMembers } from '../../lib/os/approvals';
+import { REF, REGIONS, PROF, PK, PDOM, DOM, ORGANS, NIVEAUX, TOOLBOXES, niveauOf, toolboxesOf, pn, regOf, refT, gradeOf, profOf, dtstr, dstr, initials, type Region, type Niveau, type Organ } from '../../lib/os/ref';
 
 export const prerender = false;
 const os = await osContext(Astro.locals.user!);
 const me = os.me;
 const tab = Astro.url.searchParams.get('t') ?? 'postes';
-const T: [string, string][] = [['postes', 'Postes du référentiel'], ['org', 'Organigramme'], ['ent', 'Régions et bureaux'], ['revue', 'Revue des droits'], ['hist', 'Historique']];
+const T: [string, string][] = [['postes', 'Postes du référentiel'], ['org', 'Organigramme'], ['niv', 'Niveaux et organes'], ['ent', 'Régions et bureaux'], ['revue', 'Revue des droits'], ['hist', 'Historique']];
 const can = ['dg', 'rh'].includes(os.prof ?? '') || os.superuser;
 const canReview = ['dg', 'it', 'conf'].includes(os.prof ?? '') || os.superuser;
 const people = await allStaff();
@@ -31,6 +32,10 @@ const tree: [number, Person][] = [];
 const walk = (s: Person, d: number, seen: Set<string>) => { if (seen.has(s.id)) return; seen.add(s.id); tree.push([d, s]); actifs.filter((x) => x.managerId === s.id).forEach((k) => walk(k, d + 1, seen)); };
 if (tab === 'org' && root) walk(root, 0, new Set());
 const review = await currentReview();
+// Niveaux N0 à N7 et organes (cahier des charges CEA OS, section 3)
+const organs = await organMembers();
+const canOrgan = ['dg', 'adg', 'rh', 'it', 'conf'].includes(os.prof ?? '') || os.superuser;
+const orgOf = (id: string) => organs.filter((o) => o.staffId === id).map((o) => o.organ);
 const items = tab === 'revue' ? await db.select().from(osReviewItem).where(eq(osReviewItem.quarter, review.quarter)) : [];
 const hist = tab === 'hist' ? await db.select({ at: auditLog.at, a: auditLog.action, t: auditLog.target, who: user.name }).from(auditLog).leftJoin(user, eq(user.id, auditLog.actorId)).where(or(like(auditLog.action, 'os.poste%'), like(auditLog.action, 'os.pays%'), like(auditLog.action, 'os.personnel%'), like(auditLog.action, 'os.delegation%'), like(auditLog.action, 'os.revue%'))).orderBy(desc(auditLog.at)).limit(200) : [];
 const ACTION: Record<string, string> = { 'os.poste.changement': 'Changement de poste', 'os.poste.cumul': 'Cumul de poste (intérim)', 'os.pays.ouverture': 'Ouverture de pays', 'os.personnel.creation': 'Collaborateur créé', 'os.personnel.depart': 'Compte désactivé (départ)', 'os.personnel.reactivation': 'Compte réactivé', 'os.personnel.modification': 'Fiche modifiée', 'os.delegation.creation': 'Délégation de signature', 'os.delegation.revocation': 'Délégation révoquée', 'os.revue.confirmation': 'Revue des droits : accès confirmés', 'os.revue.retrait': 'Revue des droits : accès retirés', 'os.revue.echeance': 'Revue des droits appliquée', 'os.revue.levee': 'Suspensions levées', 'os.revue.lancement': 'Revue des droits lancée' };
@@ -51,11 +56,11 @@ const name = (id: string | null) => people.find((s) => s.id === id)?.name ?? '�
       </div>
       <div class="tw">
         <table class="t" id="pt">
-          <thead><tr><th>Code</th><th>Poste</th><th>Grade</th><th>Profil d'accès</th><th>Titulaire(s)</th><th></th></tr></thead>
+          <thead><tr><th>Code</th><th>Poste</th><th>Niveau</th><th>Grade</th><th>Profil d'accès</th><th>Titulaire(s)</th><th></th></tr></thead>
           <tbody>
             {REF.map((x) => { const ti = titulaires(x.c); return (
               <tr data-row={`${x.c} ${x.t}`} data-st={ti.length ? 'p' : 'v'}>
-                <td><span class="tag gold">{x.c}</span></td><td><b class="small">{x.t}</b></td><td class="small">{gradeOf(x.c)}</td><td class="small">{PROF[profOf(x.c)]}</td>
+                <td><span class="tag gold">{x.c}</span></td><td><b class="small">{x.t}</b></td><td class="small" title={NIVEAUX[niveauOf(profOf(x.c))]}>{niveauOf(profOf(x.c))}</td><td class="small">{gradeOf(x.c)}</td><td class="small">{PROF[profOf(x.c)]}</td>
                 <td class="small">{ti.length ? ti.map((u) => <>{u.name}{u.poste2 === x.c && ' (intérim)'} · {pn(u.country)}<br /></>) : <span class="tag warn">Vacant</span>}</td>
                 <td style="white-space:nowrap"><a class="btn ghost sm" href={`/os/organisation?t=postes&fiche=${x.c}&ouvrir=dlg-fiche`}>Fiche</a>{can && <> <button class="btn ghost sm" type="button" data-dlg="dlg-assign" data-set-code={x.c} data-set-label={`${x.c} — ${x.t} · profil ${PROF[profOf(x.c)]}${PDOM[x.c] ? ' · domaine ' + DOM[PDOM[x.c]].n : ''}`}>Affecter</button></>}</td>
               </tr>
@@ -84,6 +89,38 @@ const name = (id: string | null) => people.find((s) => s.id === id)?.name ?? '�
       {tree.map(([d, s]) => <div style={`margin-left:${d * 36}px;${d ? 'border-left:2px solid var(--line);padding-left:14px' : ''}`}><div class="card" style="display:inline-flex;gap:8px;align-items:center;padding:8px 10px;margin:4px 0"><span class="av s">{initials(s.name)}</span><span class="small"><b>{s.name}</b><br /><span class="muted">{refT(s.poste)}</span></span></div></div>)}
       {!tree.length && <div class="empty">Aucun collaborateur enregistré.</div>}
     </div>
+  )}
+  {tab === 'niv' && (
+    <>
+      <p class="small muted">Les droits sont ceux du poste, puis restreints par pays, région, domaine et seuil. Le niveau découle du poste ; l'appartenance au Bureau panafricain place au niveau N1. Les fonctions de contrôle restent indépendantes des fonctions contrôlées.</p>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Niveau</th><th>Structure</th><th>Collaborateurs</th><th>Boîtes à outils</th></tr></thead>
+          <tbody>{(Object.keys(NIVEAUX) as Niveau[]).map((n) => { const ps = actifs.filter((s) => niveauOf(s.prof, orgOf(s.id)) === n); const tb = [...new Set(ps.flatMap((x) => toolboxesOf(x.prof, orgOf(x.id))))].sort(); return (
+            <tr><td><span class="tag gold">{n}</span></td><td><b class="small">{NIVEAUX[n]}</b></td><td class="small">{ps.length ? ps.map((s) => s.name).join(', ') : n.startsWith('N0') ? organs.filter((o) => o.organ === (n === 'N0-C' ? 'cc' : 'bii')).map((o) => actifs.find((s) => s.id === o.staffId)?.name).filter(Boolean).join(', ') || '—' : '—'}</td><td class="xs">{tb.map((t) => `${t} ${TOOLBOXES[t]}`).join(' · ') || (n.startsWith('N0') ? 'Consultation des dossiers soumis' : '—')}</td></tr>
+          ); })}</tbody>
+        </table>
+      </div>
+      <h2 style="margin-top:18px">Organes et comités</h2>
+      <div class="grid g3">
+        {(Object.keys(ORGANS) as Organ[]).map((o) => (
+          <div class="card">
+            <h3 style="margin-top:0">{ORGANS[o]}</h3>
+            {organs.filter((m) => m.organ === o).map((m) => <div class="chk small"><span style="flex:1"><b>{actifs.find((s) => s.id === m.staffId)?.name ?? m.staffId}</b> · {m.role}</span>{canOrgan && <button class="btn ghost sm" type="button" data-post="/api/admin/os/workflow" data-body={JSON.stringify({ action: 'organ.remove', organ: o, staffId: m.staffId })} data-confirm="Retirer ce membre ?" data-reload>Retirer</button>}</div>)}
+            {!organs.some((m) => m.organ === o) && <p class="small muted">Aucun membre : les validations de cet organe remontent à la Direction générale.</p>}
+            {canOrgan && <button class="btn ghost sm" type="button" style="margin-top:8px" data-dlg="dlg-organ" data-set-organ={o} data-set-label={ORGANS[o]}>Ajouter un membre</button>}
+          </div>
+        ))}
+      </div>
+      {canOrgan && (
+        <Dlg id="dlg-organ" title="Ajouter un membre" api="/api/admin/os/workflow" submit="Ajouter">
+          <input type="hidden" name="action" value="organ.add" /><input type="hidden" name="organ" value="" />
+          <p class="small"><b data-text="label"></b></p>
+          <label class="f" for="om">Collaborateur</label><select class="in" id="om" name="staffId" style="width:100%">{actifs.map((s) => <option value={s.id}>{s.name} — {refT(s.poste)}</option>)}</select>
+          <label class="f" for="or" style="margin-top:8px">Rôle</label><input class="in" id="or" name="role" value="Membre" style="width:100%" />
+        </Dlg>
+      )}
+    </>
   )}
   {tab === 'ent' && (
     <>

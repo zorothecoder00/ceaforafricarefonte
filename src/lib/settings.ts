@@ -95,8 +95,9 @@ export const SETTINGS = {
     label: "Seuils d'approbation (CEA OS)",
     // Dépenses : représentant pays jusqu'à « pays », directeur régional jusqu'à « reg », Direction générale au-delà ;
     // contrats : Direction générale au-delà de « contrat » (FCFA)
-    schema: z.object({ pays: z.number().int().positive(), reg: z.number().int().positive(), contrat: z.number().int().positive() }),
-    defaults: { pays: 500000, reg: 5000000, contrat: 10000000 },
+    // dg : au-delà, le Bureau panafricain intervient (circuits V09 et suivants)
+    schema: z.object({ pays: z.number().int().positive(), reg: z.number().int().positive(), contrat: z.number().int().positive(), dg: z.number().int().positive().optional() }),
+    defaults: { pays: 500000, reg: 5000000, contrat: 10000000, dg: 50000000 },
   },
   paie: {
     label: 'Taux de paie par devise (CEA OS)',

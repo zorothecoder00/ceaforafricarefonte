@@ -25,6 +25,7 @@ import { remindStreaks } from '../../../lib/streaks';
 import { qualifyReferrals } from '../../../lib/referrals';
 import { syncPoints } from '../../../lib/points';
 import { matchWeek } from '../../../lib/coffee';
+import { slaSweep } from '../../../lib/os/approvals';
 import { agendaKey, siteUrl } from '../../../lib/agenda';
 
 export const prerender = false;
@@ -88,5 +89,7 @@ export const GET: APIRoute = async ({ request }) => {
   const filleuls = await qualifyReferrals().catch(err);
   const points = await syncPoints().catch(err);
   const cafe = await matchWeek(now).catch(err);
-  return json({ ok: true, sent, failed, tickets, expiredJobs, followups, retention, concours, dataroom, frequentation, series, filleuls, points, cafe });
+  // CEA OS : délais de validation (rappel, escalade au responsable puis à la Direction générale, suspension pendant un congé)
+  const validations = await slaSweep(now).catch(err);
+  return json({ ok: true, sent, failed, tickets, expiredJobs, followups, retention, concours, dataroom, frequentation, series, filleuls, points, cafe, validations });
 };

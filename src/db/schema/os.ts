@@ -31,7 +31,9 @@ export const staff = pgTable('staff', {
   updatedAt: ts('updated_at').notNull().defaultNow(),
 }, (t) => [index('staff_manager_idx').on(t.managerId), index('staff_country_idx').on(t.country)]);
 
-export type Step = { l: string; st: 'attente' | 'ok' | 'rejet'; who?: string; whoId?: string; at?: string; com?: string };
+/* Étape d'un circuit : l jeton d'approbateur ; st état ; who/whoId décideur ; dlg délégant quand la décision est prise sous
+   délégation ; due échéance (SLA) ; esc approbateurs ajoutés par escalade ; why raison de l'étape (condition ou acheminement). */
+export type Step = { l: string; st: 'attente' | 'ok' | 'rejet' | 'modifier'; who?: string; whoId?: string; dlg?: string; at?: string; com?: string; sla?: number; due?: string; esc?: string[]; why?: string };
 
 /* Demandes soumises à un circuit d'approbation. Étapes (steps) calculées à la création selon le type et le montant
    (seuils de Processus et seuils) ; cur = étape en cours ; hist = [date, auteur, décision, commentaire]. */
@@ -48,9 +50,93 @@ export const osRequest = pgTable('os_request', {
   cur: integer('cur').notNull().default(0),
   status: text('status').notNull().default('En approbation'),
   hist: jsonb('hist').$type<[string, string, string, string][]>().notNull().default([]),
+  // Moteur de workflow (cahier des charges CEA OS, section 4) : circuit appliqué, version soumise, phase du workflow universel,
+  // propriétés obligatoires (responsable, échéance, prochaine action, preuve), portée, confidentialité, pièces fournies, SLA
+  circuit: text('circuit'),
+  version: integer('version').notNull().default(1),
+  phase: text('phase').notNull().default('validation'),
+  owner: text('owner').references(() => staff.id, { onDelete: 'set null' }),
+  due: ts('due'),
+  nextAction: text('next_action'),
+  proof: text('proof'),
+  description: text('description'),
+  countries: jsonb('countries').$type<string[]>().notNull().default([]),
+  conf: text('conf').notNull().default('Interne'), // Public, Interne, Confidentiel, Strictement confidentiel
+  risk: text('risk').notNull().default('normal'), // faible, normal, eleve, critique
+  strategic: boolean('strategic').notNull().default(false),
+  pieces: jsonb('pieces').$type<Record<string, string>>().notNull().default({}), // pièce → clé du fichier ou mention
+  stepDue: ts('step_due'),
+  reminded: integer('reminded').notNull().default(0),
   createdAt: ts('created_at').notNull().defaultNow(),
   updatedAt: ts('updated_at').notNull().defaultNow(),
-}, (t) => [index('os_request_status_idx').on(t.status), index('os_request_by_idx').on(t.byStaff)]);
+}, (t) => [index('os_request_status_idx').on(t.status), index('os_request_by_idx').on(t.byStaff), index('os_request_owner_idx').on(t.owner)]);
+
+/* Journal des décisions (WFL-07, CEA Audit) : niveau, seuil, approbateur, délégant, version, décision, motif, preuve.
+   Immuable : la base refuse toute modification ou suppression (déclencheur os_wf_decision_immuable). */
+export const osWfDecision = pgTable('os_wf_decision', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  requestId: text('request_id').notNull().references(() => osRequest.id, { onDelete: 'restrict' }),
+  version: integer('version').notNull(),
+  step: integer('step'),
+  level: text('level'), // jeton d'approbateur
+  threshold: text('threshold'), // seuil ou condition qui a amené l'étape
+  decision: text('decision').notNull(), // soumis, approuve, rejete, modifier, escalade, rappel, suspendu, cloture, phase…
+  byStaff: text('by_staff'),
+  byName: text('by_name').notNull(),
+  delegant: text('delegant'), // matricule du délégant quand la décision est prise sous délégation
+  motif: text('motif'),
+  proof: text('proof'),
+  at: ts('at').notNull().defaultNow(),
+}, (t) => [index('os_wf_decision_req_idx').on(t.requestId)]);
+
+/* Circuits de validation V01 à V16 (annexe A), paramétrables sans développement (WFL-03). */
+export const osWfCircuit = pgTable('os_wf_circuit', {
+  code: text('code').primaryKey(), // V04, V04-NDF…
+  family: text('family').notNull(), // V01 … V16
+  name: text('name').notNull(),
+  steps: jsonb('steps').$type<{ l: string; if?: string[]; sla?: number }[]>().notNull(),
+  escalade: text('escalade').notNull().default(''),
+  origin: text('origin').notNull().default('referentiel'), // referentiel, propose (◊)
+  active: boolean('active').notNull().default(true),
+  version: integer('version').notNull().default(1),
+  updatedBy: text('updated_by'),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+});
+
+/* Types de dossiers : circuit, étapes du workflow universel utilisées, pièces (critiques ou non), rejet, tâches d'exécution. */
+export const osWfType = pgTable('os_wf_type', {
+  code: text('code').primaryKey(),
+  label: text('label').notNull(),
+  circuit: text('circuit').notNull(),
+  prefix: text('prefix').notNull(),
+  phases: jsonb('phases').$type<string[]>().notNull(),
+  checklist: jsonb('checklist').$type<{ k: string; label: string; critical: boolean }[]>().notNull().default([]),
+  rejectTo: text('reject_to').notNull().default('clos'),
+  exec: jsonb('exec').$type<{ title: string; days: number }[]>().notNull().default([]),
+  sla: integer('sla').notNull().default(48), // heures par étape, sauf délai propre à l'étape
+  dueDays: integer('due_days').notNull().default(30),
+  generic: boolean('generic').notNull().default(true),
+  active: boolean('active').notNull().default(true),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+});
+
+/* Seuils de validation par type de dossier (* = tous), pays ou région (WFL-04, PO-02). */
+export const osWfThreshold = pgTable('os_wf_threshold', {
+  type: text('type').notNull(),
+  scope: text('scope').notNull(), // all, r:AO, p:TG
+  key: text('key').notNull(), // pays, reg, dg, contrat
+  amount: bigint('amount', { mode: 'number' }).notNull(),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.type, t.scope, t.key] })]);
+
+/* Organes (section 3.1) et comités : Bureau panafricain (N1), Conseil consultatif (N0-C), Bureau des investisseurs
+   indépendants (N0-I), comité d'investissement, comité de sélection. Leurs membres sont des collaborateurs. */
+export const osOrganMember = pgTable('os_organ_member', {
+  organ: text('organ').notNull(), // bp, cc, bii, ci, cs
+  staffId: text('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),
+  role: text('role').notNull().default('Membre'),
+  since: ts('since').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.organ, t.staffId] })]);
 
 /* Délégations de signature : pendant une absence, les approbations du délégant sont aussi proposées au délégataire. */
 export const osDelegation = pgTable('os_delegation', {
@@ -60,6 +146,9 @@ export const osDelegation = pgTable('os_delegation', {
   start: ts('start').notNull().defaultNow(),
   until: ts('until').notNull(),
   revoked: boolean('revoked').notNull().default(false),
+  // Périmètre (WFL-09) : types de dossiers délégués (vide = tous) ; autorisation : qui a validé la délégation
+  scope: jsonb('scope').$type<string[]>().notNull().default([]),
+  authorizedBy: text('authorized_by'),
   createdAt: ts('created_at').notNull().defaultNow(),
 });
 

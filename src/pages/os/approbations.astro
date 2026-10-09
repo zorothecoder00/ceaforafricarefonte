@@ -1,6 +1,7 @@
 ---
 /* CEA OS — Approbations (prototype › pApprob) : éléments qui attendent la décision de l'utilisateur (titulaire ou délégataire),
    approbation unitaire ou groupée, rejet avec motif obligatoire, dernières décisions. */
+import { typeName } from '../../lib/os/workflow-defaults';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import Dlg from '../../components/os/Dlg.astro';
 import Steps from '../../components/os/Steps.astro';
@@ -11,7 +12,7 @@ import { osRequest, osDecision } from '../../db/schema/os';
 import { osContext, allStaff } from '../../lib/os/core';
 import { pendingFor, thresholds, activeDelegations } from '../../lib/os/approvals';
 import { escalatedFor, hoursSince } from '../../lib/os/relations';
-import { RTYPE, pn, fcfa, dstr, type ReqType } from '../../lib/os/ref';
+import { pn, fcfa, dstr } from '../../lib/os/ref';
 
 export const prerender = false;
 const os = await osContext(Astro.locals.user!);
@@ -37,7 +38,7 @@ const name = (id: string) => people.find((s) => s.id === id)?.name ?? '—';
             const just = (r.data as { just?: { name: string } }).just;
             return (
               <tr>
-                <td><b>{RTYPE[r.type as ReqType]} {r.id} — {r.title}</b>{just && <div class="xs muted">Justificatif : <a href={`/api/admin/os/justificatif?id=${r.id}`} target="_blank" rel="noopener">{just.name}</a></div>}</td>
+                <td><a href={`/os/flux/${r.id}`}><b>{typeName(r.type)} {r.id} — {r.title}</b></a>{just && <div class="xs muted">Justificatif : <a href={`/api/admin/os/justificatif?id=${r.id}`} target="_blank" rel="noopener">{just.name}</a></div>}</td>
                 <td class="small">{name(r.byStaff)}</td>
                 <td class="small">{lvl}</td>
                 <td>{pn(r.country)}</td>
@@ -45,7 +46,7 @@ const name = (id: string) => people.find((s) => s.id === id)?.name ?? '—';
                 <td><Steps steps={r.steps} cur={r.cur} status={r.status} /></td>
                 <td style="white-space:nowrap">
                   <button class="btn ok sm" type="button" data-post="/api/admin/os/approbations" data-body={JSON.stringify({ action: 'decide', id: r.id, ok: true })} data-reload>Approuver</button>
-                  <button class="btn ghost sm" type="button" data-dlg="dlg-rejet" data-set-id={r.id} data-set-label={`${RTYPE[r.type as ReqType]} ${r.id} — ${r.title}`}>Rejeter</button>
+                  <button class="btn ghost sm" type="button" data-dlg="dlg-rejet" data-set-id={r.id} data-set-label={`${typeName(r.type)} ${r.id} — ${r.title}`}>Rejeter</button>
                 </td>
               </tr>
             );

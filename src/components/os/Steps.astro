@@ -1,9 +1,9 @@
 ---
-/* Circuit d'approbation d'une demande : étapes validées (vert), rejetée (rouge), en cours (orange), à venir (gris). */
-import { LVL, type Level } from '../../lib/os/ref';
+/* Circuit d'approbation d'une demande : étapes validées (vert), rejetée (rouge), modification demandée (bleu), en cours (orange), à venir (gris). */
+import { ROLE, type Role } from '../../lib/os/workflow-core';
 import type { Step } from '../../db/schema/os';
 interface Props { steps: Step[]; cur: number; status: string }
 const { steps, cur, status } = Astro.props;
-const cls = (s: Step, i: number) => (s.st === 'ok' ? 'ok' : s.st === 'rejet' ? 'bad' : i === cur && status === 'En approbation' ? 'warn' : '');
+const cls = (s: Step, i: number) => (s.st === 'ok' ? 'ok' : s.st === 'rejet' ? 'bad' : s.st === 'modifier' ? 'info' : i === cur && status === 'En approbation' ? 'warn' : '');
 ---
-<div class="steps2">{steps.map((s, i) => <>{i > 0 && <span class="muted xs">›</span>}<span class={`tag ${cls(s, i)}`} title={s.who ?? ''}>{LVL[s.l as Level] ?? s.l}</span></>)}</div>
+<div class="steps2">{steps.map((s, i) => <>{i > 0 && <span class="muted xs">›</span>}<span class={`tag ${cls(s, i)}`} title={s.who ?? ''}>{ROLE[s.l as Role] ?? s.l}</span></>)}</div>

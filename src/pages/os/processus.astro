@@ -1,37 +1,144 @@
 ---
-/* CEA OS — Processus, seuils et automatisations (prototype › pProc), profils dg, ops, it, conf : seuils d'approbation
-   appliqués à toute l'organisation ; processus (étapes versionnées, activation) modifiables sans code. */
+/* CEA OS — Processus, seuils et automatisations, profils dg, ops, it, conf : paramétrage du moteur de workflow sans
+   développement (cahier des charges CEA OS, WFL-03 et WFL-04) — circuits V01 à V16 (étapes, conditions, délais), types de
+   dossiers (circuit, pièces critiques, rejet, tâches d'exécution), seuils généraux puis propres à un type, une région ou un
+   pays ; processus métier versionnés (prototype). Toute modification est inscrite au journal d'audit. */
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import Dlg from '../../components/os/Dlg.astro';
-import { thresholds } from '../../lib/os/approvals';
+import { invalidateWf, wfConfig } from '../../lib/os/approvals';
 import { allFlows } from '../../lib/os/pilotage';
+import { ROLE, COND, PHASE_LABEL, circuitLabel, stepsToText, checklistToText, execToText, type Phase } from '../../lib/os/workflow-core';
+import { PK, REGIONS, pn, fcfa } from '../../lib/os/ref';
 
 export const prerender = false;
-const [thr, flows] = await Promise.all([thresholds(), allFlows()]);
+invalidateWf();
+const [cfg, flows] = await Promise.all([wfConfig(), allFlows()]);
+const tab = Astro.url.searchParams.get('t') ?? 'circuits';
+const T: [string, string][] = [['circuits', 'Circuits de validation'], ['types', 'Types de dossiers'], ['seuils', 'Seuils'], ['processus', 'Processus métier']];
+const thr = cfg.general;
+const scopeName = (s: string) => (s === 'all' ? "Toute l'organisation" : s.startsWith('r:') ? REGIONS[s.slice(2) as keyof typeof REGIONS]?.n ?? s : pn(s.slice(2)));
+const KEYS: Record<string, string> = { pays: 'Seuil pays', reg: 'Seuil régional', dg: 'Seuil Bureau panafricain', contrat: 'Seuil contrat' };
+const families = [...new Set([...cfg.circuits.values()].map((c) => c.family))].sort();
 ---
-<AdminLayout title="Processus, seuils et automatisations" lead="Paramétrage sans code par les administrateurs fonctionnels">
-  <form class="card" data-api="/api/admin/os/seuils" data-reload>
-    <h2>Seuils d'approbation</h2>
-    <div class="fg" style="max-width:820px">
-      <div><label class="f" for="t1">Représentant pays jusqu'à (FCFA)</label><input class="in num" id="t1" name="pays" type="number" min="1" value={thr.pays} required /></div>
-      <div><label class="f" for="t2">Directeur régional jusqu'à (FCFA)</label><input class="in num" id="t2" name="reg" type="number" min="1" value={thr.reg} required /></div>
-      <div><label class="f" for="t3">Contrats : Direction générale au-delà de</label><input class="in num" id="t3" name="contrat" type="number" min="1" value={thr.contrat} required /></div>
-    </div>
-    <button class="btn" type="submit" style="margin-top:6px">Enregistrer</button>
-  </form>
-  <h2 style="margin-top:18px">Processus</h2>
-  <div class="grid g2">
-    {flows.map((f) => (
-      <div class="card">
-        <div class="row between"><h3 style="margin:0">{f.name} <span class="xs muted">v{f.version}</span></h3><button class="toggle" type="button" role="switch" aria-checked={f.active ? 'true' : 'false'} aria-label={`Activer ${f.name}`} data-post="/api/admin/os/pilotage" data-body={JSON.stringify({ action: 'flow.toggle', id: f.id })} data-reload></button></div>
-        <div class="row" style="margin-top:10px;gap:4px">{f.steps.map((s, k) => <>{k > 0 && <span class="muted">›</span>}<span class={`tag ${f.active ? 'info' : ''}`}>{k + 1}. {s}</span></>)}</div>
-        <button class="btn ghost sm" type="button" data-dlg="dlg-flow" data-set-id={f.id} data-set-steps={f.steps.join('\n')} data-set-label={f.name} style="margin-top:10px">Modifier les étapes</button>
+<AdminLayout title="Processus, seuils et automatisations" lead="Paramétrage du moteur de validation sans développement : chaque changement vaut pour les dossiers soumis ensuite">
+  <div class="tabs">{T.map(([k, l]) => <a href={`?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
+
+  {tab === 'circuits' && (
+    <>
+      <p class="small muted">V01 à V13 reprennent la matrice du référentiel ; V14 à V16 (◊) sont des compléments proposés. Règles automatiques communes : plusieurs pays → niveau régional ; plusieurs régions → Direction générale ; sujet stratégique → Direction générale puis Bureau panafricain ; pièce critique manquante → retour à l'auteur ; rejet motivé ; délai dépassé → rappel puis escalade.</p>
+      {families.map((f) => (
+        <div class="grid g2" style="margin-bottom:12px">
+          {[...cfg.circuits.values()].filter((c) => c.family === f).map((c) => (
+            <div class="card">
+              <div class="row between"><h3 style="margin:0">{c.code} — {c.name} <span class="xs muted">v{c.version}</span></h3>{c.active ? <span class="tag ok">Actif</span> : <span class="tag">Inactif</span>}</div>
+              <div class="steps2" style="margin:10px 0 6px">{c.steps.map((s, i) => <>{i > 0 && <span class="muted xs">›</span>}<span class="tag info" title={s.if?.length ? 'si ' + s.if.map((k) => COND[k]).join(' ou ') : ''}>{ROLE[s.l]}{s.if?.length ? ' *' : ''} · {s.sla ?? '—'} h</span></>)}</div>
+              <p class="xs muted" style="margin:0">Escalade : {c.escalade || '—'}{c.steps.some((s) => s.if?.length) && ' · * étape conditionnelle'}</p>
+              <p class="xs muted" style="margin:2px 0 0">Utilisé par : {[...cfg.types.values()].filter((t) => t.circuit === c.code).map((t) => t.label).join(', ') || 'aucun type'}</p>
+              <button class="btn ghost sm" type="button" style="margin-top:8px" data-dlg="dlg-circuit" data-set-active={String(c.active)} data-set-code={c.code} data-set-name={c.name} data-set-escalade={c.escalade} data-set-steps={stepsToText(c.steps)} data-set-label={`${c.code} — ${c.name}`}>Modifier</button>
+            </div>
+          ))}
+        </div>
+      ))}
+      <Dlg id="dlg-circuit" title="Modifier le circuit" api="/api/admin/os/workflow" submit="Enregistrer une nouvelle version" wide>
+        <input type="hidden" name="action" value="circuit.save" /><input type="hidden" name="code" value="" />
+        <p class="small"><b data-text="label"></b></p>
+        <div class="fg">
+          <div><label class="f" for="cn">Nom</label><input class="in" id="cn" name="name" required /></div>
+          <div><label class="f" for="ce">Escalade</label><input class="in" id="ce" name="escalade" /></div>
+          <div><label class="f" for="ca">État</label><select class="in" id="ca" name="active"><option value="true">Actif</option><option value="false">Inactif</option></select></div>
+          <div class="full"><label class="f" for="cs">Étapes — une par ligne : <code>approbateur | conditions (séparées par des virgules) | délai en heures</code></label><textarea class="in" id="cs" name="steps" style="min-height:150px;width:100%;font-family:monospace"></textarea></div>
+        </div>
+        <details class="small" style="margin-top:8px"><summary>Approbateurs et conditions disponibles</summary>
+          <p class="xs"><b>Approbateurs :</b> {Object.entries(ROLE).map(([k, v]) => <><code>{k}</code> {v} · </>)}</p>
+          <p class="xs"><b>Conditions</b> (l'étape n'existe que si l'une est vraie) : {Object.entries(COND).map(([k, v]) => <><code>{k}</code> {v} · </>)}</p>
+        </details>
+      </Dlg>
+    </>
+  )}
+
+  {tab === 'types' && (
+    <>
+      <div class="tw">
+        <table class="t">
+          <thead><tr><th>Type</th><th>Circuit</th><th>Phases</th><th>Pièces</th><th>Rejet</th><th>Délai / échéance</th><th></th></tr></thead>
+          <tbody>{[...cfg.types.values()].map((t) => (
+            <tr>
+              <td><b>{t.label}</b><div class="xs muted">{t.code} · préfixe {t.prefix}{t.generic ? '' : ' · formulaire dédié'}{!t.active ? ' · inactif' : ''}</div></td>
+              <td class="small">{t.circuit}<div class="xs muted">{circuitLabel(cfg.circuits.get(t.circuit)?.steps ?? [])}</div></td>
+              <td class="xs">{t.phases.map((p) => PHASE_LABEL[p as Phase] ?? p).join(' › ')}</td>
+              <td class="xs">{t.checklist.map((x) => (x.critical ? '★ ' : '') + x.label).join(' · ') || '—'}{t.exec.length > 0 && <div class="muted">Après validation : {t.exec.map((x) => x.title).join(' · ')}</div>}</td>
+              <td class="small">{t.rejectTo === 'clos' ? 'Clôt le dossier' : 'À corriger'}</td>
+              <td class="small">{t.sla} h par étape<br />{t.dueDays} jours</td>
+              <td><button class="btn ghost sm" type="button" data-dlg="dlg-type" data-set-active={String(t.active)} data-set-code={t.code} data-set-label={t.label} data-set-circuit={t.circuit} data-set-reject-to={t.rejectTo} data-set-sla={String(t.sla)} data-set-due-days={String(t.dueDays)} data-set-checklist={checklistToText(t.checklist)} data-set-exec={execToText(t.exec)}>Modifier</button></td>
+            </tr>
+          ))}</tbody>
+        </table>
       </div>
-    ))}
-  </div>
-  <Dlg id="dlg-flow" title="Étapes du processus" api="/api/admin/os/pilotage" submit="Enregistrer une nouvelle version">
-    <input type="hidden" name="action" value="flow.steps" /><input type="hidden" name="id" value="" />
-    <p class="small"><b data-text="label"></b> — une étape par ligne.</p>
-    <textarea class="in" name="steps" style="min-height:160px;width:100%"></textarea>
-  </Dlg>
+      <Dlg id="dlg-type" title="Modifier le type de dossier" api="/api/admin/os/workflow" submit="Enregistrer" wide>
+        <input type="hidden" name="action" value="type.save" /><input type="hidden" name="code" value="" />
+        <p class="small"><b data-text="label"></b></p>
+        <div class="fg">
+          <div><label class="f" for="tc">Circuit</label><select class="in" id="tc" name="circuit">{[...cfg.circuits.values()].map((c) => <option value={c.code}>{c.code} — {c.name}</option>)}</select></div>
+          <div><label class="f" for="tr">Rejet</label><select class="in" id="tr" name="rejectTo"><option value="clos">Clôt le dossier</option><option value="corrige">Renvoie le dossier à corriger</option></select></div>
+          <div><label class="f" for="ts">Délai par étape (heures)</label><input class="in" type="number" id="ts" name="sla" min="1" max="2160" required /></div>
+          <div><label class="f" for="td">Échéance du dossier (jours)</label><input class="in" type="number" id="td" name="dueDays" min="1" max="730" required /></div>
+          <div><label class="f" for="tac">État</label><select class="in" id="tac" name="active"><option value="true">Actif</option><option value="false">Inactif</option></select></div>
+          <div class="full"><label class="f" for="tk">Pièces — une par ligne : <code>clé | libellé | *</code> (* = critique : sans elle, pas de validation)</label><textarea class="in" id="tk" name="checklist" style="min-height:90px;width:100%;font-family:monospace"></textarea></div>
+          <div class="full"><label class="f" for="te">Tâches créées après validation — <code>intitulé | jours</code></label><textarea class="in" id="te" name="exec" style="min-height:90px;width:100%;font-family:monospace"></textarea></div>
+        </div>
+      </Dlg>
+    </>
+  )}
+
+  {tab === 'seuils' && (
+    <>
+      <form class="card" data-api="/api/admin/os/seuils" data-reload>
+        <h2>Seuils généraux <span class="xs muted">(toute l'organisation, tous types)</span></h2>
+        <div class="fg" style="max-width:980px">
+          <div><label class="f" for="t1">Représentant pays jusqu'à (FCFA)</label><input class="in num" id="t1" name="pays" type="number" min="1" value={thr.pays} required /></div>
+          <div><label class="f" for="t2">Directeur régional jusqu'à (FCFA)</label><input class="in num" id="t2" name="reg" type="number" min="1" value={thr.reg} required /></div>
+          <div><label class="f" for="t4">Bureau panafricain au-delà de (FCFA)</label><input class="in num" id="t4" name="dg" type="number" min="1" value={thr.dg} required /></div>
+          <div><label class="f" for="t3">Contrats : Direction générale au-delà de</label><input class="in num" id="t3" name="contrat" type="number" min="1" value={thr.contrat} required /></div>
+        </div>
+        <button class="btn" type="submit" style="margin-top:6px">Enregistrer</button>
+      </form>
+      <div class="card" style="margin-top:14px">
+        <h2>Seuils particuliers</h2>
+        <p class="small muted">Le seuil le plus précis s'applique : pays, puis région, puis toute l'organisation ; d'abord celui du type de dossier, puis celui de tous les types.</p>
+        {cfg.thr.length ? (
+          <table class="t">
+            <thead><tr><th>Type</th><th>Portée</th><th>Seuil</th><th>Montant</th><th></th></tr></thead>
+            <tbody>{cfg.thr.map((x) => <tr><td class="small">{x.type === '*' ? 'Tous les types' : cfg.types.get(x.type)?.label ?? x.type}</td><td class="small">{scopeName(x.scope)}</td><td class="small">{KEYS[x.key]}</td><td class="num">{fcfa(x.amount)}</td><td><button class="btn ghost sm" type="button" data-post="/api/admin/os/workflow" data-body={JSON.stringify({ action: 'threshold.delete', type: x.type, scope: x.scope, key: x.key })} data-confirm="Supprimer ce seuil ?" data-reload>Supprimer</button></td></tr>)}</tbody>
+          </table>
+        ) : <p class="small muted">Aucun seuil particulier : les seuils généraux s'appliquent partout.</p>}
+        <form data-api="/api/admin/os/workflow" data-reload class="fg" style="margin-top:12px">
+          <input type="hidden" name="action" value="threshold.set" />
+          <div><label class="f" for="st">Type</label><select class="in" id="st" name="type"><option value="*">Tous les types</option>{[...cfg.types.values()].map((t) => <option value={t.code}>{t.label}</option>)}</select></div>
+          <div><label class="f" for="ss">Portée</label><select class="in" id="ss" name="scope"><option value="all">Toute l'organisation</option><optgroup label="Régions">{Object.entries(REGIONS).map(([k, v]) => <option value={`r:${k}`}>{v.n}</option>)}</optgroup><optgroup label="Pays">{PK.map((p) => <option value={`p:${p}`}>{pn(p)}</option>)}</optgroup></select></div>
+          <div><label class="f" for="sk">Seuil</label><select class="in" id="sk" name="key">{Object.entries(KEYS).map(([k, v]) => <option value={k}>{v}</option>)}</select></div>
+          <div><label class="f" for="sa">Montant (FCFA)</label><input class="in num" type="number" id="sa" name="amount" min="1" required /></div>
+          <div style="align-self:end"><button class="btn" type="submit">Ajouter ou remplacer</button></div>
+        </form>
+      </div>
+    </>
+  )}
+
+  {tab === 'processus' && (
+    <>
+      <div class="grid g2">
+        {flows.map((f) => (
+          <div class="card">
+            <div class="row between"><h3 style="margin:0">{f.name} <span class="xs muted">v{f.version}</span></h3><button class="toggle" type="button" role="switch" aria-checked={f.active ? 'true' : 'false'} aria-label={`Activer ${f.name}`} data-post="/api/admin/os/pilotage" data-body={JSON.stringify({ action: 'flow.toggle', id: f.id })} data-reload></button></div>
+            <div class="row" style="margin-top:10px;gap:4px">{f.steps.map((s, k) => <>{k > 0 && <span class="muted">›</span>}<span class={`tag ${f.active ? 'info' : ''}`}>{k + 1}. {s}</span></>)}</div>
+            <button class="btn ghost sm" type="button" data-dlg="dlg-flow" data-set-id={f.id} data-set-steps={f.steps.join('\n')} data-set-label={f.name} style="margin-top:10px">Modifier les étapes</button>
+          </div>
+        ))}
+      </div>
+      <Dlg id="dlg-flow" title="Étapes du processus" api="/api/admin/os/pilotage" submit="Enregistrer une nouvelle version">
+        <input type="hidden" name="action" value="flow.steps" /><input type="hidden" name="id" value="" />
+        <p class="small"><b data-text="label"></b> — une étape par ligne.</p>
+        <textarea class="in" name="steps" style="min-height:160px;width:100%"></textarea>
+      </Dlg>
+    </>
+  )}
 </AdminLayout>
