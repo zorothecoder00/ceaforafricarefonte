@@ -1,0 +1,71 @@
+---
+/* CEA OS — Mon activité (cahier des charges CEA OS, ESP-14) : journal des actions et livrables (tâches terminées, décisions,
+   dossiers, versions de documents, actions tracées) et rapport quotidien ou hebdomadaire prêt à transmettre (copie, impression).
+   Un responsable consulte aussi le rapport d'un membre de son équipe (?qui=EMP…). */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { osContext, allStaff } from '../../../lib/os/core';
+import { activityOf } from '../../../lib/os/workspace';
+import { periodKey, ymd } from '../../../lib/os/workspace-core';
+import { dtstr, refT } from '../../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const me = os.me;
+const q = Astro.url.searchParams;
+const per = (['jour', 'semaine', 'mois', 'trimestre'] as const).find((p) => p === q.get('p')) ?? 'jour';
+const people = await allStaff();
+const who = q.get('qui');
+const target = who && me && (people.find((s) => s.id === who && (s.managerId === me.id || me.prof === 'dg' || me.prof === 'rh'))) || me;
+const now = new Date();
+const DAY = 864e5;
+const today = new Date(ymd(now) + 'T00:00:00Z');
+const dow = today.getUTCDay() || 7;
+const from = per === 'jour' ? today : per === 'semaine' ? new Date(today.getTime() - (dow - 1) * DAY) : per === 'mois' ? new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1)) : new Date(Date.UTC(today.getUTCFullYear(), Math.floor(today.getUTCMonth() / 3) * 3, 1));
+const a = target ? await activityOf(target, from, now) : null;
+const LBL = { jour: "Rapport du jour", semaine: `Rapport de la semaine ${periodKey('semaine', now)}`, mois: `Rapport du mois ${periodKey('mois', now)}`, trimestre: `Rapport du trimestre ${periodKey('trimestre', now)}` };
+const team = me ? people.filter((s) => s.active && (s.managerId === me.id)) : [];
+const report = a && target ? [
+  `${LBL[per]} — ${target.name} (${refT(target.poste)})`,
+  `Période : du ${from.toLocaleDateString('fr-FR', { timeZone: 'UTC' })} au ${now.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}`,
+  `Tâches terminées : ${a.tasksDone} · décisions et dossiers : ${a.decisions} · versions de documents : ${a.versions} · temps déclarés : ${a.hours} h`,
+  '',
+  ...a.items.map((x) => `- ${dtstr(x.at)} — ${x.kind} : ${x.text}`),
+].join('\n') : '';
+---
+<AdminLayout title="Mon activité" lead={target ? `${target.name} · journal des actions et des livrables` : ''}>
+  <Fragment slot="actions">{a && <button class="btn ghost" type="button" data-copy="#rapport">Copier le rapport</button>}{a && <button class="btn ghost" type="button" onclick="print()">Imprimer</button>}</Fragment>
+  {!me || !a || !target ? <div class="empty">Votre compte n'est rattaché à aucune fiche du personnel.</div> : (
+    <>
+      <div class="toolbar">
+        <div class="tabs" style="margin:0;border:0">{(['jour', 'semaine', 'mois', 'trimestre'] as const).map((p) => <a href={`?p=${p}${target.id !== me.id ? `&qui=${target.id}` : ''}`} aria-selected={p === per ? 'true' : 'false'}>{p[0].toUpperCase() + p.slice(1)}</a>)}</div>
+        {team.length > 0 && <select class="in" data-go aria-label="Collaborateur" style="width:auto;margin-left:auto"><option value={`?p=${per}`}>Moi</option>{team.map((s) => <option value={`?p=${per}&qui=${s.id}`} selected={s.id === target.id}>{s.name}</option>)}</select>}
+      </div>
+      <div class="grid g4">
+        <div class="card kpi"><div class="l">Tâches terminées</div><div class="v num">{a.tasksDone}</div></div>
+        <div class="card kpi"><div class="l">Décisions et dossiers</div><div class="v num">{a.decisions}</div></div>
+        <div class="card kpi"><div class="l">Versions de documents</div><div class="v num">{a.versions}</div></div>
+        <div class="card kpi"><div class="l">Temps déclarés</div><div class="v num">{a.hours} h</div></div>
+      </div>
+      <div class="split" style="margin-top:14px">
+        <div class="card">
+          <h2 style="margin-top:0">{LBL[per]}</h2>
+          <ul class="timeline">{a.items.map((x) => <li><i></i><div class="small"><b>{x.kind}</b> · <span class="muted">{dtstr(x.at)}</span><br />{x.link ? <a href={x.link}>{x.text}</a> : x.text}</div></li>)}</ul>
+          {!a.items.length && <p class="small muted">Aucune activité enregistrée sur la période.</p>}
+        </div>
+        <aside class="card">
+          <h3 style="margin-top:0">Rapport à transmettre</h3>
+          <textarea class="in" id="rapport" readonly style="min-height:320px;width:100%;font-size:.8rem">{report}</textarea>
+          <p class="xs muted">Le vendredi, une notification rappelle que le rapport de la semaine est prêt.</p>
+        </aside>
+      </div>
+    </>
+  )}
+</AdminLayout>
+<script>
+  document.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((b) => b.addEventListener('click', async () => {
+    const t = document.querySelector<HTMLTextAreaElement>(b.dataset.copy!);
+    if (!t) return;
+    await navigator.clipboard.writeText(t.value).catch(() => { t.select(); document.execCommand('copy'); });
+    (window as unknown as { toast?: (s: string) => void }).toast?.('Rapport copié.');
+  }));
+</script>

@@ -65,22 +65,33 @@ export function canUse(spec: string, c: Pick<OsCtx, 'me' | 'prof' | 'superuser'>
    dom : pastille de couleur du domaine. staff : réservé aux collaborateurs ayant une fiche personnel. ===== */
 export type NavItem = { href: string; label: string; spec?: string; obj?: Obj; dom?: Dom; staff?: boolean };
 export const MODS: [string, NavItem[]][] = [
+  // Espace personnel (cahier des charges CEA OS, ESP-01 à ESP-14)
   ['Mon espace', [
-    { href: '/os', label: 'Accueil' },
-    { href: '/os/poste', label: 'Mon poste et mes indicateurs', spec: ALL, staff: true },
-    { href: '/os/moi', label: 'Mes demandes', spec: ALL, staff: true },
-    { href: '/os/moi/temps', label: 'Ma feuille de temps', spec: ALL, staff: true },
-    { href: '/os/moi/paie', label: 'Mes bulletins de paie', spec: ALL, staff: true },
-    { href: '/os/messagerie', label: 'Messagerie', spec: ALL, staff: true },
-    { href: '/os/agenda', label: 'Agenda et réunions', spec: ALL, staff: true },
-    { href: '/os/taches', label: 'Tâches', spec: ALL, staff: true },
+    { href: '/os', label: 'Mon tableau de bord' },
+    { href: '/os/moi/planning', label: 'Mon agenda et ma planification', spec: ALL, staff: true },
+    { href: '/os/moi/charge', label: 'Ma charge', spec: ALL, staff: true },
+    { href: '/os/taches', label: 'Mes tâches', spec: ALL, staff: true },
+    { href: '/os/flux', label: 'Mes dossiers et validations', spec: ALL },
+    { href: '/os/moi/documents', label: 'Mes documents', spec: ALL, staff: true },
+    { href: '/os/agenda', label: 'Mes réunions', spec: ALL, staff: true },
+    { href: '/os/messagerie', label: 'Mes messages', spec: ALL, staff: true },
     { href: '/os/equipe', label: 'Mon équipe', spec: MANAGERS + ' jur conf com it', staff: true },
     { href: '/os/annuaire', label: 'Annuaire du personnel', spec: ALL },
+  ]],
+  ['Mon parcours', [
+    { href: '/os/poste', label: 'Mon poste et mes indicateurs', spec: ALL, staff: true },
+    { href: '/os/moi/missions', label: 'Mes missions', spec: ALL, staff: true },
+    { href: '/os/moi/objectifs', label: 'Mes objectifs', spec: ALL, staff: true },
+    { href: '/os/moi/competences', label: 'Mes compétences', spec: ALL, staff: true },
+    { href: '/os/moi/evaluation', label: 'Mon évaluation', spec: ALL, staff: true },
+    { href: '/os/moi/activite', label: 'Mon activité', spec: ALL, staff: true },
+    { href: '/os/moi', label: 'Mes demandes (congés, frais)', spec: ALL, staff: true },
+    { href: '/os/moi/temps', label: 'Ma feuille de temps', spec: ALL, staff: true },
+    { href: '/os/moi/paie', label: 'Mes bulletins de paie', spec: ALL, staff: true },
   ]],
   ['Pilotage', [
     { href: '/os/cockpit', label: 'Cockpit', spec: MANAGERS },
     { href: '/os/approbations', label: 'Approbations', spec: ALL },
-    { href: '/os/flux', label: 'Dossiers et validations', spec: ALL },
     { href: '/os/okr', label: 'Objectifs (OKR)', spec: ALL },
     { href: '/os/impact', label: 'CEA Impact Lab', spec: 'dg adg ops chef dirreg rep com agent:prj' },
     { href: '/os/risques', label: 'Risques et audit interne', spec: 'dg ops conf jur chef dirreg' },

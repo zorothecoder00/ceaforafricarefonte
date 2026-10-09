@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../../../lib/db';
 import { osDocShare, osDocument } from '../../../db/schema/os';
 import { audit, clientIp } from '../../../lib/session';
-import { readStoredFile } from '../../../lib/storage';
+import { contentOf } from '../../../lib/os/documents';
 
 export const prerender = false;
 
@@ -16,8 +16,8 @@ export const GET: APIRoute = async ({ params, request }) => {
   if (!s) return page('Lien inconnu.', 404);
   if (s.expiresAt < new Date()) return page('Ce lien de partage a expiré. Demandez un nouveau lien à votre contact CEA FOR AFRICA.', 410);
   const [d] = await db.select().from(osDocument).where(eq(osDocument.id, s.documentId));
-  const f = d ? await readStoredFile(d.storageKey) : null;
+  const f = d ? await contentOf(d, d.finalVersion ?? undefined) : null; // version finale validée quand elle existe
   if (!d || !f) return page('Document indisponible.', 404);
   await audit(null, 'os.document.partage.ouverture', d.name, { destinataire: s.email }, clientIp(request));
-  return new Response(Buffer.from(f.body), { headers: { 'Content-Type': f.type, 'Content-Disposition': `inline; filename="${d.name.replace(/[^\w.\- ]/g, '_')}"`, 'Cache-Control': 'private, no-store', 'X-Robots-Tag': 'noindex' } });
+  return new Response(Buffer.from(f.body), { headers: { 'Content-Type': f.type, 'Content-Disposition': `inline; filename="${f.filename}"`, 'Cache-Control': 'private, no-store', 'X-Robots-Tag': 'noindex' } });
 };

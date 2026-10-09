@@ -1,0 +1,78 @@
+---
+/* CEA OS — Mes documents (cahier des charges CEA OS, ESP-09 et 5.4) : brouillons et documents dont je suis l'auteur,
+   documents à signer, documents signés, modèles par domaine ; création d'un document vierge ou depuis un modèle. */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Dlg from '../../../components/os/Dlg.astro';
+import Tags from '../../../components/os/Tags.astro';
+import { desc, eq, or } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { osDocument, osSignFlow, osDocTemplate } from '../../../db/schema/os';
+import { osContext, canUse, MANAGERS } from '../../../lib/os/core';
+import { CONF } from '../../../lib/os/support';
+import { DK, DOM, dstr } from '../../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const me = os.me;
+const tab = Astro.url.searchParams.get('t') ?? 'mes';
+const [docs, flows, tpls] = me ? await Promise.all([
+  db.select().from(osDocument).where(or(eq(osDocument.owner, me.id), eq(osDocument.by, me.id))).orderBy(desc(osDocument.updatedAt)),
+  db.select({ f: osSignFlow, name: osDocument.name }).from(osSignFlow).innerJoin(osDocument, eq(osDocument.id, osSignFlow.documentId)).orderBy(desc(osSignFlow.createdAt)),
+  db.select().from(osDocTemplate).orderBy(osDocTemplate.name),
+]) : [[], [], []];
+const toSign = flows.filter(({ f }) => f.status === 'En cours' && me && f.signers[f.cur] === me.id);
+const signedByMe = flows.filter(({ f }) => me && f.signers.slice(0, f.cur).includes(me.id));
+const canTpl = canUse(MANAGERS + ' com jur', os);
+const T: [string, string][] = [['mes', `Mes documents (${docs.length})`], ['signer', `À signer (${toSign.length})`], ['signes', 'Signés par moi'], ['modeles', `Modèles (${tpls.length})`]];
+const preset = Astro.url.searchParams.get('dossier') ?? '';
+---
+<AdminLayout title="Mes documents" lead="Brouillons, versions, validation et signature ; le classeur partagé reste dans Support › Documents">
+  <Fragment slot="actions">{me && <button class="btn" type="button" data-dlg="dlg-newdoc">+ Nouveau document</button>}</Fragment>
+  <div class="tabs">{T.map(([k, l]) => <a href={`?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
+  {!me ? <div class="empty">Votre compte n'est rattaché à aucune fiche du personnel.</div> : (
+    <>
+      {tab === 'mes' && (docs.length ? (
+        <div class="tw"><table class="t">
+          <thead><tr><th>Document</th><th>Statut</th><th>Version</th><th>Confidentialité</th><th>Modifié</th></tr></thead>
+          <tbody>{docs.map((d) => <tr><td><a href={`/os/documents/${d.id}`}><b>{d.name}</b></a><div class="xs muted">{d.kind === 'texte' ? 'Rédigé dans CEA OS' : 'Fichier'}{d.sourceRequest && ` · dossier ${d.sourceRequest}`}</div></td><td><Tags st={d.status} /></td><td class="small">v{d.version}{d.finalVersion && <span class="muted"> · finale v{d.finalVersion}</span>}</td><td class="small">{d.confidentiality}</td><td class="small">{dstr(d.updatedAt)}</td></tr>)}</tbody>
+        </table></div>
+      ) : <div class="empty">Aucun document. Créez-en un, vierge ou depuis un modèle.</div>)}
+      {tab === 'signer' && (toSign.length ? toSign.map(({ f, name }) => <div class="card" style="margin-bottom:10px"><div class="row between"><b>{name}</b><a class="btn sm" href={`/os/documents/${f.documentId}`}>Lire et signer</a></div><p class="small muted" style="margin:4px 0 0">Version {f.version} · signataire {f.cur + 1} sur {f.signers.length}</p></div>) : <div class="empty">Aucun document n'attend votre signature.</div>)}
+      {tab === 'signes' && (signedByMe.length ? <div class="tw"><table class="t"><thead><tr><th>Document</th><th>Version</th><th>Circuit</th></tr></thead><tbody>{signedByMe.map(({ f, name }) => <tr><td><a href={`/os/documents/${f.documentId}`}>{name}</a></td><td class="small">v{f.version}</td><td><Tags st={f.status === 'Signé' ? 'Signé' : f.status} /></td></tr>)}</tbody></table></div> : <div class="empty">Aucune signature.</div>)}
+      {tab === 'modeles' && (
+        <>
+          {tpls.map((t) => (
+            <div class="card" style="margin-bottom:10px">
+              <div class="row between"><b>{t.name} <span class="xs muted">· {t.domain ? DOM[t.domain as keyof typeof DOM]?.n : 'tous les domaines'}</span></b>
+                {canTpl && <span><button class="btn ghost sm" type="button" data-dlg="dlg-tpl" data-set-id={t.id} data-set-name={t.name} data-set-domain={t.domain ?? ''} data-set-body={t.body}>Modifier</button> <button class="btn ghost sm" type="button" data-post="/api/admin/os/documents" data-body={JSON.stringify({ action: 'template.delete', id: t.id })} data-confirm="Supprimer ce modèle ?" data-reload>Supprimer</button></span>}</div>
+              <pre class="xs" style="white-space:pre-wrap;max-height:140px;overflow:auto;margin:8px 0 0;background:var(--surface-2);padding:8px;border-radius:6px">{t.body.slice(0, 600)}</pre>
+            </div>
+          ))}
+          {!tpls.length && <div class="empty">Aucun modèle pour l'instant.</div>}
+          {canTpl && <button class="btn" type="button" data-dlg="dlg-tpl" data-set-id="" data-set-name="" data-set-body="">+ Modèle</button>}
+          <p class="xs muted" style="margin-top:8px">Variables remplacées à la création : {'{{titre}} {{date}} {{auteur}} {{poste}} {{pays}} {{domaine}} {{dossier}} {{montant}} {{description}}'}.</p>
+        </>
+      )}
+      <Dlg id="dlg-newdoc" title="Nouveau document" api="/api/admin/os/documents" submit="Créer" wide>
+        <input type="hidden" name="action" value="create" />
+        <div class="fg">
+          <div class="full"><label class="f" for="dn">Nom du document</label><input class="in" id="dn" name="name" required minlength="2" maxlength="200" /></div>
+          <div><label class="f" for="dd">Domaine</label><select class="in" id="dd" name="domain">{DK.map((d) => <option value={d} selected={d === (me.domain ?? 'prj')}>{DOM[d].n}</option>)}</select></div>
+          <div><label class="f" for="dc">Confidentialité</label><select class="in" id="dc" name="confidentiality">{CONF.map((c) => <option selected={c === 'Interne'}>{c}</option>)}</select></div>
+          <div class="full"><label class="f" for="dt">Modèle</label><select class="in" id="dt" name="templateId"><option value="">Document vierge</option>{tpls.map((t) => <option value={t.id}>{t.name}{t.domain ? ` (${DOM[t.domain as keyof typeof DOM]?.n})` : ''}</option>)}</select></div>
+          <div class="full"><label class="f" for="ds">Dossier d'origine (facultatif)</label><input class="in" id="ds" name="sourceRequest" value={preset} placeholder="Référence, ex. PRJ-1A2B3" maxlength="40" /></div>
+        </div>
+      </Dlg>
+      {canTpl && (
+        <Dlg id="dlg-tpl" title="Modèle de document" api="/api/admin/os/documents" submit="Enregistrer" wide>
+          <input type="hidden" name="action" value="template.save" /><input type="hidden" name="id" value="" />
+          <div class="fg">
+            <div><label class="f" for="tn">Nom</label><input class="in" id="tn" name="name" required maxlength="160" /></div>
+            <div><label class="f" for="td">Domaine</label><select class="in" id="td" name="domain"><option value="">Tous les domaines</option>{DK.map((d) => <option value={d}>{DOM[d].n}</option>)}</select></div>
+            <div class="full"><label class="f" for="tb">Contenu (Markdown, variables entre doubles accolades)</label><textarea class="in" id="tb" name="body" required style="min-height:260px;width:100%;font-family:monospace"></textarea></div>
+          </div>
+        </Dlg>
+      )}
+    </>
+  )}
+</AdminLayout>

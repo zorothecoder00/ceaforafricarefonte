@@ -1,6 +1,8 @@
 ---
-/* CEA OS — Tâches (prototype › pTaches) : kanban À faire / En cours / Terminé, glisser-déposer ou liste de statut ;
-   les managers voient aussi les tâches de leur périmètre et en confient à leur équipe. */
+/* CEA OS — Mes tâches (prototype › pTaches ; cahier des charges CEA OS, ESP-07) : boîtes Entrée (à planifier), Aujourd'hui,
+   À valider (dossiers du moteur de workflow), En retard, Déléguées ; kanban À faire / En cours / Terminé, score de priorité,
+   charge estimée ; les managers voient aussi les tâches de leur périmètre, en confient à leur équipe et les réaffectent.
+   Les tâches en retard sont relancées puis escaladées par la tâche planifiée quotidienne. */
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import Dlg from '../../components/os/Dlg.astro';
 import Tags from '../../components/os/Tags.astro';
@@ -10,6 +12,10 @@ import { osTask } from '../../db/schema/os';
 import { osContext, allStaff, canUse, MANAGERS, scopeState } from '../../lib/os/core';
 import { TASK_COLS } from '../../lib/os/collab';
 import { DK, DOM, dstr, regOf } from '../../lib/os/ref';
+import { pendingFor } from '../../lib/os/approvals';
+import { osObjective } from '../../db/schema/os';
+import { and, eq } from 'drizzle-orm';
+import { periodKey, priorityScore, PRIO_LABEL, ymd, type Prio } from '../../lib/os/workspace-core';
 
 export const prerender = false;
 const os = await osContext(Astro.locals.user!);
@@ -18,20 +24,40 @@ const people = await allStaff();
 const name = (id: string) => people.find((s) => s.id === id)?.name ?? '—';
 const mineOnly = !canUse(MANAGERS, os);
 const sc = scopeState(os, Astro.cookies);
-const list = me ? (await db.select().from(osTask).orderBy(asc(osTask.due))).filter((t) => (mineOnly ? t.owner === me.id : t.owner === me.id || sc.inScope({ country: t.country, domain: t.domain }))) : [];
+const list = me ? (await db.select().from(osTask).orderBy(asc(osTask.due))).filter((t) => t.owner === me.id || t.delegatedBy === me.id || t.createdBy === me.id || (!mineOnly && sc.inScope({ country: t.country, domain: t.domain }))) : [];
 const team = me ? (mineOnly ? [me] : people.filter((s) => s.active && (s.id === me.id || s.managerId === me.id || me.prof === 'dg' || (me.prof === 'dirreg' && regOf(s.country) === me.reg)))) : [];
 const now = new Date();
+// Boîtes (ESP-07)
+const boite = Astro.url.searchParams.get('boite') ?? '';
+const today = ymd(now);
+const mineList = me ? list.filter((t) => t.owner === me.id && t.status !== 'Terminé') : [];
+const BOX: Record<string, { l: string; f: (t: (typeof list)[number]) => boolean }> = {
+  entree: { l: 'Entrée (à planifier)', f: (t) => t.owner === me?.id && t.status === 'À faire' && !t.start },
+  aujourdhui: { l: "Aujourd'hui", f: (t) => t.owner === me?.id && t.status !== 'Terminé' && (ymd(t.due) === today || (!!t.start && ymd(t.start) === today)) },
+  retard: { l: 'En retard', f: (t) => t.owner === me?.id && t.status !== 'Terminé' && t.due < now },
+  deleguees: { l: 'Déléguées', f: (t) => t.owner !== me?.id && (t.delegatedBy === me?.id || t.createdBy === me?.id) && t.status !== 'Terminé' },
+};
+const toValidate = me ? (await pendingFor(me.id)).length : 0;
+const shown = boite && BOX[boite] ? list.filter(BOX[boite].f) : list;
+const objectives = me ? await db.select().from(osObjective).where(and(eq(osObjective.staffId, me.id))) : [];
+const liveObj = objectives.filter((o) => o.periodKey === periodKey(o.period as 'semaine', now));
 ---
 <AdminLayout title="Tâches" lead={mineOnly ? 'Mes tâches' : `Mes tâches et celles de mon périmètre (${sc.label})`}>
   <Fragment slot="actions">{me && <button class="btn" type="button" data-dlg="dlg-task">Nouvelle tâche</button>}</Fragment>
-  <div class="toolbar"><label class="row small"><input type="checkbox" id="mine" checked={mineOnly} disabled={mineOnly} /> Mes tâches uniquement</label></div>
+  <div class="tabs">
+    <a href="/os/taches" aria-selected={!boite ? 'true' : 'false'}>Toutes ({list.filter((t) => t.status !== 'Terminé').length})</a>
+    {Object.entries(BOX).map(([k, b]) => <a href={`?boite=${k}`} aria-selected={k === boite ? 'true' : 'false'}>{b.l} ({list.filter(b.f).length})</a>)}
+    <a href="/os/flux?vue=a_valider">À valider ({toValidate}) ›</a>
+  </div>
+  <div class="toolbar"><label class="row small"><input type="checkbox" id="mine" checked={mineOnly} disabled={mineOnly} /> Mes tâches uniquement</label><span class="xs muted" style="margin-left:auto">Le chiffre en gras est le score de priorité (retard, échéance, priorité déclarée).</span></div>
   <div class="kanban" data-me={me?.id}>
     {TASK_COLS.map((c) => (
       <div class="col" data-st={c}>
-        <h4><span>{c}</span><span class="tag">{list.filter((t) => t.status === c).length}</span></h4>
-        {list.filter((t) => t.status === c).map((t) => (
+        <h4><span>{c}</span><span class="tag">{shown.filter((t) => t.status === c).length}</span></h4>
+        {shown.filter((t) => t.status === c).sort((a, b) => priorityScore(b, now) - priorityScore(a, now)).map((t) => (
           <div class="kc" draggable="true" data-id={t.id} data-who={t.owner}>
-            <b>{t.title}</b>
+            <b>{c !== 'Terminé' && <span class="num" title="Score de priorité" style="color:var(--gold-ink);margin-right:6px">{priorityScore(t, now)}</span>}{t.title}</b>
+            {(t.priority !== 'normale' || t.estimate !== 1 || t.delegatedBy) && <div class="xs muted">{t.priority !== 'normale' && `Priorité ${PRIO_LABEL[t.priority as Prio].toLowerCase()} · `}{t.estimate} h{t.delegatedBy && t.delegatedBy !== t.owner && ` · confiée par ${name(t.delegatedBy)}`}{t.start && ` · planifiée le ${dstr(t.start)}`}</div>}
             <div class="row between xs muted" style="margin-top:6px"><span>{name(t.owner)}</span><span class={t.due < now && c !== 'Terminé' ? 'down' : ''}>{dstr(t.due)}</span></div>
             <div class="row" style="margin-top:6px"><Tags dom={t.domain} /><select class="in xs" data-mv={t.id} aria-label="Statut" style="padding:2px 4px;margin-left:auto">{TASK_COLS.map((x) => <option selected={x === c}>{x}</option>)}</select></div>
           </div>
@@ -47,6 +73,9 @@ const now = new Date();
         <div><label class="f" for="tw">Responsable</label><select class="in" id="tw" name="owner">{team.map((s) => <option value={s.id} selected={s.id === me.id}>{s.name}</option>)}</select></div>
         <div><label class="f" for="tdm">Domaine</label><select class="in" id="tdm" name="domain">{DK.map((d) => <option value={d} selected={d === me.domain}>{DOM[d].n}</option>)}</select></div>
         <div><label class="f" for="tdu">Échéance</label><input class="in" type="date" id="tdu" name="due" /></div>
+        <div><label class="f" for="tpr">Priorité</label><select class="in" id="tpr" name="priority"><option value="urgente">Urgente</option><option value="haute">Haute</option><option value="normale" selected>Normale</option><option value="basse">Basse</option></select></div>
+        <div><label class="f" for="tes">Charge estimée (heures)</label><input class="in" type="number" id="tes" name="estimate" min="0.25" max="80" step="0.25" value="1" /></div>
+        <div class="full"><label class="f" for="tob">Objectif (fait progresser l'objectif quand la tâche est terminée)</label><select class="in" id="tob" name="objectiveId"><option value="">—</option>{liveObj.map((o) => <option value={o.id}>{o.title}</option>)}</select></div>
       </div>
     </Dlg>
   )}

@@ -1,0 +1,76 @@
+---
+/* CEA OS — Mes objectifs (cahier des charges CEA OS, ESP-06) : objectifs de la semaine, du mois et du trimestre, rattachés
+   aux OKR de l'organisation ; progression calculée (tâches rattachées terminées, ou valeur atteinte face à la cible) ;
+   indicateurs du poste rappelés. */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Dlg from '../../../components/os/Dlg.astro';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { osObjective, osTask, osOkr } from '../../../db/schema/os';
+import { osContext, allStaff } from '../../../lib/os/core';
+import { kpisOf, kpiState } from '../../../lib/os/kpis';
+import { objectiveProgress, periodKey } from '../../../lib/os/workspace-core';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const me = os.me;
+const now = new Date();
+const keys = { semaine: periodKey('semaine', now), mois: periodKey('mois', now), trimestre: periodKey('trimestre', now) };
+const list = me ? await db.select().from(osObjective).where(eq(osObjective.staffId, me.id)).orderBy(desc(osObjective.createdAt)) : [];
+const ids = list.map((o) => o.id);
+const linked = ids.length ? await db.select({ o: osTask.objectiveId, n: sql<number>`count(*)::int`, done: sql<number>`count(*) filter (where ${osTask.status} = 'Terminé')::int` }).from(osTask).where(inArray(osTask.objectiveId, ids)).groupBy(osTask.objectiveId) : [];
+const okrs = await db.select({ id: osOkr.id, title: osOkr.title, level: osOkr.level }).from(osOkr);
+const kpis = me ? await kpisOf(me, await allStaff()) : [];
+const PER: [keyof typeof keys, string][] = [['semaine', 'Cette semaine'], ['mois', 'Ce mois'], ['trimestre', 'Ce trimestre']];
+const prog = (o: (typeof list)[number]) => { const l = linked.find((x) => x.o === o.id); return objectiveProgress(o, l ? { done: l.done, total: l.n } : undefined); };
+---
+<AdminLayout title="Mes objectifs" lead={`Semaine ${keys.semaine} · mois ${keys.mois} · trimestre ${keys.trimestre} · progression calculée`}>
+  <Fragment slot="actions">{me && <button class="btn" type="button" data-dlg="dlg-obj" data-set-id="" data-set-title="" data-set-current="0">+ Objectif</button>}</Fragment>
+  {!me ? <div class="empty">Votre compte n'est rattaché à aucune fiche du personnel.</div> : (
+    <>
+      <div class="grid g3">
+        {PER.map(([p, l]) => { const cur = list.filter((o) => o.period === p && o.periodKey === keys[p]); return (
+          <div class="card">
+            <h2 style="margin-top:0">{l} <span class="xs muted">{keys[p]}</span></h2>
+            {cur.map((o) => { const v = prog(o); const lk = linked.find((x) => x.o === o.id); return (
+              <div style="padding:8px 0;border-bottom:1px solid var(--line)">
+                <div class="row between small"><b>{o.title}</b><span class="num">{v} %</span></div>
+                <div class={`bar ${v >= 100 ? 'ok' : ''}`} style="margin:6px 0"><span style={`width:${Math.min(100, v)}%`}></span></div>
+                <div class="xs muted">{lk ? `${lk.done}/${lk.n} tâche(s) rattachée(s) terminée(s)` : `${o.current} / ${o.target} ${o.unit}`}{o.okrId && ` · OKR : ${okrs.find((k) => k.id === o.okrId)?.title ?? ''}`}</div>
+                <div class="row" style="margin-top:4px">
+                  <button class="btn ghost sm" type="button" data-dlg="dlg-obj" data-set-id={o.id} data-set-period={o.period} data-set-title={o.title} data-set-target={String(o.target)} data-set-current={String(o.current)} data-set-unit={o.unit} data-set-okr-id={o.okrId ?? ''}>Mettre à jour</button>
+                  <button class="btn ghost sm" type="button" data-post="/api/admin/os/espace" data-body={JSON.stringify({ action: 'objective.delete', id: o.id })} data-confirm="Supprimer cet objectif ?" data-reload>Supprimer</button>
+                </div>
+              </div>
+            ); })}
+            {!cur.length && <p class="small muted">Aucun objectif.</p>}
+          </div>
+        ); })}
+      </div>
+      <h2 style="margin-top:18px">Indicateurs de mon poste</h2>
+      <div class="grid g4">
+        {kpis.map((x) => { const st = kpiState(x); return <div class="card kpi"><div class="row between"><span class="l">{x.l}</span>{st && <span class="health" style={`background:var(--${st})`}></span>}</div><div class="v num">{x.v}</div>{x.sub && <div class="d muted">{x.sub}</div>}</div>; })}
+        {!kpis.length && <div class="empty">Aucun indicateur calculable pour l'instant.</div>}
+      </div>
+      {list.filter((o) => o.periodKey !== keys[o.period as keyof typeof keys]).length > 0 && (
+        <>
+          <h2 style="margin-top:18px">Périodes passées</h2>
+          <div class="tw"><table class="t"><thead><tr><th>Objectif</th><th>Période</th><th>Résultat</th></tr></thead>
+            <tbody>{list.filter((o) => o.periodKey !== keys[o.period as keyof typeof keys]).map((o) => <tr><td class="small">{o.title}</td><td class="small">{o.periodKey}</td><td class="num">{prog(o)} %</td></tr>)}</tbody></table></div>
+        </>
+      )}
+      <p class="xs muted" style="margin-top:8px">Pour qu'un objectif progresse tout seul, rattachez-lui des tâches (Mes tâches › Nouvelle tâche › objectif).</p>
+      <Dlg id="dlg-obj" title="Objectif" api="/api/admin/os/espace" submit="Enregistrer" wide>
+        <input type="hidden" name="action" value="objective.save" /><input type="hidden" name="id" value="" />
+        <div class="fg">
+          <div class="full"><label class="f" for="ot">Objectif</label><input class="in" id="ot" name="title" required minlength="3" maxlength="200" /></div>
+          <div><label class="f" for="op">Période</label><select class="in" id="op" name="period"><option value="semaine">Semaine</option><option value="mois">Mois</option><option value="trimestre">Trimestre</option></select></div>
+          <div><label class="f" for="oc">Atteint</label><input class="in" type="number" id="oc" name="current" min="0" step="any" value="0" /></div>
+          <div><label class="f" for="og">Cible</label><input class="in" type="number" id="og" name="target" min="0.01" step="any" value="100" required /></div>
+          <div><label class="f" for="ou">Unité</label><input class="in" id="ou" name="unit" value="%" maxlength="20" /></div>
+          <div class="full"><label class="f" for="ok">OKR de rattachement</label><select class="in" id="ok" name="okrId"><option value="">—</option>{okrs.map((k) => <option value={k.id}>{k.level} — {k.title}</option>)}</select></div>
+        </div>
+      </Dlg>
+    </>
+  )}
+</AdminLayout>

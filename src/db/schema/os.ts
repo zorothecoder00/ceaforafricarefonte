@@ -1,7 +1,7 @@
 /* CEA OS — progiciel de gestion interne (prototype CEA OS), lot 1 : personnel, demandes soumises à approbation
    (congés, notes de frais, achats, dépenses, contrats, recrutements), délégations de signature, temps passés, budgets par domaine.
    Le profil d'accès d'un collaborateur découle de son poste (src/lib/os/ref.ts › profOf) : il n'est pas stocké. */
-import { pgTable, text, integer, bigint, boolean, real, timestamp, uuid, jsonb, index, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, bigint, boolean, real, timestamp, uuid, jsonb, index, primaryKey, uniqueIndex } from 'drizzle-orm/pg-core';
 import { user } from './auth';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true });
@@ -223,8 +223,74 @@ export const osTask = pgTable('os_task', {
   domain: text('domain'),
   due: ts('due').notNull(),
   createdBy: text('created_by').references(() => staff.id, { onDelete: 'set null' }),
+  // Poste de travail (cahier des charges CEA OS, 5.1) : priorité, charge estimée, créneau planifié, rattachements, délégation, relances
+  priority: text('priority').notNull().default('normale'), // urgente, haute, normale, basse
+  estimate: real('estimate').notNull().default(1), // heures
+  start: ts('start'), // créneau planifié (Ma planification)
+  missionId: uuid('mission_id'),
+  objectiveId: uuid('objective_id'),
+  requestId: text('request_id'), // dossier du moteur de workflow
+  delegatedBy: text('delegated_by'), // matricule de la personne qui a confié la tâche
+  doneAt: ts('done_at'),
+  remindedAt: ts('reminded_at'),
+  escalatedAt: ts('escalated_at'),
   createdAt: ts('created_at').notNull().defaultNow(),
 }, (t) => [index('os_task_owner_idx').on(t.owner)]);
+
+/* Agenda personnel (ESP-02) : visites, déplacements, temps de concentration… en plus des réunions, échéances et congés. */
+export const osAgendaItem = pgTable('os_agenda_item', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  staffId: text('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),
+  kind: text('kind').notNull(), // visite, deplacement, concentration, autre
+  title: text('title').notNull(),
+  start: ts('start').notNull(),
+  end: ts('end').notNull(),
+  place: text('place').notNull().default(''),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('os_agenda_item_staff_idx').on(t.staffId, t.start)]);
+
+/* Missions (ESP-05) : permanentes ou ponctuelles ; une récurrence crée les tâches automatiquement (AUT-04). */
+export const osMission = pgTable('os_mission', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  staffId: text('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  kind: text('kind').notNull().default('permanente'), // permanente, ponctuelle
+  recurrence: text('recurrence'), // jour, semaine:1 (lundi) … semaine:7, mois:1 … mois:28 ; null = sans tâche récurrente
+  estimate: real('estimate').notNull().default(1),
+  domain: text('domain'),
+  start: ts('start').notNull().defaultNow(),
+  end: ts('end'),
+  active: boolean('active').notNull().default(true),
+  lastRun: text('last_run'), // dernière date (AAAA-MM-JJ) pour laquelle la tâche récurrente a été créée
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('os_mission_staff_idx').on(t.staffId)]);
+
+/* Objectifs personnels (ESP-06) : semaine, mois, trimestre ; rattachés à un OKR ; progression calculée. */
+export const osObjective = pgTable('os_objective', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  staffId: text('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),
+  period: text('period').notNull(), // semaine, mois, trimestre
+  periodKey: text('period_key').notNull(), // 2026-S41, 2026-10, 2026-T4
+  title: text('title').notNull(),
+  target: real('target').notNull().default(100),
+  current: real('current').notNull().default(0),
+  unit: text('unit').notNull().default('%'),
+  okrId: uuid('okr_id'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [index('os_objective_staff_idx').on(t.staffId, t.periodKey)]);
+
+/* Compétences (ESP-12) : niveau actuel et attendu par le poste, certification, plan de développement. */
+export const osSkill = pgTable('os_skill', {
+  staffId: text('staff_id').notNull().references(() => staff.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  level: integer('level').notNull().default(1), // 1 à 5
+  target: integer('target').notNull().default(3),
+  certification: text('certification'),
+  certExpires: ts('cert_expires'),
+  plan: text('plan'), // action de développement
+  planDue: ts('plan_due'),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.staffId, t.name] })]);
 
 /* Registre des décisions : décidé (Direction générale), en attente de la DG, refusé. */
 export const osDecision = pgTable('os_decision', {
@@ -622,11 +688,72 @@ export const osDocument = pgTable('os_document', {
   country: text('country'),
   confidentiality: text('confidentiality').notNull().default('Interne'), // Public | Interne | Confidentiel | Strictement confidentiel
   version: integer('version').notNull().default(1),
-  storageKey: text('storage_key').notNull(),
+  storageKey: text('storage_key').notNull(), // fichier de la version courante ('' pour un document rédigé dans CEA OS)
   mime: text('mime').notNull(),
   size: integer('size').notNull().default(0),
   by: text('by'),
+  // Documents (cahier des charges CEA OS, 5.4) : statut, auteur, document rédigé dans l'outil, modèle et dossier d'origine,
+  // dossier de validation (circuit V02), version finale archivée à la validation
+  status: text('status').notNull().default('Brouillon'), // Brouillon, En validation, Validé, En signature, Signé
+  kind: text('kind').notNull().default('fichier'), // fichier, texte
+  owner: text('owner'),
+  templateId: uuid('template_id'),
+  sourceRequest: text('source_request'),
+  validationRequest: text('validation_request'),
+  finalVersion: integer('final_version'),
   updatedAt: ts('updated_at').notNull().defaultNow(),
+});
+
+/* Versions d'un document (DOC-02) : chaque version garde son fichier ou son texte, son empreinte et son auteur. */
+export const osDocVersion = pgTable('os_doc_version', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  documentId: uuid('document_id').notNull().references(() => osDocument.id, { onDelete: 'cascade' }),
+  version: integer('version').notNull(),
+  storageKey: text('storage_key'),
+  body: text('body'),
+  mime: text('mime').notNull(),
+  size: integer('size').notNull().default(0),
+  sha256: text('sha256'),
+  note: text('note').notNull().default(''),
+  by: text('by'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+}, (t) => [uniqueIndex('os_doc_version_unique').on(t.documentId, t.version)]);
+
+/* Modèles de documents par domaine (DOC-01) ; variables {{titre}}, {{date}}, {{auteur}}, {{poste}}, {{pays}}, {{dossier}}… */
+export const osDocTemplate = pgTable('os_doc_template', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  domain: text('domain'), // null = tous les domaines
+  body: text('body').notNull(),
+  createdBy: text('created_by'),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+});
+
+/* Circuits de signature (DOC-04, CEA Sign interne) : signataires dans l'ordre, sur une version validée et figée. */
+export const osSignFlow = pgTable('os_sign_flow', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  documentId: uuid('document_id').notNull().references(() => osDocument.id, { onDelete: 'cascade' }),
+  version: integer('version').notNull(),
+  sha256: text('sha256').notNull(),
+  signers: jsonb('signers').$type<string[]>().notNull(),
+  cur: integer('cur').notNull().default(0),
+  status: text('status').notNull().default('En cours'), // En cours, Signé, Annulé
+  createdBy: text('created_by'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  completedAt: ts('completed_at'),
+});
+/* Signatures apposées : immuables (déclencheur os_signature_immuable), elles forment le certificat conservé avec le document. */
+export const osSignature = pgTable('os_signature', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  flowId: uuid('flow_id').notNull().references(() => osSignFlow.id, { onDelete: 'restrict' }),
+  signer: text('signer').notNull(),
+  name: text('name').notNull(),
+  poste: text('poste').notNull().default(''),
+  sha256: text('sha256').notNull(),
+  statement: text('statement').notNull(),
+  ip: text('ip'),
+  userAgent: text('user_agent'),
+  signedAt: ts('signed_at').notNull().defaultNow(),
 });
 export const osDocShare = pgTable('os_doc_share', {
   token: text('token').primaryKey(),

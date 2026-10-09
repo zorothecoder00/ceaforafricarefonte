@@ -2,7 +2,7 @@
    POST { action: 'create', title, date, hour, place, participants[], agenda } → invitations notifiées
    POST { action: 'cr', id, minutes, decisions, actions } → compte rendu diffusé ; décisions (une par ligne) inscrites au
         registre (décidées si la Direction générale rédige, sinon en attente de sa validation) ; actions (une par ligne)
-        créées en tâches pour le rédacteur, échéance à 7 jours. */
+        créées en tâches, échéance à 7 jours : « action @Prénom Nom » la confie au participant cité, sinon au rédacteur. */
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
@@ -49,7 +49,20 @@ export const POST: APIRoute = async ({ locals, request }) => {
   await db.update(osMeeting).set({ minutes: b.minutes, decisions: dec }).where(eq(osMeeting.id, m.id));
   if (dec.length) await db.insert(osDecision).values(dec.map((t) => ({ text: `${t} (${m.title})`, status: me.prof === 'dg' ? 'Décidé' : 'En attente', source: m.title, by: me.id })));
   const acts = lines(b.actions);
-  if (acts.length) await db.insert(osTask).values(acts.map((t) => ({ title: t, owner: me.id, country: me.country, domain: me.domain ?? 'prj', due: new Date(Date.now() + 7 * 864e5), createdBy: me.id })));
+  // Action « texte @Prénom Nom » (ou @EMP…) : confiée au participant cité, sinon au rédacteur ; la décision devient une tâche suivie
+  const ppl = people;
+  const assign = (line: string) => {
+    const mt = line.match(/^(.*?)\s*@\s*(.+)$/);
+    if (!mt) return { title: line, owner: me };
+    const who = mt[2].trim().toLowerCase();
+    const p = ppl.find((x) => x.active && (x.id.toLowerCase() === who || x.name.toLowerCase() === who || x.name.toLowerCase().startsWith(who)) && (m.participants.includes(x.id) || x.id === me.id));
+    return { title: mt[1].trim() || line, owner: p ?? me };
+  };
+  if (acts.length) {
+    const rows = acts.map(assign);
+    await db.insert(osTask).values(rows.map((x) => ({ title: x.title, owner: x.owner.id, country: x.owner.country, domain: x.owner.domain ?? me.domain ?? 'prj', due: new Date(Date.now() + 7 * 864e5), createdBy: me.id, delegatedBy: x.owner.id !== me.id ? me.id : null })));
+    for (const x of rows) if (x.owner.id !== me.id) await notifyStaff([x.owner.id], `Action issue de la réunion « ${m.title} » : ${x.title}`, '/os/taches', ppl);
+  }
   await notifyStaff(m.participants, `Compte rendu disponible : ${m.title}`, '/os/agenda', people);
   if (dec.length && me.prof !== 'dg') await notifyStaff(people.filter((s) => s.prof === 'dg' && s.active).map((s) => s.id), `Décision(s) à valider : ${m.title}`, '/os/approbations', people);
   await audit(me.userId, 'os.reunion.compte_rendu', m.id, { decisions: dec.length, actions: acts.length });

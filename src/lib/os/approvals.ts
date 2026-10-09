@@ -337,6 +337,7 @@ export async function decide(id: string, me: Person, ok: boolean | Decision, com
       if (r.type === 'recrut' && r.data.rec) await db.update(osRecruit).set({ status: 'Refusée' }).where(eq(osRecruit.id, String(r.data.rec)));
       if (r.type === 'offre' && r.data.cand) await db.update(osCandidate).set({ status: 'Entretien' }).where(eq(osCandidate.id, String(r.data.cand)));
     }
+    if (r.type === 'doc' && r.data.documentId) await (await import('./documents')).onDocDecision(r, final ? 'rejete' : 'corriger');
     await notifyStaff([r.byStaff, r.owner ?? r.byStaff], `${label(c, r)} — ${status.toLowerCase()} (${lvl}) : ${com}`, objLink(r.id), e.people);
     await audit(me.userId, dec === 'rejete' ? 'os.demande.rejet' : 'os.demande.modification', r.id, { niveau: lvl, motif: com, delegant });
     return null;
@@ -395,6 +396,7 @@ async function finalize(c: WfConfig, r: Req, e: Env) {
     const [cd] = await db.select().from(osCandidate).where(eq(osCandidate.id, String(r.data.cand)));
     if (x && cd && x.status !== 'Pourvu') await hire(x, cd, r.amount, people, null, '');
   }
+  if (r.type === 'doc' && r.data.documentId) await (await import('./documents')).onDocDecision(r, 'valide');
   const t = c.types.get(r.type);
   const owner = r.owner ?? r.byStaff;
   const tasks = t?.exec ?? [];

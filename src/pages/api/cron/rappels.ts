@@ -26,6 +26,7 @@ import { qualifyReferrals } from '../../../lib/referrals';
 import { syncPoints } from '../../../lib/points';
 import { matchWeek } from '../../../lib/coffee';
 import { slaSweep } from '../../../lib/os/approvals';
+import { runMissions, taskReminders, weeklyReports } from '../../../lib/os/workspace';
 import { agendaKey, siteUrl } from '../../../lib/agenda';
 
 export const prerender = false;
@@ -91,5 +92,9 @@ export const GET: APIRoute = async ({ request }) => {
   const cafe = await matchWeek(now).catch(err);
   // CEA OS : délais de validation (rappel, escalade au responsable puis à la Direction générale, suspension pendant un congé)
   const validations = await slaSweep(now).catch(err);
-  return json({ ok: true, sent, failed, tickets, expiredJobs, followups, retention, concours, dataroom, frequentation, series, filleuls, points, cafe, validations });
+  // CEA OS : tâches récurrentes des missions, relances et escalades des tâches en retard, rapport d'activité du vendredi
+  const missions = await runMissions(now).catch(err);
+  const taches = await taskReminders(now).catch(err);
+  const rapports = await weeklyReports(now).catch(err);
+  return json({ ok: true, sent, failed, tickets, expiredJobs, followups, retention, concours, dataroom, frequentation, series, filleuls, points, cafe, validations, missions, taches, rapports });
 };

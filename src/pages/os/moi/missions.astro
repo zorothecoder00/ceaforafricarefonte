@@ -1,0 +1,58 @@
+---
+/* CEA OS — Mes missions (cahier des charges CEA OS, ESP-05) : missions permanentes (reprises de la fiche de poste) et
+   ponctuelles ; une récurrence crée automatiquement la tâche du jour (AUT-04, tâche planifiée quotidienne). */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Dlg from '../../../components/os/Dlg.astro';
+import { and, asc, eq, sql } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { osMission, osTask } from '../../../db/schema/os';
+import { osContext } from '../../../lib/os/core';
+import { RECURRENCE_LABEL } from '../../../lib/os/workspace-core';
+import { DK, DOM, dstr, poste } from '../../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const me = os.me;
+const list = me ? await db.select().from(osMission).where(eq(osMission.staffId, me.id)).orderBy(asc(osMission.kind), asc(osMission.title)) : [];
+const counts = me ? await db.select({ m: osTask.missionId, n: sql<number>`count(*)::int`, done: sql<number>`count(*) filter (where ${osTask.status} = 'Terminé')::int` }).from(osTask).where(and(eq(osTask.owner, me.id), sql`${osTask.missionId} is not null`)).groupBy(osTask.missionId) : [];
+const fiche = me ? poste(me.poste) : undefined;
+const REC: [string, string][] = [['', 'Sans tâche récurrente'], ['jour', 'Chaque jour ouvré'], ...[1, 2, 3, 4, 5].map((n) => [`semaine:${n}`, RECURRENCE_LABEL(`semaine:${n}`)] as [string, string]), ['mois:1', 'Le 1er de chaque mois'], ['mois:15', 'Le 15 de chaque mois'], ['mois:28', 'Le 28 de chaque mois']];
+const dlgSet = (m?: (typeof list)[number]) => (m ? { 'data-set-id': m.id, 'data-set-title': m.title, 'data-set-kind': m.kind, 'data-set-recurrence': m.recurrence ?? '', 'data-set-estimate': String(m.estimate), 'data-set-domain': m.domain ?? '', 'data-set-end': m.end ? m.end.toISOString().slice(0, 10) : '', 'data-set-active': String(m.active) } : { 'data-set-id': '', 'data-set-title': '', 'data-set-recurrence': '', 'data-set-active': 'true' });
+---
+<AdminLayout title="Mes missions" lead="Missions permanentes et ponctuelles ; une mission récurrente crée sa tâche automatiquement le jour venu">
+  <Fragment slot="actions">
+    {me && fiche?.m?.length && <button class="btn ghost" type="button" data-post="/api/admin/os/espace" data-body={JSON.stringify({ action: 'mission.import' })} data-reload>Reprendre les missions de ma fiche de poste</button>}
+    {me && <button class="btn" type="button" data-dlg="dlg-mis" {...dlgSet()}>+ Mission</button>}
+  </Fragment>
+  {!me ? <div class="empty">Votre compte n'est rattaché à aucune fiche du personnel.</div> : list.length ? (
+    <div class="tw">
+      <table class="t">
+        <thead><tr><th>Mission</th><th>Type</th><th>Récurrence</th><th>Charge</th><th>Tâches créées</th><th></th></tr></thead>
+        <tbody>{list.map((m) => { const k = counts.find((x) => x.m === m.id); return (
+          <tr>
+            <td><b class="small">{m.title}</b><div class="xs muted">{m.domain && DOM[m.domain as keyof typeof DOM]?.n}{!m.active && ' · inactive'}</div></td>
+            <td class="small">{m.kind === 'permanente' ? 'Permanente' : `Ponctuelle jusqu'au ${dstr(m.end)}`}</td>
+            <td class="small">{RECURRENCE_LABEL(m.recurrence)}</td>
+            <td class="num">{m.estimate} h</td>
+            <td class="small">{k ? `${k.done}/${k.n} terminée(s)` : '—'}</td>
+            <td style="white-space:nowrap"><button class="btn ghost sm" type="button" data-dlg="dlg-mis" {...dlgSet(m)}>Modifier</button> <button class="btn ghost sm" type="button" data-post="/api/admin/os/espace" data-body={JSON.stringify({ action: 'mission.delete', id: m.id })} data-confirm="Supprimer cette mission ?" data-reload>Supprimer</button></td>
+          </tr>
+        ); })}</tbody>
+      </table>
+    </div>
+  ) : <div class="empty">Aucune mission. {fiche?.m?.length ? 'Reprenez celles de votre fiche de poste pour commencer.' : ''}</div>}
+  {me && (
+    <Dlg id="dlg-mis" title="Mission" api="/api/admin/os/espace" submit="Enregistrer" wide>
+      <input type="hidden" name="action" value="mission.save" /><input type="hidden" name="id" value="" />
+      <div class="fg">
+        <div class="full"><label class="f" for="mt">Intitulé</label><input class="in" id="mt" name="title" required minlength="3" maxlength="200" /></div>
+        <div><label class="f" for="mk">Type</label><select class="in" id="mk" name="kind"><option value="permanente">Permanente</option><option value="ponctuelle">Ponctuelle</option></select></div>
+        <div><label class="f" for="mr">Tâche récurrente</label><select class="in" id="mr" name="recurrence">{REC.map(([v, l]) => <option value={v}>{l}</option>)}</select></div>
+        <div><label class="f" for="me">Charge par occurrence (heures)</label><input class="in" type="number" id="me" name="estimate" min="0.25" max="40" step="0.25" value="1" /></div>
+        <div><label class="f" for="md">Domaine</label><select class="in" id="md" name="domain"><option value="">—</option>{DK.map((d) => <option value={d} selected={d === me.domain}>{DOM[d].n}</option>)}</select></div>
+        <div><label class="f" for="mf">Fin (mission ponctuelle)</label><input class="in" type="date" id="mf" name="end" /></div>
+        <div><label class="f" for="ma">État</label><select class="in" id="ma" name="active"><option value="true">Active</option><option value="false">Suspendue</option></select></div>
+      </div>
+    </Dlg>
+  )}
+</AdminLayout>

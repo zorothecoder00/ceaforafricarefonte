@@ -1,0 +1,125 @@
+---
+/* CEA OS — fiche d'un document (cahier des charges CEA OS, 5.4) : contenu (édition pour un document rédigé dans CEA OS,
+   dépôt d'un fichier sinon), historique des versions avec empreinte, comparaison de deux versions (texte), restauration,
+   validation par le circuit V02 et version finale archivée, signature ordonnée (CEA Sign) et certificat. */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Dlg from '../../../components/os/Dlg.astro';
+import Tags from '../../../components/os/Tags.astro';
+import { osContext, allStaff } from '../../../lib/os/core';
+import { canSeeDoc } from '../../../lib/os/support';
+import { flowsOf, getDoc, signaturesOf, versions, STATEMENT } from '../../../lib/os/documents';
+import { lineDiff } from '../../../lib/os/workspace-core';
+import { DOM, dtstr, pn, refT } from '../../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const me = os.me;
+const d = await getDoc(Astro.params.id ?? '');
+if (!d) return Astro.redirect('/os/moi/documents');
+const ok = canSeeDoc(d, os);
+const [vs, flows, people] = ok ? await Promise.all([versions(d.id), flowsOf(d.id), allStaff()]) : [[], [], []];
+const sigs = await Promise.all(flows.map(async (f) => ({ f, s: await signaturesOf(f.id) })));
+const name = (id: string | null) => people.find((s) => s.id === id)?.name ?? id ?? '—';
+const cur = vs.find((v) => v.version === d.version);
+const author = !!me && (d.owner === me.id || d.by === me.id || me.prof === 'dg' || os.superuser);
+const editable = ['Brouillon', 'Déposé', 'À corriger', 'Validé', 'Signé'].includes(d.status);
+const q = Astro.url.searchParams;
+const a = Number(q.get('a')), b = Number(q.get('b'));
+const va = vs.find((v) => v.version === a), vb = vs.find((v) => v.version === b);
+const diff = va?.body != null && vb?.body != null ? lineDiff(va.body, vb.body) : null;
+const open = flows.find((f) => f.status === 'En cours');
+const myTurn = !!open && !!me && open.signers[open.cur] === me.id;
+---
+<AdminLayout title={d.name} lead={`${d.kind === 'texte' ? 'Rédigé dans CEA OS' : 'Fichier'} · ${d.domain ? DOM[d.domain as keyof typeof DOM]?.n : '—'} · ${pn(d.country)} · ${d.confidentiality} · version ${d.version}${d.finalVersion ? ` · version finale v${d.finalVersion}` : ''}`} crumbs={[['Mes documents', '/os/moi/documents'], [d.name]]}>
+  <Fragment slot="actions">
+    {ok && <a class="btn ghost" href={`/api/admin/os/doc?id=${d.id}&dl=1`}>Télécharger</a>}
+    {ok && author && ['Brouillon', 'Déposé', 'À corriger'].includes(d.status) && <button class="btn" type="button" data-post="/api/admin/os/documents" data-body={JSON.stringify({ action: 'submit', id: d.id })} data-confirm={`Soumettre la version ${d.version} à la validation ?`} data-reload>Soumettre à la validation</button>}
+    {ok && author && d.status === 'Validé' && <button class="btn" type="button" data-dlg="dlg-sign-start">Faire signer</button>}
+  </Fragment>
+  {!ok ? <div class="empty">Accès restreint : document {d.confidentiality.toLowerCase()}.</div> : (
+    <>
+      <p class="small"><Tags st={d.status} />{d.validationRequest && <> · validation : <a href={`/os/flux/${d.validationRequest}`}>dossier {d.validationRequest}</a></>}{d.sourceRequest && <> · créé depuis le dossier <a href={`/os/flux/${d.sourceRequest}`}>{d.sourceRequest}</a></>}</p>
+      {myTurn && (
+        <div class="card" style="margin-bottom:14px;border-color:var(--gold)">
+          <h2 style="margin-top:0">Votre signature</h2>
+          <p class="small">{STATEMENT(me!.name, d.name, open!.version)}</p>
+          <p class="xs muted">Empreinte SHA-256 de la version signée : <code>{open!.sha256}</code></p>
+          <form data-api="/api/admin/os/documents" data-reload class="row">
+            <input type="hidden" name="action" value="sign" /><input type="hidden" name="flowId" value={open!.id} />
+            <input class="in" name="confirm" required placeholder={`Saisissez « ${me!.name} »`} aria-label="Nom complet" style="flex:1;min-width:220px" />
+            <button class="btn" type="submit">Signer</button>
+          </form>
+        </div>
+      )}
+      <div class="split">
+        <div>
+          {diff ? (
+            <div class="card">
+              <div class="row between"><h2 style="margin:0">Comparaison v{a} → v{b}</h2><a class="small" href={`/os/documents/${d.id}`}>Fermer</a></div>
+              <pre class="small" style="white-space:pre-wrap;margin:10px 0 0">{diff.map((l) => <div style={l.op === '+' ? 'background:var(--ok-soft)' : l.op === '-' ? 'background:var(--bad-soft);text-decoration:line-through' : ''}>{l.op === '=' ? '  ' : l.op + ' '}{l.text}</div>)}</pre>
+            </div>
+          ) : d.kind === 'texte' ? (
+            <form class="card" data-api="/api/admin/os/documents" data-reload>
+              <input type="hidden" name="action" value="save" /><input type="hidden" name="id" value={d.id} />
+              <div class="row between"><h2 style="margin:0">Contenu — version {d.version}</h2>{!(author && editable) && <span class="xs muted">lecture seule</span>}</div>
+              <textarea class="in" name="body" style="min-height:420px;width:100%;margin-top:10px;font-family:inherit" readonly={!(author && editable)}>{cur?.body ?? ''}</textarea>
+              {author && editable && <div class="row" style="margin-top:8px"><input class="in" name="note" placeholder="Note de version (ce qui change)" maxlength="300" style="flex:1" /><button class="btn" type="submit">Enregistrer une nouvelle version</button></div>}
+              {d.status === 'Validé' || d.status === 'Signé' ? <p class="xs muted">Modifier un document {d.status.toLowerCase()} crée une nouvelle version en brouillon ; la version finale v{d.finalVersion} reste archivée.</p> : null}
+            </form>
+          ) : (
+            <div class="card">
+              <h2 style="margin-top:0">Fichier — version {d.version}</h2>
+              <p class="small"><a href={`/api/admin/os/doc?id=${d.id}`} target="_blank" rel="noopener">Ouvrir la version courante</a></p>
+              {author && editable && (
+                <form data-upload="/api/admin/os/documents">
+                  <input type="hidden" name="action" value="upload" /><input type="hidden" name="id" value={d.id} />
+                  <div class="row"><input class="in" type="file" name="file" required style="flex:1" /><input class="in" name="note" placeholder="Note de version" maxlength="300" /><button class="btn" type="submit">Déposer une nouvelle version</button></div>
+                </form>
+              )}
+            </div>
+          )}
+          {sigs.length > 0 && (
+            <div class="card" style="margin-top:14px" id="certificat">
+              <h2 style="margin-top:0">Certificat de signature</h2>
+              {sigs.map(({ f, s }) => (
+                <div style="padding:8px 0;border-bottom:1px solid var(--line)">
+                  <div class="row between small"><b>Version {f.version}</b><Tags st={f.status} /></div>
+                  <p class="xs muted" style="margin:2px 0 6px">Empreinte SHA-256 : <code style="word-break:break-all">{f.sha256}</code> · ouvert par {name(f.createdBy)} le {dtstr(f.createdAt)}</p>
+                  {f.signers.map((sid, i) => { const g = s.find((x) => x.signer === sid); return <div class="chk small"><span class="num xs">{i + 1}.</span><span style="flex:1">{name(sid)}{g && <span class="xs muted"> · {g.poste} · {dtstr(g.signedAt)} · IP {g.ip ?? '—'}</span>}</span>{g ? <span class="tag ok">Signé</span> : f.status === 'En cours' && i === f.cur ? <span class="tag warn">À signer</span> : <span class="tag">En attente</span>}</div>; })}
+                  {f.status === 'En cours' && me && (f.createdBy === me.id || me.prof === 'dg') && <button class="btn ghost sm" type="button" style="margin-top:6px" data-post="/api/admin/os/documents" data-body={JSON.stringify({ action: 'sign.cancel', flowId: f.id })} data-confirm="Annuler ce circuit de signature ?" data-reload>Annuler le circuit</button>}
+                </div>
+              ))}
+              <p class="xs muted">Signature électronique simple CEA Sign : identité authentifiée (double authentification), déclaration du signataire, horodatage, adresse IP et empreinte de la version signée ; les signatures ne peuvent être ni modifiées ni supprimées. <button class="btn ghost sm" type="button" onclick="print()">Imprimer le certificat</button></p>
+            </div>
+          )}
+        </div>
+        <aside>
+          <div class="card">
+            <h3 style="margin-top:0">Versions</h3>
+            <form method="get" class="row" style="gap:6px;margin-bottom:8px">
+              <select class="in" name="a" aria-label="Version de départ" style="width:auto">{vs.map((v) => <option value={v.version} selected={v.version === (a || (vs[1]?.version ?? 1))}>v{v.version}</option>)}</select>
+              <span class="muted">→</span>
+              <select class="in" name="b" aria-label="Version d'arrivée" style="width:auto">{vs.map((v) => <option value={v.version} selected={v.version === (b || d.version)}>v{v.version}</option>)}</select>
+              <button class="btn ghost sm" type="submit" disabled={d.kind !== 'texte'}>Comparer</button>
+            </form>
+            {vs.map((v) => (
+              <div class="chk small" style="align-items:flex-start">
+                <span style="flex:1"><b>v{v.version}</b>{v.version === d.finalVersion && <span class="tag ok" style="margin-left:4px">finale</span>}{v.version === d.version && <span class="tag info" style="margin-left:4px">courante</span>}<div class="xs muted">{name(v.by)} · {dtstr(v.createdAt)}{v.note && ` · ${v.note}`}</div>{v.sha256 && <div class="xs muted" title={v.sha256}>SHA-256 {v.sha256.slice(0, 12)}…</div>}</span>
+                <a class="btn ghost sm" href={`/api/admin/os/doc?id=${d.id}&v=${v.version}`} target="_blank" rel="noopener">Ouvrir</a>
+                {author && editable && v.version !== d.version && <button class="btn ghost sm" type="button" data-post="/api/admin/os/documents" data-body={JSON.stringify({ action: 'restore', id: d.id, version: v.version })} data-confirm={`Restaurer la version ${v.version} (elle devient une nouvelle version) ?`} data-reload>Restaurer</button>}
+              </div>
+            ))}
+          </div>
+        </aside>
+      </div>
+      {author && d.status === 'Validé' && (
+        <Dlg id="dlg-sign-start" title="Faire signer la version finale" api="/api/admin/os/documents" submit="Ouvrir le circuit de signature" wide>
+          <input type="hidden" name="action" value="sign.start" /><input type="hidden" name="id" value={d.id} />
+          <p class="small">Version finale v{d.finalVersion} : les signataires signent dans l'ordre de la liste. Seuls les collaborateurs habilités à voir un document {d.confidentiality.toLowerCase()} peuvent signer.</p>
+          <div class="fg">{[1, 2, 3, 4, 5].map((n) => <div><label class="f" for={`sg${n}`}>{n === 1 ? '1er signataire' : `${n}e signataire${n > 1 ? ' (facultatif)' : ''}`}</label><select class="in" id={`sg${n}`} name={`signer${n}`} required={n === 1}><option value="">—</option>{people.filter((s) => s.active).map((s) => <option value={s.id}>{s.name} — {refT(s.poste)}</option>)}</select></div>)}</div>
+          <p class="xs muted">Chaque signataire est prévenu à son tour ; la signature porte sur l'empreinte de la version finale.</p>
+        </Dlg>
+      )}
+    </>
+  )}
+</AdminLayout>

@@ -1,0 +1,120 @@
+---
+/* CEA OS — Mon agenda et ma planification (cahier des charges CEA OS, ESP-02 et ESP-03) : réunions, visites, déplacements,
+   temps de concentration, échéances des tâches et des dossiers, congés ; vues jour, semaine, mois, trimestre ; conflits
+   détectés ; plan du jour généré à partir des tâches (score de priorité) dans les trous laissés par les rendez-vous. */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Dlg from '../../../components/os/Dlg.astro';
+import { and, eq, ne } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { osTask } from '../../../db/schema/os';
+import { osContext } from '../../../lib/os/core';
+import { agendaOf, type AgendaEntry } from '../../../lib/os/workspace';
+import { conflicts, priorityScore, ymd } from '../../../lib/os/workspace-core';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const me = os.me;
+const q = Astro.url.searchParams;
+const vue = (['jour', 'semaine', 'mois', 'trimestre'] as const).find((v) => v === q.get('vue')) ?? 'semaine';
+const ref = /^\d{4}-\d{2}-\d{2}$/.test(q.get('d') ?? '') ? new Date(q.get('d') + 'T00:00:00Z') : new Date(ymd(new Date()) + 'T00:00:00Z');
+const DAY = 864e5;
+const dow = ref.getUTCDay() || 7;
+const from = vue === 'jour' ? ref : vue === 'semaine' ? new Date(ref.getTime() - (dow - 1) * DAY)
+  : vue === 'mois' ? new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), 1)) : new Date(Date.UTC(ref.getUTCFullYear(), Math.floor(ref.getUTCMonth() / 3) * 3, 1));
+const to = vue === 'jour' ? new Date(from.getTime() + DAY - 1) : vue === 'semaine' ? new Date(from.getTime() + 7 * DAY - 1)
+  : vue === 'mois' ? new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + 1, 1) - 1) : new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + 3, 1) - 1);
+const step = vue === 'jour' ? DAY : vue === 'semaine' ? 7 * DAY : 0;
+const shift = (n: number) => ymd(step ? new Date(from.getTime() + n * step) : new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + n * (vue === 'mois' ? 1 : 3), 1)));
+const items: AgendaEntry[] = me ? await agendaOf(me, from, to) : [];
+const timed = items.filter((x) => !['echeance', 'dossier'].includes(x.kind));
+const clash = conflicts(timed);
+const inClash = new Set(clash.flatMap(([a, b]) => [a.id, b.id]));
+const open = me ? await db.select().from(osTask).where(and(eq(osTask.owner, me.id), ne(osTask.status, 'Terminé'))) : [];
+const now = new Date();
+const days: Date[] = [];
+for (let t = from.getTime(); t <= to.getTime(); t += DAY) days.push(new Date(t));
+const KIND: Record<string, [string, string]> = {
+  reunion: ['Réunion', 'info'], visite: ['Visite', 'ok'], deplacement: ['Déplacement', 'warn'], concentration: ['Concentration', ''], autre: ['Autre', ''],
+  tache: ['Tâche planifiée', 'gold'], echeance: ['Échéance de tâche', 'gold'], dossier: ['Échéance de dossier', 'bad'], conge: ['Congé', 'ok'],
+};
+const hhmm = (d: Date) => d.toISOString().slice(11, 16);
+const dayLabel = (d: Date) => d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+const onDay = (d: Date) => items.filter((x) => x.start < new Date(d.getTime() + DAY) && x.end > d);
+const title = vue === 'jour' ? dayLabel(from) : vue === 'semaine' ? `Semaine du ${from.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}` : vue === 'mois' ? from.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' }) : `Trimestre ${Math.floor(from.getUTCMonth() / 3) + 1} ${from.getUTCFullYear()}`;
+const unplanned = open.filter((t) => !t.start).sort((a, b) => priorityScore(b, now) - priorityScore(a, now));
+---
+<AdminLayout title="Mon agenda et ma planification" lead={`${title} · heures de Lomé (GMT) · ${clash.length ? `${clash.length} conflit(s) à résoudre` : 'aucun conflit'}`}>
+  <Fragment slot="actions">
+    {me && <button class="btn ghost" type="button" data-dlg="dlg-block">+ Créneau (visite, déplacement, concentration)</button>}
+    {me && <button class="btn" type="button" data-post="/api/admin/os/espace" data-body={JSON.stringify({ action: 'plan.generate', date: vue === 'jour' ? ymd(from) : ymd(now) })} data-reload>Générer le plan {vue === 'jour' ? 'de ce jour' : "d'aujourd'hui"}</button>}
+  </Fragment>
+  {!me ? <div class="empty">Votre compte n'est rattaché à aucune fiche du personnel.</div> : (
+    <>
+      <div class="toolbar">
+        <div class="tabs" style="margin:0;border:0">{(['jour', 'semaine', 'mois', 'trimestre'] as const).map((v) => <a href={`?vue=${v}&d=${ymd(ref)}`} aria-selected={v === vue ? 'true' : 'false'}>{v[0].toUpperCase() + v.slice(1)}</a>)}</div>
+        <span style="flex:1"></span>
+        <a class="btn ghost sm" href={`?vue=${vue}&d=${shift(-1)}`}>‹ Précédent</a><a class="btn ghost sm" href={`?vue=${vue}`}>Aujourd'hui</a><a class="btn ghost sm" href={`?vue=${vue}&d=${shift(1)}`}>Suivant ›</a>
+      </div>
+      {clash.length > 0 && <div class="watch" style="margin-bottom:12px"><b>Conflits :</b> {clash.slice(0, 6).map(([a, b]) => `${a.title} (${hhmm(a.start)}) ↔ ${b.title} (${hhmm(b.start)}) le ${a.start.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}`).join(' · ')}</div>}
+      <div class="split">
+        <div>
+          {(vue === 'jour' || vue === 'semaine') ? (
+            <div class={vue === 'semaine' ? 'grid g3' : ''}>
+              {days.map((d) => (
+                <div class="card" style={`margin-bottom:10px;${ymd(d) === ymd(now) ? 'border-color:var(--gold)' : ''}`}>
+                  <div class="row between"><h3 style="margin:0;text-transform:capitalize">{dayLabel(d)}</h3>{vue === 'semaine' && <a class="xs" href={`?vue=jour&d=${ymd(d)}`}>Ouvrir</a>}</div>
+                  {onDay(d).map((x) => (
+                    <div class="chk small" style={inClash.has(x.id) ? 'background:var(--bad-soft);border-radius:6px;padding:4px 6px' : ''}>
+                      <span class="num xs" style="min-width:88px">{x.kind === 'conge' ? 'Journée' : `${hhmm(x.start)}–${hhmm(x.end)}`}</span>
+                      <span style="flex:1">{x.kind === 'dossier' && x.ref ? <a href={`/os/flux/${x.ref}`}>{x.title}</a> : x.title}{x.place && <span class="muted xs"> · {x.place}</span>}</span>
+                      <span class={`tag ${KIND[x.kind]?.[1] ?? ''}`}>{KIND[x.kind]?.[0] ?? x.kind}</span>
+                      {['visite', 'deplacement', 'concentration', 'autre'].includes(x.kind) && <button class="btn ghost sm" type="button" data-post="/api/admin/os/espace" data-body={JSON.stringify({ action: 'agenda.delete', id: x.id })} data-confirm="Supprimer ce créneau ?" data-reload aria-label="Supprimer">✕</button>}
+                    </div>
+                  ))}
+                  {!onDay(d).length && <p class="small muted" style="margin:6px 0 0">Rien de prévu.</p>}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div class="tw">
+              <table class="t">
+                <thead><tr><th>Jour</th><th>Agenda</th></tr></thead>
+                <tbody>{days.filter((d) => onDay(d).length).map((d) => (
+                  <tr><td class="small" style="white-space:nowrap;text-transform:capitalize"><a href={`?vue=jour&d=${ymd(d)}`}>{dayLabel(d)}</a></td><td class="small">{onDay(d).map((x) => <div><span class={`tag ${KIND[x.kind]?.[1] ?? ''}`} style="margin-right:6px">{KIND[x.kind]?.[0]}</span>{x.kind !== 'conge' && x.kind !== 'echeance' && x.kind !== 'dossier' && `${hhmm(x.start)} · `}{x.title}{inClash.has(x.id) && <span class="tag bad" style="margin-left:6px">conflit</span>}</div>)}</td></tr>
+                ))}</tbody>
+              </table>
+              {!days.some((d) => onDay(d).length) && <div class="empty">Rien de prévu sur la période.</div>}
+            </div>
+          )}
+        </div>
+        <aside>
+          <div class="card">
+            <h3 style="margin-top:0">Tâches à planifier</h3>
+            <p class="xs muted">Par score de priorité (retard, échéance, priorité). « Générer le plan » les place dans les trous de la journée, entre 8 h et 17 h.</p>
+            {unplanned.slice(0, 12).map((t) => (
+              <form class="chk small" data-api="/api/admin/os/espace" data-reload style="gap:6px;flex-wrap:wrap">
+                <input type="hidden" name="action" value="task.plan" /><input type="hidden" name="id" value={t.id} />
+                <span style="flex:1;min-width:140px"><b class="num">{priorityScore(t, now)}</b> · {t.title}<div class="xs muted">{t.estimate} h · échéance {t.due.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}</div></span>
+                <input class="in" type="datetime-local" name="start" required aria-label="Créneau" style="width:auto;padding:4px 6px;font-size:.8rem" />
+                <button class="btn ghost sm" type="submit">Placer</button>
+              </form>
+            ))}
+            {!unplanned.length && <p class="small muted">Toutes vos tâches ouvertes ont un créneau.</p>}
+          </div>
+        </aside>
+      </div>
+      <Dlg id="dlg-block" title="Nouveau créneau" api="/api/admin/os/espace" submit="Enregistrer">
+        <input type="hidden" name="action" value="agenda.save" />
+        <div class="fg">
+          <div><label class="f" for="bk">Type</label><select class="in" id="bk" name="kind"><option value="visite">Visite</option><option value="deplacement">Déplacement</option><option value="concentration">Temps de concentration</option><option value="autre">Autre</option></select></div>
+          <div class="full"><label class="f" for="bt">Intitulé</label><input class="in" id="bt" name="title" required maxlength="200" /></div>
+          <div><label class="f" for="bd">Date</label><input class="in" type="date" id="bd" name="date" value={ymd(vue === 'jour' ? from : now)} required /></div>
+          <div><label class="f" for="bf">De</label><input class="in" type="time" id="bf" name="from" value="09:00" required /></div>
+          <div><label class="f" for="bto">À</label><input class="in" type="time" id="bto" name="to" value="10:00" required /></div>
+          <div class="full"><label class="f" for="bp">Lieu</label><input class="in" id="bp" name="place" maxlength="200" /></div>
+        </div>
+        <p class="xs muted">Un conflit avec une réunion, un autre créneau ou un congé est signalé à l'enregistrement.</p>
+      </Dlg>
+    </>
+  )}
+</AdminLayout>

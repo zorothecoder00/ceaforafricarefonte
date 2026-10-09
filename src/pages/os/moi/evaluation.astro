@@ -1,0 +1,48 @@
+---
+/* CEA OS — Mon évaluation (cahier des charges CEA OS, ESP-13) : entretiens déjà menés par mon responsable (compétences notées,
+   objectifs, indicateurs), écarts au poste et objectifs en cours. Le cycle trimestriel complet (auto-évaluation, évaluation du
+   manager, consolidation automatique, plans correctifs : section 8, EVA-01 à EVA-10) arrive avec le Lot 8. */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { desc, eq } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { osInterview, osSkill } from '../../../db/schema/os';
+import { osContext, allStaff } from '../../../lib/os/core';
+import { COMPS } from '../../../lib/os/pilotage';
+import { dstr } from '../../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const me = os.me;
+const [people, list, skills] = me ? await Promise.all([allStaff(), db.select().from(osInterview).where(eq(osInterview.staffId, me.id)).orderBy(desc(osInterview.at)), db.select().from(osSkill).where(eq(osSkill.staffId, me.id))]) : [[], [], []];
+const name = (id: string | null) => people.find((s) => s.id === id)?.name ?? '—';
+const gaps = skills.filter((s) => s.level < s.target);
+---
+<AdminLayout title="Mon évaluation" lead="Entretiens avec mon responsable, écarts au poste et objectifs">
+  {!me ? <div class="empty">Votre compte n'est rattaché à aucune fiche du personnel.</div> : (
+    <>
+      <div class="watch" style="margin-bottom:14px">L'évaluation trimestrielle complète (auto-évaluation avec preuves, évaluation du responsable, données de CEA OS consolidées, plan de développement ou plan correctif) sera ouverte avec le lot « Tableaux de bord et évaluation ». En attendant, vos entretiens et vos écarts au poste sont rassemblés ici.</div>
+      <div class="split">
+        <div>
+          {list.map((i) => (
+            <div class="card" style="margin-bottom:12px">
+              <div class="row between"><h2 style="margin:0">Entretien du {dstr(i.at)}</h2><span class="small muted">avec {name(i.managerId)}</span></div>
+              <table class="t" style="margin-top:8px"><tbody>{COMPS.map((c, k) => <tr><td class="small">{c}</td><td class="num" style="width:120px">{'●'.repeat(i.competences[k] ?? 0)}<span class="muted">{'○'.repeat(Math.max(0, 4 - (i.competences[k] ?? 0)))}</span></td></tr>)}</tbody></table>
+              {i.objectives && <p class="small" style="margin-top:8px"><b>Objectifs fixés :</b> {i.objectives}</p>}
+              {i.kpis.length > 0 && <p class="small"><b>Indicateurs :</b> {i.kpis.map(([l, v]) => `${l} : ${v}`).join(' · ')}</p>}
+            </div>
+          ))}
+          {!list.length && <div class="empty">Aucun entretien enregistré pour l'instant.</div>}
+        </div>
+        <aside>
+          <div class="card">
+            <h3 style="margin-top:0">Écarts au poste</h3>
+            {gaps.map((s) => <div class="chk small"><span style="flex:1">{s.name}</span><span class="tag bad">{s.level} / {s.target}</span></div>)}
+            {!gaps.length && <p class="small muted">Aucun écart déclaré.</p>}
+            <a class="xs" href="/os/moi/competences">Mes compétences</a>
+          </div>
+          <div class="card" style="margin-top:14px"><h3 style="margin-top:0">Liens utiles</h3><p class="small"><a href="/os/moi/objectifs">Mes objectifs</a><br /><a href="/os/poste">Mes indicateurs de poste</a><br /><a href="/os/moi/activite?p=trimestre">Mon activité du trimestre</a></p></div>
+        </aside>
+      </div>
+    </>
+  )}
+</AdminLayout>

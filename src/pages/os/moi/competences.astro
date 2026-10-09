@@ -1,0 +1,64 @@
+---
+/* CEA OS — Mes compétences (cahier des charges CEA OS, ESP-12) : niveau actuel (1 à 5) et niveau attendu par le poste,
+   écarts au poste, certifications (expiration signalée), plan de développement (action et échéance). */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Dlg from '../../../components/os/Dlg.astro';
+import { asc, eq } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { osSkill } from '../../../db/schema/os';
+import { osContext } from '../../../lib/os/core';
+import { dstr, poste, refT } from '../../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const me = os.me;
+const list = me ? await db.select().from(osSkill).where(eq(osSkill.staffId, me.id)).orderBy(asc(osSkill.name)) : [];
+const fiche = me ? poste(me.poste) : undefined;
+const now = new Date();
+const gaps = list.filter((s) => s.level < s.target);
+const soon = (d: Date | null) => !!d && d.getTime() - now.getTime() < 60 * 864e5;
+const LVL = ['', 'Notions', 'En progression', 'Maîtrisé', 'Très bon', 'Expert'];
+const set = (s?: (typeof list)[number]) => (s ? { 'data-set-name': s.name, 'data-set-level': String(s.level), 'data-set-target': String(s.target), 'data-set-certification': s.certification ?? '', 'data-set-cert-expires': s.certExpires ? s.certExpires.toISOString().slice(0, 10) : '', 'data-set-plan': s.plan ?? '', 'data-set-plan-due': s.planDue ? s.planDue.toISOString().slice(0, 10) : '' } : { 'data-set-name': '', 'data-set-level': '1', 'data-set-target': '3', 'data-set-plan': '' });
+---
+<AdminLayout title="Mes compétences" lead={me ? `${refT(me.poste)} · ${list.length} compétence(s) · ${gaps.length} écart(s) au poste` : ''}>
+  <Fragment slot="actions">
+    {me && fiche?.tech?.length && <button class="btn ghost" type="button" data-post="/api/admin/os/espace" data-body={JSON.stringify({ action: 'skill.import' })} data-reload>Reprendre les compétences de ma fiche de poste</button>}
+    {me && <button class="btn" type="button" data-dlg="dlg-skill" {...set()}>+ Compétence</button>}
+  </Fragment>
+  {!me ? <div class="empty">Votre compte n'est rattaché à aucune fiche du personnel.</div> : (
+    <>
+      {gaps.some((s) => !s.plan) && <div class="watch" style="margin-bottom:12px">{gaps.filter((s) => !s.plan).length} écart(s) sans action de développement : ajoutez une formation, un mentorat ou une mission pour progresser.</div>}
+      {list.length ? (
+        <div class="tw">
+          <table class="t">
+            <thead><tr><th>Compétence</th><th>Niveau</th><th>Attendu</th><th>Écart</th><th>Certification</th><th>Plan de développement</th><th></th></tr></thead>
+            <tbody>{list.map((s) => (
+              <tr>
+                <td><b class="small">{s.name}</b></td>
+                <td class="small">{s.level} · {LVL[s.level]}</td>
+                <td class="small">{s.target} · {LVL[s.target]}</td>
+                <td>{s.level < s.target ? <span class="tag bad">−{s.target - s.level}</span> : <span class="tag ok">Conforme</span>}</td>
+                <td class="small">{s.certification ?? '—'}{s.certExpires && <div class={`xs ${soon(s.certExpires) ? 'down' : 'muted'}`}>expire le {dstr(s.certExpires)}</div>}</td>
+                <td class="small">{s.plan ?? '—'}{s.planDue && <div class={`xs ${s.planDue < now ? 'down' : 'muted'}`}>échéance {dstr(s.planDue)}</div>}</td>
+                <td style="white-space:nowrap"><button class="btn ghost sm" type="button" data-dlg="dlg-skill" {...set(s)}>Modifier</button> <button class="btn ghost sm" type="button" data-post="/api/admin/os/espace" data-body={JSON.stringify({ action: 'skill.delete', name: s.name })} data-confirm="Retirer cette compétence ?" data-reload>Retirer</button></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      ) : <div class="empty">Aucune compétence renseignée. {fiche?.tech?.length ? 'Reprenez celles de votre fiche de poste pour commencer.' : ''}</div>}
+      <p class="xs muted" style="margin-top:8px">Échelle : 1 Notions · 2 En progression · 3 Maîtrisé (attendu du poste) · 4 Très bon · 5 Expert. Votre responsable et les RH consultent ces informations lors de l'évaluation trimestrielle.</p>
+      <Dlg id="dlg-skill" title="Compétence" api="/api/admin/os/espace" submit="Enregistrer" wide>
+        <input type="hidden" name="action" value="skill.save" />
+        <div class="fg">
+          <div class="full"><label class="f" for="sn">Compétence</label><input class="in" id="sn" name="name" required minlength="2" maxlength="120" /></div>
+          <div><label class="f" for="sl">Mon niveau</label><select class="in" id="sl" name="level">{[1, 2, 3, 4, 5].map((n) => <option value={n}>{n} — {LVL[n]}</option>)}</select></div>
+          <div><label class="f" for="stg">Niveau attendu</label><select class="in" id="stg" name="target">{[1, 2, 3, 4, 5].map((n) => <option value={n}>{n} — {LVL[n]}</option>)}</select></div>
+          <div><label class="f" for="sc">Certification</label><input class="in" id="sc" name="certification" maxlength="200" /></div>
+          <div><label class="f" for="se">Expire le</label><input class="in" type="date" id="se" name="certExpires" /></div>
+          <div class="full"><label class="f" for="sp">Action de développement</label><input class="in" id="sp" name="plan" maxlength="500" placeholder="Formation, mentorat, mission d'appui…" /></div>
+          <div><label class="f" for="sd">Échéance de l'action</label><input class="in" type="date" id="sd" name="planDue" /></div>
+        </div>
+      </Dlg>
+    </>
+  )}
+</AdminLayout>

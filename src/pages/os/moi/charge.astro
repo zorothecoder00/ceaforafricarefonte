@@ -1,0 +1,90 @@
+---
+/* CEA OS — Ma charge (cahier des charges CEA OS, ESP-04) : charge prévue de la semaine (tâches ouvertes à échéance, réunions,
+   créneaux) face à la capacité (40 h moins les congés) et au réel déclaré dans la feuille de temps ; surcharge signalée avec
+   une proposition de réaffectation vers les collègues les moins chargés. Un responsable voit aussi la charge de son équipe et
+   peut réaffecter une tâche. */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { and, eq, gte, lte, ne, sql } from 'drizzle-orm';
+import { db } from '../../../lib/db';
+import { osTask, osTimesheet } from '../../../db/schema/os';
+import { osContext, allStaff, type Person } from '../../../lib/os/core';
+import { agendaOf, openTaskHours, teammates } from '../../../lib/os/workspace';
+import { periodKey, priorityScore, weekLoad, ymd } from '../../../lib/os/workspace-core';
+import { refT } from '../../../lib/os/ref';
+
+export const prerender = false;
+const os = await osContext(Astro.locals.user!);
+const me = os.me;
+const now = new Date();
+const DAY = 864e5;
+const dow = now.getUTCDay() || 7;
+const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - (dow - 1) * DAY), to = new Date(from.getTime() + 7 * DAY - 1);
+const wk = periodKey('semaine', now);
+async function loadOf(p: Person) {
+  const ag = await agendaOf(p, from, to);
+  const hours = (k: string[]) => ag.filter((x) => k.includes(x.kind)).reduce((n, x) => n + (x.end.getTime() - x.start.getTime()) / 36e5, 0);
+  const leaveDays = ag.filter((x) => x.kind === 'conge').reduce((n, x) => n + Math.min(5, Math.ceil((Math.min(x.end.getTime(), to.getTime()) - Math.max(x.start.getTime(), from.getTime())) / DAY)), 0);
+  const [t] = await db.select({ h: sql<number>`coalesce(sum(${osTask.estimate}),0)::float` }).from(osTask).where(and(eq(osTask.owner, p.id), ne(osTask.status, 'Terminé'), lte(osTask.due, to)));
+  const [r] = await db.select({ h: sql<number>`coalesce(sum(${osTimesheet.hours}),0)::float` }).from(osTimesheet).where(and(eq(osTimesheet.staffId, p.id), eq(osTimesheet.week, wk)));
+  return weekLoad({ taskHours: Number(t?.h ?? 0), meetingHours: hours(['reunion']), blockHours: hours(['visite', 'deplacement', 'concentration', 'autre']), leaveDays, realHours: Number(r?.h ?? 0) });
+}
+const mine = me ? await loadOf(me) : null;
+const people = await allStaff();
+const team = me ? people.filter((s) => s.active && s.managerId === me.id) : [];
+const teamLoads = await Promise.all(team.map(async (s) => ({ s, l: await loadOf(s) })));
+// Proposition de réaffectation : les plus grosses tâches de la semaine vers les collègues les moins chargés
+const mates = me && mine && mine.level === 'surcharge' ? await teammates(me) : [];
+const mateHours = await openTaskHours(mates.map((m) => m.id), new Date(0), to);
+const sugg = mates.map((m) => ({ m, h: mateHours[m.id] ?? 0 })).sort((a, b) => a.h - b.h).slice(0, 3);
+const heavy = me && mine?.level === 'surcharge' ? (await db.select().from(osTask).where(and(eq(osTask.owner, me.id), ne(osTask.status, 'Terminé'), lte(osTask.due, to), gte(osTask.due, new Date(0))))).sort((a, b) => b.estimate - a.estimate || priorityScore(a, now) - priorityScore(b, now)).slice(0, 5) : [];
+const pct = (r: number) => Math.round(r * 100);
+const cls = (lv: string) => (lv === 'surcharge' ? 'bad' : lv === 'pleine' ? 'warn' : 'ok');
+const LV: Record<string, string> = { surcharge: 'Surcharge', pleine: 'Pleine charge', normale: 'Normale', disponible: 'Disponible' };
+---
+<AdminLayout title="Ma charge" lead={`Semaine ${wk} (du ${from.toLocaleDateString('fr-FR', { timeZone: 'UTC' })} au ${to.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}) · charge prévue face à la capacité et au réel déclaré`}>
+  {!me || !mine ? <div class="empty">Votre compte n'est rattaché à aucune fiche du personnel.</div> : (
+    <>
+      <div class="grid g4">
+        <div class="card kpi"><div class="l">Charge prévue</div><div class="v num">{mine.planned.toFixed(1)} h</div><div class={`d ${cls(mine.level)}`}>{pct(mine.ratio)} % de la capacité · {LV[mine.level]}</div></div>
+        <div class="card kpi"><div class="l">Capacité</div><div class="v num">{mine.capacity} h</div><div class="d muted">40 h moins les congés</div></div>
+        <div class="card kpi"><div class="l">Réel déclaré</div><div class="v num">{mine.real.toFixed(1)} h</div><div class="d"><a href="/os/moi/temps">Feuille de temps</a></div></div>
+        <div class="card kpi"><div class="l">Reste disponible</div><div class="v num">{Math.max(0, mine.capacity - mine.planned).toFixed(1)} h</div></div>
+      </div>
+      <div class="card" style="margin-top:14px"><div class={`bar ${cls(mine.level)}`}><span style={`width:${Math.min(100, pct(mine.ratio))}%`}></span></div></div>
+      {mine.level === 'surcharge' && (
+        <div class="card" style="margin-top:14px;border-color:var(--bad)">
+          <h2 style="margin-top:0">Surcharge : proposition de réaffectation</h2>
+          {sugg.length ? (
+            <>
+              <p class="small">Collègues les moins chargés : {sugg.map(({ m, h }) => `${m.name} (${h.toFixed(1)} h de tâches ouvertes)`).join(', ')}.</p>
+              {heavy.map((t) => (
+                <form class="chk small" data-api="/api/admin/os/espace" data-reload style="gap:6px;flex-wrap:wrap">
+                  <input type="hidden" name="action" value="task.delegate" /><input type="hidden" name="id" value={t.id} />
+                  <span style="flex:1;min-width:180px">{t.title} <span class="muted xs">· {t.estimate} h</span></span>
+                  <select class="in" name="to" aria-label="Confier à" style="width:auto">{sugg.map(({ m }) => <option value={m.id}>{m.name}</option>)}</select>
+                  <button class="btn ghost sm" type="submit">Confier</button>
+                </form>
+              ))}
+              <p class="xs muted">Vous pouvez aussi demander à votre responsable de réaffecter ou de décaler des échéances.</p>
+            </>
+          ) : <p class="small">Aucun collègue de votre équipe ou de votre domaine n'est disponible : parlez-en à votre responsable.</p>}
+        </div>
+      )}
+      {teamLoads.length > 0 && (
+        <>
+          <h2 style="margin-top:18px">Charge de mon équipe</h2>
+          <div class="tw">
+            <table class="t">
+              <thead><tr><th>Collaborateur</th><th>Prévu</th><th>Capacité</th><th>Réel</th><th>Charge</th></tr></thead>
+              <tbody>{teamLoads.sort((a, b) => b.l.ratio - a.l.ratio).map(({ s, l }) => (
+                <tr><td><b class="small">{s.name}</b><div class="xs muted">{refT(s.poste)}</div></td><td class="num">{l.planned.toFixed(1)} h</td><td class="num">{l.capacity} h</td><td class="num">{l.real.toFixed(1)} h</td><td><span class={`tag ${cls(l.level)}`}>{pct(l.ratio)} % · {LV[l.level]}</span></td></tr>
+              ))}</tbody>
+            </table>
+          </div>
+          <p class="xs muted">Pour rééquilibrer, ouvrez <a href="/os/taches">les tâches de l'équipe</a> et réaffectez une tâche (les deux personnes sont prévenues).</p>
+        </>
+      )}
+      <p class="xs muted" style="margin-top:10px">Mise à jour : {ymd(now)}. Charge prévue = tâches ouvertes à échéance jusqu'à dimanche (y compris les retards) + réunions + créneaux d'agenda.</p>
+    </>
+  )}
+</AdminLayout>
