@@ -27,7 +27,7 @@ const regs = (Object.keys(REGIONS) as Region[]).filter((k) => (!rf || rf === k) 
 const st = (p: string) => reports.find((r) => r.country === p)?.status ?? 'Brouillon';
 ---
 <AdminLayout title="Réseau territorial" lead={`Bureaux régionaux et de représentation · ${sc.label} · rapports de ${period}`}>
-  <Fragment slot="actions">{rf && <a class="btn ghost" href="/admin/reseau">Toutes les régions</a>}</Fragment>
+  <Fragment slot="actions">{rf && <a class="btn ghost" href="/os/reseau">Toutes les régions</a>}</Fragment>
   {regs.map((k) => {
     const ps = PK.filter((p) => regOf(p) === k && sc.inScope({ country: p }));
     const dir = people.find((s) => s.prof === 'dirreg' && s.reg === k && s.active);
@@ -38,7 +38,7 @@ const st = (p: string) => reports.find((r) => r.country === p)?.status ?? 'Broui
           <table class="t">
             <thead><tr><th>Pays</th><th>Représentant·e</th><th>Effectif</th><th>Membres</th><th>Inscriptions en attente</th><th>Encaissé</th><th>Rapport</th><th></th></tr></thead>
             <tbody>{ps.map((p) => { const rep = people.find((s) => s.prof === 'rep' && s.country === p && s.active); return (
-              <tr><td><b>{pn(p)}</b></td><td class="small">{rep?.name ?? '—'}</td><td class="num">{people.filter((s) => s.country === p && s.active).length}</td><td class="num">{fmt(Object.values(base[p] ?? {}).reduce((a, b) => a + b, 0))}</td><td class="num">{pending.find((x) => x.c === p)?.n ?? 0}</td><td class="num">{mfcfa(paid.find((x) => x.c === p)?.s ?? 0)}</td><td><Tags st={st(p)} /></td><td><a class="btn ghost sm" href={`/admin/reseau/rapport/${p}`}>Ouvrir</a></td></tr>
+              <tr><td><b>{pn(p)}</b></td><td class="small">{rep?.name ?? '—'}</td><td class="num">{people.filter((s) => s.country === p && s.active).length}</td><td class="num">{fmt(Object.values(base[p] ?? {}).reduce((a, b) => a + b, 0))}</td><td class="num">{pending.find((x) => x.c === p)?.n ?? 0}</td><td class="num">{mfcfa(paid.find((x) => x.c === p)?.s ?? 0)}</td><td><Tags st={st(p)} /></td><td><a class="btn ghost sm" href={`/os/reseau/rapport/${p}`}>Ouvrir</a></td></tr>
             ); })}</tbody>
           </table>
         </div>

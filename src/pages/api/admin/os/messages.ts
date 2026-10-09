@@ -49,7 +49,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     const other = await staffById(b.to);
     if (!other || other.id === me.id) return fail('Destinataire invalide.');
     const id = await dmChannel(me, other);
-    return json({ ok: true, message: 'Conversation ouverte.', redirect: `/admin/messagerie?c=${id}` });
+    return json({ ok: true, message: 'Conversation ouverte.', redirect: `/os/messagerie?c=${id}` });
   }
   const ch = await channelFor(b.channel, me);
   if (!ch) return fail('Canal introuvable.', 404);

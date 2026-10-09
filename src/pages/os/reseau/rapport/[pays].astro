@@ -15,7 +15,7 @@ export const prerender = false;
 const p = (Astro.params.pays ?? '').toUpperCase();
 const os = await osContext(Astro.locals.user!);
 const sc = scopeState(os, Astro.cookies);
-if (!PAYS[p] || !sc.inScope({ country: p })) return Astro.redirect('/admin/reseau');
+if (!PAYS[p] || !sc.inScope({ country: p })) return Astro.redirect('/os/reseau');
 const period = reportPeriod();
 const [[r], base, [pend], [paid], [spent]] = await Promise.all([
   db.select().from(osReport).where(and(eq(osReport.country, p), eq(osReport.period, period))),
@@ -29,7 +29,7 @@ const canEdit = (os.me?.prof === 'rep' && os.me.country === p) || os.me?.prof ==
 const nums: [string, string][] = [['Membres validés (total)', fmt(Object.values(base[p] ?? {}).reduce((a, b) => a + b, 0))], ['Inscriptions en attente', String(pend.n)], ['Encaissements', mfcfa(paid.s)], ['Dépenses payées', mfcfa(spent.s)]];
 const reg = regOf(p);
 ---
-<AdminLayout title={`Rapport mensuel — ${pn(p)}`} lead={`Période ${period} · pré-rempli automatiquement depuis CEA OS`} crumbs={[['Réseau territorial', '/admin/reseau'], [pn(p)]]}>
+<AdminLayout title={`Rapport mensuel — ${pn(p)}`} lead={`Période ${period} · pré-rempli automatiquement depuis CEA OS`} crumbs={[['Réseau territorial', '/os/reseau'], [pn(p)]]}>
   <Fragment slot="actions"><Tags st={status} /></Fragment>
   <div class="split">
     <div>

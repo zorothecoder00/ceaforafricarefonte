@@ -17,10 +17,10 @@ const walk = (s: Person, d: number, seen: Set<string>) => { if (seen.has(s.id)) 
 if (root) walk(root, 0, new Set());
 ---
 <AdminLayout title="Annuaire du personnel" lead={`${actifs.length} collaborateurs dans ${new Set(people.map((s) => s.country)).size} pays`}>
-  <Fragment slot="actions">{org ? <a class="btn ghost" href="/admin/annuaire">Annuaire</a> : <a class="btn ghost" href="/admin/annuaire?org=1">Organigramme</a>}</Fragment>
+  <Fragment slot="actions">{org ? <a class="btn ghost" href="/os/annuaire">Annuaire</a> : <a class="btn ghost" href="/os/annuaire?org=1">Organigramme</a>}</Fragment>
   {org ? (
     <>
-      <a class="small" href="/admin/annuaire">← Retour à l'annuaire</a>
+      <a class="small" href="/os/annuaire">← Retour à l'annuaire</a>
       <div style="margin-top:10px">
         {tree.map(([d, s]) => (
           <div style={`margin-left:${d * 36}px;${d ? 'border-left:2px solid var(--line);padding-left:14px' : ''}`}>

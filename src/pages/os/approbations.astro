@@ -58,7 +58,7 @@ const name = (id: string) => people.find((s) => s.id === id)?.name ?? '—';
     <div class="tw" style="margin-top:14px">
       <table class="t">
         <thead><tr><th>Inscription escaladée</th><th>Entreprise</th><th>Votre niveau</th><th>Pays</th><th>Attente</th><th></th></tr></thead>
-        <tbody>{esc.map((x) => <tr><td><b>{x.id} — {x.name}</b></td><td class="small">{x.company}</td><td class="small">Escalade (&gt; 48 h)</td><td>{pn(x.country)}</td><td class="small down">{hoursSince(x.slaFrom)} h</td><td style="white-space:nowrap"><button class="btn ok sm" type="button" data-post="/api/admin/os/relations" data-body={JSON.stringify({ action: 'ins.validate', ids: [x.id] })} data-reload>Valider</button> <a class="btn ghost sm" href="/admin/inscriptions">Examiner</a></td></tr>)}</tbody>
+        <tbody>{esc.map((x) => <tr><td><b>{x.id} — {x.name}</b></td><td class="small">{x.company}</td><td class="small">Escalade (&gt; 48 h)</td><td>{pn(x.country)}</td><td class="small down">{hoursSince(x.slaFrom)} h</td><td style="white-space:nowrap"><button class="btn ok sm" type="button" data-post="/api/admin/os/relations" data-body={JSON.stringify({ action: 'ins.validate', ids: [x.id] })} data-reload>Valider</button> <a class="btn ghost sm" href="/os/inscriptions">Examiner</a></td></tr>)}</tbody>
       </table>
     </div>
   )}

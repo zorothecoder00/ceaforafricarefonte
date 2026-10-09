@@ -546,7 +546,7 @@ if (import.meta.env.PROD && 'PerformanceObserver' in window && Math.random() < 0
 /* ===== état de connexion dans l'en-tête (pages statiques) ===== */
 fetch('/api/moi', { credentials: 'same-origin' })
   .then((r) => (r.ok ? r.json() : null))
-  .then((d: { user: { name: string; email?: string; roleLabels?: string[]; staff?: boolean } | null; unread?: number } | null) => {
+  .then((d: { user: { name: string; email?: string; roleLabels?: string[]; staff?: boolean; os?: boolean } | null; unread?: number } | null) => {
     const inside = !!d?.user;
     $$('[data-auth="out"]').forEach((el) => (el.hidden = inside));
     $$('[data-auth="in"]').forEach((el) => (el.hidden = !inside));
@@ -560,6 +560,7 @@ fetch('/api/moi', { credentials: 'same-origin' })
     $$('[data-useremail]').forEach((el) => (el.textContent = d.user!.email ?? ''));
     $$('[data-userroles]').forEach((el) => (el.textContent = (d.user!.roleLabels ?? []).join(' · ')));
     $$('[data-staff]').forEach((el) => (el.hidden = !d.user!.staff));
+    $$('[data-os]').forEach((el) => (el.hidden = !d.user!.os));
     const n = d.unread ?? 0;
     $$('[data-unread]').forEach((el) => { el.hidden = n === 0; el.textContent = n > 9 ? '9+' : String(n); });
   })
@@ -568,9 +569,9 @@ fetch('/api/moi', { credentials: 'same-origin' })
    catalogue… —, un bandeau sous l'en-tête ramène à la page de départ, tant qu'on navigue sur le site depuis là. */
 {
   const BK = 'cea-back';
-  const app = (p: string) => /^\/(en\/)?(espace|admin)(\/|$)/.test(p);
+  const app = (p: string) => /^\/(en\/)?(espace|admin|os)(\/|$)/.test(p);
   if (app(location.pathname)) {
-    try { sessionStorage.setItem(BK, JSON.stringify({ h: location.pathname + location.search, t: /^\/(en\/)?(espace|admin)\/?$/.test(location.pathname) ? (EN ? 'Dashboard' : 'Accueil') : document.title.split(' — ')[0] })); } catch {}
+    try { sessionStorage.setItem(BK, JSON.stringify({ h: location.pathname + location.search, t: /^\/(en\/)?(espace|admin|os)\/?$/.test(location.pathname) ? (EN ? 'Dashboard' : 'Accueil') : document.title.split(' — ')[0] })); } catch {}
   } else {
     let ref: URL | null = null;
     try { ref = document.referrer ? new URL(document.referrer) : null; } catch {}
@@ -578,13 +579,13 @@ fetch('/api/moi', { credentials: 'same-origin' })
     let back: { h: string; t: string } | null = null;
     try { back = JSON.parse(sessionStorage.getItem(BK) || 'null'); } catch {}
     if (back && same && !location.pathname.startsWith('/connexion')) {
-      const os = /^\/(en\/)?admin/.test(back.h);
+      const os = /^\/(en\/)?os(\/|$)/.test(back.h) ? 'CEA OS' : /^\/(en\/)?admin/.test(back.h) ? (EN ? 'the back office' : 'au back-office') : '';
       const bar = document.createElement('div');
       bar.className = 'backbar';
       bar.innerHTML = '<div class="wrap"><a></a><button type="button"></button></div>';
       const a = bar.querySelector('a')!;
       a.href = back.h;
-      a.textContent = `← ${os ? (EN ? 'Back to CEA OS' : 'Revenir à CEA OS') : (EN ? 'Back to My space' : 'Revenir à Mon espace')}${back.t ? ' · ' + back.t : ''}`;
+      a.textContent = `← ${os ? (EN ? `Back to ${os}` : `Revenir ${os === 'CEA OS' ? 'à CEA OS' : os}`) : (EN ? 'Back to My space' : 'Revenir à Mon espace')}${back.t ? ' · ' + back.t : ''}`;
       const x = bar.querySelector('button')!;
       x.textContent = '✕';
       x.setAttribute('aria-label', EN ? 'Hide' : 'Masquer');

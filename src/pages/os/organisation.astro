@@ -37,7 +37,7 @@ const ACTION: Record<string, string> = { 'os.poste.changement': 'Changement de p
 const name = (id: string | null) => people.find((s) => s.id === id)?.name ?? '—';
 ---
 <AdminLayout title="Organisation et postes" lead={`${REF.length} postes · ${actifs.length} collaborateurs actifs · le poste porte les droits, pas la personne`}>
-  <div class="tabs">{T.map(([k, l]) => <a href={`/admin/organisation?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
+  <div class="tabs">{T.map(([k, l]) => <a href={`/os/organisation?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
   {tab === 'postes' && (
     <>
       <div class="grid g4" style="margin-bottom:12px">
@@ -57,7 +57,7 @@ const name = (id: string | null) => people.find((s) => s.id === id)?.name ?? '�
               <tr data-row={`${x.c} ${x.t}`} data-st={ti.length ? 'p' : 'v'}>
                 <td><span class="tag gold">{x.c}</span></td><td><b class="small">{x.t}</b></td><td class="small">{gradeOf(x.c)}</td><td class="small">{PROF[profOf(x.c)]}</td>
                 <td class="small">{ti.length ? ti.map((u) => <>{u.name}{u.poste2 === x.c && ' (intérim)'} · {pn(u.country)}<br /></>) : <span class="tag warn">Vacant</span>}</td>
-                <td style="white-space:nowrap"><a class="btn ghost sm" href={`/admin/organisation?t=postes&fiche=${x.c}&ouvrir=dlg-fiche`}>Fiche</a>{can && <> <button class="btn ghost sm" type="button" data-dlg="dlg-assign" data-set-code={x.c} data-set-label={`${x.c} — ${x.t} · profil ${PROF[profOf(x.c)]}${PDOM[x.c] ? ' · domaine ' + DOM[PDOM[x.c]].n : ''}`}>Affecter</button></>}</td>
+                <td style="white-space:nowrap"><a class="btn ghost sm" href={`/os/organisation?t=postes&fiche=${x.c}&ouvrir=dlg-fiche`}>Fiche</a>{can && <> <button class="btn ghost sm" type="button" data-dlg="dlg-assign" data-set-code={x.c} data-set-label={`${x.c} — ${x.t} · profil ${PROF[profOf(x.c)]}${PDOM[x.c] ? ' · domaine ' + DOM[PDOM[x.c]].n : ''}`}>Affecter</button></>}</td>
               </tr>
             ); })}
           </tbody>

@@ -76,7 +76,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     if (t && t.channel !== b.channel) return fail('Ce modèle est prévu pour un autre canal.');
     const [n] = await db.insert(campaign).values({ name: b.name, channel: b.channel, purpose: b.purpose, subject: t?.subject ?? null, body: t?.body ?? '', createdBy: u.id }).returning({ id: campaign.id });
     await audit(u.id, 'campagne.creation', n.id, { channel: b.channel }, ip);
-    return json({ ok: true, redirect: `/admin/campagnes/${n.id}`, message: 'Brouillon créé.' });
+    return json({ ok: true, redirect: `/os/campagnes/${n.id}`, message: 'Brouillon créé.' });
   }
   if (b.action === 'template.delete') {
     await db.delete(campaignTemplate).where(eq(campaignTemplate.id, b.id));
@@ -151,7 +151,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     }
     case 'duplicate': {
       const [n] = await db.insert(campaign).values({ name: `${c.name} (copie)`, channel: c.channel, purpose: c.purpose, segmentId: c.segmentId, subject: c.subject, body: c.body, url: c.url, subjectB: c.subjectB, bodyB: c.bodyB, splitB: c.splitB, createdBy: u.id }).returning({ id: campaign.id });
-      return json({ ok: true, redirect: `/admin/campagnes/${n.id}`, message: 'Copie créée.' });
+      return json({ ok: true, redirect: `/os/campagnes/${n.id}`, message: 'Copie créée.' });
     }
     case 'template.save': {
       await db.insert(campaignTemplate).values({ name: b.name, channel: c.channel, subject: c.subject, body: c.body, createdBy: u.id });

@@ -40,7 +40,7 @@ Astro.response.headers.set('X-Robots-Tag', 'noindex');
   </style>
 </head>
 <body>
-  <div class="bar"><button type="button" onclick="print()">Imprimer / enregistrer en PDF</button><a class="b" href={f.userId === me.id ? '/espace/paiements' : '/admin/finance'}>Retour</a></div>
+  <div class="bar"><button type="button" onclick="print()">Imprimer / enregistrer en PDF</button><a class="b" href={f.userId === me.id ? '/espace/paiements' : '/os/finance'}>Retour</a></div>
   <div class="doc">
     <div class="row">
       <div><h1>{org.name}</h1><div class="muted">{org.legalForm}<br />{org.address}{org.rccm && <><br />RCCM : {org.rccm}</>}{org.taxId && <><br />NIF : {org.taxId}</>}<br />{org.email}{org.phone && ` · ${org.phone}`}</div></div>

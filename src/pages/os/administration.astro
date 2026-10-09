@@ -37,7 +37,7 @@ const CONNECTORS: [string, string, boolean][] = [
 const canData = ['dg', 'it'].includes(os.prof ?? '') || os.superuser;
 ---
 <AdminLayout title="Administration" lead="Comptes, droits, traçabilité, intégrations et données">
-  <div class="tabs">{T.map(([k, l]) => <a href={`/admin/administration?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
+  <div class="tabs">{T.map(([k, l]) => <a href={`/os/administration?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
   {tab === 'users' && (
     <>
       <div class="tw">

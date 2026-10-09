@@ -18,7 +18,6 @@ const quick = ([
   ['/admin/emplois', 'Valider des offres', 'Annonces en attente', can(r, 'offre_emploi', 'M')],
   ['/admin/membres', 'Créer un compte', 'Invitation par e-mail', can(r, 'membres', 'C')],
   ['/admin/cms', 'Publier un contenu', 'Article, événement, cours, page', can(r, 'contenus', 'C')],
-  ['/admin/campagnes', 'Nouvelle campagne', 'E-mail, SMS, WhatsApp', can(r, 'campagnes', 'C')],
   ['/admin/domaines?nouveau', 'Créer un domaine', 'Domaines d’intervention', can(r, 'parametres', 'C')],
   ['/admin/rapports/impact', 'Rapport d’impact', 'Par programme ou partenaire', can(r, 'rapports', 'L')],
 ] as [string, string, string, boolean][]).filter((q) => q[3]).slice(0, 8);

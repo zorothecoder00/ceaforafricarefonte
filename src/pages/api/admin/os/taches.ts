@@ -34,7 +34,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     const team = w && (w.id === me.id || (manager && (w.managerId === me.id || me.prof === 'dg' || (me.prof === 'dirreg' && regOf(w.country) === me.reg))));
     if (!team) return fail('Vous ne pouvez confier une tâche qu’à vous-même ou à votre équipe.', 403);
     await db.insert(osTask).values({ title: b.title, owner: w.id, country: w.country, domain: b.domain, due: b.due ? new Date(b.due + 'T18:00:00') : new Date(Date.now() + 7 * 864e5), createdBy: me.id });
-    if (w.id !== me.id) await notifyStaff([w.id], `Nouvelle tâche de ${me.name} : ${b.title}`, '/admin/taches', people);
+    if (w.id !== me.id) await notifyStaff([w.id], `Nouvelle tâche de ${me.name} : ${b.title}`, '/os/taches', people);
     await audit(me.userId, 'os.tache.creation', w.id, { titre: b.title });
     return json({ ok: true, message: 'Tâche créée et notifiée.' });
   }
@@ -43,8 +43,8 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const owner = people.find((s) => s.id === t.owner);
   if (t.owner !== me.id && !(manager && (owner?.managerId === me.id || t.createdBy === me.id || me.prof === 'dg'))) return fail('Accès refusé.', 403);
   await db.update(osTask).set({ status: b.status }).where(eq(osTask.id, t.id));
-  if (b.status === 'Terminé' && t.owner !== me.id) await notifyStaff([t.owner], `Tâche terminée : ${t.title}`, '/admin/taches', people);
-  if (b.status === 'Terminé' && t.createdBy && t.createdBy !== me.id && t.createdBy !== t.owner) await notifyStaff([t.createdBy], `Tâche terminée : ${t.title}`, '/admin/taches', people);
+  if (b.status === 'Terminé' && t.owner !== me.id) await notifyStaff([t.owner], `Tâche terminée : ${t.title}`, '/os/taches', people);
+  if (b.status === 'Terminé' && t.createdBy && t.createdBy !== me.id && t.createdBy !== t.owner) await notifyStaff([t.createdBy], `Tâche terminée : ${t.title}`, '/os/taches', people);
   await audit(me.userId, 'os.tache.statut', t.id, { statut: b.status });
   return json({ ok: true, message: `Tâche : ${b.status}.` });
 };

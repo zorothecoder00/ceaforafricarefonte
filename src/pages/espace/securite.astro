@@ -11,7 +11,7 @@ const user = Astro.locals.user!;
 const hasPassword = (await db.select({ id: account.id }).from(account).where(and(eq(account.userId, user.id), eq(account.providerId, 'credential'), isNotNull(account.password))).limit(1)).length > 0;
 const keys = await db.select().from(passkey).where(eq(passkey.userId, user.id));
 const sessions = await db.select().from(session).where(and(eq(session.userId, user.id), gt(session.expiresAt, new Date()))).orderBy(desc(session.updatedAt));
-const required = needs2fa(user.roles);
+const required = needs2fa(user.roles) || !!user.staffId; // rôles sensibles du site et collaborateurs CEA OS
 const motif = Astro.url.searchParams.get('motif');
 const ua = (s: string | null) => (s ? (/(Android|iPhone|iPad|Windows|Mac OS X|Linux)/.exec(s)?.[1] ?? 'Appareil') + ' · ' + (/(Chrome|Firefox|Safari|Edg)/.exec(s)?.[1] ?? 'Navigateur') : 'Appareil inconnu');
 ---
@@ -122,7 +122,7 @@ const ua = (s: string | null) => (s ? (/(Android|iPhone|iPad|Windows|Mac OS X|Li
     const { error } = await authClient.twoFactor.verifyTotp({ code });
     if (error) return toast(error.message || 'Code incorrect.');
     // Membre de l'équipe : la double authentification ouvre le back-office, on l'y conduit directement
-    if (document.getElementById('sec')!.dataset.staff === '1') { toast('Double authentification activée : ouverture du back-office…'); setTimeout(() => (location.href = '/admin'), 900); return; }
+    if (document.getElementById('sec')!.dataset.staff === '1') { toast('Double authentification activée : ouverture de votre espace de travail…'); setTimeout(() => (location.href = '/choix-espace'), 900); return; }
     toast('Double authentification activée.'); reload();
   });
 

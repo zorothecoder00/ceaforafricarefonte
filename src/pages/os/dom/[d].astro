@@ -22,7 +22,7 @@ import { DOM, PK, isDom, pn, fmt, mfcfa, dstr, type Dom } from '../../../lib/os/
 
 export const prerender = false;
 const d = Astro.params.d ?? '';
-if (!isDom(d)) return Astro.redirect('/admin');
+if (!isDom(d)) return Astro.redirect('/os');
 const D = DOM[d as Dom];
 const os = await osContext(Astro.locals.user!);
 const sc = scopeState(os, Astro.cookies);
@@ -241,9 +241,9 @@ const KCOLS = KAP_STEPS.filter((s) => !['incomplet', 'preselectionne'].includes(
   {d === 'tal' && tal && (
     <>
       <div class="tabs">
-        <a href="/admin/dom/tal" aria-selected={!tab || tab === 'emp' ? 'true' : 'false'}>Registre des emplois</a>
-        <a href="/admin/dom/tal?t=off" aria-selected={tab === 'off' ? 'true' : 'false'}>Offres ({tal.jobs.length})</a>
-        <a href="/admin/dom/tal?t=app" aria-selected={tab === 'app' ? 'true' : 'false'}>Candidatures ({tal.apps.length})</a>
+        <a href="/os/dom/tal" aria-selected={!tab || tab === 'emp' ? 'true' : 'false'}>Registre des emplois</a>
+        <a href="/os/dom/tal?t=off" aria-selected={tab === 'off' ? 'true' : 'false'}>Offres ({tal.jobs.length})</a>
+        <a href="/os/dom/tal?t=app" aria-selected={tab === 'app' ? 'true' : 'false'}>Candidatures ({tal.apps.length})</a>
       </div>
       {(!tab || tab === 'emp') && (
         <>
@@ -361,7 +361,7 @@ const KCOLS = KAP_STEPS.filter((s) => !['incomplet', 'preselectionne'].includes(
         <table class="t">
           <thead><tr><th>Chantier</th><th>Maître d'ouvrage</th><th>Pays</th><th>Marché</th><th>Avancement</th><th>Marge à terminaison</th><th>Fin prévue</th><th>Alertes</th></tr></thead>
           <tbody>
-            {btp.sites.map(({ s, m, hse, over }) => <tr class="click" onclick={`location.href='/admin/dom/btp/${s.id}'`}>
+            {btp.sites.map(({ s, m, hse, over }) => <tr class="click" onclick={`location.href='/os/dom/btp/${s.id}'`}>
               <td><b>{s.name}</b><div class="xs muted">{s.id} · {name(s.manager)}</div></td><td class="small">{s.client}</td><td>{pn(s.country)}</td><td class="num">{mfcfa(s.amount)}</td>
               <td style="min-width:120px"><div class="bar"><span style={`width:${m.av}%`}></span></div><span class="xs">{m.av.toFixed(0)} %</span></td>
               <td class:list={['num', m.pct < 8 ? 'down' : 'up']}>{mfcfa(m.m)} ({m.pct.toFixed(1)} %)</td><td class="small">{dstr(s.end)}</td>

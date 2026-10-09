@@ -1,16 +1,18 @@
 ---
-/* Back-office « CEA OS » (CDC §12), au design du prototype CEA OS : application à part entière (sans l'en-tête ni le pied de
-   page du site public), menu latéral bleu nuit par rubriques (Mon espace, Pilotage, Relations, Domaines d'intervention,
-   Gestion, Support et administration) avec compteurs, barre supérieure (périmètre, recherche, approbations, notifications,
-   CEA Copilot, compte), en-tête de page (titre, sous-titre, actions).
-   Accès : une page du progiciel interne est gardée par le profil du poste (src/lib/os/core.ts › MODS) ; une page du site
-   par un droit de la matrice (prop obj). Chaque API vérifie aussi ses propres droits. */
+/* Coquille des deux espaces de travail des équipes, au design du prototype CEA OS (sans l'en-tête ni le pied de page du site) :
+   - CEA OS (/os) : progiciel interne (cahier des charges CEA OS) — espace personnel, pilotage, CRM, domaines, gestion, RH… ;
+     barre supérieure avec périmètre, recherche, approbations, CEA Copilot ;
+   - back-office du site (/admin) : administration du site public et des services en ligne (contenus, modération, comptes,
+     programmes, Kapital, paiements…).
+   Menu latéral par rubriques avec compteurs, bascule vers l'autre espace, en-tête de page (titre, sous-titre, actions).
+   Accès : une page de CEA OS est gardée par le profil du poste (src/lib/os/core.ts › MODS) ; une page du site par un droit de
+   la matrice (prop obj ou BO_MODS). Chaque API vérifie aussi ses propres droits. */
 import { eq, sql } from 'drizzle-orm';
 import BaseLayout from './BaseLayout.astro';
 import RightsHint from '../components/RightsHint.astro';
 import { db } from '../lib/db';
 import { can, isStaff, ROLE_LABEL, type Obj, type Role } from '../lib/rbac';
-import { MODS, canUse, moduleOf, osContext, scopeState, type NavItem } from '../lib/os/core';
+import { MODS, BO_MODS, canUse, moduleOf, osContext, scopeState, spaceOf, type NavItem } from '../lib/os/core';
 import { pendingFor } from '../lib/os/approvals';
 import { unreadCount } from '../lib/os/collab';
 import { escalatedFor } from '../lib/os/relations';
@@ -26,6 +28,12 @@ const hints = Astro.props.hints ?? (obj ? [obj] : []);
 const me = Astro.locals.user!;
 const os = await osContext(me);
 const path = Astro.url.pathname.replace(/\/$/, '') || '/admin';
+const space = spaceOf(path);
+const inOs = space === 'os';
+const SPACE = inOs ? 'CEA OS' : 'Back-office';
+// Accès à l'autre espace (lien de bascule) : CEA OS pour les collaborateurs (fiche personnel) et la direction ; back-office pour les rôles du site
+const canOs = !!os.me || os.superuser;
+const canBo = isStaff(me.roles);
 
 // Pages du site (obj) : réservées aux rôles du back-office ; un collaborateur sans rôle n'y accède pas
 const staffRole = isStaff(me.roles);
@@ -33,38 +41,39 @@ const gate = (i: NavItem) => (i.obj ? staffRole && can(me.roles, i.obj, 'L') : i
 const mod = moduleOf(path);
 const allowed = obj ? staffRole && can(me.roles, obj, 'L') : mod ? gate(mod) : true;
 
-// Compteurs « à traiter » (pastilles dorées du menu)
-const decisionsPending = os.me?.prof === 'dg' ? Number(((await db.execute(sql`select count(*)::int as n from os_decision where status = 'En attente'`).catch(() => ({ rows: [{ n: 0 }] }))).rows[0] as { n: number }).n) : 0;
-const escalated = (await escalatedFor(os.me).catch(() => [])).length;
-const pending = os.me ? (await pendingFor(os.me.id).catch(() => [])).length + decisionsPending + escalated : 0;
-const insPending = os.prof || os.superuser ? (await db.select({ c: osInscription.country, d: osInscription.domains }).from(osInscription).where(eq(osInscription.status, 'En attente')).catch(() => [])).filter((x) => scopeState(os, Astro.cookies).inScope({ country: x.c, domain: x.d })).length : 0;
-const unread = os.me ? await unreadCount(os.me).catch(() => 0) : 0;
-const c = (await db.execute(sql`select
+// Compteurs « à traiter » (pastilles dorées du menu), calculés pour l'espace affiché
+const decisionsPending = inOs && os.me?.prof === 'dg' ? Number(((await db.execute(sql`select count(*)::int as n from os_decision where status = 'En attente'`).catch(() => ({ rows: [{ n: 0 }] }))).rows[0] as { n: number }).n) : 0;
+const escalated = inOs ? (await escalatedFor(os.me).catch(() => [])).length : 0;
+const pending = inOs && os.me ? (await pendingFor(os.me.id).catch(() => [])).length + decisionsPending + escalated : 0;
+const insPending = inOs && (os.prof || os.superuser) ? (await db.select({ c: osInscription.country, d: osInscription.domains }).from(osInscription).where(eq(osInscription.status, 'En attente')).catch(() => [])).filter((x) => scopeState(os, Astro.cookies).inScope({ country: x.c, domain: x.d })).length : 0;
+const unread = inOs && os.me ? await unreadCount(os.me).catch(() => 0) : 0;
+const c = inOs ? {} as Record<string, number> : (await db.execute(sql`select
   (select count(*) from contact_message where status = 'nouveau')::int as messages,
   (select count(*) from post where status = 'en_moderation')::int as moderation,
   (select count(*) from job where status = 'en_moderation')::int as emplois,
   (select count(*) from programme_application where status = 'recue')::int as candidatures,
   (select count(*) from kapital.dossier where status = 'recu')::int as kapital`).catch(() => ({ rows: [{}] }))).rows[0] as Record<string, number>;
-const COUNT: Record<string, number> = { '/admin/approbations': pending, '/admin/messagerie': unread, '/admin/inscriptions': insPending, '/admin/messages': c.messages ?? 0, '/admin/moderation': c.moderation ?? 0, '/admin/emplois': c.emplois ?? 0, '/admin/candidatures': c.candidatures ?? 0, '/admin/kapital': c.kapital ?? 0 };
-const groups = MODS.map(([g, items]) => [g, items.filter(gate)] as const).filter(([, items]) => items.length);
+const COUNT: Record<string, number> = { '/os/approbations': pending, '/os/messagerie': unread, '/os/inscriptions': insPending, '/admin/messages': c.messages ?? 0, '/admin/moderation': c.moderation ?? 0, '/admin/emplois': c.emplois ?? 0, '/admin/candidatures': c.candidatures ?? 0, '/admin/kapital': c.kapital ?? 0 };
+const groups = (inOs ? MODS : BO_MODS).map(([g, items]) => [g, items.filter(gate)] as const).filter(([, items]) => items.length);
 const isCurrent = (h: string) => h === mod?.href;
 
 // Périmètre (pays, région ou toute l'organisation) ; masqué quand il n'y a qu'une option
 const sc = scopeState(os, Astro.cookies);
 const roleLine = me.roles.filter((r) => r !== 'membre').map((r) => ROLE_LABEL[r as Role] ?? r).join(' · ');
 ---
-<BaseLayout title={`${title} — CEA OS`} os>
+<BaseLayout title={`${title} — ${SPACE}`} os>
   <div class="os-shell">
-    <nav class="os-side side" id="sideNav" aria-label="Navigation CEA OS">
-      <a class="os-logo" href="/admin"><img src="/logo.png" alt="CEA FOR AFRICA" width="68" height="38" /><span>CEA OS<small>Connecter • Entreprendre • Accélérer</small></span></a>
+    <nav class:list={['os-side side', { bo: !inOs }]} id="sideNav" aria-label={`Navigation ${SPACE}`}>
+      <a class="os-logo" href={inOs ? '/os' : '/admin'}><img src="/logo.png" alt="CEA FOR AFRICA" width="68" height="38" /><span>{inOs ? 'CEA OS' : 'Back-office'}<small>{inOs ? 'Connecter • Entreprendre • Accélérer' : 'Administration du site'}</small></span></a>
+      {(inOs ? canBo : canOs) && <a class="os-switch" href={inOs ? '/admin' : '/os'}>⇄ {inOs ? 'Aller au back-office du site' : 'Aller à CEA OS'}</a>}
       <div class="side-body" id="sideBody">
         {groups.map(([g, items]) => (
-          <section class="sg" data-sg={`os:${g}`}>
+          <section class="sg" data-sg={`${space}:${g}`}>
             <h6><button class="sg-h" type="button" aria-expanded="true">{g}{items.some((i) => COUNT[i.href]) && <span class="sg-n" aria-hidden="true"></span>}<span class="sg-c" aria-hidden="true"></span></button></h6>
             <div class="sg-l">{items.map((i) => <a href={i.href} title={i.label} aria-current={isCurrent(i.href) ? 'page' : undefined}>{i.dom && <span class="dot" style={`background:${DOM[i.dom].c}`}></span>}<span class="sl">{i.label}</span>{COUNT[i.href] ? <span class="cnt" aria-label={`${COUNT[i.href]} à traiter`}>{COUNT[i.href]}</span> : null}</a>)}</div>
           </section>
         ))}
-        <section class="sg" data-sg="os:Raccourcis">
+        <section class="sg" data-sg={`${space}:Raccourcis`}>
           <h6><button class="sg-h" type="button" aria-expanded="true">Raccourcis<span class="sg-c" aria-hidden="true"></span></button></h6>
           <div class="sg-l"><a href="/espace" title="Mon espace membre"><span class="sl">Mon espace membre</span></a><a href="/" title="Site public"><span class="sl">Site public</span></a></div>
         </section>
@@ -78,20 +87,24 @@ const roleLine = me.roles.filter((r) => r !== 'membre').map((r) => ROLE_LABEL[r 
     <div class="os-main">
       <header class="os-top">
         <button class="os-ib os-menu" type="button" data-os-menu aria-controls="sideNav" aria-expanded="false" aria-label="Ouvrir la navigation">☰</button>
-        {sc.opts.length > 1
+        {inOs ? (sc.opts.length > 1
           ? <div class="os-scope" title="Périmètre affiché"><b>Périmètre</b><select id="scopeSel" aria-label="Périmètre affiché">{sc.opts.map(([v, l]) => <option value={v} selected={v === sc.sc}>{l}</option>)}</select></div>
-          : <div class="os-scope" title="Périmètre affiché"><b>Périmètre</b><span>{sc.opts[0][1].trim()}</span></div>}
+          : <div class="os-scope" title="Périmètre affiché"><b>Périmètre</b><span>{sc.opts[0][1].trim()}</span></div>)
+          : <div class="os-scope bo-tag"><b>Back-office du site</b><span class="hide-s">{roleLine}</span></div>}
         <div class="os-grow"></div>
-        <button class="os-ib" type="button" id="osSearchBtn" aria-label="Rechercher (Ctrl+K)">⌕ <span class="hide-s">Rechercher</span></button>
-        {os.me && <a class="os-ib" href="/admin/approbations" aria-label={`Approbations : ${pending}`}>✓ <span class="hide-s">Approbations</span>{pending > 0 && <span class="badge">{pending > 99 ? '99+' : pending}</span>}</a>}
+        {inOs && <button class="os-ib" type="button" id="osSearchBtn" aria-label="Rechercher (Ctrl+K)">⌕ <span class="hide-s">Rechercher</span></button>}
+        {inOs && os.me && <a class="os-ib" href="/os/approbations" aria-label={`Approbations : ${pending}`}>✓ <span class="hide-s">Approbations</span>{pending > 0 && <span class="badge">{pending > 99 ? '99+' : pending}</span>}</a>}
+        {!inOs && <a class="os-ib" href="/" aria-label="Voir le site public">↗ <span class="hide-s">Voir le site</span></a>}
         <a class="os-ib" href="/espace/notifications" aria-label="Notifications">🔔<span class="badge" data-unread hidden></span></a>
-        <button class="os-ib" type="button" id="copB" aria-label="Ouvrir CEA Copilot" aria-controls="cop">✦ <span class="hide-s">Copilot</span></button>
+        {inOs && <button class="os-ib" type="button" id="copB" aria-label="Ouvrir CEA Copilot" aria-controls="cop">✦ <span class="hide-s">Copilot</span></button>}
         <div class="umenu">
           <button class="os-user um-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="umPanel" title="Mon compte"><span class="av">{initials(os.me?.name ?? me.name)}</span><span class="t hide-s">{os.me?.name ?? me.name}</span><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></button>
           <div class="um-panel" id="umPanel" hidden>
             <div class="um-id"><span class="av">{initials(os.me?.name ?? me.name)}</span><div style="min-width:0"><b>{os.me?.name ?? me.name}</b><div class="xs muted um-mail">{me.email}</div><div class="xs">{os.me ? `${refT(os.me.poste)} · ${pn(os.me.country)}` : roleLine}</div></div></div>
-            {os.me && <a href="/admin/poste">Mon poste et mes indicateurs</a>}
-            {os.me && <a href="/admin/moi">Mes demandes (congés, frais…)</a>}
+            {os.me && <a href="/os/poste">Mon poste et mes indicateurs</a>}
+            {os.me && <a href="/os/moi">Mes demandes (congés, frais…)</a>}
+            {inOs && canBo && <a href="/admin">Back-office du site</a>}
+            {!inOs && canOs && <a href="/os">CEA OS</a>}
             <a href="/espace">Mon espace membre</a>
             <a href="/espace/profil">Mon profil</a>
             <hr />
@@ -127,7 +140,7 @@ const roleLine = me.roles.filter((r) => r !== 'membre').map((r) => ROLE_LABEL[r 
           <div class="dh"><h3 id="osSearchT">Rechercher dans CEA OS</h3><button class="os-ib" type="button" data-close aria-label="Fermer">✕</button></div>
           <div class="db"><input class="in" id="osSq" style="width:100%" placeholder="Personne, contact, dossier, chantier, facture, demande, inscription…" aria-label="Rechercher" autocomplete="off" /><div class="sres" id="osSr" style="margin-top:10px"><p class="small muted">Ctrl+K. Les résultats respectent vos droits.</p></div></div>
         </dialog>
-        {allowed ? <slot /> : <div class="empty">Votre profil ne donne pas accès à ce module. Les droits sont gérés par l’administration. <a href="/admin">Revenir à l’accueil</a></div>}
+        {allowed ? <slot /> : <div class="empty">Votre profil ne donne pas accès à ce module. Les droits sont gérés par l’administration. <a href={inOs ? '/os' : '/admin'}>Revenir à l’accueil</a></div>}
       </div>
     </div>
   </div>

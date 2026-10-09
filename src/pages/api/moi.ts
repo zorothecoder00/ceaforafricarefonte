@@ -12,5 +12,5 @@ export const GET: APIRoute = async ({ locals }) => {
   const u = locals.user;
   if (!u) return json({ ok: true, user: null });
   const [{ n }] = await db.select({ n: count() }).from(notification).where(and(eq(notification.userId, u.id), isNull(notification.readAt)));
-  return json({ ok: true, user: { name: u.name, email: u.email, roles: u.roles, roleLabels: u.roles.map((r) => ROLE_LABEL[r as Role] ?? r), staff: isStaff(u.roles) }, unread: n });
+  return json({ ok: true, user: { name: u.name, email: u.email, roles: u.roles, roleLabels: u.roles.map((r) => ROLE_LABEL[r as Role] ?? r), staff: isStaff(u.roles), os: !!u.staffId || u.roles.includes('admin') || u.roles.includes('direction') }, unread: n });
 };

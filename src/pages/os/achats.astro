@@ -37,7 +37,7 @@ const [thr, bud] = me ? await Promise.all([thresholds(), budgets()]) : [null, {}
 ---
 <AdminLayout title="Achats et stocks" lead={`Du besoin au paiement : demande, approbation, commande, réception, facture · ${sc.label}`}>
   <Fragment slot="actions">{me && <button class="btn" type="button" data-dlg="dlg-achat">Nouvelle demande d'achat</button>}</Fragment>
-  <div class="tabs">{T.map(([k, l]) => <a href={`/admin/achats?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
+  <div class="tabs">{T.map(([k, l]) => <a href={`/os/achats?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
   {tab === 'bc' && (
     <div class="tw">
       <table class="t">

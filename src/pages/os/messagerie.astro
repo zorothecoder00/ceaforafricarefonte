@@ -29,7 +29,7 @@ const lastId = msgs.at(-1)?.id ?? 0;
     <div class="chatg">
       <div class="ch">
         {chans.map((x) => (
-          <a href={`/admin/messagerie?c=${x.id}`} aria-current={x.id === cur.id ? 'true' : 'false'}>
+          <a href={`/os/messagerie?c=${x.id}`} aria-current={x.id === cur.id ? 'true' : 'false'}>
             <span class="row between" style="flex-wrap:nowrap"><b class="small">{label(x)}</b>{x.unread > 0 && x.id !== cur.id && <span class="tag gold">{x.unread}</span>}</span>
             <span class="xs muted">{x.last ? `${name(x.last.staff_id).split(' ')[0]} : ${x.last.body.slice(0, 40)}` : `${x.total} message(s)`}</span>
           </a>

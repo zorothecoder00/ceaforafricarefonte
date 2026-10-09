@@ -45,7 +45,7 @@ const me = os.me;
 const [thr] = me && tab === 'dep' ? await Promise.all([thresholds()]) : [null];
 ---
 <AdminLayout title="Finance et trésorerie" lead={`Analytique par domaine et par pays · ${sc.label}`}>
-  <div class="tabs">{T.map(([k, l]) => <a href={`/admin/tresorerie?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
+  <div class="tabs">{T.map(([k, l]) => <a href={`/os/tresorerie?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
   {tab === 'dep' && (
     <>
       <div class="toolbar">{me && ['rep', 'dirreg', 'chef', 'dg', 'fin'].includes(me.prof) && <button class="btn" type="button" data-dlg="dlg-dep">Nouvelle dépense</button>}</div>
@@ -66,7 +66,7 @@ const [thr] = me && tab === 'dep' ? await Promise.all([thresholds()]) : [null];
       <div class="toolbar">
         {(isFin || ['rep', 'chef', 'dirreg'].includes(os.prof ?? '')) && <button class="btn" type="button" data-dlg="dlg-inv">Nouvelle facture</button>}
         <button class="btn ghost" type="button" disabled={!inv.some((i) => stOf(i) === 'En retard')} data-post="/api/admin/os/gestion" data-body='{"action":"invoice.remind"}'>Relancer les factures en retard</button>
-        <a class="btn ghost" href="/admin/finance">Avoirs et exports comptables</a>
+        <a class="btn ghost" href="/os/finance">Avoirs et exports comptables</a>
       </div>
       <div class="tw">
         <table class="t">
@@ -113,7 +113,7 @@ const [thr] = me && tab === 'dep' ? await Promise.all([thresholds()]) : [null];
           </tbody>
         </table>
       </div>
-      <p class="small muted" style="margin-top:8px">{recs.filter((r) => r.status === 'Rapproché').length} encaissement(s) rapproché(s). Les paiements en ligne du site sont rapprochés automatiquement à la réception ; le relevé de l'agrégateur se contrôle dans <a href="/admin/finance?onglet=rapprochement">Factures et exports</a>.</p>
+      <p class="small muted" style="margin-top:8px">{recs.filter((r) => r.status === 'Rapproché').length} encaissement(s) rapproché(s). Les paiements en ligne du site sont rapprochés automatiquement à la réception ; le relevé de l'agrégateur se contrôle dans <a href="/os/finance?onglet=rapprochement">Factures et exports</a>.</p>
       <Dlg id="dlg-rec" title="Enregistrer un encaissement" api="/api/admin/os/gestion">
         <input type="hidden" name="action" value="receipt.create" />
         <div class="fg">

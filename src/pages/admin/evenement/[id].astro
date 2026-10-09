@@ -28,7 +28,7 @@ const sponsorNames = e.extra?.sponsors?.map((s) => s.n).filter(Boolean) ?? [];
 const TONE: Record<string, string> = { ok: 'ok', complet_prevu: 'gold', complet: 'info', surreservation: 'bad' };
 const pct = (n: number) => `${Math.round(n * 100)} %`;
 ---
-<AdminLayout title={e.t} lead={`${dateFr(e.date)} · ${e.city} · ${e.capacity ? `${fmt(e.capacity)} places` : 'sans jauge'}`} obj="controle_acces" crumbs={[['/admin/dom/evt', 'Événements'], [e.t]]}>
+<AdminLayout title={e.t} lead={`${dateFr(e.date)} · ${e.city} · ${e.capacity ? `${fmt(e.capacity)} places` : 'sans jauge'}`} obj="controle_acces" crumbs={[['/os/dom/evt', 'Événements'], [e.t]]}>
   {f && (
     <>
       <div class="row between" style="gap:8px;flex-wrap:wrap">

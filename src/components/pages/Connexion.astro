@@ -16,7 +16,7 @@ const fs = 'border:0;padding:0;margin:0';
 <section class="block">
   <div class="wrap" style="max-width:520px">
     <div class="tag info" id="authMotif" hidden style="display:block;border-radius:8px;padding:10px;margin-bottom:16px"></div>
-    <div class="panel" id="auth" data-home={L('/espace')}>
+    <div class="panel" id="auth" data-home="/choix-espace">
       <div class="auth-mode" role="tablist" aria-label={w('Choisir', 'Choose')}>
         <button type="button" role="tab" aria-selected="true" data-mode="in">{w('Se connecter', 'Sign in')}</button>
         <button type="button" role="tab" aria-selected="false" data-mode="up">{w('Créer un compte', 'Create an account')}</button>
@@ -102,7 +102,7 @@ const fs = 'border:0;padding:0;margin:0';
   const motif = q.get('motif');
   if (motif) {
     const m = document.getElementById('authMotif')!;
-    m.textContent = motif === 'admin' ? t('Connectez-vous avec un compte des équipes CEA.', 'Sign in with a CEA staff account.') : t('Connectez-vous pour accéder à votre espace.', 'Sign in to access your space.');
+    m.textContent = motif === 'admin' ? t('Back-office du site : connectez-vous avec un compte des équipes CEA.', 'Site back office: sign in with a CEA staff account.') : motif === 'os' ? t('CEA OS : connectez-vous avec votre compte de collaborateur CEA.', 'CEA OS: sign in with your CEA staff account.') : t('Connectez-vous pour accéder à votre espace.', 'Sign in to access your space.');
     m.hidden = false;
   }
   const done = () => { say(t('Connexion réussie, redirection…', 'Signed in, redirecting…'), true); location.href = dest; };

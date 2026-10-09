@@ -37,7 +37,7 @@ const fmt = (d: Date) => d.toLocaleString('fr-FR', { dateStyle: 'short', timeSty
 const won = deals.filter((d) => d.stage === 'gagne').reduce((n, d) => n + (d.amountXof ?? 0), 0);
 ---
 <AdminLayout title={o.name} lead={`${ORG_KIND_LABEL[o.kind]}${o.country ? ` · ${country(o.country)}` : ''}${o.sector ? ` · ${o.sector}` : ''}`} obj="crm">
-  <p class="small" style="margin-top:-8px"><a href="/admin/crm?vue=organisations">← Organisations</a></p>
+  <p class="small" style="margin-top:-8px"><a href="/os/crm?vue=organisations">← Organisations</a></p>
   <div class="split">
     <div>
       <form class="panel" data-api="/api/admin/crm" data-reload>
@@ -57,7 +57,7 @@ const won = deals.filter((d) => d.stage === 'gagne').reduce((n, d) => n + (d.amo
       </form>
 
       <h2 style="font-size:1.1rem;margin-top:20px">Contacts ({contacts.length})</h2>
-      <div class="panel">{contacts.length ? contacts.map((c) => <div class="list-row"><span class="small"><a href={`/admin/crm/personne/c-${c.id}`}><b>{c.name}</b></a>{c.role && <span class="muted"> · {c.role}</span>}</span><span class="xs muted">{c.email ?? c.phone ?? ''}{c.marketingConsent ? ' · ✓ marketing' : ''}</span></div>) : <p class="small muted" style="margin:0">Aucun contact. Créez-en un depuis <a href="/admin/crm">l'onglet Contacts</a> en choisissant cette organisation.</p>}</div>
+      <div class="panel">{contacts.length ? contacts.map((c) => <div class="list-row"><span class="small"><a href={`/os/crm/personne/c-${c.id}`}><b>{c.name}</b></a>{c.role && <span class="muted"> · {c.role}</span>}</span><span class="xs muted">{c.email ?? c.phone ?? ''}{c.marketingConsent ? ' · ✓ marketing' : ''}</span></div>) : <p class="small muted" style="margin:0">Aucun contact. Créez-en un depuis <a href="/os/crm">l'onglet Contacts</a> en choisissant cette organisation.</p>}</div>
 
       <h2 style="font-size:1.1rem;margin-top:20px">Opportunités {won > 0 && <span class="small muted">· gagné : <Money xof={won} /></span>}</h2>
       {won > 0 && <p class="small" style="margin:-4px 0 8px"><a href={`/admin/rapports/impact?partenaire=${o.id}`}>Rapport d'impact de ce partenaire</a></p>}

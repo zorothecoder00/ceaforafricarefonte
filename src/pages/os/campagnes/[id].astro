@@ -25,7 +25,7 @@ const limit = { email: 20000, sms: 480, whatsapp: 1500, push: 180 }[c.channel];
 const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)} %` : '—');
 ---
 <AdminLayout title={c.name} lead={`${CHANNEL_LABEL[c.channel]} · ${c.purpose === 'service' ? 'message de service' : 'information / promotion'}`} obj="campagnes">
-  <p class="small" style="margin-top:-8px"><a href="/admin/campagnes">← Campagnes</a></p>
+  <p class="small" style="margin-top:-8px"><a href="/os/campagnes">← Campagnes</a></p>
   <div class="split">
     <form class="panel" id="campF" data-id={c.id}>
       {!editable && <p class="small" style="margin-top:0"><span class="tag">Lecture seule</span> {c.status === 'brouillon' || c.status === 'programmee' ? 'Vous pouvez consulter cette campagne.' : 'Campagne partie : dupliquez-la pour en préparer une autre.'}</p>}

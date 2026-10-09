@@ -13,9 +13,13 @@ const user = Astro.locals.user!;
 const path = Astro.url.pathname.replace(/\/$/, '');
 const roles = user.roles as Role[];
 const has = (...r: Role[]) => r.some((x) => roles.includes(x));
-// Membre de l'équipe CEA : guider vers le back-office (double authentification obligatoire avant d'y accéder)
-const staff = isStaff(roles);
-const staffRoles = roles.filter((r) => r !== 'membre' && isStaff([r])).map((r) => ROLE_LABEL[r] ?? r).join(', ');
+// Membre de l'équipe CEA : guider vers le back-office du site et/ou CEA OS (double authentification obligatoire avant d'y accéder)
+const canBo = isStaff(roles);
+const canOs = !!user.staffId || roles.includes('admin') || roles.includes('direction');
+const staff = canBo || canOs;
+const staffRoles = roles.filter((r) => r !== 'membre' && isStaff([r])).map((r) => ROLE_LABEL[r] ?? r).join(', ') || 'collaborateur';
+// Espaces de travail accessibles, pour les textes d'accueil
+const spaces = [canOs && 'CEA OS', canBo && 'le back-office du site'].filter(Boolean).join(' et ');
 const tfaMissing = staff && !user.twoFactorEnabled;
 // Entrées liées à un rattachement (programmes, CDC §12) : participant d'une cohorte, membre d'un jury
 const [[inCohort], [isJury]] = await Promise.all([
@@ -32,14 +36,15 @@ const groups: [string, [string, string, boolean?][]][] = [
   ['MES RÔLES', [
     ['/espace/recruteur', 'Espace recruteur', has('employeur')], ['/espace/mentor', 'Espace mentor', has('mentor')], ['/espace/partenaire', 'Espace partenaire', has('partenaire')], ['/espace/jury', 'Jury', !!isJury],
     ['/kapital/entreprise', 'Kapital — entreprise', has('entrepreneur')], ['/kapital/investisseur', 'Kapital — investisseur', has('investisseur')],
-    ['/admin', tfaMissing ? 'Back-office CEA OS (à activer)' : 'Back-office CEA OS', staff],
+    ['/os', tfaMissing ? 'CEA OS (à activer)' : 'CEA OS', canOs],
+    ['/admin', tfaMissing ? 'Back-office du site (à activer)' : 'Back-office du site', canBo],
   ]],
 ];
 /** Icône de chaque entrée du menu (noms de src/data ICON). */
 const ICONS: Record<string, string> = {
   '/espace': 'home', '/espace/profil': 'user', '/espace/carte': 'card', '/espace/notifications': 'bell', '/espace/demandes': 'chat', '/espace/securite': 'lock', '/espace/confidentialite': 'shield',
   '/espace/apprentissage': 'learn', '/espace/programme': 'rocket', '/espace/candidatures': 'check', '/espace/billets': 'ticket', '/espace/messages': 'mail', '/espace/projets': 'proj', '/espace/mentorat': 'hand', '/espace/cercle': 'circle',
-  '/espace/recruteur': 'job', '/espace/mentor': 'star', '/espace/partenaire': 'hand', '/espace/jury': 'gov', '/kapital/entreprise': 'fund', '/kapital/investisseur': 'chart', '/admin': 'gear',
+  '/espace/recruteur': 'job', '/espace/mentor': 'star', '/espace/partenaire': 'hand', '/espace/jury': 'gov', '/kapital/entreprise': 'fund', '/kapital/investisseur': 'chart', '/os': 'circle', '/admin': 'gear',
 };
 const tabs: [string, string, string][] = [
   ['/espace', 'Accueil', 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z'],
@@ -70,8 +75,8 @@ const tabs: [string, string, string][] = [
         <div class="panel staff-cta" role="status">
           <div>
             <span class="tag gold">Équipe CEA · {staffRoles}</span>
-            <h2 style="font-size:1.25rem;margin:8px 0 4px">Votre back-office CEA OS vous attend</h2>
-            <p class="small" style="margin:0 0 8px">C'est l'espace de gestion de la plateforme : contenus, membres et rôles, programmes, événements, paiements, Kapital Invest. Comme il donne accès à des données sensibles, il faut d'abord activer la <b>double authentification</b> : environ 2 minutes, une seule fois.</p>
+            <h2 style="font-size:1.25rem;margin:8px 0 4px">{canOs && canBo ? 'Vos espaces de travail vous attendent' : canOs ? 'CEA OS vous attend' : 'Votre back-office vous attend'}</h2>
+            <p class="small" style="margin:0 0 8px">{canOs && 'CEA OS est le progiciel interne (tâches, demandes, CRM, finance, RH…). '}{canBo && 'Le back-office administre le site : contenus, membres et rôles, programmes, paiements, Kapital Invest. '}Comme {canOs && canBo ? 'ils donnent' : 'il donne'} accès à des données sensibles, il faut d'abord activer la <b>double authentification</b> : environ 2 minutes, une seule fois.</p>
             <ol class="small" style="margin:0;padding-left:18px"><li>Installez sur votre téléphone une application d'authentification gratuite (Google Authenticator, Microsoft Authenticator…).</li><li>Scannez le QR code affiché sur la page Sécurité.</li><li>Saisissez le code à 6 chiffres : le back-office s'ouvre.</li></ol>
           </div>
           <a class="btn btn-gold" href="/espace/securite?motif=2fa">Activer maintenant</a>
@@ -79,8 +84,8 @@ const tabs: [string, string, string][] = [
       )}
       {staff && !tfaMissing && path === '/espace' && (
         <div class="panel staff-cta" role="status">
-          <div><span class="tag gold">Équipe CEA · {staffRoles}</span><h2 style="font-size:1.25rem;margin:8px 0 0">Back-office CEA OS</h2><p class="small muted" style="margin:4px 0 0">Gérez la plateforme selon vos droits.</p></div>
-          <a class="btn btn-primary" href="/admin">Ouvrir le back-office</a>
+          <div><span class="tag gold">Équipe CEA · {staffRoles}</span><h2 style="font-size:1.25rem;margin:8px 0 0">Mon espace de travail</h2><p class="small muted" style="margin:4px 0 0">Accès : {spaces}.</p></div>
+          <a class="btn btn-primary" href="/choix-espace">Ouvrir mon espace de travail</a>
         </div>
       )}
       <div class="row between" style="align-items:flex-start">

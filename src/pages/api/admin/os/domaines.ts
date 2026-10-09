@@ -164,7 +164,7 @@ export const POST: APIRoute = async ({ locals, request, cookies }) => {
       const chef = people.find((s) => s.prof === 'chef' && s.domain === 'kap' && s.active) ?? people.find((s) => s.prof === 'dg');
       if (chef) {
         await db.insert(osTask).values({ title: `Ouvrir le dossier de levée de fonds de ${x.name} (${fcfa((x.valuation * x.share) / 100)} recherchés)`, owner: chef.id, country: x.country, domain: 'kap', due: new Date(Date.now() + 7 * 864e5), createdBy: me?.id ?? null });
-        await notifyStaff([chef.id], `PME transférée par CEA Actionnariat : ${x.name}`, '/admin/taches', people);
+        await notifyStaff([chef.id], `PME transférée par CEA Actionnariat : ${x.name}`, '/os/taches', people);
       }
       await audit(actor, 'os.actionnariat.transfert', x.name);
       return ok(`${x.name} transférée à CEA Kapital Invest : tâche créée pour l’équipe Kapital.`);
@@ -180,7 +180,7 @@ export const POST: APIRoute = async ({ locals, request, cookies }) => {
     case 'btp.site': {
       const id = await newSite(b.name, b.client, b.country, b.amount, me?.id ?? null);
       await audit(actor, 'os.btp.chantier', id);
-      return ok('Chantier créé avec un budget type par lot (marge cible 15 %).', { redirect: `/admin/dom/btp/${id}` });
+      return ok('Chantier créé avec un budget type par lot (marge cible 15 %).', { redirect: `/os/dom/btp/${id}` });
     }
     case 'btp.lot': {
       const [l] = await db.select().from(osSiteLot).where(eq(osSiteLot.id, b.lotId));
@@ -193,7 +193,7 @@ export const POST: APIRoute = async ({ locals, request, cookies }) => {
         const chef = people.find((s) => s.prof === 'chef' && s.domain === 'btp' && s.active) ?? me;
         if (chef) {
           await db.insert(osTask).values({ title: `Plan d'action — dépassement sur ${l.name} (${l.siteId})`, owner: chef.id, domain: 'btp', due: new Date(Date.now() + 5 * 864e5), createdBy: me?.id ?? null });
-          await notifyStaff([chef.id], `Dépassement de plus de 5 % sur ${l.name} (${l.siteId})`, `/admin/dom/btp/${l.siteId}`, people);
+          await notifyStaff([chef.id], `Dépassement de plus de 5 % sur ${l.name} (${l.siteId})`, `/os/dom/btp/${l.siteId}`, people);
         }
       }
       await audit(actor, 'os.btp.lot', l.siteId, { lot: l.name, avancement: progress, cout: cost });
@@ -239,7 +239,7 @@ export const POST: APIRoute = async ({ locals, request, cookies }) => {
       const [s] = await db.select().from(osSite).where(eq(osSite.id, b.siteId));
       if (!s) return fail('Chantier introuvable.', 404);
       await db.insert(osSiteHse).values({ siteId: s.id, text: `${b.gravity} — ${b.text}` });
-      await notifyStaff(people.filter((x) => x.active && ((x.domain === 'btp' && ['chef', 'cond'].includes(x.prof)) || x.prof === 'dg')).map((x) => x.id), `Incident HSE déclaré : ${s.name}`, `/admin/dom/btp/${s.id}?t=hse`, people);
+      await notifyStaff(people.filter((x) => x.active && ((x.domain === 'btp' && ['chef', 'cond'].includes(x.prof)) || x.prof === 'dg')).map((x) => x.id), `Incident HSE déclaré : ${s.name}`, `/os/dom/btp/${s.id}?t=hse`, people);
       await audit(actor, 'os.btp.hse', s.id, { gravite: b.gravity });
       return ok('Incident déclaré : responsable QHSE, chef de département et Direction générale notifiés.');
     }
@@ -256,7 +256,7 @@ export const POST: APIRoute = async ({ locals, request, cookies }) => {
       const [t] = await db.update(osTender).set({ status: b.status }).where(eq(osTender.id, b.id)).returning();
       if (!t) return fail('Appel d’offres introuvable.', 404);
       await audit(actor, 'os.btp.appel_offres', t.id, { decision: b.status });
-      if (b.status === 'Gagné') { const id = await newSite(t.object, t.client, t.country, t.amount, null); return ok('Marché gagné : chantier créé automatiquement avec budget par lot.', { redirect: `/admin/dom/btp/${id}` }); }
+      if (b.status === 'Gagné') { const id = await newSite(t.object, t.client, t.country, t.amount, null); return ok('Marché gagné : chantier créé automatiquement avec budget par lot.', { redirect: `/os/dom/btp/${id}` }); }
       return ok(`Décision enregistrée : ${b.status}.`);
     }
   }

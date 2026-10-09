@@ -23,7 +23,7 @@ const kapital: [string, string][] = en
   : [['/kapital', 'Accueil Kapital'], ['/kapital/opportunites', 'Opportunités'], ['/kapital/marches', 'Bourses africaines'], ['/kapital/capital-risque', 'Capital-risque'], ['/kapital/obligations', 'Marché des capitaux'], ['/kapital/risques', 'Risques']];
 const confiance: [string, string][] = [
   ['/contact', t('contact')], ['/legal/confidentialite', t('privacy')], ['/legal/cookies', t('cookies')], ['/legal/conditions', t('terms')], ['/legal/code-de-conduite', en ? 'Code of conduct' : 'Code de conduite'], ['/legal/charte-de-moderation', en ? 'Moderation charter' : 'Charte de modération'], ['/legal/reclamations', en ? 'Complaints' : 'Réclamations'],
-  ['/legal/accessibilite', t('a11y')], ['/aide', t('help')], ['/statut', en ? 'Platform status' : 'Statut de la plateforme'], ['/admin', en ? 'Back office (demo)' : 'Back-office (démo)'],
+  ['/legal/accessibilite', t('a11y')], ['/aide', t('help')], ['/statut', en ? 'Platform status' : 'Statut de la plateforme'], ['/choix-espace', en ? 'Staff workspaces' : 'Espaces des équipes'],
 ];
 ---
 <footer class="foot">
@@ -57,7 +57,7 @@ const confiance: [string, string][] = [
       </div>
       <div>
         <h4>{t('trust')}</h4>
-        {confiance.map(([h, l]) => <a href={h === '/admin' ? h : L(h)}>{l}</a>)}
+        {confiance.map(([h, l]) => <a href={h === '/choix-espace' ? h : L(h)}>{l}</a>)}
       </div>
     </div>
   </div>

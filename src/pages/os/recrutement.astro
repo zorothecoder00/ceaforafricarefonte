@@ -25,7 +25,7 @@ const g = x ? gradeOf(x.poste) : 'Cadre';
 const bd = BANDS[g];
 const ST: Record<string, [string, string]> = { Demande: ['warn', 'Demande'], Validée: ['ok', 'Validée'], Publiée: ['ok', 'Publiée'], Pourvu: ['', 'Pourvu'], Refusée: ['bad', 'Refusée'] };
 ---
-<AdminLayout title={x ? `${x.poste} — ${refT(x.poste)}` : 'Recrutement'} lead={x ? `${pn(x.country)} · demandé par ${name(x.byStaff)} · grade ${g} · ${ST[x.status]?.[1] ?? x.status}` : "Du besoin à l'arrivée : demande, validation, annonce, entretiens notés, offre, compte CEA OS"} crumbs={x ? [['Recrutement', '/admin/recrutement'], [x.id]] : undefined}>
+<AdminLayout title={x ? `${x.poste} — ${refT(x.poste)}` : 'Recrutement'} lead={x ? `${pn(x.country)} · demandé par ${name(x.byStaff)} · grade ${g} · ${ST[x.status]?.[1] ?? x.status}` : "Du besoin à l'arrivée : demande, validation, annonce, entretiens notés, offre, compte CEA OS"} crumbs={x ? [['Recrutement', '/os/recrutement'], [x.id]] : undefined}>
   <Fragment slot="actions">
     {!x && canUse(MANAGERS, os) && os.me && <button class="btn" type="button" data-dlg="dlg-recruit">Demander un recrutement</button>}
     {x && isRH && x.status === 'Validée' && <button class="btn" type="button" data-post="/api/admin/os/rh" data-body={JSON.stringify({ action: 'recruit.publish', id: x.id })} data-reload>Publier l'annonce</button>}
@@ -62,7 +62,7 @@ const ST: Record<string, [string, string]> = { Demande: ['warn', 'Demande'], Val
       <table class="t">
         <thead><tr><th>Référence</th><th>Poste</th><th>Pays</th><th>Demandeur</th><th>Statut</th><th></th></tr></thead>
         <tbody>
-          {list.map((r) => <tr><td class="small">{r.id}<br />{dstr(r.createdAt)}</td><td><span class="tag gold">{r.poste}</span> <b class="small">{refT(r.poste)}</b></td><td>{pn(r.country)}</td><td class="small">{name(r.byStaff)}</td><td><span class={`tag ${ST[r.status]?.[0] ?? ''}`}>{ST[r.status]?.[1] ?? r.status}</span></td><td><a class="btn ghost sm" href={`/admin/recrutement?id=${r.id}`}>Ouvrir</a></td></tr>)}
+          {list.map((r) => <tr><td class="small">{r.id}<br />{dstr(r.createdAt)}</td><td><span class="tag gold">{r.poste}</span> <b class="small">{refT(r.poste)}</b></td><td>{pn(r.country)}</td><td class="small">{name(r.byStaff)}</td><td><span class={`tag ${ST[r.status]?.[0] ?? ''}`}>{ST[r.status]?.[1] ?? r.status}</span></td><td><a class="btn ghost sm" href={`/os/recrutement?id=${r.id}`}>Ouvrir</a></td></tr>)}
           {!list.length && <tr><td colspan="6" class="muted">Aucun recrutement.</td></tr>}
         </tbody>
       </table>

@@ -36,7 +36,7 @@ const byDom = tab === 'temps' ? await db.select({ d: osTimesheet.domain, h: sql<
 const totH = byDom.reduce((a, x) => a + x.h, 0);
 ---
 <AdminLayout title="Ressources humaines et paie" lead={`${people.filter((s) => s.active).length} collaborateurs · ${new Set(people.map((s) => s.country)).size} pays`}>
-  <div class="tabs">{T.map(([k, l]) => <a href={`/admin/rh?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
+  <div class="tabs">{T.map(([k, l]) => <a href={`/os/rh?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
   {tab === 'eff' && (
     <>
       <div class="toolbar"><button class="btn" type="button" data-dlg="dlg-new">Nouveau collaborateur</button><button class="btn ghost" type="button" data-dlg="dlg-link">Rattacher un compte existant</button><a class="btn ghost" href="/api/admin/os/export?quoi=effectifs">Exporter</a></div>
@@ -176,7 +176,7 @@ const totH = byDom.reduce((a, x) => a + x.h, 0);
     <>
       <div class="toolbar">
         <label class="f" for="pm" style="margin:0">Mois</label>
-        <select class="in" id="pm" data-go>{Array.from({ length: 12 }, (_, i) => monthAgo(i)).map((m) => <option value={`/admin/rh?t=paie&m=${m}`} selected={m === month}>{m}</option>)}</select>
+        <select class="in" id="pm" data-go>{Array.from({ length: 12 }, (_, i) => monthAgo(i)).map((m) => <option value={`/os/rh?t=paie&m=${m}`} selected={m === month}>{m}</option>)}</select>
         {pay
           ? <><button class="btn" type="button" disabled>Paie déjà calculée</button><a class="btn ghost" href={`/api/admin/os/export?quoi=paie&m=${month}`}>Exporter le livre de paie</a></>
           : <button class="btn" type="button" data-post="/api/admin/os/rh" data-body={JSON.stringify({ action: 'payroll.run', month })} data-confirm={`Calculer et valider la paie de ${month} pour ${people.filter((s) => s.active).length} collaborateurs ?`} data-reload>Calculer et valider la paie</button>}
@@ -216,7 +216,7 @@ const totH = byDom.reduce((a, x) => a + x.h, 0);
       </Dlg>
     </>
   )}
-  {tab === 'rec' && <div class="watch">Le recrutement dispose de son propre module, relié au référentiel des postes. <a href="/admin/recrutement">Ouvrir le recrutement</a></div>}
+  {tab === 'rec' && <div class="watch">Le recrutement dispose de son propre module, relié au référentiel des postes. <a href="/os/recrutement">Ouvrir le recrutement</a></div>}
   {tab === 'ent' && (
     <div class="tw">
       <table class="t">

@@ -72,7 +72,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       }
       const [n] = await db.insert(crmContact).values({ ...f, consentAt: f.marketingConsent ? new Date() : null, ownerId: u.id }).returning({ id: crmContact.id });
       await audit(u.id, 'crm.contact.creation', n.id, {}, ip);
-      return json({ ok: true, message: 'Contact créé.', redirect: `/admin/crm/personne/c-${n.id}` });
+      return json({ ok: true, message: 'Contact créé.', redirect: `/os/crm/personne/c-${n.id}` });
     }
     case 'contact.delete': {
       const [cur] = await db.select().from(crmContact).where(eq(crmContact.id, b.id));
@@ -80,7 +80,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       if (!inScope(cur.country)) return deny();
       await db.delete(crmContact).where(eq(crmContact.id, b.id)); // interactions supprimées en cascade (effacement)
       await audit(u.id, 'crm.contact.effacement', b.id, { name: cur.name }, ip);
-      return json({ ok: true, message: 'Contact effacé, ainsi que son historique.', redirect: '/admin/crm' });
+      return json({ ok: true, message: 'Contact effacé, ainsi que son historique.', redirect: '/os/crm' });
     }
     case 'org.save': {
       const { action: _a, id: oid, ...f } = b;
@@ -95,7 +95,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       }
       const [n] = await db.insert(crmOrg).values({ ...f, ownerId: u.id }).returning({ id: crmOrg.id });
       await audit(u.id, 'crm.org.creation', n.id, {}, ip);
-      return json({ ok: true, message: 'Organisation créée.', redirect: `/admin/crm/organisation/${n.id}` });
+      return json({ ok: true, message: 'Organisation créée.', redirect: `/os/crm/organisation/${n.id}` });
     }
     case 'org.delete': {
       const [cur] = await db.select().from(crmOrg).where(eq(crmOrg.id, b.id));
@@ -103,7 +103,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       if (!inScope(cur.country)) return deny();
       await db.delete(crmOrg).where(eq(crmOrg.id, b.id));
       await audit(u.id, 'crm.org.suppression', b.id, { name: cur.name }, ip);
-      return json({ ok: true, message: 'Organisation supprimée (ses contacts sont conservés).', redirect: '/admin/crm?vue=organisations' });
+      return json({ ok: true, message: 'Organisation supprimée (ses contacts sont conservés).', redirect: '/os/crm?vue=organisations' });
     }
     case 'interaction.add': {
       if (!b.userId && !b.contactId && !b.orgId) return fail('Interaction sans destinataire.');
@@ -150,13 +150,13 @@ export const POST: APIRoute = async ({ locals, request }) => {
       }
       const [n] = await db.insert(crmSegment).values({ name: b.name, description: b.description, rules, createdBy: u.id }).returning({ id: crmSegment.id });
       await audit(u.id, 'crm.segment.creation', n.id, {}, ip);
-      return json({ ok: true, message: 'Segment créé.', redirect: `/admin/crm?vue=segments&segment=${n.id}` });
+      return json({ ok: true, message: 'Segment créé.', redirect: `/os/crm?vue=segments&segment=${n.id}` });
     }
     case 'segment.delete': {
       if (scope && !(await ownSegment(b.id, u.id))) return deny();
       await db.delete(crmSegment).where(eq(crmSegment.id, b.id));
       await audit(u.id, 'crm.segment.suppression', b.id, {}, ip);
-      return json({ ok: true, message: 'Segment supprimé.', redirect: '/admin/crm?vue=segments' });
+      return json({ ok: true, message: 'Segment supprimé.', redirect: '/os/crm?vue=segments' });
     }
     case 'segment.preview': {
       const list = await evaluate(b.rules, scope);

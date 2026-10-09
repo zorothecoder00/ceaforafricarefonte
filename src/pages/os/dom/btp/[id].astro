@@ -17,7 +17,7 @@ const id = Astro.params.id ?? '';
 const os = await osContext(Astro.locals.user!);
 const sc = scopeState(os, Astro.cookies);
 const [s] = await db.select().from(osSite).where(eq(osSite.id, id));
-if (!s || !sc.inScope({ country: s.country })) return Astro.redirect('/admin/dom/btp');
+if (!s || !sc.inScope({ country: s.country })) return Astro.redirect('/os/dom/btp');
 const tab = Astro.url.searchParams.get('t') ?? 'lots';
 const T: [string, string][] = [['lots', 'Lots et avancement'], ['jr', 'Journal de chantier'], ['sit', 'Situations de travaux'], ['sst', 'Sous-traitants'], ['hse', 'Sécurité (HSE)']];
 const people = await allStaff();
@@ -35,14 +35,14 @@ const pcCum = sits.at(-1)?.progress ?? 0, pcNow = Math.round(m.av);
 const newMt = Math.round((s.amount * (pcNow - pcCum)) / 100), ret = Math.round((newMt * s.retention) / 100);
 const days = Math.round((Date.now() - s.start.getTime()) / 864e5);
 ---
-<AdminLayout title={s.name} lead={`${s.client} · ${pn(s.country)} · conducteur de travaux : ${name(s.manager)}`} crumbs={[[DOM.btp.n, '/admin/dom/btp'], [s.id]]}>
+<AdminLayout title={s.name} lead={`${s.client} · ${pn(s.country)} · conducteur de travaux : ${name(s.manager)}`} crumbs={[[DOM.btp.n, '/os/dom/btp'], [s.id]]}>
   <div class="grid g4">
     <div class="card kpi"><div class="l">Montant du marché</div><div class="v num">{mfcfa(s.amount)}</div></div>
     <div class="card kpi"><div class="l">Avancement physique</div><div class="v num">{m.av.toFixed(1)} %</div></div>
     <div class="card kpi"><div class="l">Coûts réels à date</div><div class="v num">{mfcfa(m.cost)}</div></div>
     <div class="card kpi"><div class="l">Marge à terminaison</div><div class="v num">{mfcfa(m.m)}</div><div class:list={['d', m.pct < 8 ? 'down' : 'up']}>{m.pct.toFixed(1)} % du marché</div></div>
   </div>
-  <div class="tabs" style="margin-top:16px">{T.map(([k, l]) => <a href={`/admin/dom/btp/${id}?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
+  <div class="tabs" style="margin-top:16px">{T.map(([k, l]) => <a href={`/os/dom/btp/${id}?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
   {tab === 'lots' && (
     <>
       <div class="tw">

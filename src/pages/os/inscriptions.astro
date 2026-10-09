@@ -26,9 +26,9 @@ const mx = Math.max(1, ...Object.values(base).flatMap((o) => Object.values(o)));
 <AdminLayout title="Membres et inscriptions" lead={`Registre des entrepreneurs membres · ${sc.label}`}>
   <Fragment slot="actions"><a class="btn ghost" href="/api/admin/os/export?quoi=membres">Exporter le registre</a></Fragment>
   <div class="tabs">
-    <a href="/admin/inscriptions" aria-selected={tab === 'file' ? 'true' : 'false'}>File de validation ({pend.length})</a>
-    <a href="/admin/inscriptions?t=pivot" aria-selected={tab === 'pivot' ? 'true' : 'false'}>Pays × domaines</a>
-    <a href="/admin/inscriptions?t=hist" aria-selected={tab === 'hist' ? 'true' : 'false'}>Décisions</a>
+    <a href="/os/inscriptions" aria-selected={tab === 'file' ? 'true' : 'false'}>File de validation ({pend.length})</a>
+    <a href="/os/inscriptions?t=pivot" aria-selected={tab === 'pivot' ? 'true' : 'false'}>Pays × domaines</a>
+    <a href="/os/inscriptions?t=hist" aria-selected={tab === 'hist' ? 'true' : 'false'}>Décisions</a>
   </div>
   {tab === 'file' && (pend.length ? (
     <>

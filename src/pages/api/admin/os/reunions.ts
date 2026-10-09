@@ -38,7 +38,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     const parts = [me.id, ...b.participants.filter((x) => x !== me.id && people.some((s) => s.id === x))];
     const at = new Date(`${b.date}T${b.hour}:00`);
     const [m] = await db.insert(osMeeting).values({ title: b.title, at, hour: b.hour, place: b.place || 'Visio', participants: parts, agenda: b.agenda, organizer: me.id }).returning();
-    await notifyStaff(parts.filter((x) => x !== me.id), `Invitation : ${m.title} le ${dstr(at)} à ${b.hour}`, '/admin/agenda', people);
+    await notifyStaff(parts.filter((x) => x !== me.id), `Invitation : ${m.title} le ${dstr(at)} à ${b.hour}`, '/os/agenda', people);
     await audit(me.userId, 'os.reunion.creation', m.id, { participants: parts.length });
     return json({ ok: true, message: `Invitations envoyées à ${parts.length - 1} participant(s).` });
   }
@@ -50,8 +50,8 @@ export const POST: APIRoute = async ({ locals, request }) => {
   if (dec.length) await db.insert(osDecision).values(dec.map((t) => ({ text: `${t} (${m.title})`, status: me.prof === 'dg' ? 'Décidé' : 'En attente', source: m.title, by: me.id })));
   const acts = lines(b.actions);
   if (acts.length) await db.insert(osTask).values(acts.map((t) => ({ title: t, owner: me.id, country: me.country, domain: me.domain ?? 'prj', due: new Date(Date.now() + 7 * 864e5), createdBy: me.id })));
-  await notifyStaff(m.participants, `Compte rendu disponible : ${m.title}`, '/admin/agenda', people);
-  if (dec.length && me.prof !== 'dg') await notifyStaff(people.filter((s) => s.prof === 'dg' && s.active).map((s) => s.id), `Décision(s) à valider : ${m.title}`, '/admin/approbations', people);
+  await notifyStaff(m.participants, `Compte rendu disponible : ${m.title}`, '/os/agenda', people);
+  if (dec.length && me.prof !== 'dg') await notifyStaff(people.filter((s) => s.prof === 'dg' && s.active).map((s) => s.id), `Décision(s) à valider : ${m.title}`, '/os/approbations', people);
   await audit(me.userId, 'os.reunion.compte_rendu', m.id, { decisions: dec.length, actions: acts.length });
   return json({ ok: true, message: 'Compte rendu diffusé ; décisions ajoutées au registre, actions créées.' });
 };

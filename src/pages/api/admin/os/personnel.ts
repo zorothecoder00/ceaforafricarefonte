@@ -105,7 +105,7 @@ export const POST: APIRoute = async ({ locals, request, url }) => {
       onboarding: [false, false, false],
     });
     const inv: { url?: string; sent: boolean } = existing ? { sent: false } : await inviteLink(userId, url.origin, true);
-    if (b.managerId) await notifyStaff([b.managerId], `Nouveau collaborateur dans votre équipe : ${name}`, '/admin/annuaire');
+    if (b.managerId) await notifyStaff([b.managerId], `Nouveau collaborateur dans votre équipe : ${name}`, '/os/annuaire');
     await audit(actor, b.action === 'link' ? 'os.personnel.rattachement' : 'os.personnel.creation', id, { poste: b.poste, pays: b.country, compte: userId }, ip);
     const failed = !existing && !inv.sent && !!inv.url;
     return json({ ok: true, id, ...(failed ? { link: inv.url } : {}), message: `${name} ajouté·e (${id}, ${refT(b.poste)}) ; compte CEA OS ${existing ? 'rattaché : accès immédiat avec ses identifiants habituels' : inv.sent ? 'créé, accès envoyés par e-mail' : 'créé, mais l’e-mail d’invitation n’a pas pu partir : transmettez-lui ce lien vous-même (valable 7 jours)'}.` });

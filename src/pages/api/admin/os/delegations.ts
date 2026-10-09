@@ -36,7 +36,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const to = await staffById(b.to);
   if (!to || !to.active || to.id === me.id) return fail('Délégataire invalide.');
   await db.insert(osDelegation).values({ fromStaff: me.id, toStaff: to.id, until });
-  await notifyStaff([to.id], `Délégation reçue de ${me.name} jusqu'au ${dstr(until)}`, '/admin/approbations');
+  await notifyStaff([to.id], `Délégation reçue de ${me.name} jusqu'au ${dstr(until)}`, '/os/approbations');
   await audit(me.userId, 'os.delegation.creation', to.id, { jusqua: b.until });
   return json({ ok: true, message: 'Délégation active.' });
 };

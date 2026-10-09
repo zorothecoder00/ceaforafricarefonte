@@ -33,7 +33,7 @@ const monthName = new Date(`${period}-01T12:00:00`).toLocaleDateString('fr-FR', 
 ---
 <AdminLayout title="Comptabilité" lead={`SYSCOHADA révisé · écritures générées automatiquement par les autres modules · ${sc.label}`}>
   <Fragment slot="actions"><a class="btn ghost" href="/api/admin/os/export?quoi=ecritures">Exporter les écritures</a><button class="btn" type="button" data-dlg="dlg-od">Écriture manuelle</button></Fragment>
-  <div class="tabs">{T.map(([k, l]) => <a href={`/admin/compta?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
+  <div class="tabs">{T.map(([k, l]) => <a href={`/os/compta?t=${k}`} aria-selected={k === tab ? 'true' : 'false'}>{l}</a>)}</div>
   {tab === 'jr' && (
     <>
       <div class="tw">
@@ -59,7 +59,7 @@ const monthName = new Date(`${period}-01T12:00:00`).toLocaleDateString('fr-FR', 
       <table class="t">
         <thead><tr><th>Compte</th><th>Intitulé</th><th>Débit</th><th>Crédit</th><th>Solde débiteur</th><th>Solde créditeur</th></tr></thead>
         <tbody>
-          {ks.map((k) => { const s = b[k][0] - b[k][1]; return <tr class="click" onclick={`location.href='/admin/compta?t=gl&a=${k}'`}><td class="num"><b>{k}</b></td><td>{ACCOUNTS[k] ?? ''}</td><td class="num">{fmt(b[k][0])}</td><td class="num">{fmt(b[k][1])}</td><td class="num">{s > 0 ? fmt(s) : ''}</td><td class="num">{s < 0 ? fmt(-s) : ''}</td></tr>; })}
+          {ks.map((k) => { const s = b[k][0] - b[k][1]; return <tr class="click" onclick={`location.href='/os/compta?t=gl&a=${k}'`}><td class="num"><b>{k}</b></td><td>{ACCOUNTS[k] ?? ''}</td><td class="num">{fmt(b[k][0])}</td><td class="num">{fmt(b[k][1])}</td><td class="num">{s > 0 ? fmt(s) : ''}</td><td class="num">{s < 0 ? fmt(-s) : ''}</td></tr>; })}
           <tr><td colspan="2"><b>Totaux</b></td><td class="num"><b>{fmt(td)}</b></td><td class="num"><b>{fmt(tc)}</b></td><td colspan="2">{Math.round(td) === Math.round(tc) ? <span class="tag ok">Équilibrée</span> : <span class="tag bad">Déséquilibrée</span>}</td></tr>
         </tbody>
       </table>
@@ -67,7 +67,7 @@ const monthName = new Date(`${period}-01T12:00:00`).toLocaleDateString('fr-FR', 
   )}
   {tab === 'gl' && (
     <>
-      <div class="toolbar"><label class="f" for="ga" style="margin:0">Compte</label><select class="in" id="ga" data-go>{Object.keys(ACCOUNTS).map((k) => <option value={`/admin/compta?t=gl&a=${k}`} selected={k === acc}>{k} — {ACCOUNTS[k]}</option>)}</select></div>
+      <div class="toolbar"><label class="f" for="ga" style="margin:0">Compte</label><select class="in" id="ga" data-go>{Object.keys(ACCOUNTS).map((k) => <option value={`/os/compta?t=gl&a=${k}`} selected={k === acc}>{k} — {ACCOUNTS[k]}</option>)}</select></div>
       <div class="tw">
         <table class="t">
           <thead><tr><th>Date</th><th>Pièce</th><th>Libellé</th><th>Débit</th><th>Crédit</th><th>Solde</th></tr></thead>

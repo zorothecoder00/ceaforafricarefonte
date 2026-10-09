@@ -51,7 +51,7 @@ export const POST: APIRoute = async ({ locals, request, cookies, url }) => {
       const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(osTicket);
       const id = `TK-${311 + n}`;
       await db.insert(osTicket).values({ id, title: b.title, category: b.category, priority: b.priority, text: b.text, byStaff: me!.id, country: me!.country, domain: me!.domain ?? 'prj' });
-      await notifyStaff(people.filter((s) => s.prof === 'it' && s.active).map((s) => s.id), `Nouveau ticket ${b.priority} : ${b.title}`, '/admin/support', people);
+      await notifyStaff(people.filter((s) => s.prof === 'it' && s.active).map((s) => s.id), `Nouveau ticket ${b.priority} : ${b.title}`, '/os/support', people);
       await audit(actor, 'os.ticket.creation', id, { priorite: b.priority });
       return json({ ok: true, message: `Ticket ${id} créé ; l'équipe support est notifiée.` });
     }
@@ -60,7 +60,7 @@ export const POST: APIRoute = async ({ locals, request, cookies, url }) => {
       if (!t) return fail('Ticket introuvable.', 404);
       if (!isIT && !(canUse(MANAGERS, c) && sc.inScope({ country: t.country, domain: t.domain }))) return fail('Accès refusé.', 403);
       await db.update(osTicket).set({ status: b.status, updatedAt: new Date() }).where(eq(osTicket.id, t.id));
-      if (t.byStaff) await notifyStaff([t.byStaff], `Votre ticket ${t.id} : ${b.status}`, '/admin/support', people);
+      if (t.byStaff) await notifyStaff([t.byStaff], `Votre ticket ${t.id} : ${b.status}`, '/os/support', people);
       await audit(actor, 'os.ticket.statut', t.id, { statut: b.status });
       return json({ ok: true, message: 'Ticket mis à jour ; demandeur notifié.' });
     }

@@ -93,7 +93,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       const r = reconcile(st.rows, pays);
       const [row] = await db.insert(reconciliation).values({ provider: b.provider, fileName: b.fileName, periodFrom: b.from, periodTo: b.to, summary: r.summary, items: r.gaps, createdBy: u.id }).returning({ id: reconciliation.id });
       await audit(u.id, 'finance.rapprochement', row.id, r.summary, ip);
-      return json({ ok: true, message: `Rapprochement : ${r.summary.matched} paiement(s) concordant(s), ${r.gaps.length} écart(s).`, redirect: `/admin/finance?onglet=rapprochement&r=${row.id}` });
+      return json({ ok: true, message: `Rapprochement : ${r.summary.matched} paiement(s) concordant(s), ${r.gaps.length} écart(s).`, redirect: `/os/finance?onglet=rapprochement&r=${row.id}` });
     }
   }
 };

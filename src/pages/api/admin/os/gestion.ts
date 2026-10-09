@@ -199,7 +199,7 @@ export const POST: APIRoute = async ({ locals, request, cookies }) => {
       const q = s.qty - b.qty;
       await db.update(osStockItem).set({ qty: q }).where(eq(osStockItem.code, s.code));
       await db.insert(osStockMove).values({ code: s.code, type: 'Sortie', qty: b.qty, ref: b.dest || '—', by: me?.id ?? null });
-      if (q < s.min) { const ps = await allStaff(); await notifyStaff(ps.filter((x) => x.prof === 'fin' && x.active).map((x) => x.id), `Stock bas : ${s.label} (${q} ${s.unit})`, '/admin/achats?t=st', ps); }
+      if (q < s.min) { const ps = await allStaff(); await notifyStaff(ps.filter((x) => x.prof === 'fin' && x.active).map((x) => x.id), `Stock bas : ${s.label} (${q} ${s.unit})`, '/os/achats?t=st', ps); }
       await audit(actor, 'os.stock.sortie', s.code, { quantite: b.qty });
       return json({ ok: true, message: q < s.min ? 'Sortie enregistrée. Stock sous le seuil : la finance est alertée.' : 'Sortie enregistrée.' });
     }

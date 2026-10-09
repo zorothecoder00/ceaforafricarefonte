@@ -1,0 +1,52 @@
+---
+/* Choix de l'espace après la connexion : une personne qui a accès à plusieurs espaces choisit où entrer —
+   back-office du site (/admin), CEA OS (/os, progiciel interne) ou son espace membre. Une personne qui n'a accès qu'à un
+   espace y est envoyée directement. */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { isStaff, ROLE_LABEL, type Role } from '../lib/rbac';
+
+export const prerender = false;
+const u = Astro.locals.user;
+if (!u) return Astro.redirect('/connexion?retour=/choix-espace');
+const canBo = isStaff(u.roles);
+const canOs = !!u.staffId || u.roles.includes('admin') || u.roles.includes('direction');
+if (!canBo && !canOs) return Astro.redirect('/espace');
+if (canBo !== canOs && Astro.url.searchParams.get('voir') === null) return Astro.redirect(canOs ? '/os' : '/admin');
+const roles = u.roles.filter((r) => r !== 'membre').map((r) => ROLE_LABEL[r as Role] ?? r).join(' · ');
+const tfa = !u.twoFactorEnabled;
+const SPACES: [string, string, string, string[], boolean][] = [
+  ['/os', 'CEA OS', 'Le progiciel interne de CEA FOR AFRICA : votre poste de travail et les outils de gestion.', ['Mon espace : tâches, agenda, demandes, feuille de temps, paie', 'Pilotage : cockpit, approbations, OKR, risques', 'CRM, inscriptions, réseau territorial, domaines', 'Finance, comptabilité, achats, RH, recrutement, contrats'], canOs],
+  ['/admin', 'Back-office du site', "L'administration du site public et des services en ligne aux membres.", ['Contenus : CMS, textes, domaines, formulaires', 'Communauté : messages, modération, assemblées', 'Programmes, candidatures, projets, offres d’emploi', 'Kapital, paiements en ligne, comptes et droits'], canBo],
+  ['/espace', 'Mon espace membre', 'Votre compte de membre, comme tous les membres de la communauté.', ['Profil, carte de membre, demandes', 'Apprentissage, billets, candidatures', 'Messagerie, mentorat, projets'], true],
+];
+---
+<BaseLayout title="Choisir mon espace">
+  <section class="block">
+    <div class="wrap" style="max-width:1100px">
+      <h1 style="font-size:2rem;margin:0">Bonjour {u.name.split(' ')[0]}, où voulez-vous aller ?</h1>
+      <p class="muted" style="margin:6px 0 22px">{roles ? `Vos accès : ${roles}${u.staffId ? ' · collaborateur CEA OS' : ''}.` : 'Collaborateur CEA OS.'} Vous pourrez passer d'un espace à l'autre à tout moment depuis le menu.</p>
+      {tfa && <div class="panel" role="status" style="margin-bottom:18px;border-color:var(--gold)">Le back-office et CEA OS demandent la <b>double authentification</b> : elle vous sera proposée à l'entrée (environ 2 minutes, une seule fois).</div>}
+      <div class="spaces">
+        {SPACES.filter((s) => s[4]).map(([href, t, d, items], i) => (
+          <a class:list={['panel', 'space', { main: i < 2 }]} href={href}>
+            <span class="tag gold">{href}</span>
+            <h2>{t}</h2>
+            <p class="small">{d}</p>
+            <ul class="small">{items.map((x) => <li>{x}</li>)}</ul>
+            <span class="go">Entrer →</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+<style>
+  .spaces { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 16px; }
+  .space { display: flex; flex-direction: column; gap: 6px; text-decoration: none; color: var(--ink); transition: border-color .15s, transform .15s; }
+  .space:hover, .space:focus-visible { border-color: var(--gold); transform: translateY(-2px); }
+  .space h2 { margin: 6px 0 0; font-size: 1.35rem; }
+  .space ul { margin: 4px 0 8px; padding-left: 18px; color: var(--muted); }
+  .space .tag { align-self: flex-start; }
+  .space .go { margin-top: auto; font-weight: 700; color: var(--gold-ink); }
+  .space.main { border-width: 2px; }
+</style>

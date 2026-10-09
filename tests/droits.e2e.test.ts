@@ -21,7 +21,7 @@ describe.skipIf(!BASE)('Droits de bout en bout', () => {
   beforeAll(async () => { membre = await login('aicha@cea.demo'); });
 
   describe('visiteur', () => {
-    it.each(['/espace', '/espace/profil', '/admin', '/admin/audit'])('%s redirige vers la connexion', async (p) => {
+    it.each(['/espace', '/espace/profil', '/admin', '/admin/audit', '/os', '/os/rh'])('%s redirige vers la connexion', async (p) => {
       const r = await get(p);
       expect(r.status).toBe(302);
       expect(r.headers.get('location')).toMatch(/^\/connexion\?retour=/);
@@ -37,6 +37,7 @@ describe.skipIf(!BASE)('Droits de bout en bout', () => {
   describe('membre', () => {
     it('accède à son espace', async () => expect((await get('/espace', membre)).status).toBe(200));
     it('ne voit pas le back-office (403)', async () => expect((await get('/admin', membre)).status).toBe(403));
+    it('ne voit pas CEA OS (403)', async () => expect((await get('/os', membre)).status).toBe(403));
     it.each([
       { action: 'report.status', id: FAKE_ID, status: 'clos' },
       { action: 'kyc.review', id: FAKE_ID, status: 'verifie' },

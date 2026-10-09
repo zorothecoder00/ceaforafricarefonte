@@ -808,3 +808,9 @@ body.os .um-id .av{width:40px;height:40px;font-size:.85rem}
 .backbar a:hover{text-decoration:underline}
 .backbar button{background:none;border:0;color:var(--muted);cursor:pointer;font:inherit;padding:2px 6px;flex:none}
 html:not([data-themable]) #themeBtn{display:none}
+/* Deux espaces des équipes : CEA OS (bleu nuit) et back-office du site (bleu nuit teinté d'or) ; bascule de l'un à l'autre */
+body.os .os-side.bo{background:#1A1A2E;background:linear-gradient(180deg,#1C1830,#121126)}
+body.os .os-side.bo .os-logo small{color:#8A6416}
+.os-switch{display:block;margin:0 0 10px;padding:7px 10px;border:1px dashed #3A5A7E;border-radius:8px;color:#E2B65A;text-decoration:none;font-size:.8rem;font-weight:700;text-align:center}
+.os-switch:hover{border-style:solid;border-color:var(--gold);color:#fff}
+.os-scope.bo-tag b{color:var(--gold-ink)}

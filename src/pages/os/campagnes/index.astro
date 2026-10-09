@@ -29,10 +29,10 @@ const canC = can(me.roles, 'campagnes', 'C');
     </form>
   )}
   <div class="panel scroll-x">
-    {rows.length === 0 ? <p class="small muted" style="margin:0">Aucune campagne. Préparez d'abord un <a href="/admin/crm?vue=segments">segment</a>.</p> : (
+    {rows.length === 0 ? <p class="small muted" style="margin:0">Aucune campagne. Préparez d'abord un <a href="/os/crm?vue=segments">segment</a>.</p> : (
       <table class="t"><thead><tr><th>Campagne</th><th>Canal</th><th>Segment</th><th>État</th><th>Envoyés</th><th>Ouverture</th></tr></thead>
         <tbody>{rows.map(({ c, seg, sent, opened }) => (
-          <tr><td><a href={`/admin/campagnes/${c.id}`}><b>{c.name}</b></a><div class="xs muted">{c.purpose === 'service' ? 'Service' : 'Marketing'}{c.splitB > 0 ? ' · test A/B' : ''}</div></td>
+          <tr><td><a href={`/os/campagnes/${c.id}`}><b>{c.name}</b></a><div class="xs muted">{c.purpose === 'service' ? 'Service' : 'Marketing'}{c.splitB > 0 ? ' · test A/B' : ''}</div></td>
             <td class="small">{CHANNEL_LABEL[c.channel]}</td><td class="small">{seg ?? '—'}</td>
             <td><span class={`tag ${STATUS_TONE[c.status]}`}>{STATUS_LABEL[c.status]}</span>{c.status === 'programmee' && c.scheduledAt && <div class="xs muted">{c.scheduledAt.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</div>}</td>
             <td class="small">{sent}</td><td class="small">{c.channel === 'email' && sent ? `${Math.round((opened / sent) * 100)} %` : '—'}</td></tr>

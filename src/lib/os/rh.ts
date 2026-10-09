@@ -26,7 +26,7 @@ export async function runPayroll(month: string, people: Person[], by: string): P
   await db.insert(osPayroll).values({ month, lines, by });
   const sum = (k: keyof PayLine) => lines.reduce((a, l) => a + (l[k] as number), 0);
   if (lines.length) await post('PA', `Paie ${month}`, [['661', sum('brut'), 0], ['664', sum('cp'), 0], ['422', 0, sum('net')], ['431', 0, sum('cs') + sum('cp')], ['447', 0, sum('imp')]], { country: 'TG', domain: 'prj', ref: `PAIE-${month}`, by });
-  await notifyStaff(lines.map((l) => l.id), `Votre bulletin de paie de ${month} est disponible.`, '/admin/moi/paie', people);
+  await notifyStaff(lines.map((l) => l.id), `Votre bulletin de paie de ${month} est disponible.`, '/os/moi/paie', people);
   return lines;
 }
 
@@ -53,11 +53,11 @@ export async function hire(x: Recruit, c: Candidate, salary: number, people: Per
   });
   const inv = userId && !existing ? await inviteLink(userId, origin, true).catch(() => null) : { sent: true };
   // Invitation non partie : les RH la renvoient (ou copient le lien) depuis RH › Effectifs
-  if (!inv?.sent) await notifyStaff(people.filter((s) => s.prof === 'rh' && s.active).map((s) => s.id), `L'invitation de ${c.name} (${id}) n'a pas pu partir par e-mail : utilisez « Invitation » sur sa fiche dans RH › Effectifs`, '/admin/rh', people);
+  if (!inv?.sent) await notifyStaff(people.filter((s) => s.prof === 'rh' && s.active).map((s) => s.id), `L'invitation de ${c.name} (${id}) n'a pas pu partir par e-mail : utilisez « Invitation » sur sa fiche dans RH › Effectifs`, '/os/rh', people);
   await db.update(osRecruit).set({ status: 'Pourvu' }).where(eq(osRecruit.id, x.id));
   await db.update(osCandidate).set({ status: 'Embauché·e' }).where(eq(osCandidate.id, c.id));
-  if (x.byStaff) await notifyStaff([x.byStaff], `Arrivée de ${c.name} (${x.poste}) : compte CEA OS créé avec le profil du poste`, '/admin/equipe', people);
-  await notifyStaff(people.filter((s) => s.prof === 'it' && s.active).map((s) => s.id), `Préparer le matériel de ${c.name}`, '/admin/organisation', people);
+  if (x.byStaff) await notifyStaff([x.byStaff], `Arrivée de ${c.name} (${x.poste}) : compte CEA OS créé avec le profil du poste`, '/os/equipe', people);
+  await notifyStaff(people.filter((s) => s.prof === 'it' && s.active).map((s) => s.id), `Préparer le matériel de ${c.name}`, '/os/organisation', people);
   await audit(actor, 'os.personnel.creation', id, { embauche: x.id, poste: x.poste, profil: profOf(x.poste) });
   return { id, name: c.name, poste: refT(x.poste) };
 }

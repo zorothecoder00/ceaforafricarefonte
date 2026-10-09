@@ -42,11 +42,20 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   if (path.startsWith('/espace')) {
     if (!user) return login('espace');
   }
+  // Deux espaces des équipes : back-office du site (/admin, rôles de la matrice des droits) et CEA OS (/os, progiciel interne,
+  // collaborateurs ayant une fiche personnel et direction). Les anciennes adresses des modules CEA OS sous /admin y renvoient.
+  const legacyOs = path.match(OS_LEGACY);
+  if (legacyOs) return ctx.redirect(path.replace(/^\/admin/, '/os') + ctx.url.search, 301);
+  const osUser = !!user && (!!user.staffId || user.roles.includes('admin') || user.roles.includes('direction'));
   if (path.startsWith('/admin')) {
     if (!user) return login('admin');
-    // Équipes CEA : rôle du back-office, ou collaborateur dont la fiche personnel (CEA OS) est active
-    if (!isStaff(user.roles) && !user.staffId) return new Response('Accès réservé aux équipes CEA.', { status: 403 });
-    if ((needs2fa(user.roles) || user.staffId) && !user.twoFactorEnabled && !path.startsWith('/admin/securite')) return ctx.redirect('/espace/securite?motif=2fa');
+    if (!isStaff(user.roles)) return osUser ? ctx.redirect('/os') : new Response('Accès réservé aux équipes CEA.', { status: 403 });
+    if (needs2fa(user.roles) && !user.twoFactorEnabled) return ctx.redirect('/espace/securite?motif=2fa');
+  }
+  if (path === '/os' || path.startsWith('/os/')) {
+    if (!user) return login('os');
+    if (!osUser) return isStaff(user.roles) ? ctx.redirect('/admin') : new Response('CEA OS est réservé aux collaborateurs de CEA FOR AFRICA.', { status: 403 });
+    if (!user.twoFactorEnabled) return ctx.redirect('/espace/securite?motif=2fa');
   }
 
   let res = await next();
@@ -55,9 +64,12 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   return res;
 });
 
+/** Modules de CEA OS autrefois servis sous /admin (déplacés sous /os le 2026-10-09). */
+const OS_LEGACY = /^\/admin\/(achats|administration|agenda|annuaire|approbations|campagnes|classeur|cockpit|compta|contrats|crm|dom|equipe|finance|impact|inscriptions|kyc|messagerie|moi|okr|organisation|poste|processus|recrutement|reseau|rh|risques|support|taches|tresorerie)(\/|$)/;
+
 /** Textes et images modifiés depuis le back-office ; mode édition (?edition=1) pour les éditeurs et administrateurs. */
 async function siteText(url: URL, path: string, user: CurrentUser | null | undefined, res: Response): Promise<Response> {
-  const inside = path.startsWith('/admin') || path.startsWith('/espace');
+  const inside = path.startsWith('/admin') || path.startsWith('/os/') || path === '/os' || path.startsWith('/espace');
   const edit = !inside && url.searchParams.has('edition') && canEditSite(user);
   const all = await loadOverrides();
   const scope = pageScope(url.pathname);

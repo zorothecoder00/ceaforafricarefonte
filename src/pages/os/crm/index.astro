@@ -66,7 +66,7 @@ const describe = (r: Rules) => [
 const sum = (s: string) => deals.filter((x) => x.d.stage === s).reduce((n, x) => n + (x.d.amountXof ?? 0), 0);
 ---
 <AdminLayout title="CRM 360°" lead={scope ? `Vos pays : ${scope.map(country).join(', ') || 'aucun'}.` : 'Contacts, organisations, partenariats et segments. Chaque action est tracée.'} obj="crm">
-  <nav class="subnav" style="margin:0 0 14px">{(Object.keys(views) as V[]).map((v) => <a href={`?vue=${v}`} aria-current={v === view ? 'page' : undefined}>{views[v]}</a>)}<a href="/admin/campagnes">Campagnes →</a></nav>
+  <nav class="subnav" style="margin:0 0 14px">{(Object.keys(views) as V[]).map((v) => <a href={`?vue=${v}`} aria-current={v === view ? 'page' : undefined}>{views[v]}</a>)}<a href="/os/campagnes">Campagnes →</a></nav>
 
   {view === 'contacts' && (
     <>
@@ -81,7 +81,7 @@ const sum = (s: string) => deals.filter((x) => x.d.stage === s).reduce((n, x) =>
         {contacts.length === 0 ? <p class="small muted" style="margin:0">Aucun contact.</p> : (
           <table class="t"><thead><tr><th>Nom</th><th>Pays</th><th>Type</th><th>Marketing</th></tr></thead>
             <tbody>{contacts.map((c) => (
-              <tr><td><a href={`/admin/crm/personne/${c.key}`}><b>{c.name}</b></a><div class="xs muted">{[c.email, c.detail].filter(Boolean).join(' · ')}</div></td>
+              <tr><td><a href={`/os/crm/personne/${c.key}`}><b>{c.name}</b></a><div class="xs muted">{[c.email, c.detail].filter(Boolean).join(' · ')}</div></td>
                 <td class="small">{c.country ? country(c.country) : '—'}</td><td><span class={`tag ${c.kind === 'Membre' ? 'info' : ''}`}>{c.kind}</span></td>
                 <td class="small">{c.consent === null ? <span class="xs muted">voir fiche</span> : c.consent ? '✓' : '—'}</td></tr>
             ))}</tbody></table>
@@ -118,7 +118,7 @@ const sum = (s: string) => deals.filter((x) => x.d.stage === s).reduce((n, x) =>
       <div class="panel scroll-x">
         {orgs.length === 0 ? <p class="small muted" style="margin:0">Aucune organisation.</p> : (
           <table class="t"><thead><tr><th>Organisation</th><th>Type</th><th>Pays</th><th>Contacts</th><th>Opportunités ouvertes</th></tr></thead>
-            <tbody>{orgs.map(({ o, n, deals: d }) => <tr><td><a href={`/admin/crm/organisation/${o.id}`}><b>{o.name}</b></a>{o.sector && <div class="xs muted">{o.sector}</div>}</td><td class="small">{ORG_KIND_LABEL[o.kind]}</td><td class="small">{o.country ? country(o.country) : '—'}</td><td class="small">{n}</td><td class="small">{d}</td></tr>)}</tbody></table>
+            <tbody>{orgs.map(({ o, n, deals: d }) => <tr><td><a href={`/os/crm/organisation/${o.id}`}><b>{o.name}</b></a>{o.sector && <div class="xs muted">{o.sector}</div>}</td><td class="small">{ORG_KIND_LABEL[o.kind]}</td><td class="small">{o.country ? country(o.country) : '—'}</td><td class="small">{n}</td><td class="small">{d}</td></tr>)}</tbody></table>
         )}
       </div>
       {canC && (
@@ -147,7 +147,7 @@ const sum = (s: string) => deals.filter((x) => x.d.stage === s).reduce((n, x) =>
             <b class="small">{STAGE_LABEL[s]}</b> <span class="xs muted">({deals.filter((x) => x.d.stage === s).length}) · <Money xof={sum(s)} /></span>
             {deals.filter((x) => x.d.stage === s).map(({ d, org }) => (
               <div class="panel" style="padding:8px;margin-top:8px">
-                <a href={`/admin/crm/organisation/${d.orgId}`} class="small"><b>{org}</b></a>
+                <a href={`/os/crm/organisation/${d.orgId}`} class="small"><b>{org}</b></a>
                 <div class="xs">{d.title}</div>
                 <div class="xs muted">{DEAL_KIND_LABEL[d.kind] ?? d.kind}{d.amountXof ? <> · <Money xof={d.amountXof} /></> : ''}{d.expectedOn ? ` · ${new Date(d.expectedOn).toLocaleDateString('fr-FR')}` : ''}</div>
                 {canM && <select class="in" style="margin-top:6px;padding:4px 6px;font-size:.8rem" aria-label="Étape" data-deal={d.id}>{STAGES.map((x) => <option value={x} selected={x === d.stage}>{STAGE_LABEL[x]}</option>)}</select>}

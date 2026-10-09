@@ -60,7 +60,7 @@ export const POST: APIRoute = async ({ locals, request, cookies }) => {
   await db.insert(osReport).values({ country: b.country, period, comment: b.comment, status: submitted ? 'Soumis' : 'Brouillon', ...(submitted ? { submittedBy: me.id, submittedAt: new Date() } : {}) })
     .onConflictDoUpdate({ target: [osReport.country, osReport.period], set: { comment: b.comment, status: submitted ? 'Soumis' : 'Brouillon', ...(submitted ? { submittedBy: me.id, submittedAt: new Date() } : {}) } });
   if (submitted) {
-    await notifyStaff(people.filter((s) => s.prof === 'dirreg' && s.reg === regOf(b.country) && s.active).map((s) => s.id), `Rapport mensuel soumis : ${pn(b.country)}`, `/admin/reseau/rapport/${b.country}`, people);
+    await notifyStaff(people.filter((s) => s.prof === 'dirreg' && s.reg === regOf(b.country) && s.active).map((s) => s.id), `Rapport mensuel soumis : ${pn(b.country)}`, `/os/reseau/rapport/${b.country}`, people);
     await audit(me.userId, 'os.rapport_mensuel.soumission', b.country, { periode: period });
   }
   return json({ ok: true, message: submitted ? 'Rapport soumis au bureau régional.' : 'Enregistré.' });

@@ -66,78 +66,96 @@ export function canUse(spec: string, c: Pick<OsCtx, 'me' | 'prof' | 'superuser'>
 export type NavItem = { href: string; label: string; spec?: string; obj?: Obj; dom?: Dom; staff?: boolean };
 export const MODS: [string, NavItem[]][] = [
   ['Mon espace', [
-    { href: '/admin', label: 'Accueil' },
-    { href: '/admin/poste', label: 'Mon poste et mes indicateurs', spec: ALL, staff: true },
-    { href: '/admin/moi', label: 'Mes demandes', spec: ALL, staff: true },
-    { href: '/admin/moi/temps', label: 'Ma feuille de temps', spec: ALL, staff: true },
-    { href: '/admin/moi/paie', label: 'Mes bulletins de paie', spec: ALL, staff: true },
-    { href: '/admin/messagerie', label: 'Messagerie', spec: ALL, staff: true },
-    { href: '/admin/agenda', label: 'Agenda et réunions', spec: ALL, staff: true },
-    { href: '/admin/taches', label: 'Tâches', spec: ALL, staff: true },
-    { href: '/admin/equipe', label: 'Mon équipe', spec: MANAGERS + ' jur conf com it', staff: true },
-    { href: '/admin/annuaire', label: 'Annuaire du personnel', spec: ALL },
+    { href: '/os', label: 'Accueil' },
+    { href: '/os/poste', label: 'Mon poste et mes indicateurs', spec: ALL, staff: true },
+    { href: '/os/moi', label: 'Mes demandes', spec: ALL, staff: true },
+    { href: '/os/moi/temps', label: 'Ma feuille de temps', spec: ALL, staff: true },
+    { href: '/os/moi/paie', label: 'Mes bulletins de paie', spec: ALL, staff: true },
+    { href: '/os/messagerie', label: 'Messagerie', spec: ALL, staff: true },
+    { href: '/os/agenda', label: 'Agenda et réunions', spec: ALL, staff: true },
+    { href: '/os/taches', label: 'Tâches', spec: ALL, staff: true },
+    { href: '/os/equipe', label: 'Mon équipe', spec: MANAGERS + ' jur conf com it', staff: true },
+    { href: '/os/annuaire', label: 'Annuaire du personnel', spec: ALL },
   ]],
   ['Pilotage', [
-    { href: '/admin/cockpit', label: 'Cockpit', spec: MANAGERS },
-    { href: '/admin/approbations', label: 'Approbations', spec: ALL },
-    { href: '/admin/okr', label: 'Objectifs (OKR)', spec: ALL },
-    { href: '/admin/impact', label: 'CEA Impact Lab', spec: 'dg adg ops chef dirreg rep com agent:prj' },
-    { href: '/admin/risques', label: 'Risques et audit interne', spec: 'dg ops conf jur chef dirreg' },
-    { href: '/admin/rapports', label: 'Rapports', obj: 'rapports' },
+    { href: '/os/cockpit', label: 'Cockpit', spec: MANAGERS },
+    { href: '/os/approbations', label: 'Approbations', spec: ALL },
+    { href: '/os/okr', label: 'Objectifs (OKR)', spec: ALL },
+    { href: '/os/impact', label: 'CEA Impact Lab', spec: 'dg adg ops chef dirreg rep com agent:prj' },
+    { href: '/os/risques', label: 'Risques et audit interne', spec: 'dg ops conf jur chef dirreg' },
   ]],
   ['Relations', [
-    { href: '/admin/crm', label: 'Contacts (CRM 360°)', obj: 'crm' },
-    { href: '/admin/inscriptions', label: 'Membres et inscriptions', spec: 'dg dirreg rep agent conf com' },
-    { href: '/admin/reseau', label: 'Réseau territorial', spec: 'dg adg dirreg rep' },
-    { href: '/admin/campagnes', label: 'Campagnes et contenus', obj: 'campagnes' },
-    { href: '/admin/messages', label: 'Messages et signalements', obj: 'messages_contact' },
+    { href: '/os/crm', label: 'Contacts (CRM 360°)', obj: 'crm' },
+    { href: '/os/inscriptions', label: 'Membres et inscriptions', spec: 'dg dirreg rep agent conf com' },
+    { href: '/os/reseau', label: 'Réseau territorial', spec: 'dg adg dirreg rep' },
+    { href: '/os/campagnes', label: 'Campagnes', obj: 'campagnes' },
   ]],
-  ["Domaines d'intervention", DK.map((d) => ({ href: `/admin/dom/${d}`, label: DOM[d].n, spec: domSpec(d), dom: d }))],
+  ["Domaines d'intervention", DK.map((d) => ({ href: `/os/dom/${d}`, label: DOM[d].n, spec: domSpec(d), dom: d }))],
   ['Gestion', [
-    { href: '/admin/tresorerie', label: 'Finance et trésorerie', spec: 'dg fin dirreg rep chef' },
-    { href: '/admin/compta', label: 'Comptabilité', spec: 'dg fin' },
-    { href: '/admin/achats', label: 'Achats et stocks', spec: 'dg fin chef dirreg rep cond' },
-    { href: '/admin/rh', label: 'Ressources humaines et paie', spec: 'dg rh' },
-    { href: '/admin/recrutement', label: 'Recrutement', spec: 'dg rh ops' },
-    { href: '/admin/contrats', label: 'Contrats et juridique', spec: 'dg jur fin chef' },
-    { href: '/admin/finance', label: 'Factures, avoirs et exports', obj: 'paiements' },
-    { href: '/admin/paiements', label: 'Paiements en ligne', obj: 'paiements' },
+    { href: '/os/tresorerie', label: 'Finance et trésorerie', spec: 'dg fin dirreg rep chef' },
+    { href: '/os/compta', label: 'Comptabilité', spec: 'dg fin' },
+    { href: '/os/finance', label: 'Factures, avoirs et exports', obj: 'paiements' },
+    { href: '/os/achats', label: 'Achats et stocks', spec: 'dg fin chef dirreg rep cond' },
+    { href: '/os/rh', label: 'Ressources humaines et paie', spec: 'dg rh' },
+    { href: '/os/recrutement', label: 'Recrutement', spec: 'dg rh ops' },
+    { href: '/os/contrats', label: 'Contrats et juridique', spec: 'dg jur fin chef' },
   ]],
   ['Support et administration', [
-    { href: '/admin/support', label: 'Support', spec: ALL },
-    { href: '/admin/classeur', label: 'Documents', spec: ALL },
-    { href: '/admin/organisation', label: 'Organisation et postes', spec: 'dg adg ops rh it conf' },
-    { href: '/admin/processus', label: 'Processus et seuils', spec: 'dg ops it conf' },
-    { href: '/admin/kyc', label: 'Conformité KYC', spec: 'dg conf analyste' },
-    { href: '/admin/administration', label: 'Administration', spec: 'dg it conf' },
-    { href: '/admin/membres', label: 'Comptes et rôles', obj: 'membres' },
-    { href: '/admin/droits', label: 'Matrice des droits', obj: 'contenus' },
-    { href: '/admin/audit', label: "Journal d'audit", obj: 'journal_audit' },
-    { href: '/admin/parametrage', label: 'Paramétrage', obj: 'parametres' },
-  ]],
-  ['Outils du site', [
-    { href: '/admin/kapital', label: 'Dossiers Kapital (fiches)', obj: 'dossier_kapital' },
-    { href: '/admin/documents', label: 'Gestion documentaire (dossiers)', obj: 'documents' },
-    { href: '/admin/conformite', label: 'Pièces et contrôles KYC', obj: 'pieces_kyc' },
-    { href: '/admin/projets', label: 'Projets des entrepreneurs', obj: 'fiche_projet' },
-    { href: '/admin/emplois', label: "Offres d'emploi (modération)", obj: 'offre_emploi' },
-    { href: '/admin/programmes', label: 'Programmes et cohortes', obj: 'programmes' },
-    { href: '/admin/candidatures', label: 'Candidatures aux programmes', obj: 'candidature' },
-    { href: '/admin/cms', label: 'CMS éditorial', obj: 'contenus' },
-    { href: '/admin/textes', label: 'Textes du site', obj: 'contenus' },
-    { href: '/admin/domaines', label: "Domaines d'intervention (site)", obj: 'parametres' },
-    { href: '/admin/contenus', label: 'Contenus et voix', obj: 'contenus' },
-    { href: '/admin/moderation', label: 'Modération', obj: 'moderation' },
-    { href: '/admin/assemblees', label: 'Assemblées et votes', obj: 'journal_audit' },
-    { href: '/admin/formulaires', label: 'Formulaires', obj: 'formulaires' },
-    { href: '/admin/automatisations', label: 'Automatisations', obj: 'automatisations' },
-    { href: '/admin/interrupteurs', label: 'Interrupteurs par pays', obj: 'interrupteurs' },
+    { href: '/os/support', label: 'Support', spec: ALL },
+    { href: '/os/classeur', label: 'Documents', spec: ALL },
+    { href: '/os/organisation', label: 'Organisation et postes', spec: 'dg adg ops rh it conf' },
+    { href: '/os/processus', label: 'Processus et seuils', spec: 'dg ops it conf' },
+    { href: '/os/kyc', label: 'Conformité KYC', spec: 'dg conf analyste' },
+    { href: '/os/administration', label: 'Administration', spec: 'dg it conf' },
   ]],
 ];
+/** Back-office du site (/admin) : administration du site public et des services en ligne, gardée par la matrice des droits. */
+export const BO_MODS: [string, NavItem[]][] = [
+  ['Pilotage', [
+    { href: '/admin', label: 'Tableau de bord' },
+    { href: '/admin/rapports', label: 'Rapports', obj: 'rapports' },
+  ]],
+  ['Contenus du site', [
+    { href: '/admin/cms', label: 'CMS éditorial', obj: 'contenus' },
+    { href: '/admin/textes', label: 'Textes du site', obj: 'contenus' },
+    { href: '/admin/domaines', label: "Domaines d'intervention", obj: 'parametres' },
+    { href: '/admin/contenus', label: 'Contenus et voix', obj: 'contenus' },
+    { href: '/admin/formulaires', label: 'Formulaires', obj: 'formulaires' },
+  ]],
+  ['Communauté', [
+    { href: '/admin/messages', label: 'Messages et signalements', obj: 'messages_contact' },
+    { href: '/admin/moderation', label: 'Modération', obj: 'moderation' },
+    { href: '/admin/assemblees', label: 'Assemblées et votes', obj: 'journal_audit' },
+  ]],
+  ['Programmes et opportunités', [
+    { href: '/admin/programmes', label: 'Programmes et cohortes', obj: 'programmes' },
+    { href: '/admin/candidatures', label: 'Candidatures aux programmes', obj: 'candidature' },
+    { href: '/admin/projets', label: 'Projets des entrepreneurs', obj: 'fiche_projet' },
+    { href: '/admin/emplois', label: "Offres d'emploi", obj: 'offre_emploi' },
+  ]],
+  ['CEA Kapital Invest', [
+    { href: '/admin/kapital', label: 'Dossiers Kapital', obj: 'dossier_kapital' },
+    { href: '/admin/conformite', label: 'Pièces et contrôles KYC', obj: 'pieces_kyc' },
+    { href: '/admin/documents', label: 'Gestion documentaire', obj: 'documents' },
+  ]],
+  ['Paiements', [
+    { href: '/admin/paiements', label: 'Paiements en ligne', obj: 'paiements' },
+  ]],
+  ['Administration du site', [
+    { href: '/admin/membres', label: 'Comptes et rôles', obj: 'membres' },
+    { href: '/admin/droits', label: 'Matrice des droits', obj: 'contenus' },
+    { href: '/admin/automatisations', label: 'Automatisations', obj: 'automatisations' },
+    { href: '/admin/interrupteurs', label: 'Interrupteurs par pays', obj: 'interrupteurs' },
+    { href: '/admin/parametrage', label: 'Paramétrage', obj: 'parametres' },
+    { href: '/admin/audit', label: "Journal d'audit", obj: 'journal_audit' },
+  ]],
+];
+/** Espace de travail d'un chemin : CEA OS (/os) ou back-office du site (/admin). */
+export const spaceOf = (path: string): 'os' | 'bo' => (path === '/os' || path.startsWith('/os/') ? 'os' : 'bo');
 /** Module (entrée du menu) d'un chemin : l'entrée la plus spécifique dont le chemin préfixe celui de la page. */
 export function moduleOf(path: string): NavItem | undefined {
-  const all = MODS.flatMap(([, it]) => it);
-  return all.filter((i) => path === i.href || (i.href !== '/admin' && path.startsWith(i.href + '/'))).sort((a, b) => b.href.length - a.href.length)[0];
+  const all = (spaceOf(path) === 'os' ? MODS : BO_MODS).flatMap(([, it]) => it);
+  return all.filter((i) => path === i.href || (i.href !== '/admin' && i.href !== '/os' && path.startsWith(i.href + '/'))).sort((a, b) => b.href.length - a.href.length)[0];
 }
 
 /* ===== Périmètre ===== */

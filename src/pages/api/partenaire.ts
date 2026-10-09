@@ -22,6 +22,6 @@ export const POST: APIRoute = async ({ locals, request }) => {
   if (l.l.acknowledgedAt) return json({ ok: true, message: 'Réception déjà confirmée.' });
   await db.update(partnerDeliverable).set({ acknowledgedAt: new Date(), acknowledgedBy: u.id }).where(eq(partnerDeliverable.id, l.l.id));
   await audit(u.id, 'partenaire.livrable.reception', l.l.id, {}, clientIp(request));
-  if (l.owner) await notify(l.owner, `${l.org} a confirmé la réception du livrable « ${l.l.title} ».`, `/admin/crm/organisation/${l.orgId}`);
+  if (l.owner) await notify(l.owner, `${l.org} a confirmé la réception du livrable « ${l.l.title} ».`, `/os/crm/organisation/${l.orgId}`);
   return json({ ok: true, message: 'Réception confirmée. Merci !' });
 };

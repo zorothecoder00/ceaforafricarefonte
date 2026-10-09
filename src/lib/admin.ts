@@ -1,59 +1,9 @@
-/* Back-office « CEA OS » (CDC §11) : navigation selon la matrice des droits (§18), gardes d'API et portée par pays. */
+/* Back-office du site (CDC §11) : gardes d'API selon la matrice des droits (§18) et portée par pays. */
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { db } from './db';
 import { userRole } from '../db/schema/app';
 import { can, scope, needs2fa, type Obj, type Action } from './rbac';
 import { fail, type CurrentUser } from './session';
-
-export const ADMIN_NAV: [string, string, Obj][] = [
-  ['/admin', 'Tableau de bord', 'contenus'],
-  ['/admin/messages', 'Messages et signalements', 'messages_contact'],
-  ['/admin/moderation', 'Modération', 'moderation'],
-  ['/admin/textes', 'Administration système', 'contenus'],
-  ['/admin/domaines', "Domaines d'intervention", 'parametres'],
-  ['/admin/emplois', "Offres d'emploi", 'offre_emploi'],
-  ['/admin/programmes', 'Programmes et cohortes', 'programmes'],
-  ['/admin/candidatures', 'Candidatures programmes', 'candidature'],
-  ['/admin/projets', 'Projets', 'fiche_projet'],
-  ['/admin/kapital', 'Pipeline Kapital', 'dossier_kapital'],
-  ['/admin/conformite', 'Conformité et KYC', 'pieces_kyc'],
-  ['/admin/membres', 'Membres et rôles', 'membres'],
-  ['/admin/droits', 'Matrice des droits', 'contenus'],
-  ['/admin/interrupteurs', 'Interrupteurs par pays', 'interrupteurs'],
-  ['/admin/paiements', 'Paiements', 'paiements'],
-  ['/admin/finance', 'Factures et comptabilité', 'paiements'],
-  ['/admin/rapports', 'Rapports', 'rapports'],
-  ['/admin/formulaires', 'Formulaires', 'formulaires'],
-  ['/admin/automatisations', 'Automatisations', 'automatisations'],
-  ['/admin/documents', 'Documents', 'documents'],
-  ['/admin/parametrage', 'Paramétrage', 'parametres'],
-  ['/admin/crm', 'CRM 360°', 'crm'],
-  ['/admin/campagnes', 'Campagnes', 'campagnes'],
-  ['/admin/cms', 'CMS éditorial', 'contenus'],
-  ['/admin/contenus', 'Contenus et voix', 'contenus'],
-  ['/admin/assemblees', 'Assemblées et votes', 'journal_audit'],
-  ['/admin/audit', "Journal d'audit", 'journal_audit'],
-];
-
-/** Rubriques du menu latéral de CEA OS (comme le prototype : Pilotage, Relations…) ; une entrée non classée va dans « Autres ». */
-export const ADMIN_GROUPS: [string, string[]][] = [
-  ['Pilotage', ['/admin', '/admin/rapports', '/admin/audit']],
-  ['Relations', ['/admin/messages', '/admin/crm', '/admin/membres', '/admin/campagnes']],
-  ['Contenus et communauté', ['/admin/moderation', '/admin/textes', '/admin/domaines', '/admin/cms', '/admin/contenus', '/admin/assemblees']],
-  ['Programmes et talents', ['/admin/programmes', '/admin/candidatures', '/admin/projets', '/admin/emplois']],
-  ['CEA Kapital Invest', ['/admin/kapital', '/admin/conformite']],
-  ['Gestion', ['/admin/paiements', '/admin/finance', '/admin/formulaires', '/admin/automatisations', '/admin/documents']],
-  ['Administration', ['/admin/parametrage', '/admin/droits', '/admin/interrupteurs']],
-];
-
-/** Icône de chaque entrée du menu du back-office (noms de src/data ICON). */
-export const ADMIN_ICON: Record<string, string> = {
-  '/admin': 'home', '/admin/messages': 'mail', '/admin/moderation': 'shield', '/admin/emplois': 'job', '/admin/programmes': 'rocket',
-  '/admin/candidatures': 'check', '/admin/projets': 'proj', '/admin/kapital': 'fund', '/admin/conformite': 'lock', '/admin/membres': 'users',
-  '/admin/droits': 'key', '/admin/interrupteurs': 'toggle', '/admin/paiements': 'bank', '/admin/finance': 'invoice', '/admin/rapports': 'chart',
-  '/admin/formulaires': 'form', '/admin/automatisations': 'bolt', '/admin/documents': 'folder', '/admin/parametrage': 'gear', '/admin/crm': 'circle',
-  '/admin/campagnes': 'megaphone', '/admin/textes': 'edit', '/admin/domaines': 'cap', '/admin/cms': 'press', '/admin/contenus': 'voice', '/admin/assemblees': 'gov', '/admin/audit': 'list',
-};
 
 /** Garde d'API du back-office : droit (objet, action) + double authentification pour les rôles sensibles. */
 export function staffApi(user: CurrentUser | null | undefined, obj: Obj, action: Action): CurrentUser | Response {

@@ -63,7 +63,7 @@ const fmt = (d: Date) => d.toLocaleString('fr-FR', { dateStyle: 'short', timeSty
     {members.length === 0 ? <p class="small muted" style="margin:0">Aucun participant.</p> : (
       <table class="t"><thead><tr><th>Participant</th><th>Statut</th><th>Assiduité</th><th>Jalons</th><th>Dernier suivi</th></tr></thead>
         <tbody>{members.map(({ m, name, email }) => { const a = assid(m.userId), f = lastFollow(m.userId); return (
-          <tr><td><a href={`/admin/crm/personne/u-${m.userId}`}><b>{name}</b></a><div class="xs muted">{email}</div>{m.status === 'actif' && atRisk(m.userId) && <span class="tag gold">risque d'abandon</span>}</td>
+          <tr><td><a href={`/os/crm/personne/u-${m.userId}`}><b>{name}</b></a><div class="xs muted">{email}</div>{m.status === 'actif' && atRisk(m.userId) && <span class="tag gold">risque d'abandon</span>}</td>
             <td>{canM ? <select class="in" style="width:auto;padding:4px 6px;font-size:.85rem" data-member={m.userId} aria-label={`Statut de ${name}`}>{Object.entries(MEMBER_STATUS_LABEL).map(([k, l]) => <option value={k} selected={k === m.status}>{l}</option>)}</select> : MEMBER_STATUS_LABEL[m.status]}{m.reason && <div class="xs muted">{m.reason}</div>}</td>
             <td class="small">{a === null ? '—' : `${a} %`}</td><td class="small">{reached(m.userId)} / {stones.length}{late(m.userId) ? <span class="xs muted"> ({late(m.userId)} en retard)</span> : ''}</td>
             <td class="small">{f ? <>{f.monthsAfter} mois : {f.employees ?? '—'} emplois{f.fundsRaisedXof ? <>, <Money xof={f.fundsRaisedXof} /></> : ''}</> : '—'}</td></tr>

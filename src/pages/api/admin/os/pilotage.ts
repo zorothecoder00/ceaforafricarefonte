@@ -62,7 +62,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       if (b.parentId && !(await db.select({ id: osOkr.id }).from(osOkr).where(eq(osOkr.id, b.parentId))).length) return fail('Objectif parent introuvable.', 404);
       if (!person(b.owner)) return fail('Responsable introuvable.');
       await db.insert(osOkr).values({ title: b.title, level: b.parentId ? b.level : 'Organisation', parentId: b.parentId ?? null, owner: b.owner });
-      await notifyStaff([b.owner], `Objectif confié : ${b.title}`, '/admin/okr', people);
+      await notifyStaff([b.owner], `Objectif confié : ${b.title}`, '/os/okr', people);
       await audit(actor, 'os.okr.creation', b.title);
       return json({ ok: true, message: 'Objectif créé.' });
     }
@@ -78,7 +78,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     }
     case 'risk.create': {
       await db.insert(osRisk).values({ title: b.title, domain: b.domain, probability: b.probability, impact: b.impact, owner: b.owner, plan: b.plan, country: me?.country ?? 'TG' });
-      await notifyStaff([b.owner], `Vous êtes responsable du risque : ${b.title}`, '/admin/risques', people);
+      await notifyStaff([b.owner], `Vous êtes responsable du risque : ${b.title}`, '/os/risques', people);
       await audit(actor, 'os.risque.creation', b.title);
       return json({ ok: true, message: 'Risque enregistré.' });
     }
@@ -127,7 +127,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       else await db.insert(osReview).values({ quarter: q });
       await db.delete(osReviewItem).where(eq(osReviewItem.quarter, q));
       const managers = people.filter((s) => s.active && people.some((x) => x.managerId === s.id)).map((s) => s.id);
-      await notifyStaff(managers, 'Revue des droits lancée : confirmez les accès de votre équipe', '/admin/equipe', people);
+      await notifyStaff(managers, 'Revue des droits lancée : confirmez les accès de votre équipe', '/os/equipe', people);
       await audit(actor, 'os.revue.lancement', q);
       return json({ ok: true, message: `Revue ${q} lancée : ${managers.length} responsable(s) notifié(s).` });
     }
@@ -137,7 +137,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       if (s.managerId !== me?.id && !['dg', 'rh'].includes(c.prof ?? '')) return fail('Seul le responsable conduit l’entretien annuel.', 403);
       const ks = await kpisOf(s, people);
       await db.insert(osInterview).values({ staffId: s.id, managerId: me?.id ?? null, competences: b.competences, objectives: b.objectives, kpis: ks.map((k) => [k.l, String(k.v)]) });
-      await notifyStaff([s.id], `Votre entretien annuel a été enregistré par ${me?.name ?? 'votre responsable'}`, '/admin/poste', people);
+      await notifyStaff([s.id], `Votre entretien annuel a été enregistré par ${me?.name ?? 'votre responsable'}`, '/os/poste', people);
       await audit(actor, 'os.entretien_annuel', s.id);
       return json({ ok: true, message: 'Entretien enregistré ; le collaborateur est notifié.' });
     }
@@ -178,7 +178,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
         await db.update(staff).set({ poste2: b.code, updatedAt: new Date() }).where(eq(staff.id, s.id));
         await audit(actor, 'os.poste.cumul', s.id, { cumul: b.code });
       }
-      await notifyStaff([s.id], `Votre affectation a changé : ${refT(b.code)}`, '/admin/poste', people);
+      await notifyStaff([s.id], `Votre affectation a changé : ${refT(b.code)}`, '/os/poste', people);
       return json({ ok: true, message: 'Affectation enregistrée ; les droits sont mis à jour.' });
     }
   }

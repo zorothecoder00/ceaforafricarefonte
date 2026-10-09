@@ -92,7 +92,7 @@ const label = (r: Pick<Req, 'type' | 'id' | 'title'>) => `${RTYPE[r.type as ReqT
 async function notifyStep(r: Req, people: Person[], delegs: Deleg[]) {
   const s = r.steps[r.cur];
   if (!s) return;
-  await notifyStaff(approverOf(s.l, r, people, delegs), `À approuver : ${label(r)}`, '/admin/approbations', people);
+  await notifyStaff(approverOf(s.l, r, people, delegs), `À approuver : ${label(r)}`, '/os/approbations', people);
 }
 
 /** Engagement budgétaire du domaine pour l'année en cours (dépenses et achats). */
@@ -149,7 +149,7 @@ export async function decide(id: string, me: Person, ok: boolean, com = ''): Pro
     if (r.type === 'dep') await engageBudget(r.domain, -r.amount); // dépense engagée dès la soumission
     if (r.type === 'recrut' && r.data.rec) await db.update(osRecruit).set({ status: 'Refusée' }).where(eq(osRecruit.id, String(r.data.rec)));
     if (r.type === 'offre' && r.data.cand) await db.update(osCandidate).set({ status: 'Entretien' }).where(eq(osCandidate.id, String(r.data.cand)));
-    await notifyStaff([r.byStaff], `${label(r)} rejetée : ${com}`, '/admin/moi', people);
+    await notifyStaff([r.byStaff], `${label(r)} rejetée : ${com}`, '/os/moi', people);
     await audit(me.userId, 'os.demande.rejet', r.id, { niveau: lvl, motif: com });
     return null;
   }
@@ -158,7 +158,7 @@ export async function decide(id: string, me: Person, ok: boolean, com = ''): Pro
   if (cur >= steps.length) await finalize(u, people);
   else {
     await notifyStep(u, people, delegs);
-    await notifyStaff([r.byStaff], `${label(r)} : étape « ${lvl} » validée`, '/admin/moi', people);
+    await notifyStaff([r.byStaff], `${label(r)} : étape « ${lvl} » validée`, '/os/moi', people);
   }
   await audit(me.userId, 'os.demande.approbation', r.id, { niveau: lvl });
   return null;
@@ -197,7 +197,7 @@ async function finalize(r: Req, people: Person[]) {
   }
   if (r.type === 'recrut' && r.data.rec) {
     await db.update(osRecruit).set({ status: 'Validée' }).where(eq(osRecruit.id, String(r.data.rec)));
-    await notifyStaff(people.filter((p) => p.prof === 'rh' && p.active).map((p) => p.id), `Recrutement validé : ${r.title} — à publier`, '/admin/recrutement', people);
+    await notifyStaff(people.filter((p) => p.prof === 'rh' && p.active).map((p) => p.id), `Recrutement validé : ${r.title} — à publier`, '/os/recrutement', people);
   }
   if (r.type === 'offre' && r.data.rec && r.data.cand) {
     const [x] = await db.select().from(osRecruit).where(eq(osRecruit.id, String(r.data.rec)));
@@ -205,7 +205,7 @@ async function finalize(r: Req, people: Person[]) {
     if (x && c && x.status !== 'Pourvu') await hire(x, c, r.amount, people, null, '');
   }
   await db.update(osRequest).set({ status, updatedAt: new Date() }).where(eq(osRequest.id, r.id));
-  await notifyStaff([r.byStaff], `${label(r)} : ${status.toLowerCase()}`, '/admin/moi', people);
+  await notifyStaff([r.byStaff], `${label(r)} : ${status.toLowerCase()}`, '/os/moi', people);
 }
 
 /** Budgets de l'année par domaine : { budget, engaged, realised } (zéro pour un domaine sans budget voté). */
