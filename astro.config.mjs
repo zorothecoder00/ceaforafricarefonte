@@ -15,4 +15,9 @@ export default defineConfig({
     fallback: { en: 'fr' },
     routing: { prefixDefaultLocale: false, fallbackType: 'rewrite' },
   },
+  // Serveur local : modules du client d'authentification pré-assemblés dès le démarrage. Découverts plus tard, Vite les
+  // réassemblait en cours de route et les servait en 504 (« Outdated Optimize Dep ») : les boutons de /connexion restaient inertes.
+  vite: {
+    optimizeDeps: { include: ['better-auth/client', 'better-auth/client/plugins', '@better-auth/passkey/client'] },
+  },
 });
